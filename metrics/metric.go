@@ -1,131 +1,63 @@
 package metrics
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
-	"net/http"
-	"os"
-
-	"github.com/go-ini/ini"
+	"time"
 )
 
 const (
-	tagBytes    = 8
-	valBytes    = 8
-	metricBytes = tagBytes + valBytes
+	valBytes = 8
 )
 
-type Tag uint64
 type Value float64
 
 type Metric struct {
-	Tag Tag
+	Tag string
 	Val Value
 }
 
-var Tags map[string]Tag
-var TagNames map[Tag]string
-
-func DownloadTagConfig(httpUrl string) error {
-	resp, err := http.Get(httpUrl)
-	if err != nil {
+func (metric *Metric) WriteTo(writer io.Writer) error {
+	if metric == nil {
+		return errors.New("Cannot marshal nil *Metric")
+	}
+	if _, err := writer.Write([]byte(metric.Tag)); err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	file, err := ioutil.TempFile("", "metric_tag_config.ini")
-	if err != nil {
+	if _, err := writer.Write([]byte("\x00")); err != nil {
 		return err
 	}
-	filename := file.Name()
-	defer func() {
-		err := file.Close()
-		if err != nil {
-			log.Printf("Failed to close temporary file %v: %v\n", filename, err)
-		}
-		err = os.Remove(filename)
-		if err != nil {
-			log.Printf("Failed to delete temporary file %v: %v\n", filename, err)
-		}
-	}()
-
-	_, err = io.Copy(file, resp.Body)
-	if err != nil {
+	valBits := math.Float64bits(float64(metric.Val))
+	var val [valBytes]byte
+	binary.BigEndian.PutUint64(val[:], valBits)
+	if _, err := writer.Write(val[:]); err != nil {
 		return err
-	}
-	return ReadTagConfig(filename)
-}
-
-func ReadTagConfig(filename string) error {
-	Tags = make(map[string]Tag)
-	TagNames = make(map[Tag]string)
-
-	confIni, err := ini.Load(filename)
-	if err != nil {
-		return err
-	}
-	section, err := confIni.GetSection("")
-	if err != nil {
-		return err
-	}
-	for _, key := range section.Keys() {
-		name := key.Name()
-		tagVal, err := key.Uint64()
-		if err != nil {
-			return fmt.Errorf("Error parsing tag value of '%v': %v", name, err)
-		}
-		tag := Tag(tagVal)
-		if _, ok := Tags[name]; ok {
-			return fmt.Errorf("Duplicate tag name: %v", name)
-		}
-		if _, ok := TagNames[tag]; ok {
-			return fmt.Errorf("Duplicate tag: %v", tag)
-		}
-		Tags[name] = tag
-		TagNames[tag] = name
 	}
 	return nil
 }
 
-func (metric *Metric) MarshalBinary() (data []byte, err error) {
-	if metric == nil {
-		return nil, errors.New("Cannot marshal nil *Metric")
-	}
-	data = make([]byte, metricBytes, metricBytes)
-	binary.BigEndian.PutUint64(data, uint64(metric.Tag))
-	valBits := math.Float64bits(float64(metric.Val))
-	binary.BigEndian.PutUint64(data[tagBytes:], valBits)
-	return data, nil
-}
-
-func (metric *Metric) UnmarshalBinary(data []byte) error {
+func (metric *Metric) ReadFrom(reader *bufio.Reader) error {
 	if metric == nil {
 		return errors.New("Cannot unmarshal into nil *Metric")
 	}
-	if len(data) != 16 {
-		return fmt.Errorf("Metric.UnmarshalBinary: received %i bytes instead of %i", len(data), metricBytes)
+	tag, err := reader.ReadBytes('\x00')
+	if err != nil {
+		return err
 	}
-	metric.Tag = Tag(binary.BigEndian.Uint64(data))
-	valBits := binary.BigEndian.Uint64(data[tagBytes:])
+	metric.Tag = string(tag[:len(tag)-1])
+	var val [valBytes]byte
+	_, err = io.ReadFull(reader, val[:])
+	if err != nil {
+		return err
+	}
+	valBits := binary.BigEndian.Uint64(val[:])
 	metric.Val = Value(math.Float64frombits(valBits))
 	return nil
-}
-
-func (tag Tag) Name() string {
-	if tagName, ok := TagNames[tag]; ok {
-		return tagName
-	} else {
-		return "Unknown Tag"
-	}
-}
-
-func (tag Tag) String() string {
-	return fmt.Sprintf("%v[%v]", tag.Name(), uint64(tag))
 }
 
 func (metric *Metric) String() string {
@@ -133,4 +65,88 @@ func (metric *Metric) String() string {
 		return "<nil> Metric"
 	}
 	return fmt.Sprintf("%v: %v", metric.Tag, metric.Val)
+}
+
+func (val Value) DiffValue(logback LogbackValue, interval time.Duration) Value {
+	switch previous := logback.(type) {
+	case Value:
+		return Value(val-previous) / Value(interval.Seconds())
+	case *Value:
+		return Value(val-*previous) / Value(interval.Seconds())
+	default:
+		log.Printf("Error: Cannot diff %v (%T) and %v (%T)\n", val, val, logback, logback)
+		return Value(0)
+	}
+}
+
+// ================================= Ring logback of recorded Values =================================
+type ValueRing struct {
+	values []TimedValue
+	head   int // actually head+1
+}
+
+func NewValueRing(length int) ValueRing {
+	return ValueRing{
+		values: make([]TimedValue, length),
+	}
+}
+
+type LogbackValue interface {
+	DiffValue(previousValue LogbackValue, interval time.Duration) Value
+}
+
+type TimedValue struct {
+	time.Time // Timestamp of recording
+	val       LogbackValue
+}
+
+func (ring *ValueRing) Add(val LogbackValue) {
+	ring.values[ring.head] = TimedValue{time.Now(), val}
+	if ring.head >= len(ring.values)-1 {
+		ring.head = 0
+	} else {
+		ring.head++
+	}
+}
+
+func (ring *ValueRing) getHead() TimedValue {
+	headIndex := ring.head
+	if headIndex <= 0 {
+		headIndex = len(ring.values) - 1
+	} else {
+		headIndex--
+	}
+	return ring.values[headIndex]
+}
+
+// Does not check for empty ring
+func (ring *ValueRing) get(before time.Time) (result TimedValue) {
+	walkRing := func(i int) bool {
+		if ring.values[i].val == nil {
+			return false
+		}
+		result = ring.values[i]
+		if result.Time.Before(before) {
+			return false
+		}
+		return true
+	}
+	for i := ring.head - 1; i >= 0; i-- {
+		if !walkRing(i) {
+			return
+		}
+	}
+	for i := len(ring.values) - 1; i >= ring.head; i-- {
+		if !walkRing(i) {
+			return
+		}
+	}
+	return
+}
+
+func (ring *ValueRing) GetDiff(before time.Duration) Value {
+	head := ring.getHead()
+	beforeTime := head.Time.Add(-before)
+	previous := ring.get(beforeTime)
+	return head.val.DiffValue(previous.val, head.Time.Sub(previous.Time))
 }

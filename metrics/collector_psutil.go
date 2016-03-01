@@ -12,7 +12,9 @@ import (
 )
 
 const (
-	CpuTimeLogback = 50
+	NetIoLogback   = 50
+	NetIoInterval  = 1 * time.Second
+	CpuTimeLogback = 10
 	CpuInterval    = 1 * time.Second
 )
 
@@ -29,15 +31,20 @@ type PsutilCollector struct {
 
 func init() {
 	registerCollector("mem", &PsutilMemCollector{})
-	registerCollector("cpu", &PsutilCpuCollector{})
-	registerCollector("net-io", &PsutilNetCollector{})
-	registerCollector("net-proto", &PsutilNetProtoCollector{})
+	registerCollector("cpu", &PsutilCpuCollector{ring: NewValueRing(CpuTimeLogback)})
+	registerCollector("net-io", &PsutilNetCollector{
+		bytes:   NewValueRing(NetIoLogback),
+		packets: NewValueRing(NetIoLogback),
+		errors:  NewValueRing(NetIoLogback),
+		dropped: NewValueRing(NetIoLogback),
+	})
+	//	registerCollector("net-proto", &PsutilNetProtoCollector{})
 }
 
 func (col *PsutilCollector) doCollect(metric *Metric, readers map[string]psutilReader) error {
 	tags := make([]string, 0, len(readers))
 	for tag, reader := range readers {
-		tagStr := metric.Tag.Name()
+		tagStr := metric.Tag
 		if tagStr == tag {
 			col.metrics = append(col.metrics, &psutilMetric{
 				Metric:       metric,
@@ -103,15 +110,9 @@ func (col *PsutilMemCollector) readUsedPercentMem() Value {
 }
 
 // ==================== CPU ====================
-type cpuTime struct {
-	time.Time // Timestamp of recording
-	*cpu.CPUTimesStat
-}
-
 type PsutilCpuCollector struct {
 	PsutilCollector
-	cpu  [CpuTimeLogback]cpuTime
-	head int // actually head+1
+	ring ValueRing
 }
 
 func (col *PsutilCpuCollector) SupportedMetrics() []string {
@@ -127,25 +128,24 @@ func (col *PsutilCpuCollector) Collect(metric *Metric) error {
 }
 
 func (col *PsutilCpuCollector) Update() (err error) {
-	now := time.Now()
 	times, err := cpu.CPUTimes(false)
 	if err == nil {
 		if len(times) != 1 {
 			err = fmt.Errorf("warning: gopsutil/cpu.CPUTimes() returned %v CPUTimes instead of %v", len(times), 1)
 		} else {
-			ct := cpuTime{now, &times[0]}
-
-			// Add to the ring buffer
-			col.cpu[col.head] = ct
-			col.head++
-			if col.head > len(col.cpu)-1 {
-				col.head = 0
-			}
-
+			col.ring.Add(&cpuTime{times[0]})
 			col.updateMetrics()
 		}
 	}
 	return
+}
+
+func (col *PsutilCpuCollector) readCpu() Value {
+	return col.ring.GetDiff(CpuInterval)
+}
+
+type cpuTime struct {
+	cpu.CPUTimesStat
 }
 
 func (t *cpuTime) getAllBusy() (float64, float64) {
@@ -154,49 +154,23 @@ func (t *cpuTime) getAllBusy() (float64, float64) {
 	return busy + t.Idle, busy
 }
 
-func (col *PsutilCpuCollector) getCpuLog(before time.Time) (result cpuTime) {
-	walkRing := func(i int) bool {
-		if col.cpu[i].CPUTimesStat == nil {
-			return false
-		}
-		result = col.cpu[i]
-		if result.Time.Before(before) {
-			return false
-		}
-		return true
-	}
-	for i := col.head - 1; i >= 0; i-- {
-		if !walkRing(i) {
-			return
-		}
-	}
-	for i := len(col.cpu) - 1; i >= col.head && walkRing(i); i-- {
-		if !walkRing(i) {
-			return
-		}
-	}
-	return
-}
+func (t *cpuTime) DiffValue(logback LogbackValue, _ time.Duration) Value {
+	if previous, ok := logback.(*cpuTime); ok {
+		// Calculation based on https://github.com/shirou/gopsutil/blob/master/cpu/cpu_unix.go
+		t1All, t1Busy := previous.getAllBusy()
+		t2All, t2Busy := t.getAllBusy()
 
-// Calculation based on https://github.com/shirou/gopsutil/blob/master/cpu/cpu_unix.go#L10
-func (col *PsutilCpuCollector) readCpu() Value {
-	head := col.head - 1
-	if head < 0 {
-		head = len(col.cpu)
+		if t2Busy <= t1Busy {
+			return 0
+		}
+		if t2All <= t1All {
+			return 1
+		}
+		return Value((t2Busy - t1Busy) / (t2All - t1All) * 100)
+	} else {
+		log.Printf("Error: Cannot diff %v (%T) and %v (%T)\n", t, t, logback, logback)
+		return Value(0)
 	}
-	t2 := col.cpu[head]
-	t1 := col.getCpuLog(t2.Time.Add(-CpuInterval))
-
-	t1All, t1Busy := t1.getAllBusy()
-	t2All, t2Busy := t2.getAllBusy()
-
-	if t2Busy <= t1Busy {
-		return 0
-	}
-	if t2All <= t1All {
-		return 1
-	}
-	return Value((t2Busy - t1Busy) / (t2All - t1All) * 100)
 }
 
 // ==================== Load ====================
@@ -244,7 +218,10 @@ func (col *PsutilLoadCollector) readLoad15() Value {
 // ==================== Net IO Counters ====================
 type PsutilNetCollector struct {
 	PsutilCollector
-	stat *psnet.NetIOCountersStat
+	bytes   ValueRing
+	packets ValueRing
+	errors  ValueRing
+	dropped ValueRing
 }
 
 func (col *PsutilNetCollector) SupportedMetrics() []string {
@@ -272,26 +249,30 @@ func (col *PsutilNetCollector) Update() (err error) {
 		err = fmt.Errorf("gopsutil/net.NetIOCounters() returned %v NetIOCountersStat instead of %v", len(stats), 1)
 	}
 	if err == nil {
-		col.stat = &stats[0]
+		stat := stats[0]
+		col.bytes.Add(Value(stat.BytesSent + stat.BytesRecv))
+		col.packets.Add(Value(stat.PacketsSent + stat.PacketsRecv))
+		col.errors.Add(Value(stat.Errin + stat.Errout))
+		col.dropped.Add(Value(stat.Dropin + stat.Dropout))
 		col.updateMetrics()
 	}
 	return
 }
 
 func (col *PsutilNetCollector) readBytes() Value {
-	return Value(col.stat.BytesSent + col.stat.BytesRecv)
+	return col.bytes.GetDiff(NetIoInterval)
 }
 
 func (col *PsutilNetCollector) readPackets() Value {
-	return Value(col.stat.PacketsSent + col.stat.PacketsRecv)
+	return col.packets.GetDiff(NetIoInterval)
 }
 
 func (col *PsutilNetCollector) readErrors() Value {
-	return Value(col.stat.Errin + col.stat.Errout)
+	return col.errors.GetDiff(NetIoInterval)
 }
 
 func (col *PsutilNetCollector) readDropped() Value {
-	return Value(col.stat.Dropin + col.stat.Dropout)
+	return col.dropped.GetDiff(NetIoInterval)
 }
 
 // ==================== Net Protocol Counters ====================
@@ -308,7 +289,7 @@ type protoStatReader struct {
 
 func (col *PsutilNetProtoCollector) SupportedMetrics() []string {
 	// TODO missing: metrics about individual connections and NICs
-	if err := col.update(); err == nil {
+	if err := col.update(); err != nil {
 		log.Println("Warning: Failed to update PsutilNetProtoCollector:", err)
 		return nil
 	}
@@ -316,7 +297,7 @@ func (col *PsutilNetProtoCollector) SupportedMetrics() []string {
 	var res []string
 	for proto, stat := range col.stat {
 		for statName, _ := range stat.Stats {
-			name := "net/proto/" + proto + "/" + statName
+			name := "net-proto/" + proto + "/" + statName
 			res = append(res, name)
 		}
 	}
@@ -324,14 +305,14 @@ func (col *PsutilNetProtoCollector) SupportedMetrics() []string {
 }
 
 func (col *PsutilNetProtoCollector) Collect(metric *Metric) error {
-	if err := col.update(); err == nil {
+	if err := col.update(); err != nil {
 		return err
 	}
 
 	readers := make(map[string]psutilReader)
 	for proto, stat := range col.stat {
 		for statName, _ := range stat.Stats {
-			name := "net/proto/" + proto + "/" + statName
+			name := "net-proto/" + proto + "/" + statName
 			readers[name] = (&protoStatReader{
 				col:      col,
 				protocol: proto,

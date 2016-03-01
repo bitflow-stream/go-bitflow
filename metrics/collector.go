@@ -37,7 +37,7 @@ func registerCollector(prefix string, collector Collector) {
 
 func CollectorFor(metric *Metric) Collector {
 	for prefix, collector := range collectors {
-		if strings.HasPrefix(metric.Tag.Name(), prefix) {
+		if strings.HasPrefix(metric.Tag, prefix) {
 			return collector
 		}
 	}
@@ -65,12 +65,14 @@ func CollectMetrics(metrics ...*Metric) []Collector {
 }
 
 func AllMetrics() []*Metric {
+	var all []*Metric
 	for _, collector := range collectors {
 		metrics := collector.SupportedMetrics()
 		for _, metric := range metrics {
-			Metric{
+			all = append(all, &Metric{
 				Tag: metric,
-			}
+			})
 		}
 	}
+	return all
 }

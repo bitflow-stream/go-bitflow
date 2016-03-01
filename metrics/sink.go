@@ -70,12 +70,7 @@ func (sink *TcpSink) Sink(metric *Metric) error {
 		return err
 	}
 
-	data, err := metric.MarshalBinary()
-	if err != nil {
-		return err
-	}
-
-	if err := sink.writeAll(data); err != nil {
+	if err := metric.WriteTo(sink.conn); err != nil {
 		log.Println("TCP write failed, closing connection.", err)
 		if err := sink.conn.Close(); err != nil {
 			log.Println("Error closing connection:", err)
@@ -98,20 +93,4 @@ func (sink *TcpSink) assertConnection() error {
 		}
 	}
 	return nil
-}
-
-func (sink *TcpSink) writeAll(data []byte) error {
-	sent := 0
-	for retries := 0; retries < max_send_retries; retries++ {
-		l, err := sink.conn.Write(data[sent:])
-		if err != nil {
-			return err
-		}
-		sent += l
-		if sent >= len(data) {
-			return nil
-		}
-	}
-	return fmt.Errorf("Failed to send %v bytes after %v retries, only sent %v bytes.",
-		len(data), max_send_retries, sent)
 }

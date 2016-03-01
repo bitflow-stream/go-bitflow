@@ -1,7 +1,7 @@
 package metrics
 
 import (
-	"fmt"
+	"bufio"
 	"log"
 	"net"
 )
@@ -27,24 +27,16 @@ func ReceiveMetrics(listenAddr string, sink MetricSink) error {
 
 func handleConnection(conn *net.TCPConn, sink MetricSink) {
 	log.Println("Accepted connection from", conn.RemoteAddr())
-	var buf [metricBytes]byte
+	reader := bufio.NewReader(conn)
 	for {
-		l, err := conn.Read(buf[:])
-		if err == nil && l != len(buf) {
-			err = fmt.Errorf("Received %v bytes instead of %v", l, len(buf))
-		}
+		var metric Metric
+		err := metric.ReadFrom(reader)
 		if err != nil {
-			log.Println("Error receiving, closing connection:", err)
+			log.Println("Error receiving metric, closing connection:", err)
 			if err := conn.Close(); err != nil {
 				log.Println("Error closing connection:", err)
 			}
 			return
-		}
-		var metric Metric
-		err = metric.UnmarshalBinary(buf[:])
-		if err != nil {
-			log.Println("Error unmarshalling received metric:", err)
-			continue
 		}
 		if err := sink.CycleStart(); err != nil {
 			log.Println("Error sinking received metric (%v): %v\n", metric, err)
