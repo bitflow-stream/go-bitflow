@@ -330,8 +330,6 @@ func (reader *protoStatReader) read() Value {
 }
 
 // ==================== Disk IO ====================
-var allDiskIoMetrics = []string{"read", "write", "readBytes", "writeBytes", "readTime", "writeTime", "ioTime"}
-
 type PsutilDiskIOCollector struct {
 	PsutilCollector
 	disks map[string]disk.DiskIOCountersStat
