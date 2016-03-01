@@ -39,7 +39,7 @@ type ConsoleSink struct {
 }
 
 func (sink *ConsoleSink) Sink(metric *Metric) error {
-	fmt.Printf(" %v = %.4f", metric.Tag, metric.Val)
+	fmt.Printf(" %v = %.4f", metric.Name, metric.Val)
 	return nil
 }
 

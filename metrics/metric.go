@@ -3,7 +3,6 @@ package metrics
 import (
 	"bufio"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -18,15 +17,12 @@ const (
 type Value float64
 
 type Metric struct {
-	Tag string
-	Val Value
+	Name string
+	Val  Value
 }
 
 func (metric *Metric) WriteTo(writer io.Writer) error {
-	if metric == nil {
-		return errors.New("Cannot marshal nil *Metric")
-	}
-	if _, err := writer.Write([]byte(metric.Tag)); err != nil {
+	if _, err := writer.Write([]byte(metric.Name)); err != nil {
 		return err
 	}
 	if _, err := writer.Write([]byte("\x00")); err != nil {
@@ -42,14 +38,11 @@ func (metric *Metric) WriteTo(writer io.Writer) error {
 }
 
 func (metric *Metric) ReadFrom(reader *bufio.Reader) error {
-	if metric == nil {
-		return errors.New("Cannot unmarshal into nil *Metric")
-	}
-	tag, err := reader.ReadBytes('\x00')
+	metricName, err := reader.ReadBytes('\x00')
 	if err != nil {
 		return err
 	}
-	metric.Tag = string(tag[:len(tag)-1])
+	metric.Name = string(metricName[:len(metricName)-1])
 	var val [valBytes]byte
 	_, err = io.ReadFull(reader, val[:])
 	if err != nil {
@@ -64,7 +57,7 @@ func (metric *Metric) String() string {
 	if metric == nil {
 		return "<nil> Metric"
 	}
-	return fmt.Sprintf("%v: %v", metric.Tag, metric.Val)
+	return fmt.Sprintf("%v: %v", metric.Name, metric.Val)
 }
 
 func (val Value) DiffValue(logback LogbackValue, interval time.Duration) Value {

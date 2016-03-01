@@ -1,21 +1,77 @@
 package metrics
 
 import (
+	"fmt"
 	"log"
 	"strings"
 	"time"
 )
 
 type Collector interface {
+	Init() error
 	Collect(metric *Metric) error
 	Update() error
 	SupportedMetrics() []string
+	SupportsMetric(metric string) bool
 }
 
-var collectors map[string]Collector
+var collectors []Collector
 
-func init() {
-	collectors = make(map[string]Collector)
+func RegisterCollector(collector Collector) {
+	collectors = append(collectors, collector)
+}
+
+// Must be called after all collectors have been registered through RegisterCollector
+func InitCollectors() error {
+	for _, collector := range collectors {
+		if err := collector.Init(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func AllMetrics() []*Metric {
+	var all []*Metric
+	for _, collector := range collectors {
+		metrics := collector.SupportedMetrics()
+		for _, metric := range metrics {
+			all = append(all, &Metric{
+				Name: metric,
+			})
+		}
+	}
+	return all
+}
+
+func CollectorFor(metric *Metric) Collector {
+	for _, collector := range collectors {
+		if collector.SupportsMetric(metric.Name) {
+			return collector
+		}
+	}
+	return nil
+}
+
+func CollectMetrics(metrics ...*Metric) ([]Collector, error) {
+	set := make(map[Collector]bool)
+
+	for _, metric := range metrics {
+		collector := CollectorFor(metric)
+		if collector == nil {
+			return nil, fmt.Errorf("Warning: no collector found for", metric.Name)
+		}
+		if err := collector.Collect(metric); err != nil {
+			return nil, fmt.Errorf("Error starting collector for %v: %v\n", metric.Name, err)
+		}
+		set[collector] = true
+	}
+
+	result := make([]Collector, 0, len(set))
+	for col, _ := range set {
+		result = append(result, col)
+	}
+	return result, nil
 }
 
 func UpdateCollector(collector Collector, interval time.Duration) {
@@ -28,51 +84,19 @@ func UpdateCollector(collector Collector, interval time.Duration) {
 	}
 }
 
-func registerCollector(prefix string, collector Collector) {
-	if _, ok := collectors[prefix]; ok {
-		log.Println("Warning: overriding registered collector for", prefix)
-	}
-	collectors[prefix] = collector
-}
-
-func CollectorFor(metric *Metric) Collector {
-	for prefix, collector := range collectors {
-		if strings.HasPrefix(metric.Tag, prefix) {
-			return collector
+func FilterMetrics(all []*Metric, removePrefixes []string) (filtered []*Metric) {
+	filtered = make([]*Metric, 0, len(all))
+	for _, metric := range all {
+		hasPrefix := false
+		for _, prefix := range removePrefixes {
+			hasPrefix = strings.HasPrefix(metric.Name, prefix)
+			if hasPrefix {
+				break
+			}
+		}
+		if !hasPrefix {
+			filtered = append(filtered, metric)
 		}
 	}
-	return nil
-}
-
-func CollectMetrics(metrics ...*Metric) []Collector {
-	set := make(map[Collector]bool)
-
-	for _, metric := range metrics {
-		collector := CollectorFor(metric)
-		if collector == nil {
-			log.Println("Warning: no collector found for", metric.Tag)
-			continue
-		}
-		collector.Collect(metric)
-		set[collector] = true
-	}
-
-	result := make([]Collector, 0, len(set))
-	for col, _ := range set {
-		result = append(result, col)
-	}
-	return result
-}
-
-func AllMetrics() []*Metric {
-	var all []*Metric
-	for _, collector := range collectors {
-		metrics := collector.SupportedMetrics()
-		for _, metric := range metrics {
-			all = append(all, &Metric{
-				Tag: metric,
-			})
-		}
-	}
-	return all
+	return
 }

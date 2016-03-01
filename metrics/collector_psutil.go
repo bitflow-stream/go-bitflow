@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
@@ -18,6 +19,15 @@ const (
 	CpuInterval    = 1 * time.Second
 )
 
+func init() {
+	RegisterCollector(new(PsutilMemCollector))
+	RegisterCollector(new(PsutilCpuCollector))
+	RegisterCollector(new(PsutilLoadCollector))
+	RegisterCollector(new(PsutilNetCollector))
+	RegisterCollector(new(PsutilNetProtoCollector))
+	RegisterCollector(new(PsutilDiskIOCollector))
+}
+
 type psutilMetric struct {
 	*Metric
 	psutilReader
@@ -27,34 +37,35 @@ type psutilReader func() Value
 
 type PsutilCollector struct {
 	metrics []*psutilMetric
+	readers map[string]psutilReader // Must be filled in Init() implementations
 }
 
-func init() {
-	registerCollector("mem", &PsutilMemCollector{})
-	registerCollector("cpu", &PsutilCpuCollector{ring: NewValueRing(CpuTimeLogback)})
-	registerCollector("net-io", &PsutilNetCollector{
-		bytes:   NewValueRing(NetIoLogback),
-		packets: NewValueRing(NetIoLogback),
-		errors:  NewValueRing(NetIoLogback),
-		dropped: NewValueRing(NetIoLogback),
-	})
-	//	registerCollector("net-proto", &PsutilNetProtoCollector{})
+func (col *PsutilCollector) SupportedMetrics() (res []string) {
+	res = make([]string, 0, len(col.readers))
+	for metric, _ := range col.readers {
+		res = append(res, metric)
+	}
+	return
 }
 
-func (col *PsutilCollector) doCollect(metric *Metric, readers map[string]psutilReader) error {
-	tags := make([]string, 0, len(readers))
-	for tag, reader := range readers {
-		tagStr := metric.Tag
-		if tagStr == tag {
+func (col *PsutilCollector) SupportsMetric(metric string) bool {
+	_, ok := col.readers[metric]
+	return ok
+}
+
+func (col *PsutilCollector) Collect(metric *Metric) error {
+	tags := make([]string, 0, len(col.readers))
+	for metricName, reader := range col.readers {
+		if metric.Name == metricName {
 			col.metrics = append(col.metrics, &psutilMetric{
 				Metric:       metric,
 				psutilReader: reader,
 			})
 			return nil
 		}
-		tags = append(tags, tagStr)
+		tags = append(tags, metric.Name)
 	}
-	return fmt.Errorf("Cannot handle tag %v, expected one of %v", metric.Tag, tags)
+	return fmt.Errorf("Cannot handle metric %v, expected one of %v", metric.Name, tags)
 }
 
 func (col *PsutilCollector) updateMetrics() {
@@ -70,27 +81,20 @@ func (col *PsutilCollector) String() string {
 // ==================== Memory ====================
 type PsutilMemCollector struct {
 	PsutilCollector
-	stat *mem.VirtualMemoryStat
+	memory *mem.VirtualMemoryStat
 }
 
-func (col *PsutilMemCollector) SupportedMetrics() []string {
-	return []string{
-		"mem/free",
-		"mem/used",
-		"mem/percent",
-	}
-}
-
-func (col *PsutilMemCollector) Collect(metric *Metric) error {
-	return col.doCollect(metric, map[string]psutilReader{
+func (col *PsutilMemCollector) Init() error {
+	col.readers = map[string]psutilReader{
 		"mem/free":    col.readFreeMem,
 		"mem/used":    col.readUsedMem,
 		"mem/percent": col.readUsedPercentMem,
-	})
+	}
+	return nil
 }
 
 func (col *PsutilMemCollector) Update() (err error) {
-	col.stat, err = mem.VirtualMemory()
+	col.memory, err = mem.VirtualMemory()
 	if err == nil {
 		col.updateMetrics()
 	}
@@ -98,15 +102,15 @@ func (col *PsutilMemCollector) Update() (err error) {
 }
 
 func (col *PsutilMemCollector) readFreeMem() Value {
-	return Value(col.stat.Available)
+	return Value(col.memory.Available)
 }
 
 func (col *PsutilMemCollector) readUsedMem() Value {
-	return Value(col.stat.Used)
+	return Value(col.memory.Used)
 }
 
 func (col *PsutilMemCollector) readUsedPercentMem() Value {
-	return Value(col.stat.UsedPercent)
+	return Value(col.memory.UsedPercent)
 }
 
 // ==================== CPU ====================
@@ -115,16 +119,12 @@ type PsutilCpuCollector struct {
 	ring ValueRing
 }
 
-func (col *PsutilCpuCollector) SupportedMetrics() []string {
-	return []string{
-		"cpu",
-	}
-}
-
-func (col *PsutilCpuCollector) Collect(metric *Metric) error {
-	return col.doCollect(metric, map[string]psutilReader{
+func (col *PsutilCpuCollector) Init() error {
+	col.ring = NewValueRing(CpuTimeLogback)
+	col.readers = map[string]psutilReader{
 		"cpu": col.readCpu,
-	})
+	}
+	return nil
 }
 
 func (col *PsutilCpuCollector) Update() (err error) {
@@ -176,27 +176,20 @@ func (t *cpuTime) DiffValue(logback LogbackValue, _ time.Duration) Value {
 // ==================== Load ====================
 type PsutilLoadCollector struct {
 	PsutilCollector
-	stat *load.LoadAvgStat
+	load *load.LoadAvgStat
 }
 
-func (col *PsutilLoadCollector) SupportedMetrics() []string {
-	return []string{
-		"load/1",
-		"load/5",
-		"load/15",
-	}
-}
-
-func (col *PsutilLoadCollector) Collect(metric *Metric) error {
-	return col.doCollect(metric, map[string]psutilReader{
+func (col *PsutilLoadCollector) Init() error {
+	col.readers = map[string]psutilReader{
 		"load/1":  col.readLoad1,
 		"load/5":  col.readLoad5,
 		"load/15": col.readLoad15,
-	})
+	}
+	return nil
 }
 
 func (col *PsutilLoadCollector) Update() (err error) {
-	col.stat, err = load.LoadAvg()
+	col.load, err = load.LoadAvg()
 	if err == nil {
 		col.updateMetrics()
 	}
@@ -204,15 +197,15 @@ func (col *PsutilLoadCollector) Update() (err error) {
 }
 
 func (col *PsutilLoadCollector) readLoad1() Value {
-	return Value(col.stat.Load1)
+	return Value(col.load.Load1)
 }
 
 func (col *PsutilLoadCollector) readLoad5() Value {
-	return Value(col.stat.Load5)
+	return Value(col.load.Load5)
 }
 
 func (col *PsutilLoadCollector) readLoad15() Value {
-	return Value(col.stat.Load15)
+	return Value(col.load.Load15)
 }
 
 // ==================== Net IO Counters ====================
@@ -224,32 +217,28 @@ type PsutilNetCollector struct {
 	dropped ValueRing
 }
 
-func (col *PsutilNetCollector) SupportedMetrics() []string {
+func (col *PsutilNetCollector) Init() error {
+	col.bytes = NewValueRing(NetIoLogback)
+	col.packets = NewValueRing(NetIoLogback)
+	col.errors = NewValueRing(NetIoLogback)
+	col.dropped = NewValueRing(NetIoLogback)
 	// TODO separate in/out metrics
-	return []string{
-		"net-io/bytes",
-		"net-io/packets",
-		"net-io/errors",
-		"net-io/dropped",
-	}
-}
-
-func (col *PsutilNetCollector) Collect(metric *Metric) error {
-	return col.doCollect(metric, map[string]psutilReader{
+	col.readers = map[string]psutilReader{
 		"net-io/bytes":   col.readBytes,
 		"net-io/packets": col.readPackets,
 		"net-io/errors":  col.readErrors,
 		"net-io/dropped": col.readDropped,
-	})
+	}
+	return nil
 }
 
 func (col *PsutilNetCollector) Update() (err error) {
-	stats, err := psnet.NetIOCounters(false)
-	if err == nil && len(stats) != 1 {
-		err = fmt.Errorf("gopsutil/net.NetIOCounters() returned %v NetIOCountersStat instead of %v", len(stats), 1)
+	counters, err := psnet.NetIOCounters(false)
+	if err == nil && len(counters) != 1 {
+		err = fmt.Errorf("gopsutil/net.NetIOCounters() returned %v NetIOCountersStat instead of %v", len(counters), 1)
 	}
 	if err == nil {
-		stat := stats[0]
+		stat := counters[0]
 		col.bytes.Add(Value(stat.BytesSent + stat.BytesRecv))
 		col.packets.Add(Value(stat.PacketsSent + stat.PacketsRecv))
 		col.errors.Add(Value(stat.Errin + stat.Errout))
@@ -278,59 +267,37 @@ func (col *PsutilNetCollector) readDropped() Value {
 // ==================== Net Protocol Counters ====================
 type PsutilNetProtoCollector struct {
 	PsutilCollector
-	stat map[string]*psnet.NetProtoCountersStat
+	protocols map[string]psnet.NetProtoCountersStat
 }
 
-type protoStatReader struct {
-	col      *PsutilNetProtoCollector
-	protocol string
-	stat     string
-}
+func (col *PsutilNetProtoCollector) Init() error {
+	col.protocols = make(map[string]psnet.NetProtoCountersStat)
 
-func (col *PsutilNetProtoCollector) SupportedMetrics() []string {
 	// TODO missing: metrics about individual connections and NICs
-	if err := col.update(); err != nil {
-		log.Println("Warning: Failed to update PsutilNetProtoCollector:", err)
-		return nil
-	}
-
-	var res []string
-	for proto, stat := range col.stat {
-		for statName, _ := range stat.Stats {
-			name := "net-proto/" + proto + "/" + statName
-			res = append(res, name)
-		}
-	}
-	return res
-}
-
-func (col *PsutilNetProtoCollector) Collect(metric *Metric) error {
 	if err := col.update(); err != nil {
 		return err
 	}
-
-	readers := make(map[string]psutilReader)
-	for proto, stat := range col.stat {
-		for statName, _ := range stat.Stats {
+	col.readers = make(map[string]psutilReader)
+	for proto, counters := range col.protocols {
+		for statName, _ := range counters.Stats {
 			name := "net-proto/" + proto + "/" + statName
-			readers[name] = (&protoStatReader{
+			col.readers[name] = (&protoStatReader{
 				col:      col,
 				protocol: proto,
-				stat:     statName,
+				field:    statName,
 			}).read
 		}
 	}
-	return col.doCollect(metric, readers)
+	return nil
 }
 
 func (col *PsutilNetProtoCollector) update() error {
-	stats, err := psnet.NetProtoCounters(nil)
+	counters, err := psnet.NetProtoCounters(nil)
 	if err != nil {
 		return err
 	}
-	col.stat = make(map[string]*psnet.NetProtoCountersStat)
-	for _, stat := range stats {
-		col.stat[stat.Protocol] = &stat
+	for _, counters := range counters {
+		col.protocols[counters.Protocol] = counters
 	}
 	return nil
 }
@@ -343,15 +310,133 @@ func (col *PsutilNetProtoCollector) Update() error {
 	return err
 }
 
+type protoStatReader struct {
+	col      *PsutilNetProtoCollector
+	protocol string
+	field    string
+}
+
 func (reader *protoStatReader) read() Value {
-	if stat, ok := reader.col.stat[reader.protocol]; ok {
-		if val, ok := stat.Stats[reader.stat]; ok {
+	if counters, ok := reader.col.protocols[reader.protocol]; ok {
+		if val, ok := counters.Stats[reader.field]; ok {
 			return Value(val)
 		} else {
-			log.Printf("Warning: Stat %v not found in protocol %v in PsutilNetProtoCollector\n", reader.stat, reader.protocol)
+			log.Printf("Warning: Counter %v not found in protocol %v in PsutilNetProtoCollector\n", reader.field, reader.protocol)
 		}
 	} else {
 		log.Printf("Warning: Protocol %v not found in PsutilNetProtoCollector\n", reader.protocol)
+	}
+	return Value(0)
+}
+
+// ==================== Disk IO ====================
+var allDiskIoMetrics = []string{"read", "write", "readBytes", "writeBytes", "readTime", "writeTime", "ioTime"}
+
+type PsutilDiskIOCollector struct {
+	PsutilCollector
+	disks map[string]disk.DiskIOCountersStat
+}
+
+func (col *PsutilDiskIOCollector) Init() error {
+	col.disks = make(map[string]disk.DiskIOCountersStat)
+
+	if err := col.update(); err != nil {
+		return err
+	}
+	col.readers = make(map[string]psutilReader)
+	for disk, _ := range col.disks {
+		name := "disk-io/" + disk + "/"
+		reader := &diskIOReader{
+			col:  col,
+			disk: disk,
+		}
+		col.readers[name+"read"] = reader.readRead
+		col.readers[name+"write"] = reader.readWrite
+		col.readers[name+"readBytes"] = reader.readReadBytes
+		col.readers[name+"writeBytes"] = reader.readWriteBytes
+		col.readers[name+"readTime"] = reader.readReadTime
+		col.readers[name+"writeTime"] = reader.readWriteTime
+		col.readers[name+"ioTime"] = reader.readIoTime
+	}
+	return nil
+}
+
+func (col *PsutilDiskIOCollector) update() error {
+	disks, err := disk.DiskIOCounters()
+	if err != nil {
+		return err
+	}
+	col.disks = disks
+	return nil
+}
+
+func (col *PsutilDiskIOCollector) Update() error {
+	err := col.update()
+	if err == nil {
+		col.updateMetrics()
+	}
+	return err
+}
+
+type diskIOReader struct {
+	col  *PsutilDiskIOCollector
+	disk string
+}
+
+func (reader *diskIOReader) checkDisk() *disk.DiskIOCountersStat {
+	if disk, ok := reader.col.disks[reader.disk]; ok {
+		return &disk
+	} else {
+		log.Printf("Warning: disk-io counters for disk %v not found\n", reader.disk)
+		return nil
+	}
+}
+
+func (reader *diskIOReader) readRead() Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return Value(disk.ReadCount)
+	}
+	return Value(0)
+}
+
+func (reader *diskIOReader) readWrite() Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return Value(disk.WriteCount)
+	}
+	return Value(0)
+}
+
+func (reader *diskIOReader) readReadBytes() Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return Value(disk.ReadBytes)
+	}
+	return Value(0)
+}
+
+func (reader *diskIOReader) readWriteBytes() Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return Value(disk.WriteBytes)
+	}
+	return Value(0)
+}
+
+func (reader *diskIOReader) readReadTime() Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return Value(disk.ReadTime)
+	}
+	return Value(0)
+}
+
+func (reader *diskIOReader) readWriteTime() Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return Value(disk.WriteTime)
+	}
+	return Value(0)
+}
+
+func (reader *diskIOReader) readIoTime() Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return Value(disk.IoTime)
 	}
 	return Value(0)
 }
