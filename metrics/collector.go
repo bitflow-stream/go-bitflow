@@ -3,7 +3,8 @@ package metrics
 import (
 	"fmt"
 	"log"
-	"strings"
+	"regexp"
+	"sync"
 	"time"
 )
 
@@ -74,7 +75,24 @@ func CollectMetrics(metrics ...*Metric) ([]Collector, error) {
 	return result, nil
 }
 
-func UpdateCollector(collector Collector, interval time.Duration) {
+func FilterMetrics(all []*Metric, removeRegexes []*regexp.Regexp) (filtered []*Metric) {
+	filtered = make([]*Metric, 0, len(all))
+	for _, metric := range all {
+		matches := false
+		for _, regex := range removeRegexes {
+			if matches = regex.MatchString(metric.Name); matches {
+				break
+			}
+		}
+		if !matches {
+			filtered = append(filtered, metric)
+		}
+	}
+	return
+}
+
+func UpdateCollector(wg *sync.WaitGroup, collector Collector, interval time.Duration) {
+	defer wg.Done()
 	for {
 		err := collector.Update()
 		if err != nil {
@@ -84,19 +102,21 @@ func UpdateCollector(collector Collector, interval time.Duration) {
 	}
 }
 
-func FilterMetrics(all []*Metric, removePrefixes []string) (filtered []*Metric) {
-	filtered = make([]*Metric, 0, len(all))
-	for _, metric := range all {
-		hasPrefix := false
-		for _, prefix := range removePrefixes {
-			hasPrefix = strings.HasPrefix(metric.Name, prefix)
-			if hasPrefix {
-				break
+func SinkMetrics(wg *sync.WaitGroup, metrics []*Metric, target MetricSink, interval time.Duration) {
+	defer wg.Done()
+	for {
+		if err := target.CycleStart(); err != nil {
+			log.Printf("Warning: Failed to sink %v metrics: %v\n", len(metrics), err)
+		} else {
+			for _, metric := range metrics {
+				err := target.Sink(metric)
+				if err != nil {
+					log.Printf("Warning: Failed to sink metric %v: %v\n", metric, err)
+					break
+				}
 			}
+			target.CycleFinish()
 		}
-		if !hasPrefix {
-			filtered = append(filtered, metric)
-		}
+		time.Sleep(interval)
 	}
-	return
 }

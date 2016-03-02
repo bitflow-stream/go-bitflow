@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/cpu"
@@ -26,6 +27,7 @@ func init() {
 	RegisterCollector(new(PsutilNetCollector))
 	RegisterCollector(new(PsutilNetProtoCollector))
 	RegisterCollector(new(PsutilDiskIOCollector))
+	RegisterCollector(new(PsutilDiskUsageCollector))
 }
 
 type psutilMetric struct {
@@ -435,6 +437,103 @@ func (reader *diskIOReader) readWriteTime() Value {
 func (reader *diskIOReader) readIoTime() Value {
 	if disk := reader.checkDisk(); disk != nil {
 		return Value(disk.IoTime)
+	}
+	return Value(0)
+}
+
+// ==================== Disk Usage ====================
+type PsutilDiskUsageCollector struct {
+	PsutilCollector
+	allPartitions      []string
+	observedPartitions map[string]bool
+	usage              map[string]*disk.DiskUsageStat
+}
+
+func (col *PsutilDiskUsageCollector) Init() error {
+	col.usage = make(map[string]*disk.DiskUsageStat)
+	col.observedPartitions = make(map[string]bool)
+
+	var err error
+	col.allPartitions, err = col.getAllPartitions()
+	if err != nil {
+		return err
+	}
+
+	col.readers = make(map[string]psutilReader)
+	for _, partition := range col.allPartitions {
+		name := "disk-usage/" + partition + "/"
+		reader := &diskUsageReader{
+			col:       col,
+			partition: partition,
+		}
+		col.readers[name+"free"] = reader.readFree
+		col.readers[name+"used"] = reader.readPercent
+	}
+	return nil
+}
+
+func (col *PsutilDiskUsageCollector) Collect(metric *Metric) error {
+	lastSlash := strings.LastIndex(metric.Name, "/")
+	partition := metric.Name[len("disk-usage/"):lastSlash]
+	col.observedPartitions[partition] = true
+	return col.PsutilCollector.Collect(metric)
+}
+
+func (col *PsutilDiskUsageCollector) getAllPartitions() ([]string, error) {
+	partitions, err := disk.DiskPartitions(true)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(partitions))
+	for _, partition := range partitions {
+		result = append(result, partition.Mountpoint)
+	}
+	return result, nil
+}
+
+func (col *PsutilDiskUsageCollector) update() error {
+	for partition, _ := range col.observedPartitions {
+		usage, err := disk.DiskUsage(partition)
+		if err != nil {
+			return err
+		}
+		col.usage[partition] = usage
+	}
+	return nil
+}
+
+func (col *PsutilDiskUsageCollector) Update() error {
+	err := col.update()
+	if err == nil {
+		col.updateMetrics()
+	}
+	return err
+}
+
+type diskUsageReader struct {
+	col       *PsutilDiskUsageCollector
+	partition string
+}
+
+func (reader *diskUsageReader) checkDisk() *disk.DiskUsageStat {
+	if disk, ok := reader.col.usage[reader.partition]; ok {
+		return disk
+	} else {
+		log.Printf("Warning: disk-usage counters for partition %v not found\n", reader.partition)
+		return nil
+	}
+}
+
+func (reader *diskUsageReader) readFree() Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return Value(disk.Free)
+	}
+	return Value(0)
+}
+
+func (reader *diskUsageReader) readPercent() Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return Value(disk.UsedPercent)
 	}
 	return Value(0)
 }
