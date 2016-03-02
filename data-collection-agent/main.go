@@ -17,10 +17,12 @@ var (
 	collect_local    = false
 	collect_listen   = ""
 	collect_download = ""
+	collect_file     = ""
 
 	sink_console = false
 	sink_connect = ""
 	sink_listen  = ""
+	sink_file    = ""
 
 	active_retry_interval = 1000 * time.Millisecond
 )
@@ -39,9 +41,11 @@ func main() {
 	flag.DurationVar(&sink_interval, "si", sink_interval, "Interval for sinking (sending/printing/...) data when collecting local metrics")
 	flag.StringVar(&collect_listen, "L", collect_listen, "Data source: receive metrics by accepting TCP connections")
 	flag.StringVar(&collect_download, "d", collect_download, "Data source: receive metrics by connecting to remote endpoint")
+	flag.StringVar(&collect_file, "F", collect_file, "Data source: read metrics from given CSV file (as produced by -f)")
 	flag.BoolVar(&sink_console, "p", sink_console, "Data sink: print to console")
 	flag.StringVar(&sink_connect, "s", sink_connect, "Data sink: send data to specified endpoint")
 	flag.StringVar(&sink_listen, "l", sink_listen, "Data sink: accept connections to send data on specified endpoint")
+	flag.StringVar(&sink_file, "f", sink_file, "Data sink: write data do given CSV file")
 	flag.Parse()
 
 	// ====== Initialize sink(s)
@@ -54,6 +58,11 @@ func main() {
 	}
 	if sink_listen != "" {
 		sinks = append(sinks, &metrics.PassiveTcpSink{Endpoint: sink_listen})
+	}
+	if sink_file != "" {
+		sink := &metrics.CSVFileSink{Filename: sink_file}
+		sinks = append(sinks, sink)
+		defer sink.Close() // Ignore error
 	}
 	if len(sinks) == 0 {
 		log.Println("No data sinks selected, data will not be output anywhere.")
@@ -74,6 +83,13 @@ func main() {
 			RemoteAddr:    collect_download,
 			RetryInterval: active_retry_interval,
 		})
+	}
+	if collect_file != "" {
+		source := &metrics.CSVFileMetricSource{
+			Filename: collect_file,
+		}
+		sources = append(sources, source)
+		defer source.Close() // Ignore error
 	}
 	if len(sources) == 0 {
 		log.Println("No data sources selected, no data will be generated.")

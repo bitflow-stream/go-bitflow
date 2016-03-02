@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -62,25 +63,28 @@ func (source *DownloadMetricSource) dial() (*net.TCPConn, error) {
 	return net.DialTCP("tcp", nil, endpoint)
 }
 
-func receiveMetrics(conn *net.TCPConn, sink MetricSink) error {
-	reader := bufio.NewReader(conn)
-	for {
-		var metric Metric
-		err := metric.ReadFrom(reader)
+func receiveMetrics(conn *net.TCPConn, sink MetricSink) (err error) {
+	defer func() {
 		if err != nil {
 			if err := conn.Close(); err != nil {
 				log.Println("Error closing connection:", err)
 			}
-			return err
 		}
-		if err := sink.CycleStart(); err != nil {
-			log.Printf("Error sinking received metric (%v): %v\n", &metric, err)
-		} else {
-			if err := sink.Sink(&metric); err != nil {
-				log.Printf("Error sinking received metric (%v): %v\n", metric, err)
-			} else {
-				sink.CycleFinish()
-			}
+	}()
+	reader := bufio.NewReader(conn)
+	var header Header
+	if err = header.ReadBinary(reader); err != nil {
+		return
+	}
+	log.Printf("Receiving %v metrics\n", len(header))
+
+	for {
+		var sample Sample
+		if err = sample.ReadBinary(reader, len(header)); err != nil {
+			return
+		}
+		if err := sink.Sample(sample); err != nil {
+			log.Printf("Error forwarding received sample: %v\n", err)
 		}
 	}
 }
@@ -105,15 +109,17 @@ func (source *ReceiveMetricSource) Start(wg *sync.WaitGroup, sink MetricSink) er
 }
 
 func (source *ReceiveMetricSource) listen(wg *sync.WaitGroup, listener *net.TCPListener, sink MetricSink) {
-	log.Println("Listening for incoming metric data on", listener.Addr())
 	defer wg.Done()
+	log.Println("Listening for incoming metric data on", listener.Addr())
 	for {
 		conn, err := listener.AcceptTCP()
 		if err != nil {
 			log.Println("Error accepting connection:", err)
 		} else {
 			log.Println("Accepted connection from", conn.RemoteAddr())
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				if err := receiveMetrics(conn, sink); err == io.EOF {
 					log.Println("Connection closed by", conn.RemoteAddr())
 				} else if err != nil {
@@ -122,4 +128,45 @@ func (source *ReceiveMetricSource) listen(wg *sync.WaitGroup, listener *net.TCPL
 			}()
 		}
 	}
+}
+
+// ==================== CSV file source ====================
+type CSVFileMetricSource struct {
+	Filename string
+	file     *os.File
+}
+
+func (source *CSVFileMetricSource) Start(wg *sync.WaitGroup, sink MetricSink) error {
+	f, err := os.Open(source.Filename)
+	if err != nil {
+		return err
+	}
+	source.file = f
+	wg.Add(1)
+	go source.readFile(wg, sink)
+	return nil
+}
+
+func (source *CSVFileMetricSource) readFile(wg *sync.WaitGroup, sink MetricSink) {
+	defer wg.Done()
+	reader := bufio.NewReader(source.file)
+	var header Header
+	if err := header.ReadCsv(reader); err != nil {
+		return
+	}
+	log.Printf("Reading %v metrics from %v\n", len(header), source.file.Name())
+
+	for {
+		var sample Sample
+		if err := sample.ReadCsv(reader); err != nil {
+			return
+		}
+		if err := sink.Sample(sample); err != nil {
+			log.Printf("Error forwarding read sample: %v\n", err)
+		}
+	}
+}
+
+func (source *CSVFileMetricSource) Close() error {
+	return source.file.Close()
 }
