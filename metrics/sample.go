@@ -3,6 +3,7 @@ package metrics
 import (
 	"bufio"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -19,6 +20,10 @@ const (
 	csv_newline        = "\n"
 	csv_time_col       = "time"
 	csv_date_layout    = "2006-01-02 15:04:05.999999999"
+)
+
+var (
+	CSV_EOF = errors.New("End of CSV file")
 )
 
 type Value float64
@@ -69,7 +74,7 @@ func (header *Header) ReadBinary(reader *bufio.Reader) error {
 		if err != nil {
 			return err
 		}
-		if len(name) == 0 {
+		if len(name) <= 1 {
 			return nil
 		}
 		*header = append(*header, string(name[:len(name)-1]))
@@ -77,25 +82,36 @@ func (header *Header) ReadBinary(reader *bufio.Reader) error {
 	return nil
 }
 
-func readCsvLine(reader *bufio.Reader) ([]string, error) {
+func readCsvLine(reader *bufio.Reader) ([]string, bool, error) {
 	line, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
-		return nil, err
+	eof := err == io.EOF
+	if err != nil && !eof {
+		return nil, false, err
 	}
+	if len(line) == 0 {
+		return nil, eof, nil
+	}
+	line = line[:len(line)-1] // Strip newline char
 	return strings.FieldsFunc(line, func(r rune) bool {
 		return r == csv_separator_rune
-	}), nil
+	}), eof, nil
 }
 
-func (header *Header) ReadCsv(reader *bufio.Reader) (err error) {
+func (header *Header) ReadCsv(reader *bufio.Reader) error {
 	*header = nil
 	var fields []string
-	fields, err = readCsvLine(reader)
+	fields, eof, err := readCsvLine(reader)
+	if err != nil {
+		return err
+	}
+	if len(fields) == 0 && eof {
+		return CSV_EOF
+	}
 	if fields[0] != csv_time_col {
 		return fmt.Errorf("Unexpected first column %v, expected %v", fields[0], csv_time_col)
 	}
 	*header = Header(fields[1:])
-	return
+	return nil
 }
 
 func (sample *Sample) WriteBinary(writer io.Writer) error {
@@ -137,7 +153,6 @@ func (sample *Sample) WriteCsv(writer io.Writer) error {
 	return nil
 }
 
-// TODO numFields is required since we don't have separators in the binary format
 func (sample *Sample) ReadBinary(reader *bufio.Reader, numFields int) error {
 	sample.Time = time.Time{}
 	sample.Values = nil
@@ -159,8 +174,8 @@ func (sample *Sample) ReadBinary(reader *bufio.Reader, numFields int) error {
 			return err
 		}
 		valBits := binary.BigEndian.Uint64(val)
-		sample.Values = append(sample.Values, Value(math.Float64frombits(valBits)))
-		return nil
+		value := math.Float64frombits(valBits)
+		sample.Values = append(sample.Values, Value(value))
 	}
 	return nil
 }
@@ -169,9 +184,12 @@ func (sample *Sample) ReadCsv(reader *bufio.Reader) error {
 	sample.Time = time.Time{}
 	sample.Values = nil
 
-	fields, err := readCsvLine(reader)
-	if len(fields) < 1 {
-		return fmt.Errorf("Empty CSV line")
+	fields, eof, err := readCsvLine(reader)
+	if err != nil {
+		return err
+	}
+	if len(fields) == 0 && eof {
+		return CSV_EOF
 	}
 	tim, err := time.Parse(csv_date_layout, fields[0])
 	if err != nil {

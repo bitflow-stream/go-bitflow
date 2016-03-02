@@ -38,9 +38,8 @@ type psutilMetric struct {
 type psutilReader func() Value
 
 type PsutilCollector struct {
-	metrics    []*psutilMetric
-	readers    map[string]psutilReader // Must be filled in Init() implementations
-	lastUpdate time.Time
+	metrics []*psutilMetric
+	readers map[string]psutilReader // Must be filled in Init() implementations
 }
 
 func (col *PsutilCollector) SupportedMetrics() (res []string) {
@@ -73,8 +72,7 @@ func (col *PsutilCollector) Collect(metric *Metric) error {
 
 func (col *PsutilCollector) updateMetrics() {
 	for _, metric := range col.metrics {
-		metric.Time = col.lastUpdate
-		metric.Val = metric.psutilReader()
+		metric.Set(metric.psutilReader())
 	}
 }
 
@@ -98,7 +96,6 @@ func (col *PsutilMemCollector) Init() error {
 }
 
 func (col *PsutilMemCollector) Update() (err error) {
-	col.lastUpdate = time.Now()
 	col.memory, err = mem.VirtualMemory()
 	if err == nil {
 		col.updateMetrics()
@@ -133,7 +130,6 @@ func (col *PsutilCpuCollector) Init() error {
 }
 
 func (col *PsutilCpuCollector) Update() (err error) {
-	col.lastUpdate = time.Now()
 	times, err := cpu.CPUTimes(false)
 	if err == nil {
 		if len(times) != 1 {
@@ -195,7 +191,6 @@ func (col *PsutilLoadCollector) Init() error {
 }
 
 func (col *PsutilLoadCollector) Update() (err error) {
-	col.lastUpdate = time.Now()
 	col.load, err = load.LoadAvg()
 	if err == nil {
 		col.updateMetrics()
@@ -240,7 +235,6 @@ func (col *PsutilNetCollector) Init() error {
 }
 
 func (col *PsutilNetCollector) Update() (err error) {
-	col.lastUpdate = time.Now()
 	counters, err := psnet.NetIOCounters(false)
 	if err == nil && len(counters) != 1 {
 		err = fmt.Errorf("gopsutil/net.NetIOCounters() returned %v NetIOCountersStat instead of %v", len(counters), 1)
@@ -311,7 +305,6 @@ func (col *PsutilNetProtoCollector) update() error {
 }
 
 func (col *PsutilNetProtoCollector) Update() error {
-	col.lastUpdate = time.Now()
 	err := col.update()
 	if err == nil {
 		col.updateMetrics()
@@ -378,7 +371,6 @@ func (col *PsutilDiskIOCollector) update() error {
 }
 
 func (col *PsutilDiskIOCollector) Update() error {
-	col.lastUpdate = time.Now()
 	err := col.update()
 	if err == nil {
 		col.updateMetrics()
@@ -511,7 +503,6 @@ func (col *PsutilDiskUsageCollector) update() error {
 }
 
 func (col *PsutilDiskUsageCollector) Update() error {
-	col.lastUpdate = time.Now()
 	err := col.update()
 	if err == nil {
 		col.updateMetrics()

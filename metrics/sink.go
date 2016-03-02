@@ -64,7 +64,6 @@ func (agg AggregateSink) Sample(sample Sample) error {
 // ==================== Console ====================
 type ConsoleSink struct {
 	abstractSink
-	tags []string
 }
 
 func (sink *ConsoleSink) Start(wg *sync.WaitGroup) error {
@@ -78,7 +77,7 @@ func (sink *ConsoleSink) Sample(sample Sample) error {
 	timeStr := sample.Time.Format("2006-01-02 15:04:05.999")
 	fmt.Printf("%s: ", timeStr)
 	for i, value := range sample.Values {
-		fmt.Printf("%s = %.4f", sink.tags[i], value)
+		fmt.Printf("%s = %.4f", sink.header[i], value)
 		if i < len(sample.Values)-1 {
 			fmt.Printf(", ")
 		}
@@ -105,7 +104,9 @@ func (sink *ActiveTcpSink) Header(header Header) error {
 	if err := sink.abstractSink.Header(header); err != nil {
 		return err
 	}
-	return sink.checkResult(header.WriteBinary(sink.conn))
+	log.Printf("Sending %v metrics to %v\n", len(header), sink.conn.RemoteAddr())
+	sink.checkResult(header.WriteBinary(sink.conn))
+	return nil
 }
 
 func (sink *ActiveTcpSink) Sample(sample Sample) error {
@@ -115,19 +116,16 @@ func (sink *ActiveTcpSink) Sample(sample Sample) error {
 	if err := sink.assertConnection(); err != nil {
 		return err
 	}
-	return sink.checkResult(sample.WriteBinary(sink.conn))
+	sink.checkResult(sample.WriteBinary(sink.conn))
+	return nil
 }
 
-func (sink *ActiveTcpSink) checkResult(err error) error {
-	if err != nil {
-		log.Println("TCP write failed, closing connection.", err)
-		if err := sink.conn.Close(); err != nil {
-			log.Println("Error closing connection:", err)
-		}
+func (sink *ActiveTcpSink) checkResult(err error) {
+	connection := sink.conn
+	if err != nil && connection != nil {
 		sink.conn = nil
-		return err
+		tcpWriteError(err, connection)
 	}
-	return nil
 }
 
 func (sink *ActiveTcpSink) assertConnection() error {
@@ -144,6 +142,19 @@ func (sink *ActiveTcpSink) assertConnection() error {
 	return nil
 }
 
+func tcpWriteError(err error, conn *net.TCPConn) {
+	if operr, ok := err.(*net.OpError); ok && operr.Err == syscall.EPIPE {
+		log.Printf("Connection to %v closed\n", conn.RemoteAddr())
+	} else if err != nil {
+		log.Printf("TCP write to %v failed, closing connection. %v\n", conn.RemoteAddr(), err)
+	} else {
+		log.Println("Closing connection to", conn.RemoteAddr())
+	}
+	if err := conn.Close(); err != nil {
+		log.Printf("Error closing connection to %v: %v\n", conn.RemoteAddr(), err)
+	}
+}
+
 // ==================== TCP passive ====================
 const (
 	tcp_metric_buffer = 50
@@ -157,6 +168,7 @@ type PassiveTcpSink struct {
 
 type passiveTcpConn struct {
 	sink    *PassiveTcpSink
+	remote  net.Addr
 	conn    *net.TCPConn
 	samples chan Sample
 }
@@ -189,7 +201,9 @@ func (sink *PassiveTcpSink) listen(wg *sync.WaitGroup, listener *net.TCPListener
 		} else {
 			passiveConn := &passiveTcpConn{
 				conn:    conn,
+				remote:  conn.RemoteAddr(),
 				samples: make(chan Sample, tcp_metric_buffer),
+				sink:    sink,
 			}
 			wg.Add(1)
 			go passiveConn.run(wg)
@@ -229,16 +243,7 @@ func (conn *passiveTcpConn) stop(err error) {
 	connection := conn.conn
 	if connection != nil {
 		conn.conn = nil
-		if err == syscall.EPIPE {
-			log.Printf("Connection to %v closed\n", connection.RemoteAddr())
-		} else if err != nil {
-			log.Printf("TCP write to %v failed, closing connection. %v\n", connection.RemoteAddr(), err)
-		} else {
-			log.Println("Closing connection to", connection.RemoteAddr())
-		}
-		if err := connection.Close(); err != nil {
-			log.Printf("Error closing connection to %v: %v\n", connection.RemoteAddr(), err)
-		}
+		tcpWriteError(err, connection)
 	}
 }
 
@@ -247,7 +252,7 @@ func (conn *passiveTcpConn) run(wg *sync.WaitGroup) {
 		conn.conn = nil // In case of panic, avoid full channel-buffers
 		wg.Done()
 	}()
-	log.Printf("Accepted connection from %v, serving %v metrics\n", conn.conn.RemoteAddr(), len(conn.sink.header))
+	log.Printf("Accepted connection from %v, serving %v metrics\n", conn.remote, len(conn.sink.header))
 	if err := conn.sink.header.WriteBinary(conn.conn); err != nil {
 		conn.stop(err)
 		return
@@ -272,7 +277,7 @@ type CSVFileSink struct {
 }
 
 func (sink *CSVFileSink) Start(wg *sync.WaitGroup) error {
-	f, err := os.OpenFile(sink.Filename, os.O_WRONLY, os.FileMode(0664))
+	f, err := os.Create(sink.Filename)
 	if err != nil {
 		return err
 	}

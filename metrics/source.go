@@ -71,9 +71,13 @@ func receiveMetrics(conn *net.TCPConn, sink MetricSink) (err error) {
 			}
 		}
 	}()
+	log.Println("Receiving header from", conn.RemoteAddr())
 	reader := bufio.NewReader(conn)
 	var header Header
 	if err = header.ReadBinary(reader); err != nil {
+		return
+	}
+	if err = sink.Header(header); err != nil {
 		return
 	}
 	log.Printf("Receiving %v metrics\n", len(header))
@@ -151,20 +155,31 @@ func (source *CSVFileMetricSource) readFile(wg *sync.WaitGroup, sink MetricSink)
 	defer wg.Done()
 	reader := bufio.NewReader(source.file)
 	var header Header
-	if err := header.ReadCsv(reader); err != nil {
+	if err := header.ReadCsv(reader); err != nil && err != CSV_EOF {
+		log.Println("Failed to read CSV header", err)
+		return
+	}
+	if err := sink.Header(header); err != nil {
+		log.Println("Failed to forward CSV header:", err)
 		return
 	}
 	log.Printf("Reading %v metrics from %v\n", len(header), source.file.Name())
 
+	num_samples := 0
 	for {
 		var sample Sample
-		if err := sample.ReadCsv(reader); err != nil {
+		if err := sample.ReadCsv(reader); err == CSV_EOF {
+			break
+		} else if err != nil {
+			log.Println("CSV read failed:", err)
 			return
 		}
+		num_samples++
 		if err := sink.Sample(sample); err != nil {
 			log.Printf("Error forwarding read sample: %v\n", err)
 		}
 	}
+	log.Printf("Read %v samples from file, %v metrics each\n", num_samples, len(header))
 }
 
 func (source *CSVFileMetricSource) Close() error {

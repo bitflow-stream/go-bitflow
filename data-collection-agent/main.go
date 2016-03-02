@@ -117,7 +117,7 @@ func (source *CollectorSource) Start(wg *sync.WaitGroup, sink metrics.MetricSink
 	met = metrics.FilterMetrics(met, ignoredMetrics)
 	log.Printf("Locally collecting %v metrics\n", len(met))
 
-	collectors, err := metrics.CollectMetrics(met...)
+	header, values, collectors, err := metrics.ConstructSample(met)
 	if err != nil {
 		return err
 	}
@@ -127,6 +127,6 @@ func (source *CollectorSource) Start(wg *sync.WaitGroup, sink metrics.MetricSink
 	}
 
 	wg.Add(1)
-	go metrics.SinkMetrics(wg, met, sink, sink_interval)
+	go metrics.SinkMetrics(wg, header, values, sink, sink_interval)
 	return nil
 }

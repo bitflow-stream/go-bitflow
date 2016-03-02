@@ -8,14 +8,18 @@ import (
 	"time"
 )
 
+// ==================== Metric ====================
 type Metric struct {
-	Name string
-	Val  Value
-	Time time.Time
+	Name   string
+	index  int
+	sample []Value
 }
 
-type Metrics []*Metric
+func (metric *Metric) Set(val Value) {
+	metric.sample[metric.index] = val
+}
 
+// ==================== Collector ====================
 type Collector interface {
 	Init() error
 	Collect(metric *Metric) error
@@ -40,87 +44,23 @@ func InitCollectors() error {
 	return nil
 }
 
-func (metric *Metric) String() string {
-	if metric == nil {
-		return "<nil> Metric"
-	}
-	timeStr := metric.Time.Format("2006-01-02 15:04:05.999")
-	return fmt.Sprintf("(%v) %v = %.4f", timeStr, metric.Name, metric.Val)
-}
-
-func (metrics Metrics) Header() (header Header) {
-	header = make(Header, 0, len(metrics))
-	for _, metric := range metrics {
-		header = append(header, metric.Name)
-	}
-	return
-}
-
-func (metrics Metrics) Sample() Sample {
-	// Use the timestamp of the first metric.
-	// TODO refactor
-	if len(metrics) == 0 {
-		return Sample{}
-	}
-	values := make([]Value, len(metrics))
-	for _, metric := range metrics {
-		values = append(values, metric.Val)
-	}
-	return Sample{
-		Time:   metrics[0].Time,
-		Values: values,
-	}
-}
-
-func AllMetrics() []*Metric {
-	var all []*Metric
+func AllMetrics() []string {
+	var all []string
 	for _, collector := range collectors {
 		metrics := collector.SupportedMetrics()
 		for _, metric := range metrics {
-			all = append(all, &Metric{
-				Name: metric,
-			})
+			all = append(all, metric)
 		}
 	}
 	return all
 }
 
-func CollectorFor(metric *Metric) Collector {
-	for _, collector := range collectors {
-		if collector.SupportsMetric(metric.Name) {
-			return collector
-		}
-	}
-	return nil
-}
-
-func CollectMetrics(metrics ...*Metric) ([]Collector, error) {
-	set := make(map[Collector]bool)
-
-	for _, metric := range metrics {
-		collector := CollectorFor(metric)
-		if collector == nil {
-			return nil, fmt.Errorf("Warning: no collector found for", metric.Name)
-		}
-		if err := collector.Collect(metric); err != nil {
-			return nil, fmt.Errorf("Error starting collector for %v: %v\n", metric.Name, err)
-		}
-		set[collector] = true
-	}
-
-	result := make([]Collector, 0, len(set))
-	for col, _ := range set {
-		result = append(result, col)
-	}
-	return result, nil
-}
-
-func FilterMetrics(all []*Metric, removeRegexes []*regexp.Regexp) (filtered []*Metric) {
-	filtered = make([]*Metric, 0, len(all))
+func FilterMetrics(all []string, removeRegexes []*regexp.Regexp) (filtered []string) {
+	filtered = make([]string, 0, len(all))
 	for _, metric := range all {
 		matches := false
 		for _, regex := range removeRegexes {
-			if matches = regex.MatchString(metric.Name); matches {
+			if matches = regex.MatchString(metric); matches {
 				break
 			}
 		}
@@ -129,6 +69,41 @@ func FilterMetrics(all []*Metric, removeRegexes []*regexp.Regexp) (filtered []*M
 		}
 	}
 	return
+}
+
+func CollectorFor(metric string) Collector {
+	for _, collector := range collectors {
+		if collector.SupportsMetric(metric) {
+			return collector
+		}
+	}
+	return nil
+}
+
+func ConstructSample(metrics []string) (Header, []Value, []Collector, error) {
+	set := make(map[Collector]bool)
+
+	header := make(Header, len(metrics))
+	values := make([]Value, len(metrics))
+	for i, metricName := range metrics {
+		collector := CollectorFor(metricName)
+		if collector == nil {
+			return nil, nil, nil, fmt.Errorf("No collector found for", metricName)
+		}
+		header[i] = metricName
+		metric := Metric{metricName, i, values}
+
+		if err := collector.Collect(&metric); err != nil {
+			return nil, nil, nil, fmt.Errorf("Error starting collector for %v: %v\n", metricName, err)
+		}
+		set[collector] = true
+	}
+
+	collectors := make([]Collector, 0, len(set))
+	for col, _ := range set {
+		collectors = append(collectors, col)
+	}
+	return header, values, collectors, nil
 }
 
 func UpdateCollector(wg *sync.WaitGroup, collector Collector, interval time.Duration) {
@@ -142,13 +117,24 @@ func UpdateCollector(wg *sync.WaitGroup, collector Collector, interval time.Dura
 	}
 }
 
-func SinkMetrics(wg *sync.WaitGroup, metrics Metrics, target MetricSink, interval time.Duration) {
+func SinkMetrics(wg *sync.WaitGroup, header Header, values []Value, target MetricSink, interval time.Duration) {
 	defer wg.Done()
 	for {
-		target.Header(metrics.Header())
-		err := target.Sample(metrics.Sample())
-		if err != nil {
-			log.Printf("Warning: Failed to sink %v metrics\n", len(metrics), err)
+		if err := target.Header(header); err != nil {
+			log.Printf("Warning: Failed to sink header for %v metrics: %v\n", len(header), err)
+		} else {
+			for {
+				sample := Sample{
+					time.Now(),
+					values,
+				}
+				if err := target.Sample(sample); err != nil {
+					// When a sample fails, try sending the header again
+					log.Printf("Warning: Failed to sink %v metrics: %v\n", len(values), err)
+					break
+				}
+				time.Sleep(interval)
+			}
 		}
 		time.Sleep(interval)
 	}
