@@ -65,7 +65,7 @@ func (sink *ConsoleSink) Start(wg *sync.WaitGroup) error {
 }
 
 func (sink *ConsoleSink) Sink(metric *Metric) error {
-	fmt.Printf(" %v = %.4f", metric.Name, metric.Val)
+	fmt.Printf(" %v", metric)
 	return nil
 }
 

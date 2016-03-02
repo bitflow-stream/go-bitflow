@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	valBytes = 8
+	timeBytes = 8
+	valBytes  = 8
 )
 
 type Value float64
@@ -19,36 +20,59 @@ type Value float64
 type Metric struct {
 	Name string
 	Val  Value
+	Time time.Time
 }
 
 func (metric *Metric) WriteTo(writer io.Writer) error {
+	// Zero-terminated Name
 	if _, err := writer.Write([]byte(metric.Name)); err != nil {
 		return err
 	}
 	if _, err := writer.Write([]byte("\x00")); err != nil {
 		return err
 	}
+
+	// Time as uint64 nanoseconds since Unix epoch
+	tim := make([]byte, timeBytes)
+	binary.BigEndian.PutUint64(tim, uint64(metric.Time.UnixNano()))
+	if _, err := writer.Write(tim); err != nil {
+		return err
+	}
+
+	// Value
 	valBits := math.Float64bits(float64(metric.Val))
-	var val [valBytes]byte
-	binary.BigEndian.PutUint64(val[:], valBits)
-	if _, err := writer.Write(val[:]); err != nil {
+	val := make([]byte, valBytes)
+	binary.BigEndian.PutUint64(val, valBits)
+	if _, err := writer.Write(val); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (metric *Metric) ReadFrom(reader *bufio.Reader) error {
+	// Zero-terminated Name
 	metricName, err := reader.ReadBytes('\x00')
 	if err != nil {
 		return err
 	}
 	metric.Name = string(metricName[:len(metricName)-1])
-	var val [valBytes]byte
-	_, err = io.ReadFull(reader, val[:])
+
+	// Time as nanoseconds since Unix epoch
+	tim := make([]byte, timeBytes)
+	_, err = io.ReadFull(reader, tim)
 	if err != nil {
 		return err
 	}
-	valBits := binary.BigEndian.Uint64(val[:])
+	timeVal := binary.BigEndian.Uint64(tim)
+	metric.Time = time.Unix(0, int64(timeVal))
+
+	// Value
+	val := make([]byte, valBytes)
+	_, err = io.ReadFull(reader, val)
+	if err != nil {
+		return err
+	}
+	valBits := binary.BigEndian.Uint64(val)
 	metric.Val = Value(math.Float64frombits(valBits))
 	return nil
 }
@@ -57,7 +81,8 @@ func (metric *Metric) String() string {
 	if metric == nil {
 		return "<nil> Metric"
 	}
-	return fmt.Sprintf("%v: %v", metric.Name, metric.Val)
+	timeStr := metric.Time.Format("2006-01-02 15:04:05.999")
+	return fmt.Sprintf("(%v) %v = %.4f", timeStr, metric.Name, metric.Val)
 }
 
 func (val Value) DiffValue(logback LogbackValue, interval time.Duration) Value {
