@@ -18,6 +18,8 @@ const (
 	NetIoInterval  = 1 * time.Second
 	CpuTimeLogback = 10
 	CpuInterval    = 1 * time.Second
+	DiskIoLogback  = 50
+	DiskIoInterval = 1 * time.Second
 )
 
 func init() {
@@ -347,8 +349,15 @@ func (col *PsutilDiskIOCollector) Init() error {
 	for disk, _ := range col.disks {
 		name := "disk-io/" + disk + "/"
 		reader := &diskIOReader{
-			col:  col,
-			disk: disk,
+			col:            col,
+			disk:           disk,
+			readRing:       NewValueRing(DiskIoLogback),
+			writeRing:      NewValueRing(DiskIoLogback),
+			readBytesRing:  NewValueRing(DiskIoLogback),
+			writeBytesRing: NewValueRing(DiskIoLogback),
+			readTimeRing:   NewValueRing(DiskIoLogback),
+			writeTimeRing:  NewValueRing(DiskIoLogback),
+			ioTimeRing:     NewValueRing(DiskIoLogback),
 		}
 		col.readers[name+"read"] = reader.readRead
 		col.readers[name+"write"] = reader.readWrite
@@ -381,6 +390,14 @@ func (col *PsutilDiskIOCollector) Update() error {
 type diskIOReader struct {
 	col  *PsutilDiskIOCollector
 	disk string
+
+	readRing       ValueRing
+	writeRing      ValueRing
+	readBytesRing  ValueRing
+	writeBytesRing ValueRing
+	readTimeRing   ValueRing
+	writeTimeRing  ValueRing
+	ioTimeRing     ValueRing
 }
 
 func (reader *diskIOReader) checkDisk() *disk.DiskIOCountersStat {
@@ -392,51 +409,56 @@ func (reader *diskIOReader) checkDisk() *disk.DiskIOCountersStat {
 	}
 }
 
+func (reader *diskIOReader) value(val uint64, ring *ValueRing) Value {
+	ring.Add(Value(val))
+	return ring.GetDiff(DiskIoInterval)
+}
+
 func (reader *diskIOReader) readRead() Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return Value(disk.ReadCount)
+		return reader.value(disk.ReadCount, &reader.readRing)
 	}
 	return Value(0)
 }
 
 func (reader *diskIOReader) readWrite() Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return Value(disk.WriteCount)
+		return reader.value(disk.WriteCount, &reader.writeRing)
 	}
 	return Value(0)
 }
 
 func (reader *diskIOReader) readReadBytes() Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return Value(disk.ReadBytes)
+		return reader.value(disk.ReadBytes, &reader.readBytesRing)
 	}
 	return Value(0)
 }
 
 func (reader *diskIOReader) readWriteBytes() Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return Value(disk.WriteBytes)
+		return reader.value(disk.WriteBytes, &reader.writeBytesRing)
 	}
 	return Value(0)
 }
 
 func (reader *diskIOReader) readReadTime() Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return Value(disk.ReadTime)
+		return reader.value(disk.ReadTime, &reader.readTimeRing)
 	}
 	return Value(0)
 }
 
 func (reader *diskIOReader) readWriteTime() Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return Value(disk.WriteTime)
+		return reader.value(disk.WriteTime, &reader.writeTimeRing)
 	}
 	return Value(0)
 }
 
 func (reader *diskIOReader) readIoTime() Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return Value(disk.IoTime)
+		return reader.value(disk.IoTime, &reader.ioTimeRing)
 	}
 	return Value(0)
 }
