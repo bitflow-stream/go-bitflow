@@ -104,7 +104,7 @@ func (sink *TCPSink) Sample(sample Sample) error {
 	if err := sink.assertConnection(); err != nil {
 		return err
 	}
-	connection.samples <- sample
+	sink.conn.samples <- sample
 	return nil
 }
 
