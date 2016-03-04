@@ -15,6 +15,7 @@ import (
 const (
 	timeBytes          = 8
 	valBytes           = 8
+	binary_separator   = byte('\n')
 	csv_separator      = ","
 	csv_separator_rune = ','
 	csv_newline        = "\n"
@@ -62,11 +63,11 @@ func (*BinaryMarshaller) WriteHeader(header Header, writer io.Writer) error {
 		if _, err := writer.Write([]byte(name)); err != nil {
 			return err
 		}
-		if _, err := writer.Write([]byte{0}); err != nil {
+		if _, err := writer.Write([]byte{binary_separator}); err != nil {
 			return err
 		}
 	}
-	if _, err := writer.Write([]byte{0}); err != nil {
+	if _, err := writer.Write([]byte{binary_separator}); err != nil {
 		return err
 	}
 	return nil
@@ -75,7 +76,7 @@ func (*BinaryMarshaller) WriteHeader(header Header, writer io.Writer) error {
 func (*BinaryMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
 	*header = nil
 	for {
-		name, err := reader.ReadBytes(0)
+		name, err := reader.ReadBytes(binary_separator)
 		if err != nil {
 			return err
 		}
