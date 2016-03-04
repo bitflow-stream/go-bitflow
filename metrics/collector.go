@@ -28,17 +28,25 @@ type Collector interface {
 	SupportsMetric(metric string) bool
 }
 
-var collectors []Collector
+var collectors = make(map[Collector]bool)
 
 func RegisterCollector(collector Collector) {
-	collectors = append(collectors, collector)
+	collectors[collector] = true
 }
 
 // Must be called after all collectors have been registered through RegisterCollector
 func InitCollectors() error {
-	for _, collector := range collectors {
+	for collector, _ := range collectors {
 		if err := collector.Init(); err != nil {
-			return err
+			log.Printf("Failed to initialize data collector %T: %v\n", collector, err)
+			delete(collectors, collector)
+			continue
+		}
+		// Do one test update
+		if err := collector.Update(); err != nil {
+			log.Printf("Failed to update data collector %T: %v\n", collector, err)
+			delete(collectors, collector)
+			continue
 		}
 	}
 	return nil
@@ -46,7 +54,7 @@ func InitCollectors() error {
 
 func AllMetrics() []string {
 	var all []string
-	for _, collector := range collectors {
+	for collector, _ := range collectors {
 		metrics := collector.SupportedMetrics()
 		for _, metric := range metrics {
 			all = append(all, metric)
@@ -72,7 +80,7 @@ func FilterMetrics(all []string, removeRegexes []*regexp.Regexp) (filtered []str
 }
 
 func CollectorFor(metric string) Collector {
-	for _, collector := range collectors {
+	for collector, _ := range collectors {
 		if collector.SupportsMetric(metric) {
 			return collector
 		}
