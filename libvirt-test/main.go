@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/rgbkrk/libvirt-go"
 )
@@ -16,7 +17,8 @@ func check(err error) {
 // ==== SERVER:
 // /etc/default/libvirtd: Add --listen or -l parameter
 // /etc/libvirt/libvirtd.conf: listen_tls=0, listen_tcp=1, listen_addr="0.0.0.0"
-// saslpasswd2 -a libvirt root (-> Enter password rootpw)
+// sudo apt-get install sasl2-bin
+// sudo sudo saslpasswd2 -a libvirt root (-> Enter password rootpw)
 // Check user: sudo sasldblistusers2 -f /etc/libvirt/passwd.db
 // sudo /etc/init.d/libvirt-bin restart
 // ==== CLIENT:
@@ -30,7 +32,8 @@ func check(err error) {
 // $ virsh -c 'qemu+tcp://wally131/system' list
 
 func main() {
-	con, err := libvirt.NewVirConnection("qemu+tcp://root@wally131.cit.tu-berlin.de/system")
+	// "qemu+tcp://root@wally131.cit.tu-berlin.de/system"
+	con, err := libvirt.NewVirConnection(os.Args[1])
 	check(err)
 	fmt.Println(con.GetHostname())
 	fmt.Println(con.GetLibVersion())
