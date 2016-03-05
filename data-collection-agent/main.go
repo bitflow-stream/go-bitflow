@@ -61,13 +61,13 @@ func marshaller(format string) metrics.MetricMarshaller {
 func main() {
 	flag.StringVar(&format_input, "i", format_input, "Data source format (does not apply to -c), one of "+supportedFormats)
 
-	flag.BoolVar(&collect_local, "c", collect_local, "Data source: collect local metrics")
-	flag.DurationVar(&collect_local_interval, "ci", collect_local_interval, "Interval for collecting local metrics")
-	flag.DurationVar(&sink_interval, "si", sink_interval, "Interval for sinking (sending/printing/...) data when collecting local metrics")
+	flag.BoolVar(&collect_local, "c", collect_local, "Data source: collect local samples")
+	flag.DurationVar(&collect_local_interval, "ci", collect_local_interval, "Interval for collecting local samples")
+	flag.DurationVar(&sink_interval, "si", sink_interval, "Interval for sinking (sending/printing/...) data when collecting local samples")
 	flag.BoolVar(&collect_console, "C", collect_console, "Data source: read from stdin")
 	flag.StringVar(&collect_file, "F", collect_file, "Data source: read from file")
-	flag.StringVar(&collect_listen, "L", collect_listen, "Data source: receive metrics by accepting a TCP connection")
-	flag.StringVar(&collect_download, "D", collect_download, "Data source: receive metrics by connecting to remote endpoint")
+	flag.StringVar(&collect_listen, "L", collect_listen, "Data source: receive samples by accepting a TCP connection")
+	flag.StringVar(&collect_download, "D", collect_download, "Data source: receive samples by connecting to remote endpoint")
 
 	flag.BoolVar(&sink_console, "p", sink_console, "Data sink: print to stdout")
 	flag.StringVar(&format_console, "pf", format_console, "Data format for console output, one of "+supportedFormats)

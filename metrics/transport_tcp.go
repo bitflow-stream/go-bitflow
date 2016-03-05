@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	tcp_metric_buffer = 50
+	tcp_sample_buffer = 50
 )
 
 // ==================== TCP write connection ====================
@@ -26,7 +26,7 @@ func (sink *abstractSink) writeConn(conn *net.TCPConn) *tcpWriteConn {
 		sink:    sink,
 		conn:    conn,
 		remote:  conn.RemoteAddr(),
-		samples: make(chan Sample, tcp_metric_buffer),
+		samples: make(chan Sample, tcp_sample_buffer),
 	}
 }
 
@@ -78,7 +78,7 @@ type TCPSink struct {
 }
 
 func (sink *TCPSink) Start(wg *sync.WaitGroup, marshaller Marshaller) error {
-	log.Println("Sending", marshaller, "metrics to", sink.Endpoint)
+	log.Println("Sending", marshaller, "samples to", sink.Endpoint)
 	sink.marshaller = marshaller
 	sink.wg = wg
 	return nil
@@ -166,7 +166,7 @@ func tcpReadSamples(conn *net.TCPConn, um Unmarshaller, sink MetricSink) {
 	if num_samples, err = readSamples(conn, um, sink); err == io.EOF {
 		log.Println("Connection closed by", conn.RemoteAddr())
 	} else if err != nil {
-		log.Printf("Error receiving metrics from %v: %v\n", conn.RemoteAddr(), err)
+		log.Printf("Error receiving samples from %v: %v\n", conn.RemoteAddr(), err)
 		if err := conn.Close(); err != nil {
 			log.Println("Error closing connection:", err)
 		}

@@ -96,21 +96,23 @@ func (agg AggregateSink) Start(wg *sync.WaitGroup, marshaller Marshaller) error 
 }
 
 func (agg AggregateSink) Header(header Header) error {
+	var errors MultiError
 	for _, sink := range agg {
 		if err := sink.Header(header); err != nil {
-			return err
+			errors.Add(err)
 		}
 	}
-	return nil
+	return errors.NilOrError()
 }
 
 func (agg AggregateSink) Sample(sample Sample) error {
+	var errors MultiError
 	for _, sink := range agg {
 		if err := sink.Sample(sample); err != nil {
-			return err
+			errors.Add(err)
 		}
 	}
-	return nil
+	return errors.NilOrError()
 }
 
 // ==================== Empty Sink ====================

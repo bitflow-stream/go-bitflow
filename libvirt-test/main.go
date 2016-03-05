@@ -1,11 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"os"
-
-	"github.com/rgbkrk/libvirt-go"
+	"regexp"
 )
 
 func check(err error) {
@@ -33,11 +30,20 @@ func check(err error) {
 
 func main() {
 	// "qemu+tcp://root@wally131.cit.tu-berlin.de/system"
-	con, err := libvirt.NewVirConnection(os.Args[1])
-	check(err)
-	fmt.Println(con.GetHostname())
-	fmt.Println(con.GetLibVersion())
-	fmt.Println(con.GetType())
-	fmt.Println(con.GetCapabilities())
-	fmt.Println(con.GetNodeInfo())
+	//	con, err := libvirt.NewVirConnection(os.Args[1])
+	//	check(err)
+	//	fmt.Println(con.GetHostname())
+	//	fmt.Println(con.GetLibVersion())
+	//	fmt.Println(con.GetType())
+	//	fmt.Println(con.GetCapabilities())
+	//	fmt.Println(con.GetNodeInfo())
+
+	r := regexp.MustCompile("^" + "aaa" + "(-[0-9]+)?" + ".bbb" + "$")
+	log.Println(r.MatchString("aaa.bbb"))
+	log.Println(r.MatchString("aaa-.bbb"))
+	log.Println(r.MatchString("aaa--.bbb"))
+	log.Println(r.MatchString("aaa .bbb"))
+	log.Println(r.MatchString("aaa-0.bbb"))
+	log.Println(r.MatchString("aaa-0a.bbb"))
+	log.Println(r.MatchString("aaa-11.bbb"))
 }

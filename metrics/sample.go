@@ -20,7 +20,8 @@ const (
 	csv_separator_rune = ','
 	csv_newline        = "\n"
 	csv_time_col       = "time"
-	csv_date_layout    = "2006-01-02 15:04:05.999999999"
+	csv_date_format    = "2006-01-02 15:04:05.999999999"
+	text_date_format   = "2006-01-02 15:04:05.999"
 )
 
 type Marshaller interface {
@@ -89,7 +90,7 @@ func (*BinaryMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error 
 }
 
 func (*BinaryMarshaller) WriteSample(sample Sample, writer io.Writer) error {
-	// Time as uint64 nanoseconds since Unix epoch
+	// Time as big-endian uint64 nanoseconds since Unix epoch
 	tim := make([]byte, timeBytes)
 	binary.BigEndian.PutUint64(tim, uint64(sample.Time.UnixNano()))
 	if _, err := writer.Write(tim); err != nil {
@@ -195,7 +196,7 @@ func (*CsvMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
 }
 
 func (*CsvMarshaller) WriteSample(sample Sample, writer io.Writer) error {
-	if _, err := writer.Write([]byte(sample.Time.Format(csv_date_layout))); err != nil {
+	if _, err := writer.Write([]byte(sample.Time.Format(csv_date_format))); err != nil {
 		return err
 	}
 	for _, value := range sample.Values {
@@ -224,7 +225,7 @@ func (*CsvMarshaller) ReadSample(sample *Sample, reader *bufio.Reader, num int) 
 	if len(fields) == 0 && eof {
 		return io.EOF
 	}
-	tim, err := time.Parse(csv_date_layout, fields[0])
+	tim, err := time.Parse(csv_date_format, fields[0])
 	if err != nil {
 		return err
 	}
@@ -259,7 +260,7 @@ func (m *TextMarshaller) WriteSample(sample Sample, writer io.Writer) error {
 	if len(m.lastHeader) != len(sample.Values) {
 		return fmt.Errorf("Cannot write text sample of length %v, expected %v", len(sample.Values), len(m.lastHeader))
 	}
-	timeStr := sample.Time.Format("2006-01-02 15:04:05.999")
+	timeStr := sample.Time.Format(text_date_format)
 	fmt.Fprintf(writer, "%s: ", timeStr)
 	for i, value := range sample.Values {
 		fmt.Fprintf(writer, "%s = %.4f", m.lastHeader[i], value)
