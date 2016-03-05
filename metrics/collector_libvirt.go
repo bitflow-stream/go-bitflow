@@ -72,12 +72,11 @@ func (col *LibvirtCollector) Init() error {
 	return nil
 }
 
-func (col *LibvirtCollector) Update() error {
-	if err := col.update(); err != nil {
-		return err
+func (col *LibvirtCollector) Update() (err error) {
+	if err = col.update(); err != nil {
+		col.UpdateMetrics()
 	}
-	// TODO update
-	return nil
+	return
 }
 
 func (col *LibvirtCollector) update() (err error) {

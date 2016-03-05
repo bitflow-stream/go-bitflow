@@ -233,7 +233,7 @@ func (col *PsutilNetProtoCollector) Init() error {
 	col.protocols = make(map[string]psnet.NetProtoCountersStat)
 
 	// TODO missing: metrics about individual connections and NICs
-	if err := col.update(); err != nil {
+	if err := col.update(false); err != nil {
 		return err
 	}
 	col.readers = make(map[string]MetricReader)
@@ -250,23 +250,31 @@ func (col *PsutilNetProtoCollector) Init() error {
 	return nil
 }
 
-func (col *PsutilNetProtoCollector) update() error {
+func (col *PsutilNetProtoCollector) update(checkChange bool) error {
 	counters, err := psnet.NetProtoCounters(nil)
 	if err != nil {
 		return err
 	}
 	for _, counters := range counters {
+		if checkChange {
+			if _, ok := col.protocols[counters.Protocol]; !ok {
+				return MetricsChanged
+			}
+		}
 		col.protocols[counters.Protocol] = counters
+	}
+	if checkChange && len(counters) != len(col.protocols) {
+		// This means some previous metric is not available anymore
+		return MetricsChanged
 	}
 	return nil
 }
 
-func (col *PsutilNetProtoCollector) Update() error {
-	err := col.update()
-	if err == nil {
+func (col *PsutilNetProtoCollector) Update() (err error) {
+	if err = col.update(true); err == nil {
 		col.UpdateMetrics()
 	}
-	return err
+	return
 }
 
 type protoStatReader struct {
@@ -298,7 +306,7 @@ func (col *PsutilDiskIOCollector) Init() error {
 	col.Reset(col)
 	col.disks = make(map[string]disk.DiskIOCountersStat)
 
-	if err := col.update(); err != nil {
+	if err := col.update(false); err != nil {
 		return err
 	}
 	col.readers = make(map[string]MetricReader)
@@ -326,21 +334,30 @@ func (col *PsutilDiskIOCollector) Init() error {
 	return nil
 }
 
-func (col *PsutilDiskIOCollector) update() error {
+func (col *PsutilDiskIOCollector) update(checkChange bool) error {
 	disks, err := disk.DiskIOCounters()
 	if err != nil {
 		return err
+	}
+	if checkChange {
+		for k, _ := range col.disks {
+			if _, ok := disks[k]; !ok {
+				return MetricsChanged
+			}
+		}
+		if len(col.disks) != len(disks) {
+			return MetricsChanged
+		}
 	}
 	col.disks = disks
 	return nil
 }
 
-func (col *PsutilDiskIOCollector) Update() error {
-	err := col.update()
-	if err == nil {
+func (col *PsutilDiskIOCollector) Update() (err error) {
+	if err = col.update(true); err == nil {
 		col.UpdateMetrics()
 	}
-	return err
+	return
 }
 
 type diskIOReader struct {
@@ -422,7 +439,7 @@ func (reader *diskIOReader) readIoTime() Value {
 // ==================== Disk Usage ====================
 type PsutilDiskUsageCollector struct {
 	AbstractCollector
-	allPartitions      []string
+	allPartitions      map[string]bool
 	observedPartitions map[string]bool
 	usage              map[string]*disk.DiskUsageStat
 }
@@ -439,7 +456,7 @@ func (col *PsutilDiskUsageCollector) Init() error {
 	}
 
 	col.readers = make(map[string]MetricReader)
-	for _, partition := range col.allPartitions {
+	for partition, _ := range col.allPartitions {
 		name := "disk-usage/" + partition + "/"
 		reader := &diskUsageReader{
 			col:       col,
@@ -458,14 +475,14 @@ func (col *PsutilDiskUsageCollector) Collect(metric *Metric) error {
 	return col.AbstractCollector.Collect(metric)
 }
 
-func (col *PsutilDiskUsageCollector) getAllPartitions() ([]string, error) {
+func (col *PsutilDiskUsageCollector) getAllPartitions() (map[string]bool, error) {
 	partitions, err := disk.DiskPartitions(true)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]string, 0, len(partitions))
+	result := make(map[string]bool, len(partitions))
 	for _, partition := range partitions {
-		result = append(result, partition.Mountpoint)
+		result[partition.Mountpoint] = true
 	}
 	return result, nil
 }
@@ -481,12 +498,34 @@ func (col *PsutilDiskUsageCollector) update() error {
 	return nil
 }
 
-func (col *PsutilDiskUsageCollector) Update() error {
-	err := col.update()
-	if err == nil {
-		col.UpdateMetrics()
+func (col *PsutilDiskUsageCollector) checkChangedPartitions() error {
+	partitions, err := disk.DiskPartitions(true)
+	if err != nil {
+		return err
 	}
-	return err
+	checked := make(map[string]bool, len(partitions))
+	for _, partition := range partitions {
+		if _, ok := col.allPartitions[partition.Mountpoint]; !ok {
+			return MetricsChanged
+		}
+		checked[partition.Mountpoint] = true
+	}
+	if len(checked) != len(col.allPartitions) {
+		return MetricsChanged
+	}
+	return nil
+}
+
+func (col *PsutilDiskUsageCollector) Update() error {
+	if err := col.checkChangedPartitions(); err != nil {
+		return err
+	}
+	if err := col.update(); err == nil {
+		col.UpdateMetrics()
+		return nil
+	} else {
+		return err
+	}
 }
 
 type diskUsageReader struct {

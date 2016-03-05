@@ -163,7 +163,7 @@ func (*CsvMarshaller) WriteHeader(header Header, writer io.Writer) error {
 }
 
 func readCsvLine(reader *bufio.Reader) ([]string, bool, error) {
-	line, err := reader.ReadString('\n')
+	line, err := reader.ReadString(csv_newline[0])
 	eof := err == io.EOF
 	if err != nil && !eof {
 		return nil, false, err
@@ -257,7 +257,7 @@ func (m *TextMarshaller) WriteHeader(header Header, writer io.Writer) error {
 
 func (m *TextMarshaller) WriteSample(sample Sample, writer io.Writer) error {
 	if len(m.lastHeader) != len(sample.Values) {
-		return fmt.Errorf("Canot write text sample of length %v, expected %v", len(sample.Values), len(m.lastHeader))
+		return fmt.Errorf("Cannot write text sample of length %v, expected %v", len(sample.Values), len(m.lastHeader))
 	}
 	timeStr := sample.Time.Format("2006-01-02 15:04:05.999")
 	fmt.Fprintf(writer, "%s: ", timeStr)
