@@ -66,6 +66,9 @@ func main() {
 	flag.StringVar(&sink_listen, "l", sink_listen, "Data sink: accept connections for sending out data")
 	flag.Parse()
 
+	// ====== Configure collectors
+	metrics.RegisterLibvirtCollectors(metrics.LibvirtLocal())
+
 	// ====== Data format
 	if format_both != "" {
 		if format_input != "" || format_output != "" {
@@ -115,7 +118,11 @@ func main() {
 			source = theSource
 		}
 	}
-	setSource(collect_local, new(CollectorSource))
+	setSource(collect_local, &metrics.CollectorSource{
+		CollectInterval: collect_local_interval,
+		SinkInterval:    sink_interval,
+		IgnoredMetrics:  ignoredMetrics,
+	})
 	setSource(collect_console, new(metrics.ConsoleSource))
 	setSource(collect_listen != "", &metrics.TCPListenerSource{
 		ListenEndpoint: collect_listen,
@@ -144,29 +151,4 @@ func main() {
 		}
 	}
 	wg.Wait()
-}
-
-type CollectorSource struct {
-}
-
-func (source *CollectorSource) Start(wg *sync.WaitGroup, _ metrics.Unmarshaller, sink metrics.MetricSink) error {
-	if err := metrics.InitCollectors(); err != nil {
-		return err
-	}
-	met := metrics.AllMetrics()
-	met = metrics.FilterMetrics(met, ignoredMetrics)
-	log.Printf("Locally collecting %v metrics\n", len(met))
-
-	header, values, collectors, err := metrics.ConstructSample(met)
-	if err != nil {
-		return err
-	}
-	for _, collector := range collectors {
-		wg.Add(1)
-		go metrics.UpdateCollector(wg, collector, collect_local_interval)
-	}
-
-	wg.Add(1)
-	go metrics.SinkMetrics(wg, header, values, sink, sink_interval)
-	return nil
 }
