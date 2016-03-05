@@ -155,9 +155,10 @@ func (sink *FileSink) Header(header Header) error {
 		if err := sink.openNextFile(); err != nil {
 			return err
 		}
+		sink.header = header
+		return sink.marshaller.WriteHeader(header, sink.file)
 	}
-	sink.header = header
-	return sink.marshaller.WriteHeader(header, sink.file)
+	return nil
 }
 
 func (sink *FileSink) Sample(sample Sample) error {

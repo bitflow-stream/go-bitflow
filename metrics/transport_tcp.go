@@ -120,6 +120,7 @@ func (sink *TCPSink) assertConnection() error {
 			return err
 		}
 		sink.conn = sink.writeConn(conn)
+		sink.wg.Add(1)
 		go sink.conn.run(sink.wg)
 	}
 	return nil

@@ -32,6 +32,8 @@ var (
 	format_listen    = "b"
 	format_file      = "c"
 
+	all_metrics = false
+
 	active_retry_interval = 1000 * time.Millisecond
 )
 
@@ -59,6 +61,7 @@ func marshaller(format string) metrics.MetricMarshaller {
 }
 
 func main() {
+	flag.BoolVar(&all_metrics, "a", all_metrics, "Use all available metrics, disable all filters")
 	flag.StringVar(&format_input, "i", format_input, "Data source format (does not apply to -c), one of "+supportedFormats)
 
 	flag.BoolVar(&collect_local, "c", collect_local, "Data source: collect local samples")
@@ -82,6 +85,9 @@ func main() {
 	// ====== Configure collectors
 	metrics.RegisterPsutilCollectors()
 	metrics.RegisterLibvirtCollectors(metrics.LibvirtLocal())
+	if all_metrics {
+		ignoredMetrics = nil
+	}
 
 	// ====== Data format
 	marshaller_console := marshaller(format_console)
