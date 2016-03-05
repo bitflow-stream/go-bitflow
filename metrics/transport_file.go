@@ -22,12 +22,13 @@ func (transport *FileTransport) Close() error {
 
 // ==================== File data source ====================
 type FileSource struct {
+	unmarshallingMetricSource
 	FileTransport
 }
 
-func (source *FileSource) Start(wg *sync.WaitGroup, um Unmarshaller, sink MetricSink) (err error) {
+func (source *FileSource) Start(wg *sync.WaitGroup, sink MetricSink) (err error) {
 	if source.file, err = os.Open(source.Filename); err == nil {
-		simpleReadSamples(wg, source.file.Name(), source.file, um, sink)
+		simpleReadSamples(wg, source.file.Name(), source.file, source.Unmarshaller, sink)
 	}
 	return
 }
@@ -39,6 +40,7 @@ type FileSink struct {
 }
 
 func (sink *FileSink) Start(wg *sync.WaitGroup, marshaller Marshaller) (err error) {
+	log.Println("Writing", marshaller, "samples to", sink.Filename)
 	sink.marshaller = marshaller
 	sink.file, err = os.Create(sink.Filename)
 	return
@@ -46,7 +48,6 @@ func (sink *FileSink) Start(wg *sync.WaitGroup, marshaller Marshaller) (err erro
 
 func (sink *FileSink) Header(header Header) error {
 	sink.header = header
-	log.Printf("Writing %v metrics to %v\n", len(header), sink.file.Name())
 	return sink.marshaller.WriteHeader(header, sink.file)
 }
 

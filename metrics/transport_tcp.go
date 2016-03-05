@@ -52,7 +52,7 @@ func (conn *tcpWriteConn) run(wg *sync.WaitGroup) {
 		conn.conn = nil // In case of panic, avoid full channel-buffer
 		wg.Done()
 	}()
-	log.Printf("Serving %v metrics to %v\n", len(conn.sink.header), conn.remote)
+	log.Println("Serving", len(conn.sink.header), "metrics to", conn.remote)
 	if err := conn.sink.marshaller.WriteHeader(conn.sink.header, conn.conn); err != nil {
 		conn.stop(err)
 		return
@@ -78,6 +78,7 @@ type TCPSink struct {
 }
 
 func (sink *TCPSink) Start(wg *sync.WaitGroup, marshaller Marshaller) error {
+	log.Println("Sending", marshaller, "metrics to", sink.Endpoint)
 	sink.marshaller = marshaller
 	sink.wg = wg
 	return nil
@@ -126,24 +127,25 @@ func (sink *TCPSink) assertConnection() error {
 
 // ==================== TCP active source ====================
 type TCPSource struct {
+	unmarshallingMetricSource
 	RemoteAddr    string
 	RetryInterval time.Duration
 }
 
-func (source *TCPSource) Start(wg *sync.WaitGroup, um Unmarshaller, sink MetricSink) error {
+func (source *TCPSource) Start(wg *sync.WaitGroup, sink MetricSink) error {
 	wg.Add(1)
-	go source.download(wg, um, sink)
+	go source.download(wg, sink)
 	return nil
 }
 
-func (source *TCPSource) download(wg *sync.WaitGroup, um Unmarshaller, sink MetricSink) {
+func (source *TCPSource) download(wg *sync.WaitGroup, sink MetricSink) {
 	defer wg.Done()
-	log.Println("Downloading data from", source.RemoteAddr)
+	log.Println("Downloading", source.Unmarshaller, "data from", source.RemoteAddr)
 	for {
 		if conn, err := source.dial(); err != nil {
 			log.Println("Error downloading data:", err)
 		} else {
-			tcpRead(conn, um, sink)
+			tcpReadSamples(conn, source.Unmarshaller, sink)
 		}
 		time.Sleep(source.RetryInterval)
 	}
@@ -157,7 +159,7 @@ func (source *TCPSource) dial() (*net.TCPConn, error) {
 	return net.DialTCP("tcp", nil, endpoint)
 }
 
-func tcpRead(conn *net.TCPConn, um Unmarshaller, sink MetricSink) {
+func tcpReadSamples(conn *net.TCPConn, um Unmarshaller, sink MetricSink) {
 	log.Println("Receiving header from", conn.RemoteAddr())
 	var err error
 	var num_samples int

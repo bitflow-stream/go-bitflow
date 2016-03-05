@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"log"
 	"os"
 	"sync"
 )
@@ -10,6 +11,7 @@ type ConsoleSink struct {
 }
 
 func (sink *ConsoleSink) Start(wg *sync.WaitGroup, marshaller Marshaller) error {
+	log.Println("Printing", marshaller, "samples")
 	sink.marshaller = marshaller
 	return nil
 }
@@ -27,9 +29,10 @@ func (sink *ConsoleSink) Sample(sample Sample) error {
 }
 
 type ConsoleSource struct {
+	unmarshallingMetricSource
 }
 
-func (source *ConsoleSource) Start(wg *sync.WaitGroup, um Unmarshaller, sink MetricSink) error {
-	simpleReadSamples(wg, "stdin", os.Stdin, um, sink)
+func (source *ConsoleSource) Start(wg *sync.WaitGroup, sink MetricSink) error {
+	simpleReadSamples(wg, "stdin", os.Stdin, source.Unmarshaller, sink)
 	return nil
 }

@@ -8,10 +8,11 @@ import (
 
 // ==================== TCP listener source ====================
 type TCPListenerSource struct {
+	unmarshallingMetricSource
 	ListenEndpoint string
 }
 
-func (source *TCPListenerSource) Start(wg *sync.WaitGroup, um Unmarshaller, sink MetricSink) error {
+func (source *TCPListenerSource) Start(wg *sync.WaitGroup, sink MetricSink) error {
 	endpoint, err := net.ResolveTCPAddr("tcp", source.ListenEndpoint)
 	if err != nil {
 		return err
@@ -21,13 +22,13 @@ func (source *TCPListenerSource) Start(wg *sync.WaitGroup, um Unmarshaller, sink
 		return err
 	}
 	wg.Add(1)
-	go source.listen(wg, listener, um, sink)
+	go source.listen(wg, listener, sink)
 	return nil
 }
 
-func (source *TCPListenerSource) listen(wg *sync.WaitGroup, listener *net.TCPListener, um Unmarshaller, sink MetricSink) {
+func (source *TCPListenerSource) listen(wg *sync.WaitGroup, listener *net.TCPListener, sink MetricSink) {
 	defer wg.Done()
-	log.Println("Listening for incoming metric data on", listener.Addr())
+	log.Println("Listening for incoming", source.Unmarshaller, "samples on", listener.Addr())
 	var connected net.Addr
 	for {
 		conn, err := listener.AcceptTCP()
@@ -49,7 +50,7 @@ func (source *TCPListenerSource) listen(wg *sync.WaitGroup, listener *net.TCPLis
 					wg.Done()
 					connected = nil
 				}()
-				tcpRead(conn, um, sink)
+				tcpReadSamples(conn, source.Unmarshaller, sink)
 			}()
 		}
 	}
@@ -83,7 +84,7 @@ func (sink *TCPListenerSink) Start(wg *sync.WaitGroup, marshaller Marshaller) er
 
 func (sink *TCPListenerSink) listen(wg *sync.WaitGroup, listener *net.TCPListener) {
 	defer wg.Done()
-	log.Println("Listening for data sink connections on", listener.Addr())
+	log.Println("Listening for", sink.marshaller, "sample output connections on", listener.Addr())
 	for {
 		conn, err := listener.AcceptTCP()
 		if err != nil {

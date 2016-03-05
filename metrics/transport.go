@@ -29,7 +29,20 @@ func (sink *abstractSink) checkSample(sample Sample) error {
 
 // ==================== Data Source ====================
 type MetricSource interface {
-	Start(wg *sync.WaitGroup, um Unmarshaller, sink MetricSink) error
+	Start(wg *sync.WaitGroup, sink MetricSink) error
+}
+
+type UnmarshallingMetricSource interface {
+	MetricSource
+	SetUnmarshaller(unmarshaller Unmarshaller) // Must be called before Start()
+}
+
+type unmarshallingMetricSource struct {
+	Unmarshaller Unmarshaller
+}
+
+func (s *unmarshallingMetricSource) SetUnmarshaller(unmarshaller Unmarshaller) {
+	s.Unmarshaller = unmarshaller
 }
 
 func readSamples(input io.Reader, um Unmarshaller, sink MetricSink) (int, error) {
@@ -62,11 +75,11 @@ func simpleReadSamples(wg *sync.WaitGroup, sourceName string, input io.Reader, u
 		defer wg.Done()
 		var err error
 		var num_samples int
-		log.Println("Reading from", sourceName)
+		log.Println("Reading", um, "from", sourceName)
 		if num_samples, err = readSamples(input, um, sink); err != nil && err != io.EOF {
 			log.Println("Read failed:", err)
 		}
-		log.Printf("Read %v samples from %v\n", num_samples, sourceName)
+		log.Printf("Read %v %v samples from %v\n", num_samples, um, sourceName)
 	}()
 }
 
@@ -97,5 +110,20 @@ func (agg AggregateSink) Sample(sample Sample) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// ==================== Empty Sink ====================
+type EmptySink struct{}
+
+func (*EmptySink) Start(wg *sync.WaitGroup, marshaller Marshaller) error {
+	return nil
+}
+
+func (*EmptySink) Header(header Header) error {
+	return nil
+}
+
+func (*EmptySink) Sample(sample Sample) error {
 	return nil
 }

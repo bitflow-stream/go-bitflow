@@ -22,7 +22,7 @@ const (
 	DiskIoInterval = 1 * time.Second
 )
 
-func init() {
+func RegisterPsutilCollectors() {
 	RegisterCollector(new(PsutilMemCollector))
 	RegisterCollector(new(PsutilCpuCollector))
 	RegisterCollector(new(PsutilLoadCollector))

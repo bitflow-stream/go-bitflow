@@ -47,7 +47,7 @@ type CollectorSource struct {
 	collectors []Collector
 }
 
-func (config *CollectorSource) Start(wg *sync.WaitGroup, _ Unmarshaller, sink MetricSink) error {
+func (config *CollectorSource) Start(wg *sync.WaitGroup, sink MetricSink) error {
 	wg.Add(1)
 	go config.run(wg, sink)
 	return nil
