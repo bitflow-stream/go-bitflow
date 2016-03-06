@@ -34,6 +34,8 @@ var (
 
 	all_metrics = false
 
+	libvirt_uri = metrics.LibvirtLocal()
+	//	libvirt_uri           = metrics.LibvirtSsh("host", "keyfile")
 	active_retry_interval = 1000 * time.Millisecond
 )
 
@@ -84,7 +86,7 @@ func main() {
 
 	// ====== Configure collectors
 	metrics.RegisterPsutilCollectors()
-	metrics.RegisterLibvirtCollectors(metrics.LibvirtLocal())
+	metrics.RegisterLibvirtCollector(libvirt_uri)
 	if all_metrics {
 		ignoredMetrics = nil
 	}
