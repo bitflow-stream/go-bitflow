@@ -7,12 +7,7 @@ import (
 )
 
 const (
-	// virDomainMemoryStatStruct.Tag
-	VIR_DOMAIN_MEMORY_STAT_SWAP_OUT       = 1
-	VIR_DOMAIN_MEMORY_STAT_AVAILABLE      = 5 // Max usable memory
-	VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON = 6 // Used memory?
-	VIR_DOMAIN_MEMORY_STAT_RSS            = 7 // Occuppied by VM process
-	MAX_NUM_MEMORY_STATS                  = 8
+	NO_FLAGS = 0
 )
 
 /*
@@ -102,7 +97,7 @@ func (col *LibvirtCollector) update(checkChange bool) error {
 		return err
 	}
 	col.conn = conn
-	domains, err := conn.ListAllDomains(0) // No flags: return all domains
+	domains, err := conn.ListAllDomains(NO_FLAGS) // No flags: return all domains
 	if err != nil {
 		return err
 	}
@@ -134,6 +129,15 @@ func (col *LibvirtCollector) updateVms() error {
 }
 
 // ==================== Metrics ====================
+const (
+	// virDomainMemoryStatStruct.Tag
+	VIR_DOMAIN_MEMORY_STAT_SWAP_OUT       = 1
+	VIR_DOMAIN_MEMORY_STAT_AVAILABLE      = 5 // Max usable memory
+	VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON = 6 // Used memory?
+	VIR_DOMAIN_MEMORY_STAT_RSS            = 7 // Occuppied by VM process
+	MAX_NUM_MEMORY_STATS                  = 8
+)
+
 type vmMetricsReader struct {
 	col      *LibvirtCollector
 	name     string
@@ -145,7 +149,7 @@ func (reader *vmMetricsReader) update() error {
 		return fmt.Errorf("Warning: libvirt domain %v not found", reader.name)
 	} else {
 		var err error
-		if reader.memStats, err = domain.MemoryStats(MAX_NUM_MEMORY_STATS, 0); err != nil {
+		if reader.memStats, err = domain.MemoryStats(MAX_NUM_MEMORY_STATS, NO_FLAGS); err != nil {
 			return err
 		}
 	}
