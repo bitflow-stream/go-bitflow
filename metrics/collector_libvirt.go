@@ -88,8 +88,8 @@ func (col *LibvirtCollector) Init() error {
 }
 
 func (col *LibvirtCollector) Update() (err error) {
-	if err = col.update(true); err != nil {
-		if err = col.updateVms(); err != nil {
+	if err = col.update(true); err == nil {
+		if err = col.updateVms(); err == nil {
 			col.UpdateMetrics()
 		}
 	}
