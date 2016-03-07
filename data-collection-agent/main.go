@@ -13,6 +13,7 @@ import (
 var (
 	collect_local_interval = 300 * time.Millisecond
 	sink_interval          = 500 * time.Millisecond
+	active_retry_interval  = 1000 * time.Millisecond
 
 	collect_local    = false
 	collect_console  = false
@@ -32,15 +33,17 @@ var (
 	format_listen    = "b"
 	format_file      = "c"
 
-	all_metrics = false
+	all_metrics          = false
+	user_include_metrics metrics.StringSlice
+	user_exclude_metrics metrics.StringSlice
 
-	libvirt_uri = metrics.LibvirtLocal()
-	//	libvirt_uri           = metrics.LibvirtSsh("host", "keyfile")
-	active_retry_interval = 1000 * time.Millisecond
+	print_metrics = false
+	libvirt_uri   = metrics.LibvirtLocal() // metrics.LibvirtSsh("host", "keyfile")
 )
 
 var (
-	ignoredMetrics = []*regexp.Regexp{
+	includeMetricsRegexes []*regexp.Regexp
+	excludeMetricsRegexes = []*regexp.Regexp{
 		regexp.MustCompile("^net-proto/(UdpLite|IcmpMsg)"), // Some extended protocol-metrics
 		regexp.MustCompile("^disk-io/...[0-9]"),            // Disk IO for specific partitions
 		regexp.MustCompile("^disk-usage//.+/(used|free)$"), // All partitions except root
@@ -63,9 +66,13 @@ func marshaller(format string) metrics.MetricMarshaller {
 }
 
 func main() {
-	flag.BoolVar(&all_metrics, "a", all_metrics, "Use all available metrics, disable all filters")
-	flag.StringVar(&format_input, "i", format_input, "Data source format (does not apply to -c), one of "+supportedFormats)
+	flag.StringVar(&libvirt_uri, "libvirt", libvirt_uri, "Libvirt connection uri (default is local system)")
+	flag.BoolVar(&print_metrics, "metrics", print_metrics, "Print all available metrics and exit")
+	flag.BoolVar(&all_metrics, "a", all_metrics, "Disable built-in filters on available metrics")
+	flag.Var(&user_exclude_metrics, "exclude", "Metrics to exclude (only with -c, substring match)")
+	flag.Var(&user_include_metrics, "include", "Metrics to include exclusively (only with -c, substring match)")
 
+	flag.StringVar(&format_input, "i", format_input, "Data source format (does not apply to -c), one of "+supportedFormats)
 	flag.BoolVar(&collect_local, "c", collect_local, "Data source: collect local samples")
 	flag.DurationVar(&collect_local_interval, "ci", collect_local_interval, "Interval for collecting local samples")
 	flag.DurationVar(&sink_interval, "si", sink_interval, "Interval for sinking (sending/printing/...) data when collecting local samples")
@@ -88,7 +95,15 @@ func main() {
 	metrics.RegisterPsutilCollectors()
 	metrics.RegisterLibvirtCollector(libvirt_uri)
 	if all_metrics {
-		ignoredMetrics = nil
+		excludeMetricsRegexes = nil
+	}
+	for _, exclude := range user_exclude_metrics {
+		excludeMetricsRegexes = append(excludeMetricsRegexes,
+			regexp.MustCompile(regexp.QuoteMeta(exclude)))
+	}
+	for _, include := range user_include_metrics {
+		includeMetricsRegexes = append(includeMetricsRegexes,
+			regexp.MustCompile(regexp.QuoteMeta(include)))
 	}
 
 	// ====== Data format
@@ -108,11 +123,17 @@ func main() {
 			source = theSource
 		}
 	}
-	setSource(collect_local, &metrics.CollectorSource{
+	collector := &metrics.CollectorSource{
 		CollectInterval: collect_local_interval,
 		SinkInterval:    sink_interval,
-		IgnoredMetrics:  ignoredMetrics,
-	})
+		ExcludeMetrics:  excludeMetricsRegexes,
+		IncludeMetrics:  includeMetricsRegexes,
+	}
+	if print_metrics {
+		collector.PrintMetrics()
+		return
+	}
+	setSource(collect_local, collector)
 	setSource(collect_console, new(metrics.ConsoleSource))
 	setSource(collect_listen != "", &metrics.TCPListenerSource{
 		ListenEndpoint: collect_listen,

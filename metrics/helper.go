@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// ============================================================================
 type Stopper struct {
 	stopped   chan bool
 	num       int
@@ -39,6 +40,7 @@ func (s *Stopper) IsStopped() bool {
 	return s.isStopped
 }
 
+// ============================================================================
 type MultiError []error
 
 func (err MultiError) NilOrError() error {
@@ -70,4 +72,16 @@ func (err MultiError) Error() string {
 		}
 		return buf.String()
 	}
+}
+
+// ============================================================================
+type StringSlice []string
+
+func (i *StringSlice) String() string {
+	return fmt.Sprintf("%v", *i)
+}
+
+func (i *StringSlice) Set(value string) error {
+	*i = append(*i, value)
+	return nil
 }
