@@ -15,11 +15,9 @@ const (
 	v.GetBlockInfo()
 	v.InterfaceStats()
 	v.BlockStatsFlags()
-	v.GetCPUStats()
 
 	// ?
 	v.GetInterfaceParameters()
-	v.GetInfo()
 	v.GetXMLDesc()
 
 	// State
@@ -33,7 +31,6 @@ const (
 	v.GetUUID()
 	v.GetUUIDString()
 	v.GetAutostart()
-	v.GetVcpus()
 */
 
 func RegisterLibvirtCollector(connectUri string) {
@@ -51,39 +48,49 @@ func LibvirtLocal() string {
 	return "qemu:///system"
 }
 
-// ==================== General collector ====================
+// ==================== Libvirt collector ====================
 type LibvirtCollector struct {
 	AbstractCollector
 	ConnectUri string
 	conn       libvirt.VirConnection
 	domains    map[string]libvirt.VirDomain
-	vmReaders  []*vmMetricsReader
+	vmReaders  []*vmMetricsCollector
 }
 
 func (col *LibvirtCollector) Init() error {
 	col.Reset(col)
 	col.domains = make(map[string]libvirt.VirDomain)
-	if err := col.update(false); err != nil {
+	if err := col.fetchDomains(false); err != nil {
 		return err
 	}
 	col.readers = make(map[string]MetricReader)
-	col.vmReaders = make([]*vmMetricsReader, 0, len(col.domains))
+	col.vmReaders = make([]*vmMetricsCollector, 0, len(col.domains))
 	for name, _ := range col.domains {
-		vmReader := &vmMetricsReader{
+		vmReader := &vmMetricsCollector{
 			col:  col,
 			name: name,
+			readers: []activatedMetricsReader{
+				activatedMetricsReader{reader: &vmGeneralReader{}},
+				activatedMetricsReader{reader: &memoryStatReader{}},
+				activatedMetricsReader{reader: &cpuStatReader{}},
+				activatedMetricsReader{reader: &blockStatReader{}},
+			},
+		}
+		for _, collector := range vmReader.readers {
+			for metric, reader := range collector.reader.register(name) {
+				// The notify mechanism here is to avoid unnecessary libvirt
+				// API-calls for metrics that filtered out
+				col.readers[metric] = reader
+				col.notify[metric] = collector.activate
+			}
 		}
 		col.vmReaders = append(col.vmReaders, vmReader)
-		col.readers["libvirt/vm/"+name+"/swap"] = vmReader.readSwap
-		col.readers["libvirt/vm/"+name+"/available"] = vmReader.readAvailable
-		col.readers["libvirt/vm/"+name+"/balloon"] = vmReader.readBalloon
-		col.readers["libvirt/vm/"+name+"/rss"] = vmReader.readRss
 	}
 	return nil
 }
 
 func (col *LibvirtCollector) Update() (err error) {
-	if err = col.update(true); err == nil {
+	if err = col.fetchDomains(true); err == nil {
 		if err = col.updateVms(); err == nil {
 			col.UpdateMetrics()
 		}
@@ -91,7 +98,7 @@ func (col *LibvirtCollector) Update() (err error) {
 	return
 }
 
-func (col *LibvirtCollector) update(checkChange bool) error {
+func (col *LibvirtCollector) fetchDomains(checkChange bool) error {
 	conn, err := libvirt.NewVirConnection(col.ConnectUri)
 	if err != nil {
 		return err
@@ -128,7 +135,73 @@ func (col *LibvirtCollector) updateVms() error {
 	return nil
 }
 
-// ==================== Metrics ====================
+// ==================== VM Collector ====================
+type vmMetricsCollector struct {
+	col     *LibvirtCollector
+	name    string
+	readers []activatedMetricsReader
+}
+
+func (reader *vmMetricsCollector) update() error {
+	if domain, ok := reader.col.domains[reader.name]; !ok {
+		return fmt.Errorf("Warning: libvirt domain %v not found", reader.name)
+	} else {
+		for _, collector := range reader.readers {
+			if collector.active {
+				if err := collector.reader.update(domain); err != nil {
+					return fmt.Errorf("Failed to update domain %s: %v", domain, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+type activatedMetricsReader struct {
+	active bool
+	reader vmMetricsReader
+}
+
+func (reader *activatedMetricsReader) activate() {
+	reader.active = true
+}
+
+type vmMetricsReader interface {
+	update(domain libvirt.VirDomain) error
+	register(domainName string) map[string]MetricReader
+}
+
+// ==================== General VM info ====================
+type vmGeneralReader struct {
+	info libvirt.VirDomainInfo
+}
+
+func (reader *vmGeneralReader) register(domainName string) map[string]MetricReader {
+	return map[string]MetricReader{
+		"libvirt/vm/" + domainName + "/general/cpu":    reader.readCpu,
+		"libvirt/vm/" + domainName + "/general/maxMem": reader.readMaxMem,
+		"libvirt/vm/" + domainName + "/general/mem":    reader.readMem,
+	}
+}
+
+func (reader *vmGeneralReader) update(domain libvirt.VirDomain) (err error) {
+	reader.info, err = domain.GetInfo()
+	return
+}
+
+func (reader *vmGeneralReader) readCpu() Value {
+	return Value(reader.info.GetCpuTime())
+}
+
+func (reader *vmGeneralReader) readMaxMem() Value {
+	return Value(reader.info.GetMaxMem())
+}
+
+func (reader *vmGeneralReader) readMem() Value {
+	return Value(reader.info.GetMemory())
+}
+
+// ==================== Memory Stats ====================
 const (
 	// virDomainMemoryStatStruct.Tag
 	VIR_DOMAIN_MEMORY_STAT_SWAP_OUT       = 1
@@ -138,25 +211,25 @@ const (
 	MAX_NUM_MEMORY_STATS                  = 8
 )
 
-type vmMetricsReader struct {
-	col      *LibvirtCollector
-	name     string
+type memoryStatReader struct {
 	memStats []libvirt.VirDomainMemoryStat
 }
 
-func (reader *vmMetricsReader) update() error {
-	if domain, ok := reader.col.domains[reader.name]; !ok {
-		return fmt.Errorf("Warning: libvirt domain %v not found", reader.name)
-	} else {
-		var err error
-		if reader.memStats, err = domain.MemoryStats(MAX_NUM_MEMORY_STATS, NO_FLAGS); err != nil {
-			return err
-		}
+func (reader *memoryStatReader) register(domainName string) map[string]MetricReader {
+	return map[string]MetricReader{
+		"libvirt/vm/" + domainName + "/swap":      reader.readSwap,
+		"libvirt/vm/" + domainName + "/available": reader.readAvailable,
+		"libvirt/vm/" + domainName + "/balloon":   reader.readBalloon,
+		"libvirt/vm/" + domainName + "/rss":       reader.readRss,
 	}
-	return nil
 }
 
-func (reader *vmMetricsReader) readMemStat(index int32) Value {
+func (reader *memoryStatReader) update(domain libvirt.VirDomain) (err error) {
+	reader.memStats, err = domain.MemoryStats(MAX_NUM_MEMORY_STATS, NO_FLAGS)
+	return
+}
+
+func (reader *memoryStatReader) readMemStat(index int32) Value {
 	// TODO short linear search for every single metric...
 	for _, stat := range reader.memStats {
 		if stat.Tag == index {
@@ -166,18 +239,52 @@ func (reader *vmMetricsReader) readMemStat(index int32) Value {
 	return Value(-1)
 }
 
-func (reader *vmMetricsReader) readSwap() Value {
+func (reader *memoryStatReader) readSwap() Value {
 	return reader.readMemStat(VIR_DOMAIN_MEMORY_STAT_SWAP_OUT)
 }
 
-func (reader *vmMetricsReader) readAvailable() Value {
+func (reader *memoryStatReader) readAvailable() Value {
 	return reader.readMemStat(VIR_DOMAIN_MEMORY_STAT_AVAILABLE)
 }
 
-func (reader *vmMetricsReader) readBalloon() Value {
+func (reader *memoryStatReader) readBalloon() Value {
 	return reader.readMemStat(VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON)
 }
 
-func (reader *vmMetricsReader) readRss() Value {
+func (reader *memoryStatReader) readRss() Value {
 	return reader.readMemStat(VIR_DOMAIN_MEMORY_STAT_RSS)
+}
+
+// ==================== CPU Stats ====================
+type cpuStatReader struct {
+	stats    *libvirt.VirTypedParameters
+	numStats int
+}
+
+func (reader *cpuStatReader) register(domainName string) map[string]MetricReader {
+	// TODO implement
+	return nil
+}
+
+func (reader *cpuStatReader) update(domain libvirt.VirDomain) (err error) {
+	// TODO Alternative, if GetCPUStats() is not necessary
+	// v.GetVcpus() - CPU time per CPU
+	_, err = domain.GetCPUStats(reader.stats, reader.numStats, -1, 1, NO_FLAGS)
+	return
+}
+
+// ==================== Block info ====================
+type blockStatReader struct {
+}
+
+func (reader *blockStatReader) register(domainName string) map[string]MetricReader {
+	// TODO
+	return nil
+}
+
+func (reader *blockStatReader) update(domain libvirt.VirDomain) (err error) {
+	// TODO need to get all block devices from domain.GetXMLDesc()
+	// domain.GetBlockInfo()
+	// More detailed alternative: domain.BlockStatsFlags()
+	return
 }

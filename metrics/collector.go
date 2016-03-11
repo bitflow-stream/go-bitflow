@@ -238,6 +238,7 @@ func (col *CollectorSource) PrintMetrics() {
 type AbstractCollector struct {
 	metrics []*CollectedMetric
 	readers map[string]MetricReader // Must be filled in Init() implementations
+	notify  map[string]CollectNotification
 	name    string
 }
 
@@ -246,11 +247,13 @@ type CollectedMetric struct {
 	MetricReader
 }
 
+type CollectNotification func()
 type MetricReader func() Value
 
 func (col *AbstractCollector) Reset(parent interface{}) {
 	col.metrics = nil
 	col.readers = nil
+	col.notify = make(map[string]CollectNotification)
 	col.name = fmt.Sprintf("%T", parent)
 }
 
@@ -275,6 +278,9 @@ func (col *AbstractCollector) Collect(metric *Metric) error {
 				Metric:       metric,
 				MetricReader: reader,
 			})
+			if notifier, ok := col.notify[metric.Name]; ok {
+				notifier()
+			}
 			return nil
 		}
 		tags = append(tags, metric.Name)
