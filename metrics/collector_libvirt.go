@@ -69,11 +69,11 @@ func (col *LibvirtCollector) Init() error {
 		vmReader := &vmMetricsCollector{
 			col:  col,
 			name: name,
-			readers: []activatedMetricsReader{
-				activatedMetricsReader{reader: &vmGeneralReader{}},
-				activatedMetricsReader{reader: &memoryStatReader{}},
-				activatedMetricsReader{reader: &cpuStatReader{}},
-				activatedMetricsReader{reader: &blockStatReader{}},
+			readers: []*activatedMetricsReader{
+				&activatedMetricsReader{reader: &vmGeneralReader{}},
+				&activatedMetricsReader{reader: &memoryStatReader{}},
+				&activatedMetricsReader{reader: &cpuStatReader{}},
+				&activatedMetricsReader{reader: &blockStatReader{}},
 			},
 		}
 		for _, collector := range vmReader.readers {
@@ -139,7 +139,7 @@ func (col *LibvirtCollector) updateVms() error {
 type vmMetricsCollector struct {
 	col     *LibvirtCollector
 	name    string
-	readers []activatedMetricsReader
+	readers []*activatedMetricsReader
 }
 
 func (reader *vmMetricsCollector) update() error {
