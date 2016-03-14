@@ -1,20 +1,22 @@
 package metrics
 
 import (
+	"errors"
 	"fmt"
+	"strings"
+	"time"
+
+	"gopkg.in/xmlpath.v1"
 
 	"github.com/rgbkrk/libvirt-go"
 )
 
 const (
-	NO_FLAGS = 0
+	NO_FLAGS              = 0
+	DomainReparseInterval = 5 * time.Minute
 )
 
 /*
-	// ?
-	v.GetInterfaceParameters()
-	v.GetXMLDesc()
-
 	// State
 	v.GetState()
 	v.IsActive()
@@ -65,19 +67,19 @@ func (col *LibvirtCollector) Init() error {
 			col:  col,
 			name: name,
 			readers: []*activatedMetricsReader{
-				&activatedMetricsReader{reader: &vmGeneralReader{}},
-				&activatedMetricsReader{reader: &memoryStatReader{}},
-				&activatedMetricsReader{reader: &cpuStatReader{}},
-				&activatedMetricsReader{reader: &blockStatReader{}},
-				&activatedMetricsReader{reader: &interfaceStatReader{}},
+				&activatedMetricsReader{new(vmGeneralReader), false},
+				&activatedMetricsReader{new(memoryStatReader), false},
+				&activatedMetricsReader{new(cpuStatReader), false},
+				&activatedMetricsReader{new(blockStatReader), false},
+				&activatedMetricsReader{new(interfaceStatReader), false},
 			},
 		}
-		for _, collector := range vmReader.readers {
-			for metric, reader := range collector.reader.register(name) {
+		for _, reader := range vmReader.readers {
+			for metric, registeredReader := range reader.register(name) {
 				// The notify mechanism here is to avoid unnecessary libvirt
-				// API-calls for metrics that filtered out
-				col.readers[metric] = reader
-				col.notify[metric] = collector.activate
+				// API-calls for metrics that are filtered out
+				col.readers[metric] = registeredReader
+				col.notify[metric] = reader.activate
 			}
 		}
 		col.vmReaders = append(col.vmReaders, vmReader)
@@ -136,26 +138,61 @@ type vmMetricsCollector struct {
 	col     *LibvirtCollector
 	name    string
 	readers []*activatedMetricsReader
+
+	needXmlDesc   bool
+	xmlDescParsed time.Time
 }
 
-func (reader *vmMetricsCollector) update() error {
-	if domain, ok := reader.col.domains[reader.name]; !ok {
-		return fmt.Errorf("Warning: libvirt domain %v not found", reader.name)
+var UpdateXmlDescription = errors.New("XML domain description must be updated")
+
+func (collector *vmMetricsCollector) update() error {
+	if domain, ok := collector.col.domains[collector.name]; !ok {
+		return fmt.Errorf("Warning: libvirt domain %v not found", collector.name)
 	} else {
-		for _, collector := range reader.readers {
-			if collector.active {
-				if err := collector.reader.update(domain); err != nil {
-					return fmt.Errorf("Failed to update domain %s: %v", domain, err)
-				}
+		return collector.updateReaders(domain)
+	}
+}
+
+func (collector *vmMetricsCollector) updateReaders(domain libvirt.VirDomain) error {
+	updateDesc := false
+	for _, reader := range collector.readers {
+		if reader.active {
+			if err := reader.update(domain); err == UpdateXmlDescription {
+				collector.needXmlDesc = true
+				updateDesc = true
+			} else if err != nil {
+				return fmt.Errorf("Failed to update domain %s: %v", domain, err)
 			}
 		}
+	}
+	if time.Now().Sub(collector.xmlDescParsed) >= DomainReparseInterval {
+		updateDesc = true
+	}
+	if collector.needXmlDesc && updateDesc {
+		return collector.updateXmlDesc(domain)
+	}
+	return nil
+}
+
+func (collector *vmMetricsCollector) updateXmlDesc(domain libvirt.VirDomain) error {
+	xmlData, err := domain.GetXMLDesc(NO_FLAGS)
+	if err != nil {
+		return fmt.Errorf("Failed to retrieve XML domain description of %s: %v", collector.name, err)
+	}
+	xmlDesc, err := xmlpath.Parse(strings.NewReader(xmlData))
+	if err != nil {
+		return fmt.Errorf("Failed to parse XML domain description of %s: %v", collector.name, err)
+	}
+	collector.xmlDescParsed = time.Now()
+	for _, reader := range collector.readers {
+		reader.description(xmlDesc)
 	}
 	return nil
 }
 
 type activatedMetricsReader struct {
+	vmMetricsReader
 	active bool
-	reader vmMetricsReader
 }
 
 func (reader *activatedMetricsReader) activate() {
@@ -163,8 +200,9 @@ func (reader *activatedMetricsReader) activate() {
 }
 
 type vmMetricsReader interface {
-	update(domain libvirt.VirDomain) error
 	register(domainName string) map[string]MetricReader
+	description(xmlDesc *xmlpath.Node)
+	update(domain libvirt.VirDomain) error
 }
 
 // ==================== General VM info ====================
@@ -174,10 +212,13 @@ type vmGeneralReader struct {
 
 func (reader *vmGeneralReader) register(domainName string) map[string]MetricReader {
 	return map[string]MetricReader{
-		"libvirt/vm/" + domainName + "/general/cpu":    reader.readCpu,
-		"libvirt/vm/" + domainName + "/general/maxMem": reader.readMaxMem,
-		"libvirt/vm/" + domainName + "/general/mem":    reader.readMem,
+		"libvirt/" + domainName + "/general/cpu":    reader.readCpu,
+		"libvirt/" + domainName + "/general/maxMem": reader.readMaxMem,
+		"libvirt/" + domainName + "/general/mem":    reader.readMem,
 	}
+}
+
+func (reader *vmGeneralReader) description(xmlDesc *xmlpath.Node) {
 }
 
 func (reader *vmGeneralReader) update(domain libvirt.VirDomain) (err error) {
@@ -213,11 +254,14 @@ type memoryStatReader struct {
 
 func (reader *memoryStatReader) register(domainName string) map[string]MetricReader {
 	return map[string]MetricReader{
-		"libvirt/vm/" + domainName + "/swap":      reader.readSwap,
-		"libvirt/vm/" + domainName + "/available": reader.readAvailable,
-		"libvirt/vm/" + domainName + "/balloon":   reader.readBalloon,
-		"libvirt/vm/" + domainName + "/rss":       reader.readRss,
+		"libvirt/" + domainName + "/mem/swap":      reader.readSwap,
+		"libvirt/" + domainName + "/mem/available": reader.readAvailable,
+		"libvirt/" + domainName + "/mem/balloon":   reader.readBalloon,
+		"libvirt/" + domainName + "/mem/rss":       reader.readRss,
 	}
+}
+
+func (reader *memoryStatReader) description(xmlDesc *xmlpath.Node) {
 }
 
 func (reader *memoryStatReader) update(domain libvirt.VirDomain) (err error) {
@@ -262,6 +306,9 @@ func (reader *cpuStatReader) register(domainName string) map[string]MetricReader
 	return nil
 }
 
+func (reader *cpuStatReader) description(xmlDesc *xmlpath.Node) {
+}
+
 func (reader *cpuStatReader) update(domain libvirt.VirDomain) (err error) {
 	// TODO Alternative, if GetCPUStats() is not necessary
 	// v.GetVcpus() - CPU time per CPU
@@ -271,31 +318,80 @@ func (reader *cpuStatReader) update(domain libvirt.VirDomain) (err error) {
 
 // ==================== Block info ====================
 type blockStatReader struct {
+	parsedDevices bool
+	devices       []string
+	info          []libvirt.VirDomainBlockInfo
 }
 
 func (reader *blockStatReader) register(domainName string) map[string]MetricReader {
-	// TODO
-	return nil
+	return map[string]MetricReader{
+		"libvirt/" + domainName + "/block/allocation": reader.readAllocation,
+		"libvirt/" + domainName + "/block/capacity":   reader.readCapacity,
+		"libvirt/" + domainName + "/block/physical":   reader.readPhysical,
+	}
 }
 
-func (reader *blockStatReader) update(domain libvirt.VirDomain) (err error) {
-	// TODO need to get all block devices from domain.GetXMLDesc()
-	// domain.GetBlockInfo()
-	// More detailed alternative: domain.BlockStatsFlags()
+func (reader *blockStatReader) description(xmlDesc *xmlpath.Node) {
+	// TODO get all block devices from domain.GetXMLDesc()
+	//	reader.parsedDevices = true
+}
+
+func (reader *blockStatReader) update(domain libvirt.VirDomain) error {
+	reader.info = reader.info[0:0]
+	if !reader.parsedDevices {
+		return UpdateXmlDescription
+	}
+	var resErr error
+	for _, dev := range reader.devices {
+		// More detailed alternative: domain.BlockStatsFlags()
+		if info, err := domain.GetBlockInfo(dev, NO_FLAGS); err == nil {
+			reader.info = append(reader.info, info)
+		} else {
+			return fmt.Errorf("Failed to get block-device info for %s: %v", dev, err)
+		}
+	}
+	return resErr
+}
+
+func (reader *blockStatReader) readAllocation() (result Value) {
+	for _, info := range reader.info {
+		result += Value(info.Allocation())
+	}
+	return
+}
+
+func (reader *blockStatReader) readCapacity() (result Value) {
+	for _, info := range reader.info {
+		result += Value(info.Capacity())
+	}
+	return
+}
+
+func (reader *blockStatReader) readPhysical() (result Value) {
+	for _, info := range reader.info {
+		result += Value(info.Physical())
+	}
 	return
 }
 
 // ==================== Interface info ====================
-const (
-	// TODO extract this from the domain description XML
-	LibvirtInterfacePath = "eth0"
-)
+var DomainInterfaceXPath = xmlpath.MustCompile("/domain/devices/interface/target/@dev")
 
 type interfaceStatReader struct {
-	bytes   ValueRing
-	packets ValueRing
-	errors  ValueRing
-	dropped ValueRing
+	parsedInterfaces bool
+	interfaces       []string
+	bytes            ValueRing
+	packets          ValueRing
+	errors           ValueRing
+	dropped          ValueRing
+}
+
+func (reader *interfaceStatReader) description(xmlDesc *xmlpath.Node) {
+	reader.interfaces = reader.interfaces[0:0]
+	for iter := DomainInterfaceXPath.Iter(xmlDesc); iter.Next(); {
+		reader.interfaces = append(reader.interfaces, iter.Node().String())
+	}
+	reader.parsedInterfaces = true
 }
 
 func (reader *interfaceStatReader) register(domainName string) map[string]MetricReader {
@@ -304,25 +400,31 @@ func (reader *interfaceStatReader) register(domainName string) map[string]Metric
 	reader.errors = NewValueRing(NetIoLogback)
 	reader.dropped = NewValueRing(NetIoLogback)
 	return map[string]MetricReader{
-		"libvirt/vm/" + domainName + "/net/bytes":   reader.readBytes,
-		"libvirt/vm/" + domainName + "/net/packets": reader.readPackets,
-		"libvirt/vm/" + domainName + "/net/errors":  reader.readErrors,
-		"libvirt/vm/" + domainName + "/net/dropped": reader.readDropped,
+		"libvirt/" + domainName + "/net-io/bytes":   reader.readBytes,
+		"libvirt/" + domainName + "/net-io/packets": reader.readPackets,
+		"libvirt/" + domainName + "/net-io/errors":  reader.readErrors,
+		"libvirt/" + domainName + "/net-io/dropped": reader.readDropped,
 	}
 	return nil
 }
 
-func (reader *interfaceStatReader) update(domain libvirt.VirDomain) (err error) {
-	// More detailed alternative: domain.GetInterfaceParameters()
-	var stats libvirt.VirDomainInterfaceStats
-	stats, err = domain.InterfaceStats(LibvirtInterfacePath)
-	if err == nil {
-		reader.bytes.Add(Value(stats.RxBytes + stats.TxBytes))
-		reader.packets.Add(Value(stats.RxPackets + stats.TxPackets))
-		reader.errors.Add(Value(stats.RxErrs + stats.TxErrs))
-		reader.dropped.Add(Value(stats.RxDrop + stats.TxDrop))
+func (reader *interfaceStatReader) update(domain libvirt.VirDomain) error {
+	if !reader.parsedInterfaces {
+		return UpdateXmlDescription
 	}
-	return
+	for _, interfaceName := range reader.interfaces {
+		// More detailed alternative: domain.GetInterfaceParameters()
+		stats, err := domain.InterfaceStats(interfaceName)
+		if err == nil {
+			reader.bytes.Add(Value(stats.RxBytes + stats.TxBytes))
+			reader.packets.Add(Value(stats.RxPackets + stats.TxPackets))
+			reader.errors.Add(Value(stats.RxErrs + stats.TxErrs))
+			reader.dropped.Add(Value(stats.RxDrop + stats.TxDrop))
+		} else {
+			return fmt.Errorf("Failed to update vNIC stats for %s: %v", interfaceName, err)
+		}
+	}
+	return nil
 }
 
 func (reader *interfaceStatReader) readBytes() Value {
