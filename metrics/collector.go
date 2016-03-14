@@ -377,7 +377,18 @@ func (ring *ValueRing) get(before time.Time) (result TimedValue) {
 
 func (ring *ValueRing) GetDiff(before time.Duration) Value {
 	head := ring.getHead()
+	if head.val == nil {
+		// Probably empty ring
+		return Value(0)
+	}
 	beforeTime := head.Time.Add(-before)
 	previous := ring.get(beforeTime)
-	return head.val.DiffValue(previous.val, head.Time.Sub(previous.Time))
+	if previous.val == nil {
+		return Value(0)
+	}
+	interval := head.Time.Sub(previous.Time)
+	if interval == 0 {
+		return Value(0)
+	}
+	return head.val.DiffValue(previous.val, interval)
 }
