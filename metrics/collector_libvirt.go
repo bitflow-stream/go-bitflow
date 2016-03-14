@@ -3,6 +3,7 @@ package metrics
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -14,6 +15,12 @@ import (
 const (
 	NO_FLAGS              = 0
 	DomainReparseInterval = 5 * time.Minute
+)
+const (
+	LibvirtNetIoLogback   = 50
+	LibvirtNetIoInterval  = 1 * time.Second
+	LibvirtCpuTimeLogback = 10
+	LibvirtCpuInterval    = 1 * time.Second
 )
 
 /*
@@ -67,9 +74,9 @@ func (col *LibvirtCollector) Init() error {
 			col:  col,
 			name: name,
 			readers: []*activatedMetricsReader{
-				&activatedMetricsReader{new(vmGeneralReader), false},
+				&activatedMetricsReader{NewVmGeneralReader(), false},
 				&activatedMetricsReader{new(memoryStatReader), false},
-				&activatedMetricsReader{new(cpuStatReader), false},
+				&activatedMetricsReader{NewCpuStatReader(), false},
 				&activatedMetricsReader{new(blockStatReader), false},
 				&activatedMetricsReader{NewInterfaceStatReader(), false},
 			},
@@ -155,23 +162,26 @@ func (collector *vmMetricsCollector) update() error {
 
 func (collector *vmMetricsCollector) updateReaders(domain libvirt.VirDomain) error {
 	updateDesc := false
+	var res MultiError
 	for _, reader := range collector.readers {
 		if reader.active {
 			if err := reader.update(domain); err == UpdateXmlDescription {
 				collector.needXmlDesc = true
 				updateDesc = true
 			} else if err != nil {
-				return fmt.Errorf("Failed to update domain %s: %v", domain, err)
+				res.Add(fmt.Errorf("Failed to update domain %s: %v", domain, err))
+				updateDesc = true
+				break
 			}
 		}
 	}
-	if time.Now().Sub(collector.xmlDescParsed) >= DomainReparseInterval {
+	if !updateDesc && time.Now().Sub(collector.xmlDescParsed) >= DomainReparseInterval {
 		updateDesc = true
 	}
 	if collector.needXmlDesc && updateDesc {
-		return collector.updateXmlDesc(domain)
+		res.Add(collector.updateXmlDesc(domain))
 	}
-	return nil
+	return res.NilOrError()
 }
 
 func (collector *vmMetricsCollector) updateXmlDesc(domain libvirt.VirDomain) error {
@@ -208,6 +218,27 @@ type vmMetricsReader interface {
 // ==================== General VM info ====================
 type vmGeneralReader struct {
 	info libvirt.VirDomainInfo
+	cpu  ValueRing
+}
+
+func NewVmGeneralReader() *vmGeneralReader {
+	return &vmGeneralReader{
+		cpu: NewValueRing(LibvirtCpuTimeLogback),
+	}
+}
+
+type LogbackCpuVal uint64
+
+func (val LogbackCpuVal) DiffValue(logback LogbackValue, interval time.Duration) Value {
+	switch previous := logback.(type) {
+	case LogbackCpuVal:
+		return Value(val-previous) / Value(interval.Nanoseconds())
+	case *LogbackCpuVal:
+		return Value(val-*previous) / Value(interval.Nanoseconds())
+	default:
+		log.Printf("Error: Cannot diff %v (%T) and %v (%T)\n", val, val, logback, logback)
+		return Value(0)
+	}
 }
 
 func (reader *vmGeneralReader) register(domainName string) map[string]MetricReader {
@@ -223,11 +254,14 @@ func (reader *vmGeneralReader) description(xmlDesc *xmlpath.Node) {
 
 func (reader *vmGeneralReader) update(domain libvirt.VirDomain) (err error) {
 	reader.info, err = domain.GetInfo()
+	if err == nil {
+		reader.cpu.Add(LogbackCpuVal(reader.info.GetCpuTime()))
+	}
 	return
 }
 
 func (reader *vmGeneralReader) readCpu() Value {
-	return Value(reader.info.GetCpuTime())
+	return reader.cpu.GetDiff(LibvirtCpuInterval)
 }
 
 func (reader *vmGeneralReader) readMaxMem() Value {
@@ -240,7 +274,6 @@ func (reader *vmGeneralReader) readMem() Value {
 
 // ==================== Memory Stats ====================
 const (
-	// virDomainMemoryStatStruct.Tag
 	VIR_DOMAIN_MEMORY_STAT_SWAP_OUT       = 1
 	VIR_DOMAIN_MEMORY_STAT_AVAILABLE      = 5 // Max usable memory
 	VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON = 6 // Used memory?
@@ -249,7 +282,10 @@ const (
 )
 
 type memoryStatReader struct {
-	memStats []libvirt.VirDomainMemoryStat
+	swap      uint64
+	available uint64
+	balloon   uint64
+	rss       uint64
 }
 
 func (reader *memoryStatReader) register(domainName string) map[string]MetricReader {
@@ -264,56 +300,119 @@ func (reader *memoryStatReader) register(domainName string) map[string]MetricRea
 func (reader *memoryStatReader) description(xmlDesc *xmlpath.Node) {
 }
 
-func (reader *memoryStatReader) update(domain libvirt.VirDomain) (err error) {
-	reader.memStats, err = domain.MemoryStats(MAX_NUM_MEMORY_STATS, NO_FLAGS)
-	return
-}
-
-func (reader *memoryStatReader) readMemStat(index int32) Value {
-	// TODO short linear search for every single metric...
-	for _, stat := range reader.memStats {
-		if stat.Tag == index {
-			return Value(stat.Val)
+func (reader *memoryStatReader) update(domain libvirt.VirDomain) error {
+	if memStats, err := domain.MemoryStats(MAX_NUM_MEMORY_STATS, NO_FLAGS); err != nil {
+		return err
+	} else {
+		for _, stat := range memStats {
+			switch stat.Tag {
+			case VIR_DOMAIN_MEMORY_STAT_SWAP_OUT:
+				reader.swap = stat.Val
+			case VIR_DOMAIN_MEMORY_STAT_AVAILABLE:
+				reader.available = stat.Val
+			case VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON:
+				reader.balloon = stat.Val
+			case VIR_DOMAIN_MEMORY_STAT_RSS:
+				reader.rss = stat.Val
+			}
 		}
+		return nil
 	}
-	return Value(-1)
 }
 
 func (reader *memoryStatReader) readSwap() Value {
-	return reader.readMemStat(VIR_DOMAIN_MEMORY_STAT_SWAP_OUT)
+	return Value(reader.swap)
 }
 
 func (reader *memoryStatReader) readAvailable() Value {
-	return reader.readMemStat(VIR_DOMAIN_MEMORY_STAT_AVAILABLE)
+	return Value(reader.available)
 }
 
 func (reader *memoryStatReader) readBalloon() Value {
-	return reader.readMemStat(VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON)
+	return Value(reader.balloon)
 }
 
 func (reader *memoryStatReader) readRss() Value {
-	return reader.readMemStat(VIR_DOMAIN_MEMORY_STAT_RSS)
+	return Value(reader.rss)
 }
 
 // ==================== CPU Stats ====================
+const (
+	MAX_NUM_CPU_STATS               = 4
+	VIR_DOMAIN_CPU_STATS_CPUTIME    = "cpu_time" // Total CPU (VM + hypervisor)
+	VIR_DOMAIN_CPU_STATS_SYSTEMTIME = "system_time"
+	VIR_DOMAIN_CPU_STATS_USERTIME   = "user_time"
+	VIR_DOMAIN_CPU_STATS_VCPUTIME   = "vcpu_time" // Excluding hypervisor usage
+)
+
 type cpuStatReader struct {
-	stats    *libvirt.VirTypedParameters
-	numStats int
+	cpu_total  ValueRing
+	cpu_system ValueRing
+	cpu_user   ValueRing
+	cpu_virt   ValueRing
+}
+
+func NewCpuStatReader() *cpuStatReader {
+	return &cpuStatReader{
+		cpu_system: NewValueRing(LibvirtCpuTimeLogback),
+		cpu_user:   NewValueRing(LibvirtCpuTimeLogback),
+		cpu_total:  NewValueRing(LibvirtCpuTimeLogback),
+		cpu_virt:   NewValueRing(LibvirtCpuTimeLogback),
+	}
 }
 
 func (reader *cpuStatReader) register(domainName string) map[string]MetricReader {
-	// TODO implement
-	return nil
+	return map[string]MetricReader{
+		"libvirt/" + domainName + "/cpu":        reader.readCpu,
+		"libvirt/" + domainName + "/cpu/user":   reader.readUserCpu,
+		"libvirt/" + domainName + "/cpu/system": reader.readSystemCpu,
+		"libvirt/" + domainName + "/cpu/virt":   reader.readVirtualCpu,
+	}
 }
 
 func (reader *cpuStatReader) description(xmlDesc *xmlpath.Node) {
 }
 
-func (reader *cpuStatReader) update(domain libvirt.VirDomain) (err error) {
-	// TODO Alternative, if GetCPUStats() is not necessary
-	// v.GetVcpus() - CPU time per CPU
-	_, err = domain.GetCPUStats(reader.stats, reader.numStats, -1, 1, NO_FLAGS)
-	return
+func (reader *cpuStatReader) update(domain libvirt.VirDomain) error {
+	stats := make(libvirt.VirTypedParameters, MAX_NUM_CPU_STATS)
+	// Less detailed alternative: domain.GetVcpus()
+	if _, err := domain.GetCPUStats(&stats, len(stats), -1, 1, NO_FLAGS); err != nil {
+		return err
+	} else {
+		for _, param := range stats {
+			val, ok := param.Value.(uint64)
+			if !ok {
+				continue
+			}
+			switch param.Name {
+			case VIR_DOMAIN_CPU_STATS_CPUTIME:
+				reader.cpu_total.Add(LogbackCpuVal(val))
+			case VIR_DOMAIN_CPU_STATS_USERTIME:
+				reader.cpu_user.Add(LogbackCpuVal(val))
+			case VIR_DOMAIN_CPU_STATS_SYSTEMTIME:
+				reader.cpu_system.Add(LogbackCpuVal(val))
+			case VIR_DOMAIN_CPU_STATS_VCPUTIME:
+				reader.cpu_virt.Add(LogbackCpuVal(val))
+			}
+		}
+		return nil
+	}
+}
+
+func (reader *cpuStatReader) readCpu() Value {
+	return reader.cpu_total.GetDiff(LibvirtCpuInterval)
+}
+
+func (reader *cpuStatReader) readUserCpu() Value {
+	return reader.cpu_user.GetDiff(LibvirtCpuInterval)
+}
+
+func (reader *cpuStatReader) readSystemCpu() Value {
+	return reader.cpu_system.GetDiff(LibvirtCpuInterval)
+}
+
+func (reader *cpuStatReader) readVirtualCpu() Value {
+	return reader.cpu_virt.GetDiff(LibvirtCpuInterval)
 }
 
 // ==================== Block info ====================
@@ -332,7 +431,7 @@ func (reader *blockStatReader) register(domainName string) map[string]MetricRead
 }
 
 func (reader *blockStatReader) description(xmlDesc *xmlpath.Node) {
-	// TODO get all block devices from domain.GetXMLDesc()
+	// TODO get all block devices
 	//	reader.parsedDevices = true
 }
 
@@ -387,12 +486,12 @@ type interfaceStatReader struct {
 }
 
 func NewInterfaceStatReader() *interfaceStatReader {
-	reader := new(interfaceStatReader)
-	reader.bytes = NewValueRing(NetIoLogback)
-	reader.packets = NewValueRing(NetIoLogback)
-	reader.errors = NewValueRing(NetIoLogback)
-	reader.dropped = NewValueRing(NetIoLogback)
-	return reader
+	return &interfaceStatReader{
+		bytes:   NewValueRing(LibvirtNetIoLogback),
+		packets: NewValueRing(LibvirtNetIoLogback),
+		errors:  NewValueRing(LibvirtNetIoLogback),
+		dropped: NewValueRing(LibvirtNetIoLogback),
+	}
 }
 
 func (reader *interfaceStatReader) description(xmlDesc *xmlpath.Node) {
@@ -433,17 +532,17 @@ func (reader *interfaceStatReader) update(domain libvirt.VirDomain) error {
 }
 
 func (reader *interfaceStatReader) readBytes() Value {
-	return reader.bytes.GetDiff(NetIoInterval)
+	return reader.bytes.GetDiff(LibvirtNetIoInterval)
 }
 
 func (reader *interfaceStatReader) readPackets() Value {
-	return reader.packets.GetDiff(NetIoInterval)
+	return reader.packets.GetDiff(LibvirtNetIoInterval)
 }
 
 func (reader *interfaceStatReader) readErrors() Value {
-	return reader.errors.GetDiff(NetIoInterval)
+	return reader.errors.GetDiff(LibvirtNetIoInterval)
 }
 
 func (reader *interfaceStatReader) readDropped() Value {
-	return reader.dropped.GetDiff(NetIoInterval)
+	return reader.dropped.GetDiff(LibvirtNetIoInterval)
 }
