@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	NetIoLogback   = 50
+	NetIoLogback   = 50 // Also used for libvirt interface stats
 	NetIoInterval  = 1 * time.Second
 	CpuTimeLogback = 10
 	CpuInterval    = 1 * time.Second

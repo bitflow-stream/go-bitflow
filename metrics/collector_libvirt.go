@@ -286,16 +286,57 @@ func (reader *blockStatReader) update(domain libvirt.VirDomain) (err error) {
 }
 
 // ==================== Interface info ====================
+const (
+	// TODO extract this from the domain description XML
+	LibvirtInterfacePath = "eth0"
+)
+
 type interfaceStatReader struct {
+	bytes   ValueRing
+	packets ValueRing
+	errors  ValueRing
+	dropped ValueRing
 }
 
 func (reader *interfaceStatReader) register(domainName string) map[string]MetricReader {
-	// TODO
+	reader.bytes = NewValueRing(NetIoLogback)
+	reader.packets = NewValueRing(NetIoLogback)
+	reader.errors = NewValueRing(NetIoLogback)
+	reader.dropped = NewValueRing(NetIoLogback)
+	return map[string]MetricReader{
+		"libvirt/vm/" + domainName + "/net/bytes":   reader.readBytes,
+		"libvirt/vm/" + domainName + "/net/packets": reader.readPackets,
+		"libvirt/vm/" + domainName + "/net/errors":  reader.readErrors,
+		"libvirt/vm/" + domainName + "/net/dropped": reader.readDropped,
+	}
 	return nil
 }
 
 func (reader *interfaceStatReader) update(domain libvirt.VirDomain) (err error) {
 	// More detailed alternative: domain.GetInterfaceParameters()
-	//	stats, err := domain.InterfaceStats("paath")
+	var stats libvirt.VirDomainInterfaceStats
+	stats, err = domain.InterfaceStats(LibvirtInterfacePath)
+	if err == nil {
+		reader.bytes.Add(Value(stats.RxBytes + stats.TxBytes))
+		reader.packets.Add(Value(stats.RxPackets + stats.TxPackets))
+		reader.errors.Add(Value(stats.RxErrs + stats.TxErrs))
+		reader.dropped.Add(Value(stats.RxDrop + stats.TxDrop))
+	}
 	return
+}
+
+func (reader *interfaceStatReader) readBytes() Value {
+	return reader.bytes.GetDiff(NetIoInterval)
+}
+
+func (reader *interfaceStatReader) readPackets() Value {
+	return reader.packets.GetDiff(NetIoInterval)
+}
+
+func (reader *interfaceStatReader) readErrors() Value {
+	return reader.errors.GetDiff(NetIoInterval)
+}
+
+func (reader *interfaceStatReader) readDropped() Value {
+	return reader.dropped.GetDiff(NetIoInterval)
 }
