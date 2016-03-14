@@ -11,11 +11,6 @@ const (
 )
 
 /*
-	// Metrics
-	v.GetBlockInfo()
-	v.InterfaceStats()
-	v.BlockStatsFlags()
-
 	// ?
 	v.GetInterfaceParameters()
 	v.GetXMLDesc()
@@ -74,6 +69,7 @@ func (col *LibvirtCollector) Init() error {
 				&activatedMetricsReader{reader: &memoryStatReader{}},
 				&activatedMetricsReader{reader: &cpuStatReader{}},
 				&activatedMetricsReader{reader: &blockStatReader{}},
+				&activatedMetricsReader{reader: &interfaceStatReader{}},
 			},
 		}
 		for _, collector := range vmReader.readers {
@@ -286,5 +282,20 @@ func (reader *blockStatReader) update(domain libvirt.VirDomain) (err error) {
 	// TODO need to get all block devices from domain.GetXMLDesc()
 	// domain.GetBlockInfo()
 	// More detailed alternative: domain.BlockStatsFlags()
+	return
+}
+
+// ==================== Interface info ====================
+type interfaceStatReader struct {
+}
+
+func (reader *interfaceStatReader) register(domainName string) map[string]MetricReader {
+	// TODO
+	return nil
+}
+
+func (reader *interfaceStatReader) update(domain libvirt.VirDomain) (err error) {
+	// More detailed alternative: domain.GetInterfaceParameters()
+	//	stats, err := domain.InterfaceStats("paath")
 	return
 }
