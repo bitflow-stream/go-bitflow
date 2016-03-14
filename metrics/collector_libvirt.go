@@ -71,7 +71,7 @@ func (col *LibvirtCollector) Init() error {
 				&activatedMetricsReader{new(memoryStatReader), false},
 				&activatedMetricsReader{new(cpuStatReader), false},
 				&activatedMetricsReader{new(blockStatReader), false},
-				&activatedMetricsReader{new(interfaceStatReader), false},
+				&activatedMetricsReader{NewInterfaceStatReader(), false},
 			},
 		}
 		for _, reader := range vmReader.readers {
@@ -386,6 +386,15 @@ type interfaceStatReader struct {
 	dropped          ValueRing
 }
 
+func NewInterfaceStatReader() *interfaceStatReader {
+	reader := new(interfaceStatReader)
+	reader.bytes = NewValueRing(NetIoLogback)
+	reader.packets = NewValueRing(NetIoLogback)
+	reader.errors = NewValueRing(NetIoLogback)
+	reader.dropped = NewValueRing(NetIoLogback)
+	return reader
+}
+
 func (reader *interfaceStatReader) description(xmlDesc *xmlpath.Node) {
 	reader.interfaces = reader.interfaces[0:0]
 	for iter := DomainInterfaceXPath.Iter(xmlDesc); iter.Next(); {
@@ -395,10 +404,6 @@ func (reader *interfaceStatReader) description(xmlDesc *xmlpath.Node) {
 }
 
 func (reader *interfaceStatReader) register(domainName string) map[string]MetricReader {
-	reader.bytes = NewValueRing(NetIoLogback)
-	reader.packets = NewValueRing(NetIoLogback)
-	reader.errors = NewValueRing(NetIoLogback)
-	reader.dropped = NewValueRing(NetIoLogback)
 	return map[string]MetricReader{
 		"libvirt/" + domainName + "/net-io/bytes":   reader.readBytes,
 		"libvirt/" + domainName + "/net-io/packets": reader.readPackets,
