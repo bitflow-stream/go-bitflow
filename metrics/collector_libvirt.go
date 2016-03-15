@@ -58,12 +58,13 @@ func LibvirtLocal() string {
 type LibvirtCollector struct {
 	AbstractCollector
 	ConnectUri string
-	conn       libvirt.VirConnection
+	conn       *libvirt.VirConnection
 	domains    map[string]libvirt.VirDomain
 	vmReaders  []*vmMetricsCollector
 }
 
 func (col *LibvirtCollector) Init() error {
+	col.Close()
 	col.Reset(col)
 	col.domains = make(map[string]libvirt.VirDomain)
 	if err := col.fetchDomains(false); err != nil {
@@ -106,11 +107,10 @@ func (col *LibvirtCollector) Update() (err error) {
 }
 
 func (col *LibvirtCollector) fetchDomains(checkChange bool) error {
-	conn, err := libvirt.NewVirConnection(col.ConnectUri)
+	conn, err := col.connection()
 	if err != nil {
 		return err
 	}
-	col.conn = conn
 	domains, err := conn.ListAllDomains(NO_FLAGS) // No flags: return all domains
 	if err != nil {
 		return err
@@ -142,6 +142,35 @@ func (col *LibvirtCollector) updateVms() error {
 	return nil
 }
 
+func (col *LibvirtCollector) connection() (*libvirt.VirConnection, error) {
+	conn := col.conn
+	if conn != nil {
+		if alive, err := conn.IsAlive(); err != nil || !alive {
+			log.Println("Libvirt alive connection check failed:", err)
+			col.Close()
+			conn = nil
+		}
+	}
+	if conn == nil {
+		newConn, err := libvirt.NewVirConnection(col.ConnectUri)
+		if err != nil {
+			return nil, err
+		}
+		conn = &newConn
+		col.conn = conn
+	}
+	return conn, nil
+}
+
+func (col *LibvirtCollector) Close() {
+	if col.conn != nil {
+		if err := col.conn.UnrefAndCloseConnection(); err != nil {
+			log.Println("Error closing libvirt connection:", err)
+		}
+		col.conn = nil
+	}
+}
+
 // ==================== VM Collector ====================
 type vmMetricsCollector struct {
 	col     *LibvirtCollector
@@ -171,7 +200,7 @@ func (collector *vmMetricsCollector) updateReaders(domain libvirt.VirDomain) err
 				collector.needXmlDesc = true
 				updateDesc = true
 			} else if err != nil {
-				res.Add(fmt.Errorf("Failed to update domain %s: %v", domain, err))
+				res.Add(fmt.Errorf("Failed to update domain %s: %v", collector.name, err))
 				updateDesc = true
 				break
 			}
