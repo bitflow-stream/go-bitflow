@@ -3,7 +3,9 @@ package metrics
 import (
 	"bytes"
 	"fmt"
+	"syscall"
 	"time"
+	"unsafe"
 )
 
 // ============================================================================
@@ -84,4 +86,24 @@ func (i *StringSlice) String() string {
 func (i *StringSlice) Set(value string) error {
 	*i = append(*i, value)
 	return nil
+}
+
+// ============================================================================
+type TerminalWindowSize struct {
+	Row    uint16
+	Col    uint16
+	Xpixel uint16
+	Ypixel uint16
+}
+
+func GetTerminalSize() (TerminalWindowSize, error) {
+	var ws TerminalWindowSize
+	res, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(syscall.Stdin),
+		uintptr(syscall.TIOCGWINSZ),
+		uintptr(unsafe.Pointer(&ws)))
+	if res < 0 {
+		return TerminalWindowSize{}, errno
+	}
+	return ws, nil
 }
