@@ -24,6 +24,8 @@ const (
 )
 
 /*
+	// TODO info about the node/hypervisor?
+
 	// State
 	v.GetState()
 	v.IsActive()
@@ -416,6 +418,8 @@ func (reader *cpuStatReader) readVirtualCpu() Value {
 }
 
 // ==================== Block info ====================
+var DomainBlockXPath = xmlpath.MustCompile("/domain/devices/disk[@type=\"file\"]/target/@dev")
+
 type blockStatReader struct {
 	parsedDevices bool
 	devices       []string
@@ -431,8 +435,11 @@ func (reader *blockStatReader) register(domainName string) map[string]MetricRead
 }
 
 func (reader *blockStatReader) description(xmlDesc *xmlpath.Node) {
-	// TODO get all block devices
-	//	reader.parsedDevices = true
+	reader.devices = reader.devices[0:0]
+	for iter := DomainBlockXPath.Iter(xmlDesc); iter.Next(); {
+		reader.devices = append(reader.devices, iter.Node().String())
+	}
+	reader.parsedDevices = true
 }
 
 func (reader *blockStatReader) update(domain libvirt.VirDomain) error {
