@@ -304,6 +304,8 @@ func (col *AbstractCollector) String() string {
 type ValueRing struct {
 	values []TimedValue
 	head   int // actually head+1
+
+	aggregator LogbackValue
 }
 
 func NewValueRing(length int) ValueRing {
@@ -314,6 +316,7 @@ func NewValueRing(length int) ValueRing {
 
 type LogbackValue interface {
 	DiffValue(previousValue LogbackValue, interval time.Duration) Value
+	AddValue(val LogbackValue) LogbackValue
 }
 
 type TimedValue struct {
@@ -321,25 +324,27 @@ type TimedValue struct {
 	val       LogbackValue
 }
 
-func (val Value) DiffValue(logback LogbackValue, interval time.Duration) Value {
-	switch previous := logback.(type) {
-	case Value:
-		return Value(val-previous) / Value(interval.Seconds())
-	case *Value:
-		return Value(val-*previous) / Value(interval.Seconds())
-	default:
-		log.Printf("Error: Cannot diff %v (%T) and %v (%T)\n", val, val, logback, logback)
-		return Value(0)
+func (ring *ValueRing) AddToHead(val LogbackValue) {
+	if ring.aggregator == nil {
+		ring.aggregator = val
+	} else {
+		ring.aggregator = ring.aggregator.AddValue(val)
 	}
 }
 
-func (ring *ValueRing) Add(val LogbackValue) {
-	ring.values[ring.head] = TimedValue{time.Now(), val}
+func (ring *ValueRing) FlushHead() {
+	ring.values[ring.head] = TimedValue{time.Now(), ring.aggregator}
 	if ring.head >= len(ring.values)-1 {
 		ring.head = 0
 	} else {
 		ring.head++
 	}
+	ring.aggregator = nil
+}
+
+func (ring *ValueRing) Add(val LogbackValue) {
+	ring.AddToHead(val)
+	ring.FlushHead()
 }
 
 func (ring *ValueRing) getHead() TimedValue {
@@ -393,4 +398,28 @@ func (ring *ValueRing) GetDiff(before time.Duration) Value {
 		return Value(0)
 	}
 	return head.val.DiffValue(previous.val, interval)
+}
+
+func (val Value) DiffValue(logback LogbackValue, interval time.Duration) Value {
+	switch previous := logback.(type) {
+	case Value:
+		return Value(val-previous) / Value(interval.Seconds())
+	case *Value:
+		return Value(val-*previous) / Value(interval.Seconds())
+	default:
+		log.Printf("Error: Cannot diff %v (%T) and %v (%T)\n", val, val, logback, logback)
+		return Value(0)
+	}
+}
+
+func (val Value) AddValue(incoming LogbackValue) LogbackValue {
+	switch other := incoming.(type) {
+	case Value:
+		return Value(val + other)
+	case *Value:
+		return Value(val + *other)
+	default:
+		log.Printf("Error: Cannot add %v (%T) and %v (%T)\n", val, val, incoming, incoming)
+		return Value(0)
+	}
 }

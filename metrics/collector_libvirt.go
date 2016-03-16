@@ -273,6 +273,18 @@ func (val LogbackCpuVal) DiffValue(logback LogbackValue, interval time.Duration)
 	}
 }
 
+func (val LogbackCpuVal) AddValue(logback LogbackValue) LogbackValue {
+	switch previous := logback.(type) {
+	case LogbackCpuVal:
+		return Value(val + previous)
+	case *LogbackCpuVal:
+		return Value(val + *previous)
+	default:
+		log.Printf("Error: Cannot add %v (%T) and %v (%T)\n", val, val, logback, logback)
+		return Value(0)
+	}
+}
+
 func (reader *vmGeneralReader) register(domainName string) map[string]MetricReader {
 	return map[string]MetricReader{
 		"libvirt/" + domainName + "/general/cpu":    reader.readCpu,

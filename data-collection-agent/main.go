@@ -37,6 +37,7 @@ var (
 	all_metrics          = false
 	user_include_metrics golib.StringSlice
 	user_exclude_metrics golib.StringSlice
+	process_collectors   golib.StringSlice
 
 	print_metrics = false
 	libvirt_uri   = metrics.LibvirtLocal() // metrics.LibvirtSsh("host", "keyfile")
@@ -72,6 +73,7 @@ func main() {
 	flag.BoolVar(&all_metrics, "a", all_metrics, "Disable built-in filters on available metrics")
 	flag.Var(&user_exclude_metrics, "exclude", "Metrics to exclude (only with -c, substring match)")
 	flag.Var(&user_include_metrics, "include", "Metrics to include exclusively (only with -c, substring match)")
+	flag.Var(&process_collectors, "proc", "Processes to collect metrics for (substring match on entire command line)")
 
 	flag.StringVar(&format_input, "i", format_input, "Data source format (does not apply to -c), one of "+supportedFormats)
 	flag.BoolVar(&collect_local, "c", collect_local, "Data source: collect local samples")
@@ -95,6 +97,15 @@ func main() {
 	// ====== Configure collectors
 	metrics.RegisterPsutilCollectors()
 	metrics.RegisterLibvirtCollector(libvirt_uri)
+	if len(process_collectors) > 0 {
+		procRegex := make([]*regexp.Regexp, 0, len(process_collectors))
+		for _, substr := range process_collectors {
+			regex := regexp.MustCompile(regexp.QuoteMeta(substr))
+			procRegex = append(procRegex, regex)
+		}
+		metrics.RegisterProcessCollector("vnf", procRegex)
+	}
+
 	if all_metrics {
 		excludeMetricsRegexes = nil
 	}
