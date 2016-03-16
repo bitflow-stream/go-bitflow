@@ -8,6 +8,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/antongulenko/golib"
 )
 
 // ==================== Metric ====================
@@ -70,7 +72,7 @@ func (col *CollectorSource) collect(wg *sync.WaitGroup, sink MetricSink) {
 	header, values, collectors := col.constructSample(metrics)
 	log.Printf("Locally collecting %v metrics through %v collectors\n", len(metrics), len(collectors))
 
-	stopper := NewStopper(len(collectors) + 1)
+	stopper := golib.NewStopper(len(collectors) + 1)
 	for _, collector := range collectors {
 		wg.Add(1)
 		go col.updateCollector(wg, collector, stopper)
@@ -167,7 +169,7 @@ func (col *CollectorSource) constructSample(metrics []string) (Header, []Value, 
 	return header, values, collectors
 }
 
-func (col *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collector, stopper *Stopper) {
+func (col *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collector, stopper *golib.Stopper) {
 	defer wg.Done()
 	for {
 		err := collector.Update()
@@ -184,7 +186,7 @@ func (col *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collec
 	}
 }
 
-func (col *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header Header, values []Value, sink MetricSink, stopper *Stopper) {
+func (col *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header Header, values []Value, sink MetricSink, stopper *golib.Stopper) {
 	defer wg.Done()
 	for {
 		if err := sink.Header(header); err != nil {

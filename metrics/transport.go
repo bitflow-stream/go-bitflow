@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"sync"
+
+	"github.com/antongulenko/golib"
 )
 
 // ==================== Data Sink ====================
@@ -96,7 +98,7 @@ func (agg AggregateSink) Start(wg *sync.WaitGroup, marshaller Marshaller) error 
 }
 
 func (agg AggregateSink) Header(header Header) error {
-	var errors MultiError
+	var errors golib.MultiError
 	for _, sink := range agg {
 		if err := sink.Header(header); err != nil {
 			errors.Add(err)
@@ -106,7 +108,7 @@ func (agg AggregateSink) Header(header Header) error {
 }
 
 func (agg AggregateSink) Sample(sample Sample) error {
-	var errors MultiError
+	var errors golib.MultiError
 	for _, sink := range agg {
 		if err := sink.Sample(sample); err != nil {
 			errors.Add(err)

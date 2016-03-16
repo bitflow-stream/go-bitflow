@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/antongulenko/golib"
 )
 
 const (
@@ -309,7 +311,7 @@ func (m *TextMarshaller) calculateWidths(lines []string, writer io.Writer) (text
 
 func (m *TextMarshaller) defaultTextWidth(writer io.Writer) int {
 	if writer == os.Stdout {
-		if size, err := GetTerminalSize(); err != nil {
+		if size, err := golib.GetTerminalSize(); err != nil {
 			log.Println("Failed to get terminal size:", err)
 			return 0
 		} else {

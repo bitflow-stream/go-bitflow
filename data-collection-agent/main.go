@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/antongulenko/golib"
 	"github.com/citlab/monitoring/metrics"
 )
 
@@ -34,8 +35,8 @@ var (
 	format_file      = "c"
 
 	all_metrics          = false
-	user_include_metrics metrics.StringSlice
-	user_exclude_metrics metrics.StringSlice
+	user_include_metrics golib.StringSlice
+	user_exclude_metrics golib.StringSlice
 
 	print_metrics = false
 	libvirt_uri   = metrics.LibvirtLocal() // metrics.LibvirtSsh("host", "keyfile")

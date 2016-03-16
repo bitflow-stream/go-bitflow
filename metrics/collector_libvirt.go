@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/xmlpath.v1"
 
+	"github.com/antongulenko/golib"
 	"github.com/rgbkrk/libvirt-go"
 )
 
@@ -193,7 +194,7 @@ func (collector *vmMetricsCollector) update() error {
 
 func (collector *vmMetricsCollector) updateReaders(domain libvirt.VirDomain) error {
 	updateDesc := false
-	var res MultiError
+	var res golib.MultiError
 	for _, reader := range collector.readers {
 		if reader.active {
 			if err := reader.update(domain); err == UpdateXmlDescription {
