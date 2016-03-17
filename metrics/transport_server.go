@@ -4,56 +4,75 @@ import (
 	"log"
 	"net"
 	"sync"
+
+	"github.com/antongulenko/golib"
 )
 
 // ==================== TCP listener source ====================
 type TCPListenerSource struct {
 	unmarshallingMetricSource
 	ListenEndpoint string
+	loopTask       golib.Task
+	listener       *net.TCPListener
+	conn           *net.TCPConn
+	stopped        *golib.OneshotCondition
 }
 
-func (source *TCPListenerSource) Start(wg *sync.WaitGroup, sink MetricSink) error {
+func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
+	source.stopped = golib.NewOneshotCondition()
 	endpoint, err := net.ResolveTCPAddr("tcp", source.ListenEndpoint)
 	if err != nil {
-		return err
+		return golib.TaskFinishedError(err)
 	}
-	listener, err := net.ListenTCP("tcp", endpoint)
+	source.listener, err = net.ListenTCP("tcp", endpoint)
 	if err != nil {
-		return err
+		return golib.TaskFinishedError(err)
 	}
-	wg.Add(1)
-	go source.listen(wg, listener, sink)
-	return nil
+	source.loopTask = source.listen(wg)
+	return source.loopTask.Start(wg)
 }
 
-func (source *TCPListenerSource) listen(wg *sync.WaitGroup, listener *net.TCPListener, sink MetricSink) {
-	defer wg.Done()
-	log.Println("Listening for incoming", source.Unmarshaller, "samples on", listener.Addr())
-	var connected net.Addr
-	for {
-		conn, err := listener.AcceptTCP()
+func (source *TCPListenerSource) listen(wg *sync.WaitGroup) golib.Task {
+	log.Println("Listening for incoming", source.Unmarshaller, "samples on", source.listener.Addr())
+	return golib.LoopTask(func(_ golib.StopChan) {
+		conn, err := source.listener.AcceptTCP()
 		if err != nil {
 			log.Println("Error accepting connection:", err)
 		} else {
-			if connected != nil {
-				log.Println("Rejecting connection from %v, already connected to %v\n", conn.RemoteAddr(), connected)
+			if existing := source.conn; existing != nil {
+				log.Println("Rejecting connection from %v, already connected to %v\n", conn.RemoteAddr(), existing.RemoteAddr())
 				if err := conn.Close(); err != nil {
 					log.Println("Error closing connection:", err)
 				}
-				continue
+				return
 			}
-			connected = conn.RemoteAddr()
-			log.Println("Accepted connection from", connected)
-			wg.Add(1)
-			go func() {
-				defer func() {
-					wg.Done()
-					connected = nil
+			source.stopped.IfElseEnabled(func() {
+				_ = conn.Close() // Drop error
+			}, func() {
+				log.Println("Accepted connection from", conn.RemoteAddr())
+				source.conn = conn
+				wg.Add(1)
+				go func() {
+					defer func() {
+						wg.Done()
+					}()
+					tcpReadSamples(conn, source.Unmarshaller, source.Sink)
 				}()
-				tcpReadSamples(conn, source.Unmarshaller, sink)
-			}()
+			})
 		}
-	}
+	})
+}
+
+func (source *TCPListenerSource) Stop() {
+	source.stopped.Enable(func() {
+		source.loopTask.Stop()
+		if listener := source.listener; listener != nil {
+			_ = listener.Close() // Drop error
+		}
+		if conn := source.conn; conn != nil {
+			_ = conn.Close() // Drop error
+		}
+	})
 }
 
 // ==================== TCP listener sink ====================
@@ -61,41 +80,58 @@ type TCPListenerSink struct {
 	abstractSink
 	Endpoint    string
 	connections map[*tcpWriteConn]bool
+	listener    *net.TCPListener
+	loopTask    golib.Task
+	stopped     *golib.OneshotCondition
 }
 
-func (sink *TCPListenerSink) Start(wg *sync.WaitGroup, marshaller Marshaller) error {
-	sink.marshaller = marshaller
+func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	if sink.connections == nil {
 		sink.connections = make(map[*tcpWriteConn]bool)
 	}
+	sink.stopped = golib.NewOneshotCondition()
 
 	addr, err := net.ResolveTCPAddr("tcp", sink.Endpoint)
 	if err != nil {
-		return err
+		return golib.TaskFinishedError(err)
 	}
-	listener, err := net.ListenTCP("tcp", addr)
+	sink.listener, err = net.ListenTCP("tcp", addr)
 	if err != nil {
-		return err
+		return golib.TaskFinishedError(err)
 	}
-	wg.Add(1)
-	go sink.listen(wg, listener)
-	return nil
+	sink.loopTask = sink.listen(wg)
+	return sink.loopTask.Start(wg)
 }
 
-func (sink *TCPListenerSink) listen(wg *sync.WaitGroup, listener *net.TCPListener) {
-	defer wg.Done()
-	log.Println("Listening for", sink.marshaller, "sample output connections on", listener.Addr())
-	for {
-		conn, err := listener.AcceptTCP()
+func (sink *TCPListenerSink) Stop() {
+	sink.stopped.Enable(func() {
+		sink.loopTask.Stop()
+		if listener := sink.listener; listener != nil {
+			_ = listener.Close()
+		}
+		for conn := range sink.connections {
+			conn.Stop()
+		}
+	})
+}
+
+func (sink *TCPListenerSink) listen(wg *sync.WaitGroup) golib.Task {
+	log.Println("Listening for", sink.marshaller, "sample output connections on", sink.listener.Addr())
+	return golib.LoopTask(func(_ golib.StopChan) {
+		conn, err := sink.listener.AcceptTCP()
 		if err != nil {
 			log.Println("Error accepting connection:", err)
 		} else {
-			writeConn := sink.writeConn(conn)
-			wg.Add(1)
-			go writeConn.run(wg)
-			sink.connections[writeConn] = true
+			sink.stopped.IfElseEnabled(func() {
+				_ = conn.Close()
+			}, func() {
+				writeConn := sink.writeConn(conn)
+				wg.Add(1)
+				go writeConn.run(wg)
+				sink.connections[writeConn] = true
+			})
 		}
-	}
+	})
 }
 
 func (sink *TCPListenerSink) Header(header Header) error {

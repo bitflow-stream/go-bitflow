@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"regexp"
-	"sync"
 	"time"
 
 	"github.com/antongulenko/golib"
@@ -102,6 +101,8 @@ func main() {
 	flag.StringVar(&format_listen, "lf", format_listen, "Data format for TCP server output, one of "+supportedFormats)
 	flag.Parse()
 
+	defer golib.ProfileCpu()()
+
 	// ====== Configure collectors
 	metrics.RegisterPsutilCollectors()
 	metrics.RegisterLibvirtCollector(libvirt_uri)
@@ -172,16 +173,13 @@ func main() {
 		RemoteAddr:    collect_download,
 		RetryInterval: active_retry_interval,
 	})
-	if collect_file != "" {
-		fileSource := &metrics.FileSource{FileTransport: metrics.FileTransport{Filename: collect_file}}
-		setSource(true, fileSource)
-		defer fileSource.Close() // Ignore error
-	}
+	setSource(collect_file != "", &metrics.FileSource{
+		FileTransport: metrics.FileTransport{Filename: collect_file}})
 	if source == nil {
 		log.Println("No data source provided, no data will be generated.")
 	}
 
-	// ====== Initialize sink(s)
+	// ====== Initialize sink(s) and tasks
 	var sinks metrics.AggregateSink
 	var marshallers []metrics.Marshaller
 	if sink_console {
@@ -197,9 +195,7 @@ func main() {
 		marshallers = append(marshallers, marshaller_listen)
 	}
 	if sink_file != "" {
-		sink := &metrics.FileSink{FileTransport: metrics.FileTransport{Filename: sink_file}}
-		defer sink.Close() // Ignore error
-		sinks = append(sinks, sink)
+		sinks = append(sinks, &metrics.FileSink{FileTransport: metrics.FileTransport{Filename: sink_file}})
 		marshallers = append(marshallers, marshaller_file)
 	}
 	if len(sinks) == 0 {
@@ -207,19 +203,18 @@ func main() {
 	}
 
 	// ====== Start and wait
-	var wg sync.WaitGroup
+	tasks := golib.NewTaskGroup(source)
 	for i, sink := range sinks {
-		if err := sink.Start(&wg, marshallers[i]); err != nil {
-			log.Fatalln(err)
-		}
+		sink.SetMarshaller(marshallers[i])
+		tasks.Add(sink)
 	}
 	if source != nil {
+		source.SetSink(sinks)
 		if unmarshallingSource, ok := source.(metrics.UnmarshallingMetricSource); ok {
 			unmarshallingSource.SetUnmarshaller(unmarshaller)
 		}
-		if err := source.Start(&wg, sinks); err != nil {
-			log.Fatalln(err)
-		}
 	}
-	wg.Wait()
+	log.Println("Press Ctrl-C to interrupt")
+	tasks.Add(&golib.NoopTask{golib.ExternalInterrupt(), "external interrupt"})
+	tasks.PrintWaitAndStop()
 }

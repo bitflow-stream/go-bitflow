@@ -4,16 +4,20 @@ import (
 	"log"
 	"os"
 	"sync"
+
+	"github.com/antongulenko/golib"
 )
 
 type ConsoleSink struct {
 	abstractSink
 }
 
-func (sink *ConsoleSink) Start(wg *sync.WaitGroup, marshaller Marshaller) error {
-	log.Println("Printing", marshaller, "samples")
-	sink.marshaller = marshaller
+func (sink *ConsoleSink) Start(wg *sync.WaitGroup) golib.StopChan {
+	log.Println("Printing", sink.marshaller, "samples")
 	return nil
+}
+
+func (sink *ConsoleSink) Stop() {
 }
 
 func (sink *ConsoleSink) Header(header Header) error {
@@ -32,7 +36,10 @@ type ConsoleSource struct {
 	unmarshallingMetricSource
 }
 
-func (source *ConsoleSource) Start(wg *sync.WaitGroup, sink MetricSink) error {
-	simpleReadSamples(wg, "stdin", os.Stdin, source.Unmarshaller, sink)
-	return nil
+func (source *ConsoleSource) Start(wg *sync.WaitGroup) golib.StopChan {
+	return simpleReadSamples(wg, "stdin", os.Stdin, source.Unmarshaller, source.Sink)
+}
+
+func (source *ConsoleSource) Stop() {
+	_ = os.Stdin.Close() // Drop error
 }

@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/antongulenko/golib"
 )
 
 type FileTransport struct {
@@ -15,6 +17,7 @@ type FileTransport struct {
 	prefix   string
 	suffix   string
 	file     *os.File
+	stopped  bool
 
 	abstractSink
 }
@@ -26,6 +29,13 @@ func (transport *FileTransport) Close() error {
 		return f.Close()
 	}
 	return nil
+}
+
+func (transport *FileTransport) Stop() {
+	transport.stopped = true
+	if err := transport.Close(); err != nil {
+		log.Println("Error closing file:", err)
+	}
 }
 
 func (t *FileTransport) init() {
@@ -52,6 +62,9 @@ func (t *FileTransport) walkFiles(walk func(os.FileInfo) error) error {
 		if err != nil {
 			return err
 		}
+		if t.stopped {
+			return filepath.SkipDir
+		}
 		if !info.IsDir() && r.MatchString(filepath.Base(info.Name())) {
 			return walk(info)
 		}
@@ -67,42 +80,40 @@ func (t *FileTransport) walkFiles(walk func(os.FileInfo) error) error {
 type FileSource struct {
 	unmarshallingMetricSource
 	FileTransport
+	stopped bool
 }
 
-func (source *FileSource) Start(wg *sync.WaitGroup, sink MetricSink) error {
+func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	source.init()
 	if _, err := os.Stat(source.Filename); os.IsNotExist(err) {
-		source.iterateFiles(wg, sink)
-		return nil
+		return source.iterateFiles(wg)
 	} else if err == nil {
-		return source.read(wg, source.Filename, sink)
+		return source.read(wg, source.Filename)
 	} else {
-		return err
+		return golib.TaskFinishedError(err)
 	}
 }
 
-func (source *FileSource) read(wg *sync.WaitGroup, filename string, sink MetricSink) (err error) {
+func (source *FileSource) read(wg *sync.WaitGroup, filename string) golib.StopChan {
+	var err error
 	if source.file, err = os.Open(filename); err == nil {
-		simpleReadSamples(wg, source.file.Name(), source.file, source.Unmarshaller, sink)
+		return simpleReadSamples(wg, source.file.Name(), source.file, source.Unmarshaller, source.Sink)
+	} else {
+		return golib.TaskFinishedError(err)
 	}
-	return
 }
 
-func (source *FileSource) iterateFiles(wg *sync.WaitGroup, sink MetricSink) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+func (source *FileSource) iterateFiles(wg *sync.WaitGroup) golib.StopChan {
+	return golib.WaitErrFunc(wg, func() error {
 		r := source.fileRegex()
-		source.walkFiles(func(info os.FileInfo) error {
+		return source.walkFiles(func(info os.FileInfo) error {
 			if r.MatchString(filepath.Base(info.Name())) {
-				var readWg sync.WaitGroup
-				source.read(&readWg, info.Name(), sink)
-				readWg.Wait()
 				defer source.Close() // Ignore error
+				return <-source.read(nil, info.Name())
 			}
 			return nil
 		})
-	}()
+	})
 }
 
 // ==================== File data sink ====================
@@ -112,12 +123,11 @@ type FileSink struct {
 	abstractSink
 }
 
-func (sink *FileSink) Start(wg *sync.WaitGroup, marshaller Marshaller) error {
-	log.Println("Writing", marshaller, "samples to", sink.Filename)
+func (sink *FileSink) Start(wg *sync.WaitGroup) golib.StopChan {
+	log.Println("Writing", sink.marshaller, "samples to", sink.Filename)
 	sink.init()
 	sink.cleanFiles()
 	sink.num = 0
-	sink.marshaller = marshaller
 	return nil
 }
 

@@ -12,7 +12,8 @@ import (
 
 // ==================== Data Sink ====================
 type MetricSink interface {
-	Start(wg *sync.WaitGroup, marshaller Marshaller) error
+	golib.Task
+	SetMarshaller(marshaller Marshaller)
 	Header(header Header) error
 	Sample(sample Sample) error
 }
@@ -20,6 +21,10 @@ type MetricSink interface {
 type abstractSink struct {
 	header     Header
 	marshaller Marshaller
+}
+
+func (sink *abstractSink) SetMarshaller(marshaller Marshaller) {
+	sink.marshaller = marshaller
 }
 
 func (sink *abstractSink) checkSample(sample Sample) error {
@@ -31,7 +36,8 @@ func (sink *abstractSink) checkSample(sample Sample) error {
 
 // ==================== Data Source ====================
 type MetricSource interface {
-	Start(wg *sync.WaitGroup, sink MetricSink) error
+	golib.Task
+	SetSink(sink MetricSink)
 }
 
 type UnmarshallingMetricSource interface {
@@ -41,6 +47,11 @@ type UnmarshallingMetricSource interface {
 
 type unmarshallingMetricSource struct {
 	Unmarshaller Unmarshaller
+	Sink         MetricSink
+}
+
+func (s *unmarshallingMetricSource) SetSink(sink MetricSink) {
+	s.Sink = sink
 }
 
 func (s *unmarshallingMetricSource) SetUnmarshaller(unmarshaller Unmarshaller) {
@@ -71,30 +82,34 @@ func readSamples(input io.Reader, um Unmarshaller, sink MetricSink) (int, error)
 	}
 }
 
-func simpleReadSamples(wg *sync.WaitGroup, sourceName string, input io.Reader, um Unmarshaller, sink MetricSink) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var err error
+func simpleReadSamples(wg *sync.WaitGroup, sourceName string, input io.Reader, um Unmarshaller, sink MetricSink) golib.StopChan {
+	return golib.WaitErrFunc(wg, func() (err error) {
 		var num_samples int
 		log.Println("Reading", um, "from", sourceName)
 		if num_samples, err = readSamples(input, um, sink); err != nil && err != io.EOF {
-			log.Println("Read failed:", err)
+			err = fmt.Errorf("Read failed: %v", err)
 		}
 		log.Printf("Read %v %v samples from %v\n", num_samples, um, sourceName)
-	}()
+		return
+	})
 }
 
 // ==================== Aggregating Sink ====================
 type AggregateSink []MetricSink
 
-func (agg AggregateSink) Start(wg *sync.WaitGroup, marshaller Marshaller) error {
+// The golib.Task interface cannot really be supported here
+func (agg AggregateSink) Start(wg *sync.WaitGroup) golib.StopChan {
+	panic("Start should not be called on AggregateSink")
+}
+
+func (agg AggregateSink) Stop() {
+	panic("Stop should not be called on AggregateSink")
+}
+
+func (agg AggregateSink) SetMarshaller(marshaller Marshaller) {
 	for _, sink := range agg {
-		if err := sink.Start(wg, marshaller); err != nil {
-			return err
-		}
+		sink.SetMarshaller(marshaller)
 	}
-	return nil
 }
 
 func (agg AggregateSink) Header(header Header) error {
@@ -115,19 +130,4 @@ func (agg AggregateSink) Sample(sample Sample) error {
 		}
 	}
 	return errors.NilOrError()
-}
-
-// ==================== Empty Sink ====================
-type EmptySink struct{}
-
-func (*EmptySink) Start(wg *sync.WaitGroup, marshaller Marshaller) error {
-	return nil
-}
-
-func (*EmptySink) Header(header Header) error {
-	return nil
-}
-
-func (*EmptySink) Sample(sample Sample) error {
-	return nil
 }

@@ -48,37 +48,49 @@ type CollectorSource struct {
 	IncludeMetrics  []*regexp.Regexp
 
 	collectors []Collector
+	sink       MetricSink
+	loopTask   golib.Task
 }
 
-func (col *CollectorSource) Start(wg *sync.WaitGroup, sink MetricSink) error {
-	wg.Add(1)
-	go col.run(wg, sink)
-	return nil
+func (col *CollectorSource) SetSink(sink MetricSink) {
+	col.sink = sink
 }
 
-func (col *CollectorSource) run(wg *sync.WaitGroup, sink MetricSink) {
-	defer wg.Done()
-	for {
+func (col *CollectorSource) Start(wg *sync.WaitGroup) golib.StopChan {
+	// TODO integrate golib.StopChan/LoopTask and golib.Stopper
+	col.loopTask = golib.LoopTask(func(stop golib.StopChan) {
 		var collectWg sync.WaitGroup
-		col.collect(&collectWg, sink)
+		stopper := col.collect(&collectWg)
+		select {
+		case <-stopper.Wait():
+			stopper.Stop()
+		case <-stop:
+			stopper.Stop()
+		}
 		collectWg.Wait()
-	}
+	})
+	return col.loopTask.Start(wg)
 }
 
-func (col *CollectorSource) collect(wg *sync.WaitGroup, sink MetricSink) {
+func (col *CollectorSource) Stop() {
+	col.loopTask.Stop()
+}
+
+func (col *CollectorSource) collect(wg *sync.WaitGroup) *golib.Stopper {
 	col.initCollectors()
 	metrics := col.FilteredMetrics()
 	sort.Strings(metrics)
 	header, values, collectors := col.constructSample(metrics)
 	log.Printf("Locally collecting %v metrics through %v collectors\n", len(metrics), len(collectors))
 
-	stopper := golib.NewStopper(len(collectors) + 1)
+	stopper := golib.NewStopper()
 	for _, collector := range collectors {
 		wg.Add(1)
 		go col.updateCollector(wg, collector, stopper)
 	}
 	wg.Add(1)
-	go col.sinkMetrics(wg, header, values, sink, stopper)
+	go col.sinkMetrics(wg, header, values, col.sink, stopper)
+	return stopper
 }
 
 func (col *CollectorSource) initCollectors() {
