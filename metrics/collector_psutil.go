@@ -2,15 +2,19 @@ package metrics
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/internal/common"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
@@ -659,8 +663,9 @@ type PsutilProcessCollector struct {
 	pidsUpdated bool
 	own_pid     int32
 	cpu_factor  float64
-	pids        map[int32]*process.Process
+	pids        map[int32]*SingleProcessCollector
 
+	updateLock             sync.Mutex
 	cpu                    ValueRing
 	ioRead                 ValueRing
 	ioWrite                ValueRing
@@ -737,7 +742,7 @@ func (col *PsutilProcessCollector) updatePids() error {
 		return nil
 	}
 
-	col.pids = make(map[int32]*process.Process)
+	col.pids = make(map[int32]*SingleProcessCollector)
 	errors := 0
 	pids := osInformation.pids
 	for _, pid := range pids {
@@ -760,7 +765,7 @@ func (col *PsutilProcessCollector) updatePids() error {
 		}
 		for _, regex := range col.CmdlineFilter {
 			if regex.MatchString(cmdline) {
-				col.pids[pid] = proc
+				col.pids[pid] = MakeProcessCollector(col, proc)
 				break
 			}
 		}
@@ -789,8 +794,7 @@ func (col *PsutilProcessCollector) updateValues() {
 	col.mem_swap = 0
 
 	for pid, proc := range col.pids {
-		err := col.updateProcess(proc)
-		if err != nil {
+		if err := proc.update(); err != nil {
 			// Process probably does not exist anymore
 			delete(col.pids, pid)
 			col.logErr(pid, err)
@@ -807,63 +811,179 @@ func (col *PsutilProcessCollector) updateValues() {
 	col.net.FlushHead()
 }
 
-func (col *PsutilProcessCollector) updateProcess(proc *process.Process) error {
-	// CPU
-	if cpu, err := proc.CPUTimes(); err != nil {
-		return err
+func (col *PsutilProcessCollector) safeUpdate(update func()) {
+	col.updateLock.Lock()
+	defer col.updateLock.Unlock()
+	update()
+}
+
+type SingleProcessCollector struct {
+	*PsutilProcessCollector
+	*process.Process
+	tasks CollectorTasks
+}
+
+func MakeProcessCollector(collector *PsutilProcessCollector, proc *process.Process) *SingleProcessCollector {
+	col := &SingleProcessCollector{
+		PsutilProcessCollector: collector,
+		Process:                proc,
+	}
+	col.tasks = CollectorTasks{
+		col.updateCpu,
+		col.updateDisk,
+		col.updateMemory,
+		col.updateNet,
+		col.updateOpenFiles,
+		col.updateMisc,
+	}
+	return col
+}
+
+func (col *SingleProcessCollector) update() error {
+	return col.tasks.Run()
+}
+
+func (col *SingleProcessCollector) updateCpu() error {
+	if cpu, err := col.CPUTimes(); err != nil {
+		return fmt.Errorf("Failed to get CPU info: %v", err)
 	} else {
 		busy := (cpu.Total() - cpu.Idle) * col.cpu_factor
-		col.cpu.AddToHead(Value(busy))
+		col.safeUpdate(func() {
+			col.cpu.AddToHead(Value(busy))
+		})
 	}
+	return nil
+}
 
-	// Disk
-	if io, err := proc.IOCounters(); err != nil {
-		return err
+func (col *SingleProcessCollector) updateDisk() error {
+	if io, err := col.IOCounters(); err != nil {
+		return fmt.Errorf("Failed to get disk-IO info: %v", err)
 	} else {
-		col.ioRead.AddToHead(Value(io.ReadCount))
-		col.ioWrite.AddToHead(Value(io.WriteCount))
-		col.ioReadBytes.AddToHead(Value(io.ReadBytes))
-		col.ioWriteBytes.AddToHead(Value(io.WriteBytes))
+		col.safeUpdate(func() {
+			col.ioRead.AddToHead(Value(io.ReadCount))
+			col.ioWrite.AddToHead(Value(io.WriteCount))
+			col.ioReadBytes.AddToHead(Value(io.ReadBytes))
+			col.ioWriteBytes.AddToHead(Value(io.WriteBytes))
+		})
 	}
+	return nil
+}
 
-	// Memory, Alternative: proc.MemoryInfoEx()
-	if mem, err := proc.MemoryInfo(); err != nil {
-		return err
+func (col *SingleProcessCollector) updateMemory() error {
+	// Alternative: col.MemoryInfoEx()
+	if mem, err := col.MemoryInfo(); err != nil {
+		return fmt.Errorf("Failed to get memory info: %v", err)
 	} else {
-		col.mem_rss += mem.RSS
-		col.mem_vms += mem.VMS
-		col.mem_swap += mem.Swap
+		col.safeUpdate(func() {
+			col.mem_rss += mem.RSS
+			col.mem_vms += mem.VMS
+			col.mem_swap += mem.Swap
+		})
 	}
+	return nil
+}
 
-	// Network, Alternative: proc.Connections()
-	if counters, err := proc.NetIOCounters(false); err != nil {
-		return err
+func (col *SingleProcessCollector) updateNet() error {
+	// Alternative: col.Connections()
+	if counters, err := col.NetIOCounters(false); err != nil {
+		return fmt.Errorf("Failed to get net-IO info: %v", err)
 	} else {
 		if len(counters) != 1 {
 			return fmt.Errorf("gopsutil/process/Process.NetIOCounters() returned %v NetIOCountersStat instead of %v", len(counters), 1)
 		}
-		col.net.AddToHead(&counters[0])
+		col.safeUpdate(func() {
+			col.net.AddToHead(&counters[0])
+		})
 	}
-
-	// Misc, Alternative: proc.OpenFiles()
-	if num, err := proc.NumFDs(); err != nil {
-		return err
-	} else {
-		col.numFds += num
-	}
-	if num, err := proc.NumThreads(); err != nil {
-		return err
-	} else {
-		col.numThreads += num
-	}
-	if ctxSwitches, err := proc.NumCtxSwitches(); err != nil {
-		return err
-	} else {
-		col.ctx_switch_voluntary.AddToHead(Value(ctxSwitches.Voluntary))
-		col.ctx_switch_involuntary.AddToHead(Value(ctxSwitches.Involuntary))
-	}
-
 	return nil
+}
+
+func (col *SingleProcessCollector) updateOpenFiles() error {
+	// Alternative: col.NumFDs(), proc.OpenFiles()
+	if num, err := col.procNumFds(); err != nil {
+		return fmt.Errorf("Failed to get number of open files: %v", err)
+	} else {
+		col.safeUpdate(func() {
+			col.numFds += num
+		})
+	}
+	return nil
+}
+
+func (col *SingleProcessCollector) updateMisc() error {
+	// Misc, Alternatice: col.NumThreads(), col.NumCtxSwitches()
+	if numThreads, ctxSwitches, err := col.procGetMisc(); err != nil {
+		return fmt.Errorf("Failed to get number of threads/ctx-switches: %v", err)
+	} else {
+		col.safeUpdate(func() {
+			col.numThreads += numThreads
+			col.ctx_switch_voluntary.AddToHead(Value(ctxSwitches.Voluntary))
+			col.ctx_switch_involuntary.AddToHead(Value(ctxSwitches.Involuntary))
+		})
+	}
+	return nil
+}
+
+func (col *SingleProcessCollector) procNumFds() (int32, error) {
+	// This is part of gopsutil/process.Process.fillFromfd()
+	pid := col.Pid
+	statPath := common.HostProc(strconv.Itoa(int(pid)), "fd")
+	d, err := os.Open(statPath)
+	if err != nil {
+		return 0, err
+	}
+	defer d.Close()
+	fnames, err := d.Readdirnames(-1)
+	numFDs := int32(len(fnames))
+	return numFDs, err
+}
+
+func (col *SingleProcessCollector) procGetMisc() (numThreads int32, numCtxSwitches process.NumCtxSwitchesStat, err error) {
+	// This is part of gopsutil/process.Process.fillFromStatus()
+	pid := col.Pid
+	statPath := common.HostProc(strconv.Itoa(int(pid)), "status")
+	var contents []byte
+	contents, err = ioutil.ReadFile(statPath)
+	if err != nil {
+		return
+	}
+	lines := strings.Split(string(contents), "\n")
+	leftover_fields := 3
+	for _, line := range lines {
+		tabParts := strings.SplitN(line, "\t", 2)
+		if len(tabParts) < 2 {
+			continue
+		}
+		value := tabParts[1]
+		var v int64
+		switch strings.TrimRight(tabParts[0], ":") {
+		case "Threads":
+			v, err = strconv.ParseInt(value, 10, 32)
+			if err != nil {
+				return
+			}
+			numThreads = int32(v)
+			leftover_fields--
+		case "voluntary_ctxt_switches":
+			v, err = strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				return
+			}
+			numCtxSwitches.Voluntary = v
+			leftover_fields--
+		case "nonvoluntary_ctxt_switches":
+			v, err = strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				return
+			}
+			numCtxSwitches.Involuntary = v
+			leftover_fields--
+		}
+		if leftover_fields <= 0 {
+			return
+		}
+	}
+	return
 }
 
 func (col *PsutilProcessCollector) readNumProc() Value {

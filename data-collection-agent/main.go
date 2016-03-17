@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	collect_local_interval = 300 * time.Millisecond
+	collect_local_interval = 500 * time.Millisecond
 	sink_interval          = 500 * time.Millisecond
 	active_retry_interval  = 1000 * time.Millisecond
 
@@ -38,9 +38,10 @@ var (
 	user_include_metrics golib.StringSlice
 	user_exclude_metrics golib.StringSlice
 
-	proc_collectors  golib.StringSlice
-	proc_show_errors = false
-	proc_update_pids = 1500 * time.Millisecond
+	proc_collectors      golib.StringSlice
+	proc_collector_regex golib.StringSlice
+	proc_show_errors     = false
+	proc_update_pids     = 1500 * time.Millisecond
 
 	print_metrics = false
 	libvirt_uri   = metrics.LibvirtLocal() // metrics.LibvirtSsh("host", "keyfile")
@@ -78,6 +79,7 @@ func main() {
 	flag.Var(&user_include_metrics, "include", "Metrics to include exclusively (only with -c, substring match)")
 
 	flag.Var(&proc_collectors, "proc", "Processes to collect metrics for (substring match on entire command line)")
+	flag.Var(&proc_collector_regex, "proc_regex", "Processes to collect metrics for (regex match on entire command line)")
 	flag.BoolVar(&proc_show_errors, "proc_err", proc_show_errors, "Verbose: show errors encountered while getting process metrics")
 	flag.DurationVar(&proc_update_pids, "proc_interval", proc_update_pids, "Interval for updating list of observed pids")
 
@@ -103,10 +105,15 @@ func main() {
 	// ====== Configure collectors
 	metrics.RegisterPsutilCollectors()
 	metrics.RegisterLibvirtCollector(libvirt_uri)
-	if len(proc_collectors) > 0 {
+	if len(proc_collectors) > 0 || len(proc_collector_regex) > 0 {
 		procRegex := make([]*regexp.Regexp, 0, len(proc_collectors))
 		for _, substr := range proc_collectors {
 			regex := regexp.MustCompile(regexp.QuoteMeta(substr))
+			procRegex = append(procRegex, regex)
+		}
+		for _, regexStr := range proc_collector_regex {
+			regex, err := regexp.Compile(regexStr)
+			golib.Checkerr(err)
 			procRegex = append(procRegex, regex)
 		}
 		metrics.RegisterCollector(&metrics.PsutilProcessCollector{
