@@ -37,7 +37,10 @@ var (
 	all_metrics          = false
 	user_include_metrics golib.StringSlice
 	user_exclude_metrics golib.StringSlice
-	process_collectors   golib.StringSlice
+
+	proc_collectors  golib.StringSlice
+	proc_show_errors = false
+	proc_update_pids = 1500 * time.Millisecond
 
 	print_metrics = false
 	libvirt_uri   = metrics.LibvirtLocal() // metrics.LibvirtSsh("host", "keyfile")
@@ -73,7 +76,10 @@ func main() {
 	flag.BoolVar(&all_metrics, "a", all_metrics, "Disable built-in filters on available metrics")
 	flag.Var(&user_exclude_metrics, "exclude", "Metrics to exclude (only with -c, substring match)")
 	flag.Var(&user_include_metrics, "include", "Metrics to include exclusively (only with -c, substring match)")
-	flag.Var(&process_collectors, "proc", "Processes to collect metrics for (substring match on entire command line)")
+
+	flag.Var(&proc_collectors, "proc", "Processes to collect metrics for (substring match on entire command line)")
+	flag.BoolVar(&proc_show_errors, "proc_err", proc_show_errors, "Verbose: show errors encountered while getting process metrics")
+	flag.DurationVar(&proc_update_pids, "proc_interval", proc_update_pids, "Interval for updating list of observed pids")
 
 	flag.StringVar(&format_input, "i", format_input, "Data source format (does not apply to -c), one of "+supportedFormats)
 	flag.BoolVar(&collect_local, "c", collect_local, "Data source: collect local samples")
@@ -97,13 +103,18 @@ func main() {
 	// ====== Configure collectors
 	metrics.RegisterPsutilCollectors()
 	metrics.RegisterLibvirtCollector(libvirt_uri)
-	if len(process_collectors) > 0 {
-		procRegex := make([]*regexp.Regexp, 0, len(process_collectors))
-		for _, substr := range process_collectors {
+	if len(proc_collectors) > 0 {
+		procRegex := make([]*regexp.Regexp, 0, len(proc_collectors))
+		for _, substr := range proc_collectors {
 			regex := regexp.MustCompile(regexp.QuoteMeta(substr))
 			procRegex = append(procRegex, regex)
 		}
-		metrics.RegisterProcessCollector("vnf", procRegex)
+		metrics.RegisterCollector(&metrics.PsutilProcessCollector{
+			CmdlineFilter:     procRegex,
+			GroupName:         "vnf",
+			PrintErrors:       proc_show_errors,
+			PidUpdateInterval: proc_update_pids,
+		})
 	}
 
 	if all_metrics {

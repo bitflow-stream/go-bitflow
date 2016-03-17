@@ -3,13 +3,14 @@ package metrics
 import (
 	"fmt"
 	"log"
+	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
-	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
@@ -116,7 +117,7 @@ func (t *cpuTime) getAllBusy() (float64, float64) {
 	return busy + t.Idle, busy
 }
 
-func (t *cpuTime) DiffValue(logback LogbackValue, _ time.Duration) Value {
+func (t *cpuTime) DiffValue(logback LogbackValue, d time.Duration) Value {
 	if previous, ok := logback.(*cpuTime); ok {
 		// Calculation based on https://github.com/shirou/gopsutil/blob/master/cpu/cpu_unix.go
 		t1All, t1Busy := previous.getAllBusy()
@@ -139,7 +140,6 @@ func (t *cpuTime) AddValue(incoming LogbackValue) LogbackValue {
 	if other, ok := incoming.(*cpuTime); ok {
 		return &cpuTime{
 			cpu.CPUTimesStat{
-				CPU:       t.CPU + other.CPU,
 				User:      t.User + other.User,
 				System:    t.System + other.System,
 				Idle:      t.Idle + other.Idle,
@@ -612,12 +612,17 @@ func (reader *diskUsageReader) readPercent() Value {
 }
 
 // ==================== Misc OS Metrics ====================
+// Global information updated regularly
+var osInformation struct {
+	pids []int32
+}
+
 type PsutilMiscCollector struct {
 	AbstractCollector
-	stat *host.HostInfoStat
 }
 
 func (col *PsutilMiscCollector) Init() error {
+	// TODO missing: number of open files, threads, etc in entire OS
 	col.Reset(col)
 	col.readers = map[string]MetricReader{
 		"num_procs": col.readNumProcs,
@@ -626,7 +631,11 @@ func (col *PsutilMiscCollector) Init() error {
 }
 
 func (col *PsutilMiscCollector) Update() (err error) {
-	col.stat, err = host.HostInfo()
+	pids, err := process.Pids()
+	if err != nil {
+		return err
+	}
+	osInformation.pids = pids
 	if err == nil {
 		col.UpdateMetrics()
 	}
@@ -634,9 +643,7 @@ func (col *PsutilMiscCollector) Update() (err error) {
 }
 
 func (col *PsutilMiscCollector) readNumProcs() Value {
-	// TODO this does not work, find other source.
-	// TODO extend: number of open files, threads, etc in entire OS
-	return Value(col.stat.Procs)
+	return Value(len(osInformation.pids))
 }
 
 // ==================== Process Metrics ====================
@@ -644,10 +651,15 @@ type PsutilProcessCollector struct {
 	AbstractCollector
 
 	// Settings
-	CmdlineFilter []*regexp.Regexp
-	GroupName     string
+	CmdlineFilter     []*regexp.Regexp
+	GroupName         string
+	PrintErrors       bool
+	PidUpdateInterval time.Duration
 
-	pids map[int32]*process.Process
+	pidsUpdated bool
+	own_pid     int32
+	cpu_factor  float64
+	pids        map[int32]*process.Process
 
 	cpu                    ValueRing
 	ioRead                 ValueRing
@@ -664,14 +676,15 @@ type PsutilProcessCollector struct {
 	numThreads             int32
 }
 
-func RegisterProcessCollector(name string, cmdlineFilter []*regexp.Regexp) {
-	RegisterCollector(&PsutilProcessCollector{
-		GroupName:     name,
-		CmdlineFilter: cmdlineFilter,
-	})
+func (col *PsutilProcessCollector) logErr(pid int32, err error) {
+	if err != nil && col.PrintErrors {
+		log.Printf("Error getting info about %s process %v: %v\n", col.GroupName, pid, err)
+	}
 }
 
 func (col *PsutilProcessCollector) Init() error {
+	col.own_pid = int32(os.Getpid())
+	col.cpu_factor = 100 / float64(runtime.NumCPU())
 	col.Reset(col)
 	col.cpu = NewValueRing(CpuTimeLogback)
 	col.ioRead = NewValueRing(DiskIoLogback)
@@ -709,8 +722,9 @@ func (col *PsutilProcessCollector) Init() error {
 }
 
 func (col *PsutilProcessCollector) Update() (err error) {
-	// TODO
-	col.updatePids()
+	if err := col.updatePids(); err != nil {
+		return err
+	}
 	col.updateValues()
 	if err == nil {
 		col.UpdateMetrics()
@@ -719,26 +733,29 @@ func (col *PsutilProcessCollector) Update() (err error) {
 }
 
 func (col *PsutilProcessCollector) updatePids() error {
-	col.pids = make(map[int32]*process.Process)
-	pids, err := process.Pids()
-	if err != nil {
-		return err
+	if col.pidsUpdated {
+		return nil
 	}
+
+	col.pids = make(map[int32]*process.Process)
 	errors := 0
-	var lastError error
+	pids := osInformation.pids
 	for _, pid := range pids {
+		if pid == col.own_pid {
+			continue
+		}
 		proc, err := process.NewProcess(pid)
 		if err != nil {
 			// Process does not exist anymore
 			errors++
-			lastError = err
+			col.logErr(pid, err)
 			continue
 		}
 		cmdline, err := proc.Cmdline()
 		if err != nil {
 			// Probably a permission error
-			lastError = err
 			errors++
+			col.logErr(pid, err)
 			continue
 		}
 		for _, regex := range col.CmdlineFilter {
@@ -748,9 +765,18 @@ func (col *PsutilProcessCollector) updatePids() error {
 			}
 		}
 	}
-	if len(col.pids) == 0 {
-		log.Printf("Warning: Observing no processes, failed to check %v out of %v PIDs. Last error: %v\n",
-			errors, len(pids), lastError)
+	if len(col.pids) == 0 && errors > 0 && col.PrintErrors {
+		col.logErr(-1, fmt.Errorf("Warning: Observing no processes, failed to check %v out of %v PIDs.\n",
+			errors, len(pids)))
+	}
+
+	if col.PidUpdateInterval > 0 {
+		col.pidsUpdated = true
+		time.AfterFunc(col.PidUpdateInterval, func() {
+			col.pidsUpdated = false
+		})
+	} else {
+		col.pidsUpdated = false
 	}
 	return nil
 }
@@ -767,6 +793,7 @@ func (col *PsutilProcessCollector) updateValues() {
 		if err != nil {
 			// Process probably does not exist anymore
 			delete(col.pids, pid)
+			col.logErr(pid, err)
 		}
 	}
 
@@ -782,11 +809,11 @@ func (col *PsutilProcessCollector) updateValues() {
 
 func (col *PsutilProcessCollector) updateProcess(proc *process.Process) error {
 	// CPU
-	// TODO double check, seems off
 	if cpu, err := proc.CPUTimes(); err != nil {
 		return err
 	} else {
-		col.cpu.AddToHead(&cpuTime{*cpu})
+		busy := (cpu.Total() - cpu.Idle) * col.cpu_factor
+		col.cpu.AddToHead(Value(busy))
 	}
 
 	// Disk
