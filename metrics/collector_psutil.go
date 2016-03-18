@@ -116,9 +116,9 @@ type cpuTime struct {
 }
 
 func (t *cpuTime) getAllBusy() (float64, float64) {
-	busy := t.User + t.System + t.Nice + t.Iowait + t.Irq +
+	busy := t.User + t.System + t.Nice + t.Irq +
 		t.Softirq + t.Steal + t.Guest + t.GuestNice + t.Stolen
-	return busy + t.Idle, busy
+	return busy + t.Idle + t.Iowait, busy
 }
 
 func (t *cpuTime) DiffValue(logback LogbackValue, d time.Duration) Value {
