@@ -34,12 +34,21 @@ func (sink *abstractSink) writeConn(conn *net.TCPConn) *tcpWriteConn {
 }
 
 func (conn *tcpWriteConn) Stop() {
-	conn.stop(nil)
+	if conn != nil {
+		conn.err(nil)
+		if samples := conn.samples; samples != nil {
+			conn.samples = nil
+			close(samples)
+		}
+	}
 }
 
-func (conn *tcpWriteConn) stop(err error) {
-	connection := conn.conn
-	if connection != nil {
+func (conn *tcpWriteConn) Running() bool {
+	return conn != nil && conn.conn != nil
+}
+
+func (conn *tcpWriteConn) err(err error) {
+	if connection := conn.conn; connection != nil {
 		conn.conn = nil
 		if operr, ok := err.(*net.OpError); ok && operr.Err == syscall.EPIPE {
 			log.Printf("Connection to %v closed\n", conn.remote)
@@ -54,14 +63,14 @@ func (conn *tcpWriteConn) stop(err error) {
 	}
 }
 
-func (conn *tcpWriteConn) run(wg *sync.WaitGroup) {
+func (conn *tcpWriteConn) Run(wg *sync.WaitGroup) {
 	defer func() {
 		conn.conn = nil // In case of panic, avoid full channel-buffer
 		wg.Done()
 	}()
 	log.Println("Serving", len(conn.sink.header), "metrics to", conn.remote)
 	if err := conn.sink.marshaller.WriteHeader(conn.sink.header, conn.conn); err != nil {
-		conn.stop(err)
+		conn.err(err)
 		return
 	}
 	for sample := range conn.samples {
@@ -70,7 +79,7 @@ func (conn *tcpWriteConn) run(wg *sync.WaitGroup) {
 			break
 		}
 		if err := conn.sink.marshaller.WriteSample(sample, connection); err != nil {
-			conn.stop(err)
+			conn.err(err)
 			break
 		}
 	}
@@ -85,6 +94,10 @@ type TCPSink struct {
 	stopped  *golib.OneshotCondition
 }
 
+func (sink *TCPSink) String() string {
+	return "TCP sink to " + sink.Endpoint
+}
+
 func (sink *TCPSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	log.Println("Sending", sink.marshaller, "samples to", sink.Endpoint)
 	sink.stopped = golib.NewOneshotCondition()
@@ -92,9 +105,14 @@ func (sink *TCPSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	return sink.stopped.Start(wg)
 }
 
+func (sink *TCPSink) closeConnection() {
+	sink.conn.Stop()
+	sink.conn = nil
+}
+
 func (sink *TCPSink) Stop() {
 	sink.stopped.Enable(func() {
-		sink.conn.Stop()
+		sink.closeConnection()
 	})
 }
 
@@ -102,10 +120,7 @@ func (sink *TCPSink) Header(header Header) (err error) {
 	sink.stopped.IfElseEnabled(func() {
 		err = fmt.Errorf("TCP sink to %v already stopped", sink.Endpoint)
 	}, func() {
-		if sink.conn != nil {
-			// Stop existing connection to negotiate new header
-			sink.conn.stop(nil)
-		}
+		sink.closeConnection() // Stop existing connection to negotiate new header
 		sink.header = header
 		err = sink.assertConnection()
 	})
@@ -119,10 +134,8 @@ func (sink *TCPSink) Sample(sample Sample) (err error) {
 		if err = sink.checkSample(sample); err != nil {
 			return
 		}
-		connection := sink.conn
-		if connection != nil && connection.conn == nil {
-			sink.conn = nil
-			close(connection.samples)
+		if !sink.conn.Running() {
+			sink.closeConnection() // Cleanup errored connection
 		}
 		if err = sink.assertConnection(); err != nil {
 			return
@@ -144,7 +157,7 @@ func (sink *TCPSink) assertConnection() error {
 		}
 		sink.conn = sink.writeConn(conn)
 		sink.wg.Add(1)
-		go sink.conn.run(sink.wg)
+		go sink.conn.Run(sink.wg)
 	}
 	return nil
 }
@@ -154,19 +167,21 @@ type TCPSource struct {
 	unmarshallingMetricSource
 	RemoteAddr    string
 	RetryInterval time.Duration
-	loopTask      golib.Task
+	loopTask      *golib.LoopTask
 	conn          *net.TCPConn
-	stopped       *golib.OneshotCondition
+}
+
+func (sink *TCPSource) String() string {
+	return "TCP source from " + sink.RemoteAddr
 }
 
 func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	source.stopped = golib.NewOneshotCondition()
 	log.Println("Downloading", source.Unmarshaller, "data from", source.RemoteAddr)
-	source.loopTask = golib.LoopTask(func(stop golib.StopChan) {
+	source.loopTask = golib.NewLoopTask("tcp download source", func(stop golib.StopChan) {
 		if conn, err := source.dial(); err != nil {
 			log.Println("Error downloading data:", err)
 		} else {
-			source.stopped.IfElseEnabled(func() {
+			source.loopTask.IfElseEnabled(func() {
 				return
 			}, func() {
 				source.conn = conn
@@ -182,11 +197,10 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (source *TCPSource) Stop() {
-	source.stopped.Enable(func() {
+	source.loopTask.Enable(func() {
 		if conn := source.conn; conn != nil {
 			_ = conn.Close()
 		}
-		source.loopTask.Stop()
 	})
 }
 

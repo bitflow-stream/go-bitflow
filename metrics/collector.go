@@ -52,21 +52,24 @@ type CollectorSource struct {
 	loopTask   golib.Task
 }
 
+func (col *CollectorSource) String() string {
+	return "CollectorSource"
+}
+
 func (col *CollectorSource) SetSink(sink MetricSink) {
 	col.sink = sink
 }
 
 func (col *CollectorSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	// TODO integrate golib.StopChan/LoopTask and golib.Stopper
-	col.loopTask = golib.LoopTask(func(stop golib.StopChan) {
+	col.loopTask = golib.NewLoopTask("CollectorSource", func(stop golib.StopChan) {
 		var collectWg sync.WaitGroup
 		stopper := col.collect(&collectWg)
 		select {
 		case <-stopper.Wait():
-			stopper.Stop()
 		case <-stop:
-			stopper.Stop()
 		}
+		stopper.Stop()
 		collectWg.Wait()
 	})
 	return col.loopTask.Start(wg)

@@ -216,5 +216,5 @@ func main() {
 	}
 	log.Println("Press Ctrl-C to interrupt")
 	tasks.Add(&golib.NoopTask{golib.ExternalInterrupt(), "external interrupt"})
-	tasks.PrintWaitAndStop()
+	tasks.WaitAndExit()
 }

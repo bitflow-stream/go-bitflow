@@ -97,6 +97,10 @@ func simpleReadSamples(wg *sync.WaitGroup, sourceName string, input io.Reader, u
 // ==================== Aggregating Sink ====================
 type AggregateSink []MetricSink
 
+func (agg AggregateSink) String() string {
+	return fmt.Sprintf("AggregateSink(len %v)", len(agg))
+}
+
 // The golib.Task interface cannot really be supported here
 func (agg AggregateSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	panic("Start should not be called on AggregateSink")

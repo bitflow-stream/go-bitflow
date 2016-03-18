@@ -12,6 +12,10 @@ type ConsoleSink struct {
 	abstractSink
 }
 
+func (sink *ConsoleSink) String() string {
+	return "ConsoleSink"
+}
+
 func (sink *ConsoleSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	log.Println("Printing", sink.marshaller, "samples")
 	return nil
@@ -34,6 +38,10 @@ func (sink *ConsoleSink) Sample(sample Sample) error {
 
 type ConsoleSource struct {
 	unmarshallingMetricSource
+}
+
+func (source *ConsoleSource) String() string {
+	return "ConsoleSource"
 }
 
 func (source *ConsoleSource) Start(wg *sync.WaitGroup) golib.StopChan {
