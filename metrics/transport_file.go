@@ -163,7 +163,9 @@ func (sink *FileSink) openNextFile() error {
 		err = errors.New("FileSink already stopped")
 	}, func() {
 		sink.file, err = os.Create(name)
-		log.Println("Opened file", sink.file.Name())
+		if err == nil {
+			log.Println("Opened file", sink.file.Name())
+		}
 	})
 	return err
 }

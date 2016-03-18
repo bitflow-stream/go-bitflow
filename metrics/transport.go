@@ -76,7 +76,7 @@ func readSamples(input io.Reader, um Unmarshaller, sink MetricSink) (int, error)
 			return num_samples, err
 		}
 		if err := sink.Sample(sample); err != nil {
-			log.Printf("Error forwarding received sample: %v\n", err)
+			return num_samples, err
 		}
 		num_samples++
 	}
@@ -86,7 +86,10 @@ func simpleReadSamples(wg *sync.WaitGroup, sourceName string, input io.Reader, u
 	return golib.WaitErrFunc(wg, func() (err error) {
 		var num_samples int
 		log.Println("Reading", um, "from", sourceName)
-		if num_samples, err = readSamples(input, um, sink); err != nil && err != io.EOF {
+		num_samples, err = readSamples(input, um, sink)
+		if err == io.EOF {
+			err = nil
+		} else if err != nil {
 			err = fmt.Errorf("Read failed: %v", err)
 		}
 		log.Printf("Read %v %v samples from %v\n", num_samples, um, sourceName)

@@ -166,9 +166,7 @@ func main() {
 	}
 	setSource(collect_local, collector)
 	setSource(collect_console, new(metrics.ConsoleSource))
-	setSource(collect_listen != "", &metrics.TCPListenerSource{
-		ListenEndpoint: collect_listen,
-	})
+	setSource(collect_listen != "", metrics.NewTcpListenerSource(collect_listen))
 	setSource(collect_download != "", &metrics.TCPSource{
 		RemoteAddr:    collect_download,
 		RetryInterval: active_retry_interval,
@@ -191,7 +189,7 @@ func main() {
 		marshallers = append(marshallers, marshaller_connect)
 	}
 	if sink_listen != "" {
-		sinks = append(sinks, &metrics.TCPListenerSink{Endpoint: sink_listen})
+		sinks = append(sinks, metrics.NewTcpListenerSink(sink_listen))
 		marshallers = append(marshallers, marshaller_listen)
 	}
 	if sink_file != "" {

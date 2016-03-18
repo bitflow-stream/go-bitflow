@@ -186,7 +186,7 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 			}, func() {
 				source.conn = conn
 			})
-			tcpReadSamples(conn, source.Unmarshaller, source.Sink)
+			tcpReadSamples(conn, source.Unmarshaller, source.Sink, source.connectionClosed)
 		}
 		select {
 		case <-time.After(source.RetryInterval):
@@ -199,9 +199,13 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 func (source *TCPSource) Stop() {
 	source.loopTask.Enable(func() {
 		if conn := source.conn; conn != nil {
-			_ = conn.Close()
+			_ = conn.Close() // Ignore error
 		}
 	})
+}
+
+func (source *TCPSource) connectionClosed() bool {
+	return source.loopTask.Enabled()
 }
 
 func (source *TCPSource) dial() (*net.TCPConn, error) {
@@ -212,17 +216,17 @@ func (source *TCPSource) dial() (*net.TCPConn, error) {
 	return net.DialTCP("tcp", nil, endpoint)
 }
 
-func tcpReadSamples(conn *net.TCPConn, um Unmarshaller, sink MetricSink) {
+func tcpReadSamples(conn *net.TCPConn, um Unmarshaller, sink MetricSink, checkClosed func() bool) {
 	log.Println("Receiving header from", conn.RemoteAddr())
 	var err error
 	var num_samples int
 	if num_samples, err = readSamples(conn, um, sink); err == io.EOF {
 		log.Println("Connection closed by", conn.RemoteAddr())
+	} else if checkClosed() {
+		log.Println("Connection to", conn.RemoteAddr(), "closed")
 	} else if err != nil {
 		log.Printf("Error receiving samples from %v: %v\n", conn.RemoteAddr(), err)
-		if err := conn.Close(); err != nil {
-			log.Println("Error closing connection:", err)
-		}
+		_ = conn.Close() // Ignore error
 	}
 	log.Println("Received", num_samples, "samples from", conn.RemoteAddr())
 }
