@@ -95,10 +95,10 @@ func (col *PsutilCpuCollector) Init() error {
 }
 
 func (col *PsutilCpuCollector) Update() (err error) {
-	times, err := cpu.CPUTimes(false)
+	times, err := cpu.Times(false)
 	if err == nil {
 		if len(times) != 1 {
-			err = fmt.Errorf("warning: gopsutil/cpu.CPUTimes() returned %v CPUTimes instead of %v", len(times), 1)
+			err = fmt.Errorf("warning: gopsutil/cpu.Times() returned %v CPUTimes instead of %v", len(times), 1)
 		} else {
 			col.ring.Add(&cpuTime{times[0]})
 			col.UpdateMetrics()
@@ -112,7 +112,7 @@ func (col *PsutilCpuCollector) readCpu() Value {
 }
 
 type cpuTime struct {
-	cpu.CPUTimesStat
+	cpu.TimesStat
 }
 
 func (t *cpuTime) getAllBusy() (float64, float64) {
@@ -143,7 +143,7 @@ func (t *cpuTime) DiffValue(logback LogbackValue, d time.Duration) Value {
 func (t *cpuTime) AddValue(incoming LogbackValue) LogbackValue {
 	if other, ok := incoming.(*cpuTime); ok {
 		return &cpuTime{
-			cpu.CPUTimesStat{
+			cpu.TimesStat{
 				User:      t.User + other.User,
 				System:    t.System + other.System,
 				Idle:      t.Idle + other.Idle,
@@ -166,7 +166,7 @@ func (t *cpuTime) AddValue(incoming LogbackValue) LogbackValue {
 // ==================== Load ====================
 type PsutilLoadCollector struct {
 	AbstractCollector
-	load *load.LoadAvgStat
+	load *load.AvgStat
 }
 
 func (col *PsutilLoadCollector) Init() error {
@@ -180,7 +180,7 @@ func (col *PsutilLoadCollector) Init() error {
 }
 
 func (col *PsutilLoadCollector) Update() (err error) {
-	col.load, err = load.LoadAvg()
+	col.load, err = load.Avg()
 	if err == nil {
 		col.UpdateMetrics()
 	}
@@ -226,7 +226,7 @@ func (col *PsutilNetCollector) Init() error {
 }
 
 func (col *PsutilNetCollector) Update() (err error) {
-	counters, err := psnet.NetIOCounters(false)
+	counters, err := psnet.IOCounters(false)
 	if err == nil && len(counters) != 1 {
 		err = fmt.Errorf("gopsutil/net.NetIOCounters() returned %v NetIOCountersStat instead of %v", len(counters), 1)
 	}
@@ -246,12 +246,12 @@ func newNetIoCounters() netIoCounters {
 	}
 }
 
-func (counters *netIoCounters) Add(stat *psnet.NetIOCountersStat) {
+func (counters *netIoCounters) Add(stat *psnet.IOCountersStat) {
 	counters.AddToHead(stat)
 	counters.FlushHead()
 }
 
-func (counters *netIoCounters) AddToHead(stat *psnet.NetIOCountersStat) {
+func (counters *netIoCounters) AddToHead(stat *psnet.IOCountersStat) {
 	counters.bytes.AddToHead(Value(stat.BytesSent + stat.BytesRecv))
 	counters.packets.AddToHead(Value(stat.PacketsSent + stat.PacketsRecv))
 	counters.errors.AddToHead(Value(stat.Errin + stat.Errout))
@@ -284,12 +284,12 @@ func (counters *netIoCounters) readDropped() Value {
 // ==================== Net Protocol Counters ====================
 type PsutilNetProtoCollector struct {
 	AbstractCollector
-	protocols map[string]psnet.NetProtoCountersStat
+	protocols map[string]psnet.ProtoCountersStat
 }
 
 func (col *PsutilNetProtoCollector) Init() error {
 	col.Reset(col)
-	col.protocols = make(map[string]psnet.NetProtoCountersStat)
+	col.protocols = make(map[string]psnet.ProtoCountersStat)
 
 	// TODO missing: metrics about individual connections and NICs
 	if err := col.update(false); err != nil {
@@ -310,7 +310,7 @@ func (col *PsutilNetProtoCollector) Init() error {
 }
 
 func (col *PsutilNetProtoCollector) update(checkChange bool) error {
-	counters, err := psnet.NetProtoCounters(nil)
+	counters, err := psnet.ProtoCounters(nil)
 	if err != nil {
 		return err
 	}
@@ -358,12 +358,12 @@ func (reader *protoStatReader) read() Value {
 // ==================== Disk IO ====================
 type PsutilDiskIOCollector struct {
 	AbstractCollector
-	disks map[string]disk.DiskIOCountersStat
+	disks map[string]disk.IOCountersStat
 }
 
 func (col *PsutilDiskIOCollector) Init() error {
 	col.Reset(col)
-	col.disks = make(map[string]disk.DiskIOCountersStat)
+	col.disks = make(map[string]disk.IOCountersStat)
 
 	if err := col.update(false); err != nil {
 		return err
@@ -394,7 +394,7 @@ func (col *PsutilDiskIOCollector) Init() error {
 }
 
 func (col *PsutilDiskIOCollector) update(checkChange bool) error {
-	disks, err := disk.DiskIOCounters()
+	disks, err := disk.IOCounters()
 	if err != nil {
 		return err
 	}
@@ -432,7 +432,7 @@ type diskIOReader struct {
 	ioTimeRing     ValueRing
 }
 
-func (reader *diskIOReader) checkDisk() *disk.DiskIOCountersStat {
+func (reader *diskIOReader) checkDisk() *disk.IOCountersStat {
 	if disk, ok := reader.col.disks[reader.disk]; ok {
 		return &disk
 	} else {
@@ -500,12 +500,12 @@ type PsutilDiskUsageCollector struct {
 	AbstractCollector
 	allPartitions      map[string]bool
 	observedPartitions map[string]bool
-	usage              map[string]*disk.DiskUsageStat
+	usage              map[string]*disk.UsageStat
 }
 
 func (col *PsutilDiskUsageCollector) Init() error {
 	col.Reset(col)
-	col.usage = make(map[string]*disk.DiskUsageStat)
+	col.usage = make(map[string]*disk.UsageStat)
 	col.observedPartitions = make(map[string]bool)
 
 	var err error
@@ -535,7 +535,7 @@ func (col *PsutilDiskUsageCollector) Collect(metric *Metric) error {
 }
 
 func (col *PsutilDiskUsageCollector) getAllPartitions() (map[string]bool, error) {
-	partitions, err := disk.DiskPartitions(true)
+	partitions, err := disk.Partitions(true)
 	if err != nil {
 		return nil, err
 	}
@@ -548,7 +548,7 @@ func (col *PsutilDiskUsageCollector) getAllPartitions() (map[string]bool, error)
 
 func (col *PsutilDiskUsageCollector) update() error {
 	for partition, _ := range col.observedPartitions {
-		usage, err := disk.DiskUsage(partition)
+		usage, err := disk.Usage(partition)
 		if err != nil {
 			return err
 		}
@@ -558,7 +558,7 @@ func (col *PsutilDiskUsageCollector) update() error {
 }
 
 func (col *PsutilDiskUsageCollector) checkChangedPartitions() error {
-	partitions, err := disk.DiskPartitions(true)
+	partitions, err := disk.Partitions(true)
 	if err != nil {
 		return err
 	}
@@ -592,7 +592,7 @@ type diskUsageReader struct {
 	partition string
 }
 
-func (reader *diskUsageReader) checkDisk() *disk.DiskUsageStat {
+func (reader *diskUsageReader) checkDisk() *disk.UsageStat {
 	if disk, ok := reader.col.usage[reader.partition]; ok {
 		return disk
 	} else {
@@ -844,7 +844,7 @@ func (col *SingleProcessCollector) update() error {
 }
 
 func (col *SingleProcessCollector) updateCpu() error {
-	if cpu, err := col.CPUTimes(); err != nil {
+	if cpu, err := col.Times(); err != nil {
 		return fmt.Errorf("Failed to get CPU info: %v", err)
 	} else {
 		busy := (cpu.Total() - cpu.Idle) * col.cpu_factor

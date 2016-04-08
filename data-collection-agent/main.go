@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/antongulenko/golib"
-	"github.com/citlab/monitoring/metrics"
+	"gitlab.tubit.tu-berlin.de/CIT-Huawei/monitoring/metrics"
 )
 
 var (
