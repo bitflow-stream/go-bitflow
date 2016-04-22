@@ -30,6 +30,8 @@ const (
 	DiskIoInterval    = 1 * time.Second
 	CtxSwitchLogback  = 50
 	CtxSwitchInterval = 1 * time.Second
+	NetProtoLogback   = 50
+	NetProtoInterval  = 1 * time.Second
 )
 
 func RegisterPsutilCollectors() {
@@ -282,14 +284,28 @@ func (counters *netIoCounters) readDropped() Value {
 }
 
 // ==================== Net Protocol Counters ====================
+var absoluteNetProtoValues = map[string]bool{
+	// These values will not be aggregated through ValueRing
+	"NoPorts":      true, // udp, udplite
+	"CurrEstab":    true, // tcp
+	"MaxConn":      true,
+	"RtpAlgorithm": true,
+	"RtoMax":       true,
+	"RtpMin":       true,
+	"DefaultTTL":   true, // ip
+	"Forwarding":   true,
+}
+
 type PsutilNetProtoCollector struct {
 	AbstractCollector
-	protocols map[string]psnet.ProtoCountersStat
+	protocols    map[string]psnet.ProtoCountersStat
+	protoReaders []*protoStatReader
 }
 
 func (col *PsutilNetProtoCollector) Init() error {
 	col.Reset(col)
 	col.protocols = make(map[string]psnet.ProtoCountersStat)
+	col.protoReaders = nil
 
 	// TODO missing: metrics about individual connections and NICs
 	if err := col.update(false); err != nil {
@@ -298,12 +314,20 @@ func (col *PsutilNetProtoCollector) Init() error {
 	col.readers = make(map[string]MetricReader)
 	for proto, counters := range col.protocols {
 		for statName, _ := range counters.Stats {
+			var ring *ValueRing
+			if !absoluteNetProtoValues[statName] {
+				ringVal := NewValueRing(NetProtoLogback)
+				ring = &ringVal
+			}
 			name := "net-proto/" + proto + "/" + statName
-			col.readers[name] = (&protoStatReader{
+			protoReader := &protoStatReader{
 				col:      col,
 				protocol: proto,
 				field:    statName,
-			}).read
+				ring:     ring,
+			}
+			col.readers[name] = protoReader.read
+			col.protoReaders = append(col.protoReaders, protoReader)
 		}
 	}
 	return nil
@@ -331,6 +355,11 @@ func (col *PsutilNetProtoCollector) update(checkChange bool) error {
 
 func (col *PsutilNetProtoCollector) Update() (err error) {
 	if err = col.update(true); err == nil {
+		for _, protoReader := range col.protoReaders {
+			if err := protoReader.update(); err != nil {
+				return err
+			}
+		}
 		col.UpdateMetrics()
 	}
 	return
@@ -340,19 +369,35 @@ type protoStatReader struct {
 	col      *PsutilNetProtoCollector
 	protocol string
 	field    string
+
+	// Only one of the following 2 fields is used
+	ring  *ValueRing
+	value Value
+}
+
+func (reader *protoStatReader) update() error {
+	if counters, ok := reader.col.protocols[reader.protocol]; ok {
+		if val, ok := counters.Stats[reader.field]; ok {
+			if reader.ring != nil {
+				reader.ring.Add(Value(val))
+			} else {
+				reader.value = Value(val)
+			}
+			return nil
+		} else {
+			return fmt.Errorf("Counter %v not found in protocol %v in PsutilNetProtoCollector\n", reader.field, reader.protocol)
+		}
+	} else {
+		return fmt.Errorf("Protocol %v not found in PsutilNetProtoCollector\n", reader.protocol)
+	}
 }
 
 func (reader *protoStatReader) read() Value {
-	if counters, ok := reader.col.protocols[reader.protocol]; ok {
-		if val, ok := counters.Stats[reader.field]; ok {
-			return Value(val)
-		} else {
-			log.Printf("Warning: Counter %v not found in protocol %v in PsutilNetProtoCollector\n", reader.field, reader.protocol)
-		}
+	if ring := reader.ring; ring != nil {
+		return ring.GetDiff(NetProtoInterval)
 	} else {
-		log.Printf("Warning: Protocol %v not found in PsutilNetProtoCollector\n", reader.protocol)
+		return reader.value
 	}
-	return Value(0)
 }
 
 // ==================== Disk IO ====================
