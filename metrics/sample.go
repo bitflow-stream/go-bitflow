@@ -20,10 +20,10 @@ const (
 	timeBytes          = 8
 	valBytes           = 8
 	binary_separator   = byte('\n')
+	time_col           = "time"
 	csv_separator      = ","
 	csv_separator_rune = ','
 	csv_newline        = "\n"
-	csv_time_col       = "time"
 	csv_date_format    = "2006-01-02 15:04:05.999999999"
 	text_date_format   = "2006-01-02 15:04:05.999"
 )
@@ -55,6 +55,13 @@ type Sample struct {
 	Values []Value
 }
 
+func checkFirstCol(col string) error {
+	if col != time_col {
+		return fmt.Errorf("Unexpected first column %v, expected %v", col, time_col)
+	}
+	return nil
+}
+
 // ==================== Binary Format ====================
 type BinaryMarshaller struct {
 }
@@ -64,6 +71,12 @@ func (*BinaryMarshaller) String() string {
 }
 
 func (*BinaryMarshaller) WriteHeader(header Header, writer io.Writer) error {
+	if _, err := writer.Write([]byte(time_col)); err != nil {
+		return err
+	}
+	if _, err := writer.Write([]byte{binary_separator}); err != nil {
+		return err
+	}
 	for _, name := range header {
 		if _, err := writer.Write([]byte(name)); err != nil {
 			return err
@@ -79,6 +92,13 @@ func (*BinaryMarshaller) WriteHeader(header Header, writer io.Writer) error {
 }
 
 func (*BinaryMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
+	name, err := reader.ReadBytes(binary_separator)
+	if err != nil {
+		return err
+	}
+	if err := checkFirstCol(string(name[:len(name)-1])); err != nil {
+		return err
+	}
 	*header = nil
 	for {
 		name, err := reader.ReadBytes(binary_separator)
@@ -149,7 +169,7 @@ func (*CsvMarshaller) String() string {
 }
 
 func (*CsvMarshaller) WriteHeader(header Header, writer io.Writer) error {
-	if _, err := writer.Write([]byte(csv_time_col)); err != nil {
+	if _, err := writer.Write([]byte(time_col)); err != nil {
 		return err
 	}
 	for _, name := range header {
@@ -192,8 +212,8 @@ func (*CsvMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
 	if len(fields) == 0 && eof {
 		return io.EOF
 	}
-	if fields[0] != csv_time_col {
-		return fmt.Errorf("Unexpected first column %v, expected %v", fields[0], csv_time_col)
+	if err := checkFirstCol(fields[0]); err != nil {
+		return err
 	}
 	*header = Header(fields[1:])
 	return nil
