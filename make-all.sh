@@ -6,11 +6,11 @@ if [ "$1" = "install" ]; then
     dpkg -l libvirt-dev &> /dev/null || sudo apt-get install -y libvirt-dev
 
     # === Go dependencies
-    path=$(go list -e -f '{{.Dir}}' github.com/citlab/monitoring)
+    path=$(go list -e -f '{{.Dir}}' gitlab.tubit.tu-berlin.de/CIT-Huawei/monitoring)
     cd "$path"
     gpm
 fi
 
 # === Build & Install
-go install github.com/citlab/monitoring/data-collection-agent
+go install gitlab.tubit.tu-berlin.de/CIT-Huawei/monitoring/data-collection-agent
 cp $(which data-collection-agent) bin/data-collection-agent
