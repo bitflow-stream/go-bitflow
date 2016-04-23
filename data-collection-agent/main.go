@@ -49,9 +49,11 @@ var (
 var (
 	includeMetricsRegexes []*regexp.Regexp
 	excludeMetricsRegexes = []*regexp.Regexp{
-		regexp.MustCompile("^net-proto/(UdpLite|IcmpMsg)"), // Some extended protocol-metrics
-		regexp.MustCompile("^disk-io/...[0-9]"),            // Disk IO for specific partitions
-		regexp.MustCompile("^disk-usage//.+/(used|free)$"), // All partitions except root
+		regexp.MustCompile("^net-proto/(UdpLite|IcmpMsg)"),                         // Some extended protocol-metrics
+		regexp.MustCompile("^disk-io/...[0-9]"),                                    // Disk IO for specific partitions
+		regexp.MustCompile("^disk-usage//.+/(used|free)$"),                         // All partitions except root
+		regexp.MustCompile("^net-proto/tcp/(MaxConn|RtpAlgorithm|RtpMin|RtoMax)$"), // Some irrelevant TCP/IP settings
+		regexp.MustCompile("^net-proto/ip/(DefaultTTL|Forwarding)$"),
 	}
 	marshallers = map[string]metrics.MetricMarshaller{
 		"":  new(metrics.CsvMarshaller), // The default
