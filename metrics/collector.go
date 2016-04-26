@@ -41,6 +41,9 @@ func RegisterCollector(collector Collector) {
 // ================================= Collector Source =================================
 var MetricsChanged = errors.New("Metrics of this collector have changed")
 
+const FailedCollectorCheckInterval = 5 * time.Second
+const FilteredCollectorCheckInterval = 30 * time.Second
+
 type CollectorSource struct {
 	CollectInterval time.Duration
 	SinkInterval    time.Duration
@@ -83,13 +86,6 @@ func (source *CollectorSource) Stop() {
 }
 
 func (source *CollectorSource) collect(wg *sync.WaitGroup) *golib.Stopper {
-
-	// TODO Collectors that fail their initialization should still get the
-	// chance to periodically check if the become available.
-	// Example: if libvirt-connection is temporarily unavailable when starting
-	// the collection, the libvirt collector will be disabled forever.
-	// Same goes for collectors that are completely filtered out.
-
 	source.initCollectors()
 	metrics := source.FilteredMetrics()
 	sort.Strings(metrics)
@@ -97,9 +93,19 @@ func (source *CollectorSource) collect(wg *sync.WaitGroup) *golib.Stopper {
 	log.Printf("Locally collecting %v metrics through %v collectors\n", len(metrics), len(collectors))
 
 	stopper := golib.NewStopper()
-	for _, collector := range collectors {
+	for _, collector := range source.collectors {
+		var interval time.Duration
+		if _, ok := collectors[collector]; ok {
+			interval = source.CollectInterval
+		} else {
+			interval = FilteredCollectorCheckInterval
+		}
 		wg.Add(1)
-		go source.updateCollector(wg, collector, stopper)
+		go source.updateCollector(wg, collector, stopper, interval)
+	}
+	for _, failed := range source.failedCollectors {
+		wg.Add(1)
+		go source.watchFailedCollector(wg, failed, stopper)
 	}
 	wg.Add(1)
 	go source.sinkMetrics(wg, header, values, source.sink, stopper)
@@ -175,7 +181,7 @@ func (source *CollectorSource) collectorFor(metric string) Collector {
 	return nil
 }
 
-func (source *CollectorSource) constructSample(metrics []string) (Header, []Value, []Collector) {
+func (source *CollectorSource) constructSample(metrics []string) (Header, []Value, map[Collector]bool) {
 	set := make(map[Collector]bool)
 
 	header := make(Header, len(metrics))
@@ -195,15 +201,10 @@ func (source *CollectorSource) constructSample(metrics []string) (Header, []Valu
 		}
 		set[collector] = true
 	}
-
-	collectors := make([]Collector, 0, len(set))
-	for source, _ := range set {
-		collectors = append(collectors, source)
-	}
-	return header, values, collectors
+	return header, values, set
 }
 
-func (source *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collector, stopper *golib.Stopper) {
+func (source *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collector, stopper *golib.Stopper, interval time.Duration) {
 	defer wg.Done()
 	for {
 		err := collector.Update()
@@ -214,7 +215,21 @@ func (source *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Col
 		} else if err != nil {
 			log.Println("Warning: Update of", collector, "failed:", err)
 		}
-		if stopper.Stopped(source.CollectInterval) {
+		if stopper.Stopped(interval) {
+			return
+		}
+	}
+}
+
+func (source *CollectorSource) watchFailedCollector(wg *sync.WaitGroup, collector Collector, stopper *golib.Stopper) {
+	defer wg.Done()
+	for {
+		if stopper.Stopped(FailedCollectorCheckInterval) {
+			return
+		}
+		if err := source.initCollector(collector); err == nil {
+			log.Println("Collector", collector, "is not failing anymore. Restarting metric collection.")
+			stopper.Stop()
 			return
 		}
 	}
