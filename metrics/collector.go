@@ -47,24 +47,27 @@ type CollectorSource struct {
 	ExcludeMetrics  []*regexp.Regexp
 	IncludeMetrics  []*regexp.Regexp
 
-	collectors []Collector
-	sink       MetricSink
-	loopTask   golib.Task
+	collectors         []Collector
+	failedCollectors   []Collector
+	filteredCollectors []Collector
+
+	sink     MetricSink
+	loopTask golib.Task
 }
 
-func (col *CollectorSource) String() string {
+func (source *CollectorSource) String() string {
 	return "CollectorSource"
 }
 
-func (col *CollectorSource) SetSink(sink MetricSink) {
-	col.sink = sink
+func (source *CollectorSource) SetSink(sink MetricSink) {
+	source.sink = sink
 }
 
-func (col *CollectorSource) Start(wg *sync.WaitGroup) golib.StopChan {
+func (source *CollectorSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	// TODO integrate golib.StopChan/LoopTask and golib.Stopper
-	col.loopTask = golib.NewLoopTask("CollectorSource", func(stop golib.StopChan) {
+	source.loopTask = golib.NewLoopTask("CollectorSource", func(stop golib.StopChan) {
 		var collectWg sync.WaitGroup
-		stopper := col.collect(&collectWg)
+		stopper := source.collect(&collectWg)
 		select {
 		case <-stopper.Wait():
 		case <-stop:
@@ -72,14 +75,14 @@ func (col *CollectorSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		stopper.Stop()
 		collectWg.Wait()
 	})
-	return col.loopTask.Start(wg)
+	return source.loopTask.Start(wg)
 }
 
-func (col *CollectorSource) Stop() {
-	col.loopTask.Stop()
+func (source *CollectorSource) Stop() {
+	source.loopTask.Stop()
 }
 
-func (col *CollectorSource) collect(wg *sync.WaitGroup) *golib.Stopper {
+func (source *CollectorSource) collect(wg *sync.WaitGroup) *golib.Stopper {
 
 	// TODO Collectors that fail their initialization should still get the
 	// chance to periodically check if the become available.
@@ -87,40 +90,49 @@ func (col *CollectorSource) collect(wg *sync.WaitGroup) *golib.Stopper {
 	// the collection, the libvirt collector will be disabled forever.
 	// Same goes for collectors that are completely filtered out.
 
-	col.initCollectors()
-	metrics := col.FilteredMetrics()
+	source.initCollectors()
+	metrics := source.FilteredMetrics()
 	sort.Strings(metrics)
-	header, values, collectors := col.constructSample(metrics)
+	header, values, collectors := source.constructSample(metrics)
 	log.Printf("Locally collecting %v metrics through %v collectors\n", len(metrics), len(collectors))
 
 	stopper := golib.NewStopper()
 	for _, collector := range collectors {
 		wg.Add(1)
-		go col.updateCollector(wg, collector, stopper)
+		go source.updateCollector(wg, collector, stopper)
 	}
 	wg.Add(1)
-	go col.sinkMetrics(wg, header, values, col.sink, stopper)
+	go source.sinkMetrics(wg, header, values, source.sink, stopper)
 	return stopper
 }
 
-func (col *CollectorSource) initCollectors() {
-	col.collectors = make([]Collector, 0, len(collectorRegistry))
+func (source *CollectorSource) initCollectors() {
+	source.collectors = make([]Collector, 0, len(collectorRegistry))
+	source.failedCollectors = make([]Collector, 0, len(collectorRegistry))
+	source.filteredCollectors = make([]Collector, 0, len(collectorRegistry))
 	for collector, _ := range collectorRegistry {
-		if err := collector.Init(); err != nil {
-			log.Printf("Failed to initialize data collector %T: %v\n", collector, err)
+		if err := source.initCollector(collector); err != nil {
+			log.Printf("Failed to initialize data collector %v: %v\n", collector, err)
+			source.failedCollectors = append(source.failedCollectors, collector)
 			continue
 		}
-		if err := collector.Update(); err != nil {
-			log.Printf("Failed to update data collector %T: %v\n", collector, err)
-			continue
-		}
-		col.collectors = append(col.collectors, collector)
+		source.collectors = append(source.collectors, collector)
 	}
 }
 
-func (col *CollectorSource) AllMetrics() []string {
+func (source *CollectorSource) initCollector(collector Collector) error {
+	if err := collector.Init(); err != nil {
+		return err
+	}
+	if err := collector.Update(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (source *CollectorSource) AllMetrics() []string {
 	var all []string
-	for _, collector := range col.collectors {
+	for _, collector := range source.collectors {
 		metrics := collector.SupportedMetrics()
 		for _, metric := range metrics {
 			all = append(all, metric)
@@ -129,19 +141,19 @@ func (col *CollectorSource) AllMetrics() []string {
 	return all
 }
 
-func (col *CollectorSource) FilteredMetrics() (filtered []string) {
-	all := col.AllMetrics()
+func (source *CollectorSource) FilteredMetrics() (filtered []string) {
+	all := source.AllMetrics()
 	filtered = make([]string, 0, len(all))
 	for _, metric := range all {
 		excluded := false
-		for _, regex := range col.ExcludeMetrics {
+		for _, regex := range source.ExcludeMetrics {
 			if excluded = regex.MatchString(metric); excluded {
 				break
 			}
 		}
-		if !excluded && len(col.IncludeMetrics) > 0 {
+		if !excluded && len(source.IncludeMetrics) > 0 {
 			excluded = true
-			for _, regex := range col.IncludeMetrics {
+			for _, regex := range source.IncludeMetrics {
 				if excluded = !regex.MatchString(metric); !excluded {
 					break
 				}
@@ -154,8 +166,8 @@ func (col *CollectorSource) FilteredMetrics() (filtered []string) {
 	return
 }
 
-func (col *CollectorSource) collectorFor(metric string) Collector {
-	for _, collector := range col.collectors {
+func (source *CollectorSource) collectorFor(metric string) Collector {
+	for _, collector := range source.collectors {
 		if collector.SupportsMetric(metric) {
 			return collector
 		}
@@ -163,13 +175,13 @@ func (col *CollectorSource) collectorFor(metric string) Collector {
 	return nil
 }
 
-func (col *CollectorSource) constructSample(metrics []string) (Header, []Value, []Collector) {
+func (source *CollectorSource) constructSample(metrics []string) (Header, []Value, []Collector) {
 	set := make(map[Collector]bool)
 
 	header := make(Header, len(metrics))
 	values := make([]Value, len(metrics))
 	for i, metricName := range metrics {
-		collector := col.collectorFor(metricName)
+		collector := source.collectorFor(metricName)
 		if collector == nil {
 			log.Println("No collector found for", metricName)
 			continue
@@ -185,13 +197,13 @@ func (col *CollectorSource) constructSample(metrics []string) (Header, []Value, 
 	}
 
 	collectors := make([]Collector, 0, len(set))
-	for col, _ := range set {
-		collectors = append(collectors, col)
+	for source, _ := range set {
+		collectors = append(collectors, source)
 	}
 	return header, values, collectors
 }
 
-func (col *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collector, stopper *golib.Stopper) {
+func (source *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collector, stopper *golib.Stopper) {
 	defer wg.Done()
 	for {
 		err := collector.Update()
@@ -202,13 +214,13 @@ func (col *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collec
 		} else if err != nil {
 			log.Println("Warning: Update of", collector, "failed:", err)
 		}
-		if stopper.Stopped(col.CollectInterval) {
+		if stopper.Stopped(source.CollectInterval) {
 			return
 		}
 	}
 }
 
-func (col *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header Header, values []Value, sink MetricSink, stopper *golib.Stopper) {
+func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header Header, values []Value, sink MetricSink, stopper *golib.Stopper) {
 	defer wg.Done()
 	for {
 		if err := sink.Header(header); err != nil {
@@ -227,21 +239,21 @@ func (col *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header Header, value
 					log.Printf("Warning: Failed to sink %v metrics: %v\n", len(values), err)
 					break
 				}
-				if stopper.Stopped(col.SinkInterval) {
+				if stopper.Stopped(source.SinkInterval) {
 					return
 				}
 			}
 		}
-		if stopper.Stopped(col.SinkInterval) {
+		if stopper.Stopped(source.SinkInterval) {
 			return
 		}
 	}
 }
 
-func (col *CollectorSource) PrintMetrics() {
-	col.initCollectors()
-	all := col.AllMetrics()
-	filtered := col.FilteredMetrics()
+func (source *CollectorSource) PrintMetrics() {
+	source.initCollectors()
+	all := source.AllMetrics()
+	filtered := source.FilteredMetrics()
 	sort.Strings(all)
 	sort.Strings(filtered)
 	i := 0
@@ -274,35 +286,35 @@ type CollectedMetric struct {
 type CollectNotification func()
 type MetricReader func() Value
 
-func (col *AbstractCollector) Reset(parent interface{}) {
-	col.metrics = nil
-	col.readers = nil
-	col.notify = make(map[string]CollectNotification)
-	col.name = fmt.Sprintf("%T", parent)
+func (source *AbstractCollector) Reset(parent interface{}) {
+	source.metrics = nil
+	source.readers = nil
+	source.notify = make(map[string]CollectNotification)
+	source.name = fmt.Sprintf("%T", parent)
 }
 
-func (col *AbstractCollector) SupportedMetrics() (res []string) {
-	res = make([]string, 0, len(col.readers))
-	for metric, _ := range col.readers {
+func (source *AbstractCollector) SupportedMetrics() (res []string) {
+	res = make([]string, 0, len(source.readers))
+	for metric, _ := range source.readers {
 		res = append(res, metric)
 	}
 	return
 }
 
-func (col *AbstractCollector) SupportsMetric(metric string) bool {
-	_, ok := col.readers[metric]
+func (source *AbstractCollector) SupportsMetric(metric string) bool {
+	_, ok := source.readers[metric]
 	return ok
 }
 
-func (col *AbstractCollector) Collect(metric *Metric) error {
-	tags := make([]string, 0, len(col.readers))
-	for metricName, reader := range col.readers {
+func (source *AbstractCollector) Collect(metric *Metric) error {
+	tags := make([]string, 0, len(source.readers))
+	for metricName, reader := range source.readers {
 		if metric.Name == metricName {
-			col.metrics = append(col.metrics, &CollectedMetric{
+			source.metrics = append(source.metrics, &CollectedMetric{
 				Metric:       metric,
 				MetricReader: reader,
 			})
-			if notifier, ok := col.notify[metric.Name]; ok {
+			if notifier, ok := source.notify[metric.Name]; ok {
 				notifier()
 			}
 			return nil
@@ -312,14 +324,14 @@ func (col *AbstractCollector) Collect(metric *Metric) error {
 	return fmt.Errorf("Cannot handle metric %v, expected one of %v", metric.Name, tags)
 }
 
-func (col *AbstractCollector) UpdateMetrics() {
-	for _, metric := range col.metrics {
+func (source *AbstractCollector) UpdateMetrics() {
+	for _, metric := range source.metrics {
 		metric.Set(metric.MetricReader())
 	}
 }
 
-func (col *AbstractCollector) String() string {
-	return fmt.Sprintf("%s (%v metrics)", col.name, len(col.metrics))
+func (source *AbstractCollector) String() string {
+	return fmt.Sprintf("%s (%v metrics)", source.name, len(source.metrics))
 }
 
 // ================================= Ring logback of recorded Values =================================
