@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/antongulenko/golib"
@@ -44,6 +45,7 @@ var (
 
 	print_metrics = false
 	libvirt_uri   = metrics.LibvirtLocal() // metrics.LibvirtSsh("host", "keyfile")
+	ovsdb_host    = ""
 )
 
 var (
@@ -74,6 +76,7 @@ func marshaller(format string) metrics.MetricMarshaller {
 
 func main() {
 	flag.StringVar(&libvirt_uri, "libvirt", libvirt_uri, "Libvirt connection uri (default is local system)")
+	flag.StringVar(&ovsdb_host, "ovsdb", ovsdb_host, "OVSDB host to connect to. Empty for localhost. Port is "+strconv.Itoa(metrics.DefaultOvsdbPort))
 	flag.BoolVar(&print_metrics, "metrics", print_metrics, "Print all available metrics and exit")
 	flag.BoolVar(&all_metrics, "a", all_metrics, "Disable built-in filters on available metrics")
 	flag.Var(&user_exclude_metrics, "exclude", "Metrics to exclude (only with -c, substring match)")
@@ -108,6 +111,7 @@ func main() {
 	// ====== Configure collectors
 	metrics.RegisterPsutilCollectors()
 	metrics.RegisterLibvirtCollector(libvirt_uri)
+	metrics.RegisterOvsdbCollector(ovsdb_host)
 	if len(proc_collectors) > 0 || len(proc_collector_regex) > 0 {
 		procRegex := make([]*regexp.Regexp, 0, len(proc_collectors))
 		for _, substr := range proc_collectors {
