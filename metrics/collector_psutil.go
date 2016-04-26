@@ -89,9 +89,9 @@ type PsutilCpuCollector struct {
 
 func (col *PsutilCpuCollector) Init() error {
 	col.Reset(col)
-	col.ring = NewValueRing(CpuTimeLogback)
+	col.ring = NewValueRing(CpuTimeLogback, CpuInterval)
 	col.readers = map[string]MetricReader{
-		"cpu": col.readCpu,
+		"cpu": col.ring.GetDiff,
 	}
 	return nil
 }
@@ -107,10 +107,6 @@ func (col *PsutilCpuCollector) Update() (err error) {
 		}
 	}
 	return
-}
-
-func (col *PsutilCpuCollector) readCpu() Value {
-	return col.ring.GetDiff(CpuInterval)
 }
 
 type cpuTime struct {
@@ -208,22 +204,21 @@ type PsutilNetCollector struct {
 }
 
 type netIoCounters struct {
-	bytes   ValueRing
-	packets ValueRing
-	errors  ValueRing
-	dropped ValueRing
+	bytes      ValueRing
+	packets    ValueRing
+	rx_bytes   ValueRing
+	rx_packets ValueRing
+	tx_bytes   ValueRing
+	tx_packets ValueRing
+	errors     ValueRing
+	dropped    ValueRing
 }
 
 func (col *PsutilNetCollector) Init() error {
 	col.Reset(col)
-	col.counters = newNetIoCounters()
-	// TODO separate in/out metrics
-	col.readers = map[string]MetricReader{
-		"net-io/bytes":   col.counters.readBytes,
-		"net-io/packets": col.counters.readPackets,
-		"net-io/errors":  col.counters.readErrors,
-		"net-io/dropped": col.counters.readDropped,
-	}
+	col.counters = NewNetIoCounters(NetIoLogback, NetIoInterval)
+	col.readers = make(map[string]MetricReader)
+	col.counters.Register(col.readers, "net-io")
 	return nil
 }
 
@@ -239,12 +234,16 @@ func (col *PsutilNetCollector) Update() (err error) {
 	return
 }
 
-func newNetIoCounters() netIoCounters {
+func NewNetIoCounters(logback int, interval time.Duration) netIoCounters {
 	return netIoCounters{
-		bytes:   NewValueRing(NetIoLogback),
-		packets: NewValueRing(NetIoLogback),
-		errors:  NewValueRing(NetIoLogback),
-		dropped: NewValueRing(NetIoLogback),
+		bytes:      NewValueRing(logback, interval),
+		packets:    NewValueRing(logback, interval),
+		rx_bytes:   NewValueRing(logback, interval),
+		rx_packets: NewValueRing(logback, interval),
+		tx_bytes:   NewValueRing(logback, interval),
+		tx_packets: NewValueRing(logback, interval),
+		errors:     NewValueRing(logback, interval),
+		dropped:    NewValueRing(logback, interval),
 	}
 }
 
@@ -256,6 +255,10 @@ func (counters *netIoCounters) Add(stat *psnet.IOCountersStat) {
 func (counters *netIoCounters) AddToHead(stat *psnet.IOCountersStat) {
 	counters.bytes.AddToHead(Value(stat.BytesSent + stat.BytesRecv))
 	counters.packets.AddToHead(Value(stat.PacketsSent + stat.PacketsRecv))
+	counters.rx_bytes.AddToHead(Value(stat.BytesRecv))
+	counters.rx_packets.AddToHead(Value(stat.PacketsRecv))
+	counters.tx_bytes.AddToHead(Value(stat.BytesSent))
+	counters.tx_packets.AddToHead(Value(stat.PacketsSent))
 	counters.errors.AddToHead(Value(stat.Errin + stat.Errout))
 	counters.dropped.AddToHead(Value(stat.Dropin + stat.Dropout))
 }
@@ -263,24 +266,23 @@ func (counters *netIoCounters) AddToHead(stat *psnet.IOCountersStat) {
 func (counters *netIoCounters) FlushHead() {
 	counters.bytes.FlushHead()
 	counters.packets.FlushHead()
+	counters.rx_bytes.FlushHead()
+	counters.rx_packets.FlushHead()
+	counters.tx_bytes.FlushHead()
+	counters.tx_packets.FlushHead()
 	counters.errors.FlushHead()
 	counters.dropped.FlushHead()
 }
 
-func (counters *netIoCounters) readBytes() Value {
-	return counters.bytes.GetDiff(NetIoInterval)
-}
-
-func (counters *netIoCounters) readPackets() Value {
-	return counters.packets.GetDiff(NetIoInterval)
-}
-
-func (counters *netIoCounters) readErrors() Value {
-	return counters.errors.GetDiff(NetIoInterval)
-}
-
-func (counters *netIoCounters) readDropped() Value {
-	return counters.dropped.GetDiff(NetIoInterval)
+func (counters *netIoCounters) Register(target map[string]MetricReader, prefix string) {
+	target[prefix+"/bytes"] = counters.bytes.GetDiff
+	target[prefix+"/packets"] = counters.packets.GetDiff
+	target[prefix+"/rx_bytes"] = counters.rx_bytes.GetDiff
+	target[prefix+"/rx_packets"] = counters.rx_packets.GetDiff
+	target[prefix+"/tx_bytes"] = counters.tx_bytes.GetDiff
+	target[prefix+"/tx_packets"] = counters.tx_packets.GetDiff
+	target[prefix+"/errors"] = counters.errors.GetDiff
+	target[prefix+"/dropped"] = counters.dropped.GetDiff
 }
 
 // ==================== Net Protocol Counters ====================
@@ -316,7 +318,7 @@ func (col *PsutilNetProtoCollector) Init() error {
 		for statName, _ := range counters.Stats {
 			var ring *ValueRing
 			if !absoluteNetProtoValues[statName] {
-				ringVal := NewValueRing(NetProtoLogback)
+				ringVal := NewValueRing(NetProtoLogback, NetProtoInterval)
 				ring = &ringVal
 			}
 			name := "net-proto/" + proto + "/" + statName
@@ -394,7 +396,7 @@ func (reader *protoStatReader) update() error {
 
 func (reader *protoStatReader) read() Value {
 	if ring := reader.ring; ring != nil {
-		return ring.GetDiff(NetProtoInterval)
+		return ring.GetDiff()
 	} else {
 		return reader.value
 	}
@@ -419,13 +421,13 @@ func (col *PsutilDiskIOCollector) Init() error {
 		reader := &diskIOReader{
 			col:            col,
 			disk:           disk,
-			readRing:       NewValueRing(DiskIoLogback),
-			writeRing:      NewValueRing(DiskIoLogback),
-			readBytesRing:  NewValueRing(DiskIoLogback),
-			writeBytesRing: NewValueRing(DiskIoLogback),
-			readTimeRing:   NewValueRing(DiskIoLogback),
-			writeTimeRing:  NewValueRing(DiskIoLogback),
-			ioTimeRing:     NewValueRing(DiskIoLogback),
+			readRing:       NewValueRing(DiskIoLogback, DiskIoInterval),
+			writeRing:      NewValueRing(DiskIoLogback, DiskIoInterval),
+			readBytesRing:  NewValueRing(DiskIoLogback, DiskIoInterval),
+			writeBytesRing: NewValueRing(DiskIoLogback, DiskIoInterval),
+			readTimeRing:   NewValueRing(DiskIoLogback, DiskIoInterval),
+			writeTimeRing:  NewValueRing(DiskIoLogback, DiskIoInterval),
+			ioTimeRing:     NewValueRing(DiskIoLogback, DiskIoInterval),
 		}
 		col.readers[name+"read"] = reader.readRead
 		col.readers[name+"write"] = reader.readWrite
@@ -488,7 +490,7 @@ func (reader *diskIOReader) checkDisk() *disk.IOCountersStat {
 
 func (reader *diskIOReader) value(val uint64, ring *ValueRing) Value {
 	ring.Add(Value(val))
-	return ring.GetDiff(DiskIoInterval)
+	return ring.GetDiff()
 }
 
 func (reader *diskIOReader) readRead() Value {
@@ -736,31 +738,26 @@ func (col *PsutilProcessCollector) Init() error {
 	col.own_pid = int32(os.Getpid())
 	col.cpu_factor = 100 / float64(runtime.NumCPU())
 	col.Reset(col)
-	col.cpu = NewValueRing(CpuTimeLogback)
-	col.ioRead = NewValueRing(DiskIoLogback)
-	col.ioWrite = NewValueRing(DiskIoLogback)
-	col.ioReadBytes = NewValueRing(DiskIoLogback)
-	col.ioWriteBytes = NewValueRing(DiskIoLogback)
-	col.ctx_switch_voluntary = NewValueRing(CtxSwitchLogback)
-	col.ctx_switch_involuntary = NewValueRing(CtxSwitchLogback)
-	col.net = newNetIoCounters()
+	col.cpu = NewValueRing(CpuTimeLogback, CpuInterval)
+	col.ioRead = NewValueRing(DiskIoLogback, DiskIoInterval)
+	col.ioWrite = NewValueRing(DiskIoLogback, DiskIoInterval)
+	col.ioReadBytes = NewValueRing(DiskIoLogback, DiskIoInterval)
+	col.ioWriteBytes = NewValueRing(DiskIoLogback, DiskIoInterval)
+	col.ctx_switch_voluntary = NewValueRing(CtxSwitchLogback, CtxSwitchInterval)
+	col.ctx_switch_involuntary = NewValueRing(CtxSwitchLogback, CtxSwitchInterval)
+	col.net = NewNetIoCounters(NetIoLogback, NetIoInterval)
 
 	col.readers = map[string]MetricReader{
 		"proc/" + col.GroupName + "/num": col.readNumProc,
-		"proc/" + col.GroupName + "/cpu": col.readCpu,
+		"proc/" + col.GroupName + "/cpu": col.cpu.GetDiff,
 
-		"proc/" + col.GroupName + "/disk/read":       col.readDiskRead,
-		"proc/" + col.GroupName + "/disk/write":      col.readDiskWrite,
-		"proc/" + col.GroupName + "/disk/readBytes":  col.readDiskReadBytes,
-		"proc/" + col.GroupName + "/disk/writeBytes": col.readDiskWriteBytes,
+		"proc/" + col.GroupName + "/disk/read":       col.ioRead.GetDiff,
+		"proc/" + col.GroupName + "/disk/write":      col.ioWrite.GetDiff,
+		"proc/" + col.GroupName + "/disk/readBytes":  col.ioReadBytes.GetDiff,
+		"proc/" + col.GroupName + "/disk/writeBytes": col.ioWriteBytes.GetDiff,
 
-		"proc/" + col.GroupName + "/net-io/bytes":   col.net.readBytes,
-		"proc/" + col.GroupName + "/net-io/packets": col.net.readPackets,
-		"proc/" + col.GroupName + "/net-io/errors":  col.net.readErrors,
-		"proc/" + col.GroupName + "/net-io/dropped": col.net.readDropped,
-
-		"proc/" + col.GroupName + "/ctxSwitch/voluntary":   col.readCtxSwitchVol,
-		"proc/" + col.GroupName + "/ctxSwitch/involuntary": col.readCtxSwitchInvol,
+		"proc/" + col.GroupName + "/ctxSwitch/voluntary":   col.ctx_switch_voluntary.GetDiff,
+		"proc/" + col.GroupName + "/ctxSwitch/involuntary": col.ctx_switch_involuntary.GetDiff,
 
 		"proc/" + col.GroupName + "/mem/rss":  col.readMemRss,
 		"proc/" + col.GroupName + "/mem/vms":  col.readMemVms,
@@ -768,6 +765,8 @@ func (col *PsutilProcessCollector) Init() error {
 		"proc/" + col.GroupName + "/fds":      col.readFds,
 		"proc/" + col.GroupName + "/threads":  col.readThreads,
 	}
+	col.net.Register(col.readers, "proc/"+col.GroupName+"/net-io")
+
 	return nil
 }
 
@@ -1033,34 +1032,6 @@ func (col *SingleProcessCollector) procGetMisc() (numThreads int32, numCtxSwitch
 
 func (col *PsutilProcessCollector) readNumProc() Value {
 	return Value(len(col.pids))
-}
-
-func (col *PsutilProcessCollector) readCpu() Value {
-	return col.cpu.GetDiff(CpuInterval)
-}
-
-func (col *PsutilProcessCollector) readDiskRead() Value {
-	return col.ioRead.GetDiff(DiskIoInterval)
-}
-
-func (col *PsutilProcessCollector) readDiskWrite() Value {
-	return col.ioWrite.GetDiff(DiskIoInterval)
-}
-
-func (col *PsutilProcessCollector) readDiskReadBytes() Value {
-	return col.ioReadBytes.GetDiff(DiskIoInterval)
-}
-
-func (col *PsutilProcessCollector) readDiskWriteBytes() Value {
-	return col.ioWriteBytes.GetDiff(DiskIoInterval)
-}
-
-func (col *PsutilProcessCollector) readCtxSwitchVol() Value {
-	return col.ctx_switch_voluntary.GetDiff(CtxSwitchInterval)
-}
-
-func (col *PsutilProcessCollector) readCtxSwitchInvol() Value {
-	return col.ctx_switch_involuntary.GetDiff(CtxSwitchInterval)
 }
 
 func (col *PsutilProcessCollector) readMemRss() Value {

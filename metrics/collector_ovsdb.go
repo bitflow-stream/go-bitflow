@@ -47,19 +47,7 @@ func (col *OvsdbCollector) Init() error {
 
 	col.readers = make(map[string]MetricReader)
 	for _, reader := range col.interfaceReaders {
-		base := "ovsdb/" + reader.name
-		for name, reader := range map[string]MetricReader{
-			base + "/errors":     reader.readErrors,
-			base + "/dropped":    reader.readDropped,
-			base + "/bytes":      reader.readBytes,
-			base + "/packets":    reader.readPackets,
-			base + "/rx_bytes":   reader.readRxBytes,
-			base + "/rx_packets": reader.readRxPackets,
-			base + "/tx_bytes":   reader.readTxBytes,
-			base + "/tx_packets": reader.readTxPackets,
-		} {
-			col.readers[name] = reader
-		}
+		reader.counters.Register(col.readers, "ovsdb/"+reader.name)
 	}
 	return nil
 }
@@ -69,16 +57,9 @@ func (col *OvsdbCollector) getReader(name string) *ovsdbInterfaceReader {
 		return reader
 	}
 	reader := &ovsdbInterfaceReader{
-		col:        col,
-		name:       name,
-		errors:     NewValueRing(OvsdbLogback),
-		dropped:    NewValueRing(OvsdbLogback),
-		bytes:      NewValueRing(OvsdbLogback),
-		packets:    NewValueRing(OvsdbLogback),
-		rx_bytes:   NewValueRing(OvsdbLogback),
-		rx_packets: NewValueRing(OvsdbLogback),
-		tx_bytes:   NewValueRing(OvsdbLogback),
-		tx_packets: NewValueRing(OvsdbLogback),
+		col:      col,
+		name:     name,
+		counters: NewNetIoCounters(OvsdbLogback, OvsdbInterval),
 	}
 	col.interfaceReaders[name] = reader
 	return reader
@@ -197,17 +178,9 @@ func (col *OvsdbCollector) parseRowUpdate(row *libovsdb.Row) (name string, stats
 // ==================== Interface Update Collector ====================
 
 type ovsdbInterfaceReader struct {
-	name string
-	col  *OvsdbCollector
-
-	errors     ValueRing
-	dropped    ValueRing
-	bytes      ValueRing
-	packets    ValueRing
-	rx_bytes   ValueRing
-	rx_packets ValueRing
-	tx_bytes   ValueRing
-	tx_packets ValueRing
+	name     string
+	col      *OvsdbCollector
+	counters netIoCounters
 }
 
 func (col *ovsdbInterfaceReader) fillValues(stats map[string]float64, names []string, ring *ValueRing) {
@@ -227,46 +200,14 @@ func (col *ovsdbInterfaceReader) update(stats map[string]float64) {
 		"rx_frame_err",
 		"rx_over_err",
 		"tx_errors",
-	}, &col.errors)
-	col.fillValues(stats, []string{"rx_dropped", "tx_dropped"}, &col.dropped)
-	col.fillValues(stats, []string{"rx_bytes", "tx_bytes"}, &col.bytes)
-	col.fillValues(stats, []string{"rx_packets", "tx_packets"}, &col.packets)
-	col.fillValues(stats, []string{"rx_bytes"}, &col.rx_bytes)
-	col.fillValues(stats, []string{"rx_packets"}, &col.rx_packets)
-	col.fillValues(stats, []string{"tx_bytes"}, &col.tx_bytes)
-	col.fillValues(stats, []string{"tx_packets"}, &col.tx_packets)
-}
-
-func (col *ovsdbInterfaceReader) readErrors() Value {
-	return col.errors.GetDiff(OvsdbInterval)
-}
-
-func (col *ovsdbInterfaceReader) readDropped() Value {
-	return col.dropped.GetDiff(OvsdbInterval)
-}
-
-func (col *ovsdbInterfaceReader) readBytes() Value {
-	return col.bytes.GetDiff(OvsdbInterval)
-}
-
-func (col *ovsdbInterfaceReader) readPackets() Value {
-	return col.packets.GetDiff(OvsdbInterval)
-}
-
-func (col *ovsdbInterfaceReader) readRxBytes() Value {
-	return col.rx_bytes.GetDiff(OvsdbInterval)
-}
-
-func (col *ovsdbInterfaceReader) readRxPackets() Value {
-	return col.rx_packets.GetDiff(OvsdbInterval)
-}
-
-func (col *ovsdbInterfaceReader) readTxBytes() Value {
-	return col.tx_bytes.GetDiff(OvsdbInterval)
-}
-
-func (col *ovsdbInterfaceReader) readTxPackets() Value {
-	return col.tx_packets.GetDiff(OvsdbInterval)
+	}, &col.counters.errors)
+	col.fillValues(stats, []string{"rx_dropped", "tx_dropped"}, &col.counters.dropped)
+	col.fillValues(stats, []string{"rx_bytes", "tx_bytes"}, &col.counters.bytes)
+	col.fillValues(stats, []string{"rx_packets", "tx_packets"}, &col.counters.packets)
+	col.fillValues(stats, []string{"rx_bytes"}, &col.counters.rx_bytes)
+	col.fillValues(stats, []string{"rx_packets"}, &col.counters.rx_packets)
+	col.fillValues(stats, []string{"tx_bytes"}, &col.counters.tx_bytes)
+	col.fillValues(stats, []string{"tx_packets"}, &col.counters.tx_packets)
 }
 
 // ==================== OVSDB Notifications ====================

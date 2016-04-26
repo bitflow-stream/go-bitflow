@@ -80,6 +80,13 @@ func (col *CollectorSource) Stop() {
 }
 
 func (col *CollectorSource) collect(wg *sync.WaitGroup) *golib.Stopper {
+
+	// TODO Collectors that fail their initialization should still get the
+	// chance to periodically check if the become available.
+	// Example: if libvirt-connection is temporarily unavailable when starting
+	// the collection, the libvirt collector will be disabled forever.
+	// Same goes for collectors that are completely filtered out.
+
 	col.initCollectors()
 	metrics := col.FilteredMetrics()
 	sort.Strings(metrics)
@@ -317,15 +324,18 @@ func (col *AbstractCollector) String() string {
 
 // ================================= Ring logback of recorded Values =================================
 type ValueRing struct {
+	interval time.Duration // Can be set to use GetDefaultDiff()
+
 	values []TimedValue
 	head   int // actually head+1
 
 	aggregator LogbackValue
 }
 
-func NewValueRing(length int) ValueRing {
+func NewValueRing(length int, interval time.Duration) ValueRing {
 	return ValueRing{
-		values: make([]TimedValue, length),
+		values:   make([]TimedValue, length),
+		interval: interval,
 	}
 }
 
@@ -397,7 +407,11 @@ func (ring *ValueRing) get(before time.Time) (result TimedValue) {
 	return
 }
 
-func (ring *ValueRing) GetDiff(before time.Duration) Value {
+func (ring *ValueRing) GetDiff() Value {
+	return ring.GetDiffInterval(ring.interval)
+}
+
+func (ring *ValueRing) GetDiffInterval(before time.Duration) Value {
 	head := ring.getHead()
 	if head.val == nil {
 		// Probably empty ring
