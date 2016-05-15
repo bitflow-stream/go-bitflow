@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/antongulenko/data2go/metrics"
 	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/data2go/sample-collector"
 	"github.com/antongulenko/golib"
 )
 
@@ -45,7 +45,7 @@ var (
 	proc_update_pids     = 1500 * time.Millisecond
 
 	print_metrics = false
-	libvirt_uri   = metrics.LibvirtLocal() // metrics.LibvirtSsh("host", "keyfile")
+	libvirt_uri   = collector.LibvirtLocal() // collector.LibvirtSsh("host", "keyfile")
 	ovsdb_host    = ""
 )
 
@@ -77,7 +77,7 @@ func marshaller(format string) sample.MetricMarshaller {
 
 func main() {
 	flag.StringVar(&libvirt_uri, "libvirt", libvirt_uri, "Libvirt connection uri (default is local system)")
-	flag.StringVar(&ovsdb_host, "ovsdb", ovsdb_host, "OVSDB host to connect to. Empty for localhost. Port is "+strconv.Itoa(metrics.DefaultOvsdbPort))
+	flag.StringVar(&ovsdb_host, "ovsdb", ovsdb_host, "OVSDB host to connect to. Empty for localhost. Port is "+strconv.Itoa(collector.DefaultOvsdbPort))
 	flag.BoolVar(&print_metrics, "metrics", print_metrics, "Print all available metrics and exit")
 	flag.BoolVar(&all_metrics, "a", all_metrics, "Disable built-in filters on available metrics")
 	flag.Var(&user_exclude_metrics, "exclude", "Metrics to exclude (only with -c, substring match)")
@@ -110,9 +110,9 @@ func main() {
 	defer golib.ProfileCpu()()
 
 	// ====== Configure collectors
-	metrics.RegisterPsutilCollectors()
-	metrics.RegisterLibvirtCollector(libvirt_uri)
-	metrics.RegisterOvsdbCollector(ovsdb_host)
+	collector.RegisterPsutilCollectors()
+	collector.RegisterLibvirtCollector(libvirt_uri)
+	collector.RegisterOvsdbCollector(ovsdb_host)
 	if len(proc_collectors) > 0 || len(proc_collector_regex) > 0 {
 		procRegex := make([]*regexp.Regexp, 0, len(proc_collectors))
 		for _, substr := range proc_collectors {
@@ -124,7 +124,7 @@ func main() {
 			golib.Checkerr(err)
 			procRegex = append(procRegex, regex)
 		}
-		metrics.RegisterCollector(&metrics.PsutilProcessCollector{
+		collector.RegisterCollector(&collector.PsutilProcessCollector{
 			CmdlineFilter:     procRegex,
 			GroupName:         "vnf",
 			PrintErrors:       proc_show_errors,
@@ -161,7 +161,7 @@ func main() {
 			source = theSource
 		}
 	}
-	collector := &metrics.CollectorSource{
+	collector := &collector.CollectorSource{
 		CollectInterval: collect_local_interval,
 		SinkInterval:    sink_interval,
 		ExcludeMetrics:  excludeMetricsRegexes,
