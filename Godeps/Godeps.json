@@ -1,0 +1,99 @@
+{
+	"ImportPath": "github.com/antongulenko/data2go",
+	"GoVersion": "go1.6",
+	"GodepVersion": "v67",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/StackExchange/wmi",
+			"Rev": "f3e2bae1e0cb5aef83e319133eabfee30013a4a5"
+		},
+		{
+			"ImportPath": "github.com/antongulenko/golib",
+			"Rev": "433c4564439d84fe84c0af7d011eae3bc9754535"
+		},
+		{
+			"ImportPath": "github.com/cenk/hub",
+			"Comment": "v1.0.0-17-gb864404",
+			"Rev": "b864404b5f990410d56858a1b0a6fac23a85443f"
+		},
+		{
+			"ImportPath": "github.com/cenk/rpc2",
+			"Rev": "7ab76d2e88c77ca1a715756036d8264b2886acd2"
+		},
+		{
+			"ImportPath": "github.com/cenk/rpc2/jsonrpc",
+			"Rev": "7ab76d2e88c77ca1a715756036d8264b2886acd2"
+		},
+		{
+			"ImportPath": "github.com/go-ole/go-ole",
+			"Comment": "v1.2.0-10-g572eabb",
+			"Rev": "572eabb84c424e76a0d39d31510dd7dfd62f70b2"
+		},
+		{
+			"ImportPath": "github.com/go-ole/go-ole/oleutil",
+			"Comment": "v1.2.0-10-g572eabb",
+			"Rev": "572eabb84c424e76a0d39d31510dd7dfd62f70b2"
+		},
+		{
+			"ImportPath": "github.com/rgbkrk/libvirt-go",
+			"Comment": "v2.12.0-31-g3cd5aac",
+			"Rev": "3cd5aacf75e3e3a884a0c2f833457dde75b7a1e9"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/cpu",
+			"Comment": "v2.0.0-29-gbae75fa",
+			"Rev": "bae75faa5ad1212d3e80f11f5e9cd147c6be9198"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/disk",
+			"Comment": "v2.0.0-29-gbae75fa",
+			"Rev": "bae75faa5ad1212d3e80f11f5e9cd147c6be9198"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/host",
+			"Comment": "v2.0.0-29-gbae75fa",
+			"Rev": "bae75faa5ad1212d3e80f11f5e9cd147c6be9198"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/internal/common",
+			"Comment": "v2.0.0-29-gbae75fa",
+			"Rev": "bae75faa5ad1212d3e80f11f5e9cd147c6be9198"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/load",
+			"Comment": "v2.0.0-29-gbae75fa",
+			"Rev": "bae75faa5ad1212d3e80f11f5e9cd147c6be9198"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/mem",
+			"Comment": "v2.0.0-29-gbae75fa",
+			"Rev": "bae75faa5ad1212d3e80f11f5e9cd147c6be9198"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/net",
+			"Comment": "v2.0.0-29-gbae75fa",
+			"Rev": "bae75faa5ad1212d3e80f11f5e9cd147c6be9198"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/process",
+			"Comment": "v2.0.0-29-gbae75fa",
+			"Rev": "bae75faa5ad1212d3e80f11f5e9cd147c6be9198"
+		},
+		{
+			"ImportPath": "github.com/shirou/w32",
+			"Rev": "3c9377fc6748f222729a8270fe2775d149a249ad"
+		},
+		{
+			"ImportPath": "github.com/socketplane/libovsdb",
+			"Comment": "v0.1-9-gd4b9e7a",
+			"Rev": "d4b9e7a53548bcfc6e97132bbc977e13c026084d"
+		},
+		{
+			"ImportPath": "gopkg.in/xmlpath.v1",
+			"Rev": "a146725ea6e7e357ca683ef3e02e8a403742b9c0"
+		}
+	]
+}
