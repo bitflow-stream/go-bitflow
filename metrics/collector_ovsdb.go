@@ -12,7 +12,7 @@ const (
 	OvsdbLogback  = 50
 	OvsdbInterval = 5 * time.Second
 
-	DefaultOvsdbPort = libovsdb.DEFAULT_PORT
+	DefaultOvsdbPort = libovsdb.DefaultPort
 )
 
 func RegisterOvsdbCollector(Host string) {

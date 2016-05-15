@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
-	"github.com/shirou/gopsutil/internal/common"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
@@ -79,6 +79,15 @@ func (col *PsutilMemCollector) readUsedMem() Value {
 
 func (col *PsutilMemCollector) readUsedPercentMem() Value {
 	return Value(col.memory.UsedPercent)
+}
+
+func hostProcFile(parts ...string) string {
+	// Forbidden import: "github.com/shirou/gopsutil/internal/common"
+	// return common.HostProc(parts...)
+	all := make([]string, len(parts)+1)
+	all[0] = "/proc"
+	copy(all[1:], parts)
+	return filepath.Join(all...)
 }
 
 // ==================== CPU ====================
@@ -971,7 +980,7 @@ func (col *SingleProcessCollector) updateMisc() error {
 func (col *SingleProcessCollector) procNumFds() (int32, error) {
 	// This is part of gopsutil/process.Process.fillFromfd()
 	pid := col.Pid
-	statPath := common.HostProc(strconv.Itoa(int(pid)), "fd")
+	statPath := hostProcFile(strconv.Itoa(int(pid)), "fd")
 	d, err := os.Open(statPath)
 	if err != nil {
 		return 0, err
@@ -985,7 +994,7 @@ func (col *SingleProcessCollector) procNumFds() (int32, error) {
 func (col *SingleProcessCollector) procGetMisc() (numThreads int32, numCtxSwitches process.NumCtxSwitchesStat, err error) {
 	// This is part of gopsutil/process.Process.fillFromStatus()
 	pid := col.Pid
-	statPath := common.HostProc(strconv.Itoa(int(pid)), "status")
+	statPath := hostProcFile(strconv.Itoa(int(pid)), "status")
 	var contents []byte
 	contents, err = ioutil.ReadFile(statPath)
 	if err != nil {
