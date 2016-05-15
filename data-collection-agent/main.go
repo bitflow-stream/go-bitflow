@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/antongulenko/golib"
-	"gitlab.tubit.tu-berlin.de/CIT-Huawei/monitoring/metrics"
+	"github.com/antongulenko/data2go/metrics"
 )
 
 var (
