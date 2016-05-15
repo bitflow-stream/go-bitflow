@@ -1,2 +1,2 @@
-# monitoring
-Real-time collection and analysis of different data
+# data2go
+Several Go (Golang) packages for collecting and working with streams of data
