@@ -7,8 +7,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/antongulenko/golib"
 	"github.com/antongulenko/data2go/metrics"
+	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/golib"
 )
 
 var (
@@ -57,15 +58,15 @@ var (
 		regexp.MustCompile("^net-proto/tcp/(MaxConn|RtpAlgorithm|RtpMin|RtoMax)$"), // Some irrelevant TCP/IP settings
 		regexp.MustCompile("^net-proto/ip/(DefaultTTL|Forwarding)$"),
 	}
-	marshallers = map[string]metrics.MetricMarshaller{
-		"":  new(metrics.CsvMarshaller), // The default
-		"c": new(metrics.CsvMarshaller),
-		"b": new(metrics.BinaryMarshaller),
-		"t": new(metrics.TextMarshaller),
+	marshallers = map[string]sample.MetricMarshaller{
+		"":  new(sample.CsvMarshaller), // The default
+		"c": new(sample.CsvMarshaller),
+		"b": new(sample.BinaryMarshaller),
+		"t": new(sample.TextMarshaller),
 	}
 )
 
-func marshaller(format string) metrics.MetricMarshaller {
+func marshaller(format string) sample.MetricMarshaller {
 	if marshaller, ok := marshallers[format]; !ok {
 		log.Fatalf("Illegal data fromat %v, must be one of %v\n", format, supportedFormats)
 		return nil
@@ -151,8 +152,8 @@ func main() {
 	unmarshaller := marshaller(format_input)
 
 	// ====== Initialize source(s)
-	var source metrics.MetricSource
-	setSource := func(set bool, theSource metrics.MetricSource) {
+	var source sample.MetricSource
+	setSource := func(set bool, theSource sample.MetricSource) {
 		if set {
 			if source != nil {
 				log.Fatalln("Please provide only one data source")
@@ -171,35 +172,35 @@ func main() {
 		return
 	}
 	setSource(collect_local, collector)
-	setSource(collect_console, new(metrics.ConsoleSource))
-	setSource(collect_listen != "", metrics.NewTcpListenerSource(collect_listen))
-	setSource(collect_download != "", &metrics.TCPSource{
+	setSource(collect_console, new(sample.ConsoleSource))
+	setSource(collect_listen != "", sample.NewTcpListenerSource(collect_listen))
+	setSource(collect_download != "", &sample.TCPSource{
 		RemoteAddr:    collect_download,
 		RetryInterval: active_retry_interval,
 	})
-	setSource(collect_file != "", &metrics.FileSource{
-		FileTransport: metrics.FileTransport{Filename: collect_file}})
+	setSource(collect_file != "", &sample.FileSource{
+		FileTransport: sample.FileTransport{Filename: collect_file}})
 	if source == nil {
 		log.Println("No data source provided, no data will be generated.")
 	}
 
 	// ====== Initialize sink(s) and tasks
-	var sinks metrics.AggregateSink
-	var marshallers []metrics.Marshaller
+	var sinks sample.AggregateSink
+	var marshallers []sample.Marshaller
 	if sink_console {
-		sinks = append(sinks, new(metrics.ConsoleSink))
+		sinks = append(sinks, new(sample.ConsoleSink))
 		marshallers = append(marshallers, marshaller_console)
 	}
 	if sink_connect != "" {
-		sinks = append(sinks, &metrics.TCPSink{Endpoint: sink_connect})
+		sinks = append(sinks, &sample.TCPSink{Endpoint: sink_connect})
 		marshallers = append(marshallers, marshaller_connect)
 	}
 	if sink_listen != "" {
-		sinks = append(sinks, metrics.NewTcpListenerSink(sink_listen))
+		sinks = append(sinks, sample.NewTcpListenerSink(sink_listen))
 		marshallers = append(marshallers, marshaller_listen)
 	}
 	if sink_file != "" {
-		sinks = append(sinks, &metrics.FileSink{FileTransport: metrics.FileTransport{Filename: sink_file}})
+		sinks = append(sinks, &sample.FileSink{FileTransport: sample.FileTransport{Filename: sink_file}})
 		marshallers = append(marshallers, marshaller_file)
 	}
 	if len(sinks) == 0 {
@@ -214,7 +215,7 @@ func main() {
 	}
 	if source != nil {
 		source.SetSink(sinks)
-		if unmarshallingSource, ok := source.(metrics.UnmarshallingMetricSource); ok {
+		if unmarshallingSource, ok := source.(sample.UnmarshallingMetricSource); ok {
 			unmarshallingSource.SetUnmarshaller(unmarshaller)
 		}
 	}

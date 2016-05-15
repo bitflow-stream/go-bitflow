@@ -186,7 +186,7 @@ type ovsdbInterfaceReader struct {
 func (col *ovsdbInterfaceReader) fillValues(stats map[string]float64, names []string, ring *ValueRing) {
 	for _, name := range names {
 		if value, ok := stats[name]; ok {
-			ring.AddToHead(Value(value))
+			ring.AddToHead(StoredValue(value))
 		}
 	}
 	ring.FlushHead()

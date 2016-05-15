@@ -1,0 +1,165 @@
+package sample
+
+import (
+	"bufio"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"os"
+
+	"github.com/antongulenko/golib"
+)
+
+const (
+	text_date_format = "2006-01-02 15:04:05.999"
+
+	// Defaults will be applied if value is <= 0
+	test_marshaller_default_spacing = 3
+	text_marshaller_default_width   = 200 // Automatic for stdin.
+	text_marshaller_header_char     = '='
+)
+
+type TextMarshaller struct {
+	lastHeader Header
+	TextWidth  int // Ignored if Columns is > 0
+	Columns    int // Will be inferred from TextWidth if <= 0
+	Spacing    int
+}
+
+func (*TextMarshaller) String() string {
+	return "text"
+}
+
+func (m *TextMarshaller) WriteHeader(header Header, writer io.Writer) error {
+	// HACK A Marshaller should be stateless, but this hack is required for printing...
+	// This works as long as only one source is marshalled with this
+	m.lastHeader = header
+	return nil
+}
+
+func (m *TextMarshaller) WriteSample(sample Sample, writer io.Writer) error {
+	if len(m.lastHeader) != len(sample.Values) {
+		return fmt.Errorf("Cannot write text sample of length %v, expected %v", len(sample.Values), len(m.lastHeader))
+	}
+	header := sample.Time.Format(text_date_format)
+	lines := make([]string, 0, len(sample.Values))
+	for i, value := range sample.Values {
+		line := fmt.Sprintf("%s = %.4f", m.lastHeader[i], value)
+		lines = append(lines, line)
+	}
+
+	textWidth, columnWidths := m.calculateWidths(lines, writer)
+	m.writeHeader(header, textWidth, writer)
+	m.writeLines(lines, columnWidths, writer)
+	return nil
+}
+
+func (m *TextMarshaller) calculateWidths(lines []string, writer io.Writer) (textWidth int, columnWidths []int) {
+	spacing := m.Spacing
+	if spacing <= 0 {
+		spacing = test_marshaller_default_spacing
+	}
+	if m.Columns > 0 {
+		columnWidths = m.columnWidths(lines, m.Columns, spacing)
+		for _, width := range columnWidths {
+			textWidth += width
+		}
+	} else {
+		if m.TextWidth > 0 {
+			textWidth = m.TextWidth
+		} else {
+			textWidth = m.defaultTextWidth(writer)
+		}
+		columns := m.numberOfColumns(lines, textWidth, spacing)
+		columnWidths = m.columnWidths(lines, columns, spacing)
+	}
+	return
+}
+
+func (m *TextMarshaller) defaultTextWidth(writer io.Writer) int {
+	if writer == os.Stdout {
+		if size, err := golib.GetTerminalSize(); err != nil {
+			log.Println("Failed to get terminal size:", err)
+			return 0
+		} else {
+			return int(size.Col)
+		}
+	} else {
+		return text_marshaller_default_width
+	}
+}
+
+func (m *TextMarshaller) numberOfColumns(lines []string, textWidth int, spacing int) int {
+	columns := len(lines)
+	columnCounter := 0
+	width := 0
+	for _, line := range lines {
+		length := len(line) + spacing
+		if width+length > textWidth {
+			if columns > columnCounter {
+				columns = columnCounter
+				if columns <= 1 {
+					break
+				}
+			}
+			width = length
+			columnCounter = 0
+		} else {
+			width += length
+			columnCounter++
+		}
+	}
+	return columns
+}
+
+func (m *TextMarshaller) columnWidths(lines []string, columns int, spacing int) (widths []int) {
+	widths = make([]int, columns)
+	for i, line := range lines {
+		col := i % columns
+		length := len(line) + spacing
+		if widths[col] < length {
+			widths[col] = length
+		}
+	}
+	return
+}
+
+func (m *TextMarshaller) writeHeader(header string, textWidth int, writer io.Writer) {
+	extraSpace := textWidth - len(header)
+	if extraSpace >= 4 {
+		lineChars := (extraSpace - 2) / 2
+		line := make([]byte, lineChars)
+		for i := 0; i < lineChars; i++ {
+			line[i] = text_marshaller_header_char
+		}
+		lineStr := string(line)
+		fmt.Fprintln(writer, lineStr, header, lineStr)
+	} else {
+		fmt.Fprintln(writer, header)
+	}
+}
+
+func (m *TextMarshaller) writeLines(lines []string, widths []int, writer io.Writer) {
+	columns := len(widths)
+	for i, line := range lines {
+		writer.Write([]byte(line))
+		col := i % columns
+		if col >= columns-1 || i == len(lines)-1 {
+			writer.Write([]byte("\n"))
+		} else {
+			extraSpace := widths[col] - len(line)
+			for j := 0; j < extraSpace; j++ {
+				writer.Write([]byte(" "))
+			}
+		}
+	}
+}
+
+func (*TextMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
+	return errors.New("Unmarshalling text data is not supported")
+}
+
+func (*TextMarshaller) ReadSample(sample *Sample, reader *bufio.Reader, num int) error {
+	return errors.New("Unmarshalling text data is not supported")
+}

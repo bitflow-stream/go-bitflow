@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/antongulenko/data2go/sample"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/load"
@@ -69,16 +70,16 @@ func (col *PsutilMemCollector) Update() (err error) {
 	return
 }
 
-func (col *PsutilMemCollector) readFreeMem() Value {
-	return Value(col.memory.Available)
+func (col *PsutilMemCollector) readFreeMem() sample.Value {
+	return sample.Value(col.memory.Available)
 }
 
-func (col *PsutilMemCollector) readUsedMem() Value {
-	return Value(col.memory.Used)
+func (col *PsutilMemCollector) readUsedMem() sample.Value {
+	return sample.Value(col.memory.Used)
 }
 
-func (col *PsutilMemCollector) readUsedPercentMem() Value {
-	return Value(col.memory.UsedPercent)
+func (col *PsutilMemCollector) readUsedPercentMem() sample.Value {
+	return sample.Value(col.memory.UsedPercent)
 }
 
 func hostProcFile(parts ...string) string {
@@ -128,7 +129,7 @@ func (t *cpuTime) getAllBusy() (float64, float64) {
 	return busy + t.Idle + t.Iowait, busy
 }
 
-func (t *cpuTime) DiffValue(logback LogbackValue, d time.Duration) Value {
+func (t *cpuTime) DiffValue(logback LogbackValue, d time.Duration) sample.Value {
 	if previous, ok := logback.(*cpuTime); ok {
 		// Calculation based on https://github.com/shirou/gopsutil/blob/master/cpu/cpu_unix.go
 		t1All, t1Busy := previous.getAllBusy()
@@ -140,10 +141,10 @@ func (t *cpuTime) DiffValue(logback LogbackValue, d time.Duration) Value {
 		if t2All <= t1All {
 			return 1
 		}
-		return Value((t2Busy - t1Busy) / (t2All - t1All) * 100)
+		return sample.Value((t2Busy - t1Busy) / (t2All - t1All) * 100)
 	} else {
 		log.Printf("Error: Cannot diff %v (%T) and %v (%T)\n", t, t, logback, logback)
-		return Value(0)
+		return sample.Value(0)
 	}
 }
 
@@ -166,7 +167,7 @@ func (t *cpuTime) AddValue(incoming LogbackValue) LogbackValue {
 		}
 	} else {
 		log.Printf("Error: Cannot add %v (%T) and %v (%T)\n", t, t, incoming, incoming)
-		return Value(0)
+		return StoredValue(0)
 	}
 }
 
@@ -194,16 +195,16 @@ func (col *PsutilLoadCollector) Update() (err error) {
 	return
 }
 
-func (col *PsutilLoadCollector) readLoad1() Value {
-	return Value(col.load.Load1)
+func (col *PsutilLoadCollector) readLoad1() sample.Value {
+	return sample.Value(col.load.Load1)
 }
 
-func (col *PsutilLoadCollector) readLoad5() Value {
-	return Value(col.load.Load5)
+func (col *PsutilLoadCollector) readLoad5() sample.Value {
+	return sample.Value(col.load.Load5)
 }
 
-func (col *PsutilLoadCollector) readLoad15() Value {
-	return Value(col.load.Load15)
+func (col *PsutilLoadCollector) readLoad15() sample.Value {
+	return sample.Value(col.load.Load15)
 }
 
 // ==================== Net IO Counters ====================
@@ -262,14 +263,14 @@ func (counters *netIoCounters) Add(stat *psnet.IOCountersStat) {
 }
 
 func (counters *netIoCounters) AddToHead(stat *psnet.IOCountersStat) {
-	counters.bytes.AddToHead(Value(stat.BytesSent + stat.BytesRecv))
-	counters.packets.AddToHead(Value(stat.PacketsSent + stat.PacketsRecv))
-	counters.rx_bytes.AddToHead(Value(stat.BytesRecv))
-	counters.rx_packets.AddToHead(Value(stat.PacketsRecv))
-	counters.tx_bytes.AddToHead(Value(stat.BytesSent))
-	counters.tx_packets.AddToHead(Value(stat.PacketsSent))
-	counters.errors.AddToHead(Value(stat.Errin + stat.Errout))
-	counters.dropped.AddToHead(Value(stat.Dropin + stat.Dropout))
+	counters.bytes.AddToHead(StoredValue(stat.BytesSent + stat.BytesRecv))
+	counters.packets.AddToHead(StoredValue(stat.PacketsSent + stat.PacketsRecv))
+	counters.rx_bytes.AddToHead(StoredValue(stat.BytesRecv))
+	counters.rx_packets.AddToHead(StoredValue(stat.PacketsRecv))
+	counters.tx_bytes.AddToHead(StoredValue(stat.BytesSent))
+	counters.tx_packets.AddToHead(StoredValue(stat.PacketsSent))
+	counters.errors.AddToHead(StoredValue(stat.Errin + stat.Errout))
+	counters.dropped.AddToHead(StoredValue(stat.Dropin + stat.Dropout))
 }
 
 func (counters *netIoCounters) FlushHead() {
@@ -383,16 +384,16 @@ type protoStatReader struct {
 
 	// Only one of the following 2 fields is used
 	ring  *ValueRing
-	value Value
+	value sample.Value
 }
 
 func (reader *protoStatReader) update() error {
 	if counters, ok := reader.col.protocols[reader.protocol]; ok {
 		if val, ok := counters.Stats[reader.field]; ok {
 			if reader.ring != nil {
-				reader.ring.Add(Value(val))
+				reader.ring.Add(StoredValue(val))
 			} else {
-				reader.value = Value(val)
+				reader.value = sample.Value(val)
 			}
 			return nil
 		} else {
@@ -403,7 +404,7 @@ func (reader *protoStatReader) update() error {
 	}
 }
 
-func (reader *protoStatReader) read() Value {
+func (reader *protoStatReader) read() sample.Value {
 	if ring := reader.ring; ring != nil {
 		return ring.GetDiff()
 	} else {
@@ -497,58 +498,58 @@ func (reader *diskIOReader) checkDisk() *disk.IOCountersStat {
 	}
 }
 
-func (reader *diskIOReader) value(val uint64, ring *ValueRing) Value {
-	ring.Add(Value(val))
+func (reader *diskIOReader) value(val uint64, ring *ValueRing) sample.Value {
+	ring.Add(StoredValue(val))
 	return ring.GetDiff()
 }
 
-func (reader *diskIOReader) readRead() Value {
+func (reader *diskIOReader) readRead() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
 		return reader.value(disk.ReadCount, &reader.readRing)
 	}
-	return Value(0)
+	return sample.Value(0)
 }
 
-func (reader *diskIOReader) readWrite() Value {
+func (reader *diskIOReader) readWrite() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
 		return reader.value(disk.WriteCount, &reader.writeRing)
 	}
-	return Value(0)
+	return sample.Value(0)
 }
 
-func (reader *diskIOReader) readReadBytes() Value {
+func (reader *diskIOReader) readReadBytes() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
 		return reader.value(disk.ReadBytes, &reader.readBytesRing)
 	}
-	return Value(0)
+	return sample.Value(0)
 }
 
-func (reader *diskIOReader) readWriteBytes() Value {
+func (reader *diskIOReader) readWriteBytes() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
 		return reader.value(disk.WriteBytes, &reader.writeBytesRing)
 	}
-	return Value(0)
+	return sample.Value(0)
 }
 
-func (reader *diskIOReader) readReadTime() Value {
+func (reader *diskIOReader) readReadTime() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
 		return reader.value(disk.ReadTime, &reader.readTimeRing)
 	}
-	return Value(0)
+	return sample.Value(0)
 }
 
-func (reader *diskIOReader) readWriteTime() Value {
+func (reader *diskIOReader) readWriteTime() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
 		return reader.value(disk.WriteTime, &reader.writeTimeRing)
 	}
-	return Value(0)
+	return sample.Value(0)
 }
 
-func (reader *diskIOReader) readIoTime() Value {
+func (reader *diskIOReader) readIoTime() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
 		return reader.value(disk.IoTime, &reader.ioTimeRing)
 	}
-	return Value(0)
+	return sample.Value(0)
 }
 
 // ==================== Disk Usage ====================
@@ -657,18 +658,18 @@ func (reader *diskUsageReader) checkDisk() *disk.UsageStat {
 	}
 }
 
-func (reader *diskUsageReader) readFree() Value {
+func (reader *diskUsageReader) readFree() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return Value(disk.Free)
+		return sample.Value(disk.Free)
 	}
-	return Value(0)
+	return sample.Value(0)
 }
 
-func (reader *diskUsageReader) readPercent() Value {
+func (reader *diskUsageReader) readPercent() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return Value(disk.UsedPercent)
+		return sample.Value(disk.UsedPercent)
 	}
-	return Value(0)
+	return sample.Value(0)
 }
 
 // ==================== Misc OS Metrics ====================
@@ -702,8 +703,8 @@ func (col *PsutilMiscCollector) Update() (err error) {
 	return
 }
 
-func (col *PsutilMiscCollector) readNumProcs() Value {
-	return Value(len(osInformation.pids))
+func (col *PsutilMiscCollector) readNumProcs() sample.Value {
+	return sample.Value(len(osInformation.pids))
 }
 
 // ==================== Process Metrics ====================
@@ -902,7 +903,7 @@ func (col *SingleProcessCollector) updateCpu() error {
 	} else {
 		busy := (cpu.Total() - cpu.Idle) * col.cpu_factor
 		col.safeUpdate(func() {
-			col.cpu.AddToHead(Value(busy))
+			col.cpu.AddToHead(StoredValue(busy))
 		})
 	}
 	return nil
@@ -913,10 +914,10 @@ func (col *SingleProcessCollector) updateDisk() error {
 		return fmt.Errorf("Failed to get disk-IO info: %v", err)
 	} else {
 		col.safeUpdate(func() {
-			col.ioRead.AddToHead(Value(io.ReadCount))
-			col.ioWrite.AddToHead(Value(io.WriteCount))
-			col.ioReadBytes.AddToHead(Value(io.ReadBytes))
-			col.ioWriteBytes.AddToHead(Value(io.WriteBytes))
+			col.ioRead.AddToHead(StoredValue(io.ReadCount))
+			col.ioWrite.AddToHead(StoredValue(io.WriteCount))
+			col.ioReadBytes.AddToHead(StoredValue(io.ReadBytes))
+			col.ioWriteBytes.AddToHead(StoredValue(io.WriteBytes))
 		})
 	}
 	return nil
@@ -970,8 +971,8 @@ func (col *SingleProcessCollector) updateMisc() error {
 	} else {
 		col.safeUpdate(func() {
 			col.numThreads += numThreads
-			col.ctx_switch_voluntary.AddToHead(Value(ctxSwitches.Voluntary))
-			col.ctx_switch_involuntary.AddToHead(Value(ctxSwitches.Involuntary))
+			col.ctx_switch_voluntary.AddToHead(StoredValue(ctxSwitches.Voluntary))
+			col.ctx_switch_involuntary.AddToHead(StoredValue(ctxSwitches.Involuntary))
 		})
 	}
 	return nil
@@ -1039,26 +1040,26 @@ func (col *SingleProcessCollector) procGetMisc() (numThreads int32, numCtxSwitch
 	return
 }
 
-func (col *PsutilProcessCollector) readNumProc() Value {
-	return Value(len(col.pids))
+func (col *PsutilProcessCollector) readNumProc() sample.Value {
+	return sample.Value(len(col.pids))
 }
 
-func (col *PsutilProcessCollector) readMemRss() Value {
-	return Value(col.mem_rss)
+func (col *PsutilProcessCollector) readMemRss() sample.Value {
+	return sample.Value(col.mem_rss)
 }
 
-func (col *PsutilProcessCollector) readMemVms() Value {
-	return Value(col.mem_vms)
+func (col *PsutilProcessCollector) readMemVms() sample.Value {
+	return sample.Value(col.mem_vms)
 }
 
-func (col *PsutilProcessCollector) readMemSwap() Value {
-	return Value(col.mem_swap)
+func (col *PsutilProcessCollector) readMemSwap() sample.Value {
+	return sample.Value(col.mem_swap)
 }
 
-func (col *PsutilProcessCollector) readFds() Value {
-	return Value(col.numFds)
+func (col *PsutilProcessCollector) readFds() sample.Value {
+	return sample.Value(col.numFds)
 }
 
-func (col *PsutilProcessCollector) readThreads() Value {
-	return Value(col.numThreads)
+func (col *PsutilProcessCollector) readThreads() sample.Value {
+	return sample.Value(col.numThreads)
 }

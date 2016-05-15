@@ -1,4 +1,4 @@
-package metrics
+package sample
 
 import (
 	"log"

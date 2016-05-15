@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/xmlpath.v1"
 
+	"github.com/antongulenko/data2go/sample"
 	"github.com/antongulenko/golib"
 	"github.com/rgbkrk/libvirt-go"
 )
@@ -261,27 +262,27 @@ func NewVmGeneralReader() *vmGeneralReader {
 
 type LogbackCpuVal uint64
 
-func (val LogbackCpuVal) DiffValue(logback LogbackValue, interval time.Duration) Value {
+func (val LogbackCpuVal) DiffValue(logback LogbackValue, interval time.Duration) sample.Value {
 	switch previous := logback.(type) {
 	case LogbackCpuVal:
-		return Value(val-previous) / Value(interval.Nanoseconds())
+		return sample.Value(val-previous) / sample.Value(interval.Nanoseconds())
 	case *LogbackCpuVal:
-		return Value(val-*previous) / Value(interval.Nanoseconds())
+		return sample.Value(val-*previous) / sample.Value(interval.Nanoseconds())
 	default:
 		log.Printf("Error: Cannot diff %v (%T) and %v (%T)\n", val, val, logback, logback)
-		return Value(0)
+		return sample.Value(0)
 	}
 }
 
 func (val LogbackCpuVal) AddValue(logback LogbackValue) LogbackValue {
 	switch previous := logback.(type) {
 	case LogbackCpuVal:
-		return Value(val + previous)
+		return StoredValue(val + previous)
 	case *LogbackCpuVal:
-		return Value(val + *previous)
+		return StoredValue(val + *previous)
 	default:
 		log.Printf("Error: Cannot add %v (%T) and %v (%T)\n", val, val, logback, logback)
-		return Value(0)
+		return StoredValue(0)
 	}
 }
 
@@ -304,12 +305,12 @@ func (reader *vmGeneralReader) update(domain libvirt.VirDomain) (err error) {
 	return
 }
 
-func (reader *vmGeneralReader) readMaxMem() Value {
-	return Value(reader.info.GetMaxMem())
+func (reader *vmGeneralReader) readMaxMem() sample.Value {
+	return sample.Value(reader.info.GetMaxMem())
 }
 
-func (reader *vmGeneralReader) readMem() Value {
-	return Value(reader.info.GetMemory())
+func (reader *vmGeneralReader) readMem() sample.Value {
+	return sample.Value(reader.info.GetMemory())
 }
 
 // ==================== Memory Stats ====================
@@ -360,20 +361,20 @@ func (reader *memoryStatReader) update(domain libvirt.VirDomain) error {
 	}
 }
 
-func (reader *memoryStatReader) readSwap() Value {
-	return Value(reader.swap)
+func (reader *memoryStatReader) readSwap() sample.Value {
+	return sample.Value(reader.swap)
 }
 
-func (reader *memoryStatReader) readAvailable() Value {
-	return Value(reader.available)
+func (reader *memoryStatReader) readAvailable() sample.Value {
+	return sample.Value(reader.available)
 }
 
-func (reader *memoryStatReader) readBalloon() Value {
-	return Value(reader.balloon)
+func (reader *memoryStatReader) readBalloon() sample.Value {
+	return sample.Value(reader.balloon)
 }
 
-func (reader *memoryStatReader) readRss() Value {
-	return Value(reader.rss)
+func (reader *memoryStatReader) readRss() sample.Value {
+	return sample.Value(reader.rss)
 }
 
 // ==================== CPU Stats ====================
@@ -481,23 +482,23 @@ func (reader *blockStatReader) update(domain libvirt.VirDomain) error {
 	return resErr
 }
 
-func (reader *blockStatReader) readAllocation() (result Value) {
+func (reader *blockStatReader) readAllocation() (result sample.Value) {
 	for _, info := range reader.info {
-		result += Value(info.Allocation())
+		result += sample.Value(info.Allocation())
 	}
 	return
 }
 
-func (reader *blockStatReader) readCapacity() (result Value) {
+func (reader *blockStatReader) readCapacity() (result sample.Value) {
 	for _, info := range reader.info {
-		result += Value(info.Capacity())
+		result += sample.Value(info.Capacity())
 	}
 	return
 }
 
-func (reader *blockStatReader) readPhysical() (result Value) {
+func (reader *blockStatReader) readPhysical() (result sample.Value) {
 	for _, info := range reader.info {
-		result += Value(info.Physical())
+		result += sample.Value(info.Physical())
 	}
 	return
 }
@@ -539,14 +540,14 @@ func (reader *interfaceStatReader) update(domain libvirt.VirDomain) error {
 		// More detailed alternative: domain.GetInterfaceParameters()
 		stats, err := domain.InterfaceStats(interfaceName)
 		if err == nil {
-			reader.net.bytes.Add(Value(stats.RxBytes + stats.TxBytes))
-			reader.net.packets.Add(Value(stats.RxPackets + stats.TxPackets))
-			reader.net.rx_bytes.Add(Value(stats.RxBytes))
-			reader.net.rx_packets.Add(Value(stats.RxPackets))
-			reader.net.tx_bytes.Add(Value(stats.TxBytes))
-			reader.net.tx_packets.Add(Value(stats.TxPackets))
-			reader.net.errors.Add(Value(stats.RxErrs + stats.TxErrs))
-			reader.net.dropped.Add(Value(stats.RxDrop + stats.TxDrop))
+			reader.net.bytes.Add(StoredValue(stats.RxBytes + stats.TxBytes))
+			reader.net.packets.Add(StoredValue(stats.RxPackets + stats.TxPackets))
+			reader.net.rx_bytes.Add(StoredValue(stats.RxBytes))
+			reader.net.rx_packets.Add(StoredValue(stats.RxPackets))
+			reader.net.tx_bytes.Add(StoredValue(stats.TxBytes))
+			reader.net.tx_packets.Add(StoredValue(stats.TxPackets))
+			reader.net.errors.Add(StoredValue(stats.RxErrs + stats.TxErrs))
+			reader.net.dropped.Add(StoredValue(stats.RxDrop + stats.TxDrop))
 		} else {
 			return fmt.Errorf("Failed to update vNIC stats for %s: %v", interfaceName, err)
 		}
