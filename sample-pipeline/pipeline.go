@@ -33,7 +33,6 @@ func marshaller(format string) sample.MetricMarshaller {
 }
 
 type SamplePipeline struct {
-	Sinks sample.AggregateSink
 	Tasks *golib.TaskGroup
 
 	source      sample.MetricSource
@@ -55,6 +54,7 @@ type SamplePipeline struct {
 	format_file       string
 }
 
+// Must be called before flag.Parse()
 func (p *SamplePipeline) ParseFlags() {
 	flag.StringVar(&p.format_input, "i", "b", "Data source format, one of "+supported_formats)
 	flag.BoolVar(&p.read_console, "C", false, "Data source: read from stdin")
@@ -72,6 +72,15 @@ func (p *SamplePipeline) ParseFlags() {
 	flag.StringVar(&p.format_listen, "lf", "b", "Data format for TCP server output, one of "+supported_formats)
 }
 
+// Must be called before p.Init()
+func (p *SamplePipeline) SetSource(source sample.MetricSource) {
+	if p.source != nil {
+		log.Fatalln("Please provide only one data source")
+	}
+	p.source = source
+}
+
+// Must be called before accessing p.Tasks and calling p.StartAndWait()
 func (p *SamplePipeline) Init() {
 	// ====== Data format
 	marshaller_console := marshaller(p.format_console)
@@ -93,6 +102,9 @@ func (p *SamplePipeline) Init() {
 	})
 	setSource(p.read_file != "", &sample.FileSource{
 		FileTransport: sample.FileTransport{Filename: p.read_file}})
+	if p.source == nil {
+		log.Println("No data source provided, no data will be received.")
+	}
 
 	// ====== Initialize sink(s) and tasks
 	if p.sink_console {
@@ -111,6 +123,9 @@ func (p *SamplePipeline) Init() {
 		p.sinks = append(p.sinks, &sample.FileSink{FileTransport: sample.FileTransport{Filename: p.sink_file}})
 		p.marshallers = append(p.marshallers, marshaller_file)
 	}
+	if len(p.sinks) == 0 {
+		log.Println("No data sinks selected, data will not be output anywhere.")
+	}
 
 	// ====== Task group
 	p.Tasks = golib.NewTaskGroup(p.source)
@@ -120,21 +135,8 @@ func (p *SamplePipeline) Init() {
 	}
 }
 
-func (p *SamplePipeline) SetSource(source sample.MetricSource) {
-	if p.source != nil {
-		log.Fatalln("Please provide only one data source")
-	}
-	p.source = source
-}
-
+// p.Tasks can be filled with additional Tasks before calling this
 func (p *SamplePipeline) StartAndWait() {
-	if p.source == nil {
-		log.Println("No data source provided, no data will be received.")
-	}
-	if len(p.sinks) == 0 {
-		log.Println("No data sinks selected, data will not be output anywhere.")
-	}
-
 	if p.source != nil {
 		p.source.SetSink(p.sinks)
 		if unmarshallingSource, ok := p.source.(sample.UnmarshallingMetricSource); ok {
