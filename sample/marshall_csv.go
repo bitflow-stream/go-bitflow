@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	csv_separator      = ","
 	csv_separator_rune = ','
 	csv_newline        = "\n"
+	csv_separator      = string(csv_separator_rune)
 	csv_date_format    = "2006-01-02 15:04:05.999999999"
 )
 
@@ -53,18 +53,17 @@ func readCsvLine(reader *bufio.Reader) ([]string, bool, error) {
 	}), eof, nil
 }
 
-func (*CsvMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
-	header.Fields = nil
-	var fields []string
+func (*CsvMarshaller) ReadHeader(reader *bufio.Reader) (header Header, err error) {
 	fields, eof, err := readCsvLine(reader)
 	if err != nil {
-		return err
+		return
 	}
 	if len(fields) == 0 && eof {
-		return io.EOF
+		err = io.EOF
+		return
 	}
-	if err := checkFirstCol(fields[0]); err != nil {
-		return err
+	if err = checkFirstCol(fields[0]); err != nil {
+		return
 	}
 	header.HasTags = len(fields) >= 2 && fields[1] == tags_col
 	start := 1
@@ -72,7 +71,7 @@ func (*CsvMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
 		start++
 	}
 	header.Fields = fields[start:]
-	return nil
+	return
 }
 
 func (*CsvMarshaller) WriteSample(sample Sample, header Header, writer io.Writer) error {
@@ -91,41 +90,38 @@ func (*CsvMarshaller) WriteSample(sample Sample, header Header, writer io.Writer
 	return w.Err
 }
 
-func (*CsvMarshaller) ReadSample(sample *Sample, header *Header, reader *bufio.Reader) error {
-	sample.Time = time.Time{}
-	sample.Values = nil
-	sample.Tags = make(map[string]string)
-
+func (*CsvMarshaller) ReadSample(header Header, reader *bufio.Reader) (sample Sample, err error) {
 	fields, eof, err := readCsvLine(reader)
 	if err != nil {
-		return err
+		return
 	}
 	if len(fields) == 0 && eof {
-		return io.EOF
+		err = io.EOF
+		return
 	}
-	tim, err := time.Parse(csv_date_format, fields[0])
+	sample.Time, err = time.Parse(csv_date_format, fields[0])
 	if err != nil {
-		return err
+		return
 	}
-	sample.Time = tim
 
 	start := 1
 	if header.HasTags {
 		if len(fields) < 2 {
-			return fmt.Errorf("Sample too short: %v", fields)
+			err = fmt.Errorf("Sample too short: %v", fields)
+			return
 		}
-		if err := sample.ParseTagString(fields[1]); err != nil {
-			return err
+		if err = sample.ParseTagString(fields[1]); err != nil {
+			return
 		}
 		start++
 	}
 
 	for _, field := range fields[start:] {
-		val, err := strconv.ParseFloat(field, 64)
-		if err != nil {
-			return err
+		var val float64
+		if val, err = strconv.ParseFloat(field, 64); err != nil {
+			return
 		}
 		sample.Values = append(sample.Values, Value(val))
 	}
-	return nil
+	return sample, nil
 }

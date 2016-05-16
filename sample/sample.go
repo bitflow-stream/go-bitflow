@@ -7,15 +7,23 @@ import (
 	"time"
 )
 
-type Value float64
+const (
+	tag_equals_rune    = '='
+	tag_separator_rune = ' '
+	tag_equals         = string(tag_equals_rune)
+	tag_separator      = string(tag_separator_rune)
+	tag_replacement    = "_"
+)
 
 var (
-	tagStringEscaper   = strings.NewReplacer(",", "_", "=", "_", " ", "_", "\n", "_")
-	tag_equals_rune    = '='
-	tagEquals          = []byte("=")
-	tag_separator_rune = ' '
-	tagSeparator       = []byte(" ")
+	tagStringEscaper = strings.NewReplacer(
+		tag_equals, tag_replacement,
+		tag_separator, tag_replacement,
+		csv_separator, tag_replacement,
+		csv_newline, tag_replacement)
 )
+
+type Value float64
 
 type Header struct {
 	Fields  []string
@@ -28,23 +36,15 @@ type Sample struct {
 	Tags   map[string]string
 }
 
-func NewSample(values []Value, time time.Time) Sample {
-	return Sample{
-		Values: values,
-		Time:   time,
-		Tags:   make(map[string]string),
-	}
-}
-
 func (sample *Sample) TagString() string {
 	var b bytes.Buffer
 	started := false
 	for key, value := range sample.Tags {
 		if started {
-			b.Write(tagSeparator)
+			b.Write([]byte(tag_separator))
 		}
 		b.Write([]byte(escapeTagString(key)))
-		b.Write(tagEquals)
+		b.Write([]byte(tag_equals))
 		b.Write([]byte(escapeTagString(value)))
 		started = true
 	}
@@ -56,6 +56,7 @@ func escapeTagString(str string) string {
 }
 
 func (sample *Sample) ParseTagString(tags string) error {
+	sample.Tags = make(map[string]string)
 	fields := strings.FieldsFunc(tags, func(r rune) bool {
 		return r == tag_equals_rune || r == tag_separator_rune
 	})

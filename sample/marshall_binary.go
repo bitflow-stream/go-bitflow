@@ -37,28 +37,26 @@ func (*BinaryMarshaller) WriteHeader(header Header, writer io.Writer) error {
 	return w.Err
 }
 
-func (*BinaryMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
-	header.HasTags = false
-	header.Fields = nil
-
+func (*BinaryMarshaller) ReadHeader(reader *bufio.Reader) (header Header, err error) {
 	name, err := reader.ReadBytes(binary_separator)
 	if err != nil {
-		return err
+		return
 	}
-	if err := checkFirstCol(string(name[:len(name)-1])); err != nil {
-		return err
+	if err = checkFirstCol(string(name[:len(name)-1])); err != nil {
+		return
 	}
 
 	first := true
 	for {
-		nameBytes, err := reader.ReadBytes(binary_separator)
-		name := string(nameBytes[:len(nameBytes)-1])
+		var nameBytes []byte
+		nameBytes, err = reader.ReadBytes(binary_separator)
 		if err != nil {
-			return err
+			return
 		}
 		if len(nameBytes) <= 1 {
-			return nil
+			return
 		}
+		name := string(nameBytes[:len(nameBytes)-1])
 		if first && name == tags_col {
 			header.HasTags = true
 		} else {
@@ -66,7 +64,7 @@ func (*BinaryMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error 
 		}
 		first = false
 	}
-	return nil
+	return
 }
 
 func (m *BinaryMarshaller) WriteSample(sample Sample, header Header, writer io.Writer) error {
@@ -100,41 +98,36 @@ func (m *BinaryMarshaller) WriteSample(sample Sample, header Header, writer io.W
 	return nil
 }
 
-func (*BinaryMarshaller) ReadSample(sample *Sample, header *Header, reader *bufio.Reader) error {
-	sample.Time = time.Time{}
-	sample.Values = nil
-	sample.Tags = make(map[string]string)
-
+func (*BinaryMarshaller) ReadSample(header Header, reader *bufio.Reader) (sample Sample, err error) {
 	// Time
 	tim := make([]byte, timeBytes)
-	_, err := io.ReadFull(reader, tim)
+	_, err = io.ReadFull(reader, tim)
 	if err != nil {
-		return err
+		return
 	}
 	timeVal := binary.BigEndian.Uint64(tim)
 	sample.Time = time.Unix(0, int64(timeVal))
 
 	// Tags
 	if header.HasTags {
-		tags, err := reader.ReadString(binary_separator)
-		if err != nil {
-			return err
+		var tags string
+		if tags, err = reader.ReadString(binary_separator); err != nil {
+			return
 		}
-		if err := sample.ParseTagString(tags); err != nil {
-			return err
+		if err = sample.ParseTagString(tags); err != nil {
+			return
 		}
 	}
 
 	// Values
 	for i := 0; i < len(header.Fields); i++ {
 		val := make([]byte, valBytes)
-		_, err = io.ReadFull(reader, val)
-		if err != nil {
-			return err
+		if _, err = io.ReadFull(reader, val); err != nil {
+			return
 		}
 		valBits := binary.BigEndian.Uint64(val)
 		value := math.Float64frombits(valBits)
 		sample.Values = append(sample.Values, Value(value))
 	}
-	return nil
+	return
 }

@@ -26,16 +26,16 @@ type Marshaller interface {
 
 type Unmarshaller interface {
 	String() string
-	ReadHeader(header *Header, input *bufio.Reader) error
-	ReadSample(sample *Sample, header *Header, input *bufio.Reader) error
+	ReadHeader(input *bufio.Reader) (Header, error)
+	ReadSample(header Header, input *bufio.Reader) (Sample, error)
 }
 
 type MetricMarshaller interface {
 	String() string
 	WriteHeader(header Header, output io.Writer) error
 	WriteSample(sample Sample, header Header, output io.Writer) error
-	ReadHeader(header *Header, input *bufio.Reader) error
-	ReadSample(sample *Sample, header *Header, input *bufio.Reader) error
+	ReadHeader(input *bufio.Reader) (Header, error)
+	ReadSample(header Header, input *bufio.Reader) (Sample, error)
 }
 
 // Helper type for more concise Write code by avoiding error checks on every

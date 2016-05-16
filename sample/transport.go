@@ -61,8 +61,9 @@ func (s *unmarshallingMetricSource) SetUnmarshaller(unmarshaller Unmarshaller) {
 
 func readSamples(input io.Reader, um Unmarshaller, sink MetricSink) (int, error) {
 	reader := bufio.NewReader(input)
+	var err error
 	var header Header
-	if err := um.ReadHeader(&header, reader); err != nil {
+	if header, err = um.ReadHeader(reader); err != nil {
 		return 0, err
 	}
 	if err := sink.Header(header); err != nil {
@@ -73,7 +74,7 @@ func readSamples(input io.Reader, um Unmarshaller, sink MetricSink) (int, error)
 	num_samples := 0
 	for {
 		var sample Sample
-		if err := um.ReadSample(&sample, &header, reader); err != nil {
+		if sample, err = um.ReadSample(header, reader); err != nil {
 			return num_samples, err
 		}
 		if err := sink.Sample(sample, header); err != nil {
