@@ -129,12 +129,6 @@ func main() {
 	p.StartAndWait()
 }
 
-func addToMap(m map[string][]*regexp.Regexp, key string, r *regexp.Regexp) {
-	if list, ok := m[key]; ok {
-		m[key] = append(list)
-	}
-}
-
 func splitKeyValue(pair string) (string, string) {
 	index := strings.Index(pair, "=")
 	if index > 0 {
