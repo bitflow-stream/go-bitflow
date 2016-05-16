@@ -171,10 +171,10 @@ func (sink *FileSink) openNextFile() error {
 }
 
 func (sink *FileSink) Header(header Header) error {
-	newHeader := len(sink.header) != len(header)
+	newHeader := len(sink.header.Fields) != len(header.Fields)
 	if !newHeader {
-		for i, old := range sink.header {
-			if old != header[i] {
+		for i, old := range sink.header.Fields {
+			if old != header.Fields[i] {
 				newHeader = true
 				break
 			}
@@ -190,9 +190,9 @@ func (sink *FileSink) Header(header Header) error {
 	return nil
 }
 
-func (sink *FileSink) Sample(sample Sample) error {
+func (sink *FileSink) Sample(sample Sample, header Header) error {
 	if err := sink.checkSample(sample); err != nil {
 		return err
 	}
-	return sink.marshaller.WriteSample(sample, sink.file)
+	return sink.marshaller.WriteSample(sample, header, sink.file)
 }

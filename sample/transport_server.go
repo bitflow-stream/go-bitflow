@@ -117,7 +117,7 @@ func (sink *TCPListenerSink) Header(header Header) error {
 	return nil
 }
 
-func (sink *TCPListenerSink) Sample(sample Sample) error {
+func (sink *TCPListenerSink) Sample(sample Sample, header Header) error {
 	if err := sink.checkSample(sample); err != nil {
 		return err
 	}

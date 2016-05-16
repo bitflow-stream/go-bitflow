@@ -29,11 +29,11 @@ func (sink *ConsoleSink) Header(header Header) error {
 	return sink.marshaller.WriteHeader(header, os.Stdout)
 }
 
-func (sink *ConsoleSink) Sample(sample Sample) error {
+func (sink *ConsoleSink) Sample(sample Sample, header Header) error {
 	if err := sink.checkSample(sample); err != nil {
 		return err
 	}
-	return sink.marshaller.WriteSample(sample, os.Stdout)
+	return sink.marshaller.WriteSample(sample, header, os.Stdout)
 }
 
 type ConsoleSource struct {

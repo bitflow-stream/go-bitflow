@@ -13,6 +13,8 @@ import (
 	"github.com/antongulenko/golib"
 )
 
+const samples_have_tags = false
+
 // ==================== Metric ====================
 type Metric struct {
 	Name   string
@@ -185,7 +187,7 @@ func (source *CollectorSource) collectorFor(metric string) Collector {
 func (source *CollectorSource) constructSample(metrics []string) (sample.Header, []sample.Value, map[Collector]bool) {
 	set := make(map[Collector]bool)
 
-	header := make(sample.Header, len(metrics))
+	fields := make([]string, len(metrics))
 	values := make([]sample.Value, len(metrics))
 	for i, metricName := range metrics {
 		collector := source.collectorFor(metricName)
@@ -193,7 +195,7 @@ func (source *CollectorSource) constructSample(metrics []string) (sample.Header,
 			log.Println("No collector found for", metricName)
 			continue
 		}
-		header[i] = metricName
+		fields[i] = metricName
 		metric := Metric{metricName, i, values}
 
 		if err := collector.Collect(&metric); err != nil {
@@ -202,7 +204,7 @@ func (source *CollectorSource) constructSample(metrics []string) (sample.Header,
 		}
 		set[collector] = true
 	}
-	return header, values, set
+	return sample.Header{fields, samples_have_tags}, values, set
 }
 
 func (source *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collector, stopper *golib.Stopper, interval time.Duration) {
@@ -240,17 +242,17 @@ func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header sample.Hea
 	defer wg.Done()
 	for {
 		if err := sink.Header(header); err != nil {
-			log.Printf("Warning: Failed to sink header for %v metrics: %v\n", len(header), err)
+			log.Printf("Warning: Failed to sink header for %v metrics: %v\n", len(header.Fields), err)
 		} else {
 			if stopper.IsStopped() {
 				return
 			}
 			for {
 				sample := sample.Sample{
-					time.Now(),
-					values,
+					Time:   time.Now(),
+					Values: values,
 				}
-				if err := sink.Sample(sample); err != nil {
+				if err := sink.Sample(sample, header); err != nil {
 					// When a sample fails, try sending the header again
 					log.Printf("Warning: Failed to sink %v metrics: %v\n", len(values), err)
 					break

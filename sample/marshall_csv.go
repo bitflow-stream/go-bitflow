@@ -24,22 +24,18 @@ func (*CsvMarshaller) String() string {
 }
 
 func (*CsvMarshaller) WriteHeader(header Header, writer io.Writer) error {
-	if _, err := writer.Write([]byte(time_col)); err != nil {
-		return err
+	w := WriteCascade{Writer: writer}
+	w.WriteStr(time_col)
+	if header.HasTags {
+		w.WriteStr(csv_separator)
+		w.WriteStr(tags_col)
 	}
-	for _, name := range header {
-		if _, err := writer.Write([]byte(csv_separator)); err != nil {
-			return err
-		}
-		if _, err := writer.Write([]byte(name)); err != nil {
-			return err
-		}
+	for _, name := range header.Fields {
+		w.WriteStr(csv_separator)
+		w.WriteStr(name)
 	}
-	_, err := writer.Write([]byte(csv_newline))
-	if err != nil {
-		return err
-	}
-	return nil
+	w.WriteStr(csv_newline)
+	return w.Err
 }
 
 func readCsvLine(reader *bufio.Reader) ([]string, bool, error) {
@@ -58,7 +54,7 @@ func readCsvLine(reader *bufio.Reader) ([]string, bool, error) {
 }
 
 func (*CsvMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
-	*header = nil
+	header.Fields = nil
 	var fields []string
 	fields, eof, err := readCsvLine(reader)
 	if err != nil {
@@ -70,32 +66,35 @@ func (*CsvMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
 	if err := checkFirstCol(fields[0]); err != nil {
 		return err
 	}
-	*header = Header(fields[1:])
+	header.HasTags = len(fields) >= 2 && fields[1] == tags_col
+	start := 1
+	if header.HasTags {
+		start++
+	}
+	header.Fields = fields[start:]
 	return nil
 }
 
-func (*CsvMarshaller) WriteSample(sample Sample, writer io.Writer) error {
-	if _, err := writer.Write([]byte(sample.Time.Format(csv_date_format))); err != nil {
-		return err
+func (*CsvMarshaller) WriteSample(sample Sample, header Header, writer io.Writer) error {
+	w := WriteCascade{Writer: writer}
+	w.WriteStr(sample.Time.Format(csv_date_format))
+	if header.HasTags {
+		tags := sample.TagString()
+		w.WriteStr(csv_separator)
+		w.WriteStr(tags)
 	}
 	for _, value := range sample.Values {
-		if _, err := writer.Write([]byte(csv_separator)); err != nil {
-			return err
-		}
-		if _, err := writer.Write([]byte(fmt.Sprintf("%v", value))); err != nil {
-			return err
-		}
+		w.WriteStr(csv_separator)
+		w.WriteStr(fmt.Sprintf("%v", value))
 	}
-	_, err := writer.Write([]byte(csv_newline))
-	if err != nil {
-		return err
-	}
-	return nil
+	w.WriteStr(csv_newline)
+	return w.Err
 }
 
-func (*CsvMarshaller) ReadSample(sample *Sample, reader *bufio.Reader, num int) error {
+func (*CsvMarshaller) ReadSample(sample *Sample, header *Header, reader *bufio.Reader) error {
 	sample.Time = time.Time{}
 	sample.Values = nil
+	sample.Tags = make(map[string]string)
 
 	fields, eof, err := readCsvLine(reader)
 	if err != nil {
@@ -109,7 +108,19 @@ func (*CsvMarshaller) ReadSample(sample *Sample, reader *bufio.Reader, num int) 
 		return err
 	}
 	sample.Time = tim
-	for _, field := range fields[1:] {
+
+	start := 1
+	if header.HasTags {
+		if len(fields) < 2 {
+			return fmt.Errorf("Sample too short: %v", fields)
+		}
+		if err := sample.ParseTagString(fields[1]); err != nil {
+			return err
+		}
+		start++
+	}
+
+	for _, field := range fields[start:] {
 		val, err := strconv.ParseFloat(field, 64)
 		if err != nil {
 			return err

@@ -68,7 +68,7 @@ func (conn *tcpWriteConn) Run(wg *sync.WaitGroup) {
 		conn.conn = nil // In case of panic, avoid full channel-buffer
 		wg.Done()
 	}()
-	log.Println("Serving", len(conn.sink.header), "metrics to", conn.remote)
+	log.Println("Serving", len(conn.sink.header.Fields), "metrics to", conn.remote)
 	if err := conn.sink.marshaller.WriteHeader(conn.sink.header, conn.conn); err != nil {
 		conn.err(err)
 		return
@@ -78,7 +78,7 @@ func (conn *tcpWriteConn) Run(wg *sync.WaitGroup) {
 		if connection == nil {
 			break
 		}
-		if err := conn.sink.marshaller.WriteSample(sample, connection); err != nil {
+		if err := conn.sink.marshaller.WriteSample(sample, conn.sink.header, connection); err != nil {
 			conn.err(err)
 			break
 		}
@@ -127,7 +127,7 @@ func (sink *TCPSink) Header(header Header) (err error) {
 	return
 }
 
-func (sink *TCPSink) Sample(sample Sample) (err error) {
+func (sink *TCPSink) Sample(sample Sample, header Header) (err error) {
 	sink.stopped.IfElseEnabled(func() {
 		err = fmt.Errorf("TCP sink to %v already stopped", sink.Endpoint)
 	}, func() {

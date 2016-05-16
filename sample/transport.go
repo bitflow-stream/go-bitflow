@@ -15,7 +15,7 @@ type MetricSink interface {
 	golib.Task
 	SetMarshaller(marshaller Marshaller)
 	Header(header Header) error
-	Sample(sample Sample) error
+	Sample(sample Sample, header Header) error
 }
 
 type abstractSink struct {
@@ -28,8 +28,9 @@ func (sink *abstractSink) SetMarshaller(marshaller Marshaller) {
 }
 
 func (sink *abstractSink) checkSample(sample Sample) error {
-	if len(sample.Values) != len(sink.header) {
-		return fmt.Errorf("Unexpected number of values in sample: %v, expected %v", len(sample.Values), len(sink.header))
+	if len(sample.Values) != len(sink.header.Fields) {
+		return fmt.Errorf("Unexpected number of values in sample: %v, expected %v",
+			len(sample.Values), len(sink.header.Fields))
 	}
 	return nil
 }
@@ -67,15 +68,15 @@ func readSamples(input io.Reader, um Unmarshaller, sink MetricSink) (int, error)
 	if err := sink.Header(header); err != nil {
 		return 0, err
 	}
-	log.Printf("Reading %v metrics\n", len(header))
+	log.Printf("Reading %v metrics\n", len(header.Fields))
 
 	num_samples := 0
 	for {
 		var sample Sample
-		if err := um.ReadSample(&sample, reader, len(header)); err != nil {
+		if err := um.ReadSample(&sample, &header, reader); err != nil {
 			return num_samples, err
 		}
-		if err := sink.Sample(sample); err != nil {
+		if err := sink.Sample(sample, header); err != nil {
 			return num_samples, err
 		}
 		num_samples++
@@ -129,10 +130,10 @@ func (agg AggregateSink) Header(header Header) error {
 	return errors.NilOrError()
 }
 
-func (agg AggregateSink) Sample(sample Sample) error {
+func (agg AggregateSink) Sample(sample Sample, header Header) error {
 	var errors golib.MultiError
 	for _, sink := range agg {
-		if err := sink.Sample(sample); err != nil {
+		if err := sink.Sample(sample, header); err != nil {
 			errors.Add(err)
 		}
 	}

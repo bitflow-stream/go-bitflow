@@ -2,6 +2,7 @@ package sample
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -21,10 +22,9 @@ const (
 )
 
 type TextMarshaller struct {
-	lastHeader Header
-	TextWidth  int // Ignored if Columns is > 0
-	Columns    int // Will be inferred from TextWidth if <= 0
-	Spacing    int
+	TextWidth int // Ignored if Columns is > 0
+	Columns   int // Will be inferred from TextWidth if <= 0
+	Spacing   int
 }
 
 func (*TextMarshaller) String() string {
@@ -32,25 +32,31 @@ func (*TextMarshaller) String() string {
 }
 
 func (m *TextMarshaller) WriteHeader(header Header, writer io.Writer) error {
-	// HACK A Marshaller should be stateless, but this hack is required for printing...
-	// This works as long as only one source is marshalled with this
-	m.lastHeader = header
 	return nil
 }
 
-func (m *TextMarshaller) WriteSample(sample Sample, writer io.Writer) error {
-	if len(m.lastHeader) != len(sample.Values) {
-		return fmt.Errorf("Cannot write text sample of length %v, expected %v", len(sample.Values), len(m.lastHeader))
+func (m *TextMarshaller) WriteSample(sample Sample, header Header, writer io.Writer) error {
+	if len(header.Fields) != len(sample.Values) {
+		return fmt.Errorf("Cannot write text sample of length %v, expected %v",
+			len(sample.Values), len(header.Fields))
 	}
-	header := sample.Time.Format(text_date_format)
+	headerStr := sample.Time.Format(text_date_format)
+	if header.HasTags {
+		var b bytes.Buffer
+		b.WriteString(headerStr)
+		b.WriteString(" (")
+		b.WriteString(sample.TagString())
+		b.WriteString(")")
+		headerStr = b.String()
+	}
 	lines := make([]string, 0, len(sample.Values))
 	for i, value := range sample.Values {
-		line := fmt.Sprintf("%s = %.4f", m.lastHeader[i], value)
+		line := fmt.Sprintf("%s = %.4f", header.Fields[i], value)
 		lines = append(lines, line)
 	}
 
 	textWidth, columnWidths := m.calculateWidths(lines, writer)
-	m.writeHeader(header, textWidth, writer)
+	m.writeHeader(headerStr, textWidth, writer)
 	m.writeLines(lines, columnWidths, writer)
 	return nil
 }
@@ -160,6 +166,6 @@ func (*TextMarshaller) ReadHeader(header *Header, reader *bufio.Reader) error {
 	return errors.New("Unmarshalling text data is not supported")
 }
 
-func (*TextMarshaller) ReadSample(sample *Sample, reader *bufio.Reader, num int) error {
+func (*TextMarshaller) ReadSample(sample *Sample, header *Header, reader *bufio.Reader) error {
 	return errors.New("Unmarshalling text data is not supported")
 }
