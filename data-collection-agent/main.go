@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/antongulenko/data2go/sample"
@@ -56,8 +58,8 @@ func main() {
 	flag.Var(&user_exclude_metrics, "exclude", "Metrics to exclude (only with -c, substring match)")
 	flag.Var(&user_include_metrics, "include", "Metrics to include exclusively (only with -c, substring match)")
 
-	flag.Var(&proc_collectors, "proc", "Processes to collect metrics for (substring match on entire command line)")
-	flag.Var(&proc_collector_regex, "proc_regex", "Processes to collect metrics for (regex match on entire command line)")
+	flag.Var(&proc_collectors, "proc", "'key=substring' Processes to collect metrics for (substring match on entire command line)")
+	flag.Var(&proc_collector_regex, "proc_regex", "'key=regex' Processes to collect metrics for (regex match on entire command line)")
 	flag.BoolVar(&proc_show_errors, "proc_err", proc_show_errors, "Verbose: show errors encountered while getting process metrics")
 	flag.DurationVar(&proc_update_pids, "proc_interval", proc_update_pids, "Interval for updating list of observed pids")
 
@@ -75,22 +77,26 @@ func main() {
 	collector.RegisterLibvirtCollector(libvirt_uri)
 	collector.RegisterOvsdbCollector(ovsdb_host)
 	if len(proc_collectors) > 0 || len(proc_collector_regex) > 0 {
-		procRegex := make([]*regexp.Regexp, 0, len(proc_collectors))
+		regexes := make(map[string][]*regexp.Regexp)
 		for _, substr := range proc_collectors {
-			regex := regexp.MustCompile(regexp.QuoteMeta(substr))
-			procRegex = append(procRegex, regex)
+			key, value := splitKeyValue(substr)
+			regex := regexp.MustCompile(regexp.QuoteMeta(value))
+			regexes[key] = append(regexes[key], regex)
 		}
 		for _, regexStr := range proc_collector_regex {
-			regex, err := regexp.Compile(regexStr)
+			key, value := splitKeyValue(regexStr)
+			regex, err := regexp.Compile(value)
 			golib.Checkerr(err)
-			procRegex = append(procRegex, regex)
+			regexes[key] = append(regexes[key], regex)
 		}
-		collector.RegisterCollector(&collector.PsutilProcessCollector{
-			CmdlineFilter:     procRegex,
-			GroupName:         "vnf",
-			PrintErrors:       proc_show_errors,
-			PidUpdateInterval: proc_update_pids,
-		})
+		for key, list := range regexes {
+			collector.RegisterCollector(&collector.PsutilProcessCollector{
+				CmdlineFilter:     list,
+				GroupName:         key,
+				PrintErrors:       proc_show_errors,
+				PidUpdateInterval: proc_update_pids,
+			})
+		}
 	}
 
 	if all_metrics {
@@ -121,4 +127,19 @@ func main() {
 
 	p.Init()
 	p.StartAndWait()
+}
+
+func addToMap(m map[string][]*regexp.Regexp, key string, r *regexp.Regexp) {
+	if list, ok := m[key]; ok {
+		m[key] = append(list)
+	}
+}
+
+func splitKeyValue(pair string) (string, string) {
+	index := strings.Index(pair, "=")
+	if index > 0 {
+		return pair[:index], pair[index+1:]
+	}
+	golib.Checkerr(errors.New("-proc and -proc_regex must have argument format 'key=value'"))
+	return "", ""
 }
