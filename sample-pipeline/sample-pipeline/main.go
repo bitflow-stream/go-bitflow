@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	var p pipeline.SamplePipeline
+	var p pipeline.CmdSamplePipeline
 	p.ParseFlags()
 	flag.Parse()
 	defer golib.ProfileCpu()()

@@ -13,9 +13,13 @@ import (
 // ==================== Data Sink ====================
 type MetricSink interface {
 	golib.Task
-	SetMarshaller(marshaller Marshaller)
 	Header(header Header) error
 	Sample(sample Sample, header Header) error
+}
+
+type MarshallingMetricSink interface {
+	MetricSink
+	SetMarshaller(marshaller Marshaller)
 }
 
 type abstractSink struct {
@@ -117,7 +121,9 @@ func (agg AggregateSink) Stop() {
 
 func (agg AggregateSink) SetMarshaller(marshaller Marshaller) {
 	for _, sink := range agg {
-		sink.SetMarshaller(marshaller)
+		if um, ok := sink.(MarshallingMetricSink); ok {
+			um.SetMarshaller(marshaller)
+		}
 	}
 }
 

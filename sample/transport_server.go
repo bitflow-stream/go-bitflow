@@ -72,7 +72,7 @@ type TCPListenerSink struct {
 	task        *golib.TCPListenerTask
 }
 
-func NewTcpListenerSink(endpoint string) MetricSink {
+func NewTcpListenerSink(endpoint string) MarshallingMetricSink {
 	sink := &TCPListenerSink{
 		connections: make(map[*tcpWriteConn]bool),
 	}

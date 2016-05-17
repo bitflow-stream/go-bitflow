@@ -67,7 +67,7 @@ func main() {
 	flag.DurationVar(&collect_local_interval, "ci", collect_local_interval, "Interval for collecting local samples")
 	flag.DurationVar(&sink_interval, "si", sink_interval, "Interval for sinking (sending/printing/...) data when collecting local samples")
 
-	var p pipeline.SamplePipeline
+	var p pipeline.CmdSamplePipeline
 	p.ParseFlags()
 	flag.Parse()
 	defer golib.ProfileCpu()()
