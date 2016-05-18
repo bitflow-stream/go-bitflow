@@ -10,7 +10,7 @@ import (
 
 // ==================== TCP listener source ====================
 type TCPListenerSource struct {
-	unmarshallingMetricSource
+	AbstractUnmarshallingMetricSource
 	conn *net.TCPConn
 	task *golib.TCPListenerTask
 }
@@ -48,7 +48,7 @@ func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.
 			source.conn = nil
 			wg.Done()
 		}()
-		tcpReadSamples(conn, source.Unmarshaller, source.Sink, source.connectionClosed)
+		tcpReadSamples(conn, source.Unmarshaller, source.OutgoingSink, source.connectionClosed)
 	}()
 }
 
@@ -67,7 +67,7 @@ func (source *TCPListenerSource) Stop() {
 
 // ==================== TCP listener sink ====================
 type TCPListenerSink struct {
-	abstractSink
+	tcpMetricSink
 	connections map[*tcpWriteConn]bool
 	task        *golib.TCPListenerTask
 }
@@ -89,7 +89,7 @@ func (sink *TCPListenerSink) String() string {
 
 func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	return sink.task.ExtendedStart(func(addr net.Addr) {
-		log.Println("Listening for", sink.marshaller, "sample output connections on", addr)
+		log.Println("Listening for", sink.Marshaller, "sample output connections on", addr)
 	}, wg)
 }
 
@@ -109,7 +109,7 @@ func (sink *TCPListenerSink) handleConnection(wg *sync.WaitGroup, conn *net.TCPC
 }
 
 func (sink *TCPListenerSink) Header(header Header) error {
-	sink.header = header
+	sink.LastHeader = header
 	// Close all running connections, since we have to negotiate a new header.
 	for conn := range sink.connections {
 		conn.Stop()
@@ -118,7 +118,7 @@ func (sink *TCPListenerSink) Header(header Header) error {
 }
 
 func (sink *TCPListenerSink) Sample(sample Sample, header Header) error {
-	if err := sink.checkSample(sample); err != nil {
+	if err := sample.Check(header); err != nil {
 		return err
 	}
 	for conn, _ := range sink.connections {

@@ -22,21 +22,12 @@ type MarshallingMetricSink interface {
 	SetMarshaller(marshaller Marshaller)
 }
 
-type abstractSink struct {
-	header     Header
-	marshaller Marshaller
+type AbstractMarshallingMetricSink struct {
+	Marshaller Marshaller
 }
 
-func (sink *abstractSink) SetMarshaller(marshaller Marshaller) {
-	sink.marshaller = marshaller
-}
-
-func (sink *abstractSink) checkSample(sample Sample) error {
-	if len(sample.Values) != len(sink.header.Fields) {
-		return fmt.Errorf("Unexpected number of values in sample: %v, expected %v",
-			len(sample.Values), len(sink.header.Fields))
-	}
-	return nil
+func (sink *AbstractMarshallingMetricSink) SetMarshaller(marshaller Marshaller) {
+	sink.Marshaller = marshaller
 }
 
 // ==================== Data Source ====================
@@ -45,21 +36,32 @@ type MetricSource interface {
 	SetSink(sink MetricSink)
 }
 
+type AbstractMetricSource struct {
+	OutgoingSink MetricSink
+}
+
+func (s *AbstractMetricSource) SetSink(sink MetricSink) {
+	s.OutgoingSink = sink
+}
+
+func (s *AbstractMetricSource) CheckSink() error {
+	if s.OutgoingSink == nil {
+		return fmt.Errorf("No data sink set for %v", s)
+	}
+	return nil
+}
+
 type UnmarshallingMetricSource interface {
 	MetricSource
 	SetUnmarshaller(unmarshaller Unmarshaller) // Must be called before Start()
 }
 
-type unmarshallingMetricSource struct {
+type AbstractUnmarshallingMetricSource struct {
+	AbstractMetricSource
 	Unmarshaller Unmarshaller
-	Sink         MetricSink
 }
 
-func (s *unmarshallingMetricSource) SetSink(sink MetricSink) {
-	s.Sink = sink
-}
-
-func (s *unmarshallingMetricSource) SetUnmarshaller(unmarshaller Unmarshaller) {
+func (s *AbstractUnmarshallingMetricSource) SetUnmarshaller(unmarshaller Unmarshaller) {
 	s.Unmarshaller = unmarshaller
 }
 

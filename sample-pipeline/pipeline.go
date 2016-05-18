@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"sync"
+
 	"github.com/antongulenko/data2go/sample"
 	"github.com/antongulenko/golib"
 )
@@ -45,4 +47,40 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 
 func (p *SamplePipeline) Add(processor SampleProcessor) {
 	p.Processors = append(p.Processors, processor)
+}
+
+// ==================== Abstract Processor ====================
+// This type defines standard implementations for all methods in
+// SampleProcessor. Parts can be shadowed by embedding the type.
+type AbstractProcessor struct {
+	sample.AbstractMetricSource
+}
+
+func (p *AbstractProcessor) Header(header sample.Header) error {
+	if err := p.CheckSink(); err != nil {
+		return err
+	} else {
+		return p.OutgoingSink.Header(header)
+	}
+}
+
+func (p *AbstractProcessor) Sample(sample sample.Sample, header sample.Header) error {
+	if err := p.CheckSink(); err != nil {
+		return err
+	}
+	if err := sample.Check(header); err != nil {
+		return err
+	}
+	return p.OutgoingSink.Sample(sample, header)
+}
+
+func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
+	return nil
+}
+
+func (p *AbstractProcessor) Stop() {
+}
+
+func (p *AbstractProcessor) String() string {
+	return "AbstractProcessor"
 }

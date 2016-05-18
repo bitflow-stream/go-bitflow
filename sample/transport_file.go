@@ -20,7 +20,7 @@ type FileTransport struct {
 	file     *os.File
 	stopped  *golib.OneshotCondition
 
-	abstractSink
+	AbstractMarshallingMetricSink
 }
 
 func (transport *FileTransport) Close() error {
@@ -81,7 +81,7 @@ func (t *FileTransport) walkFiles(walk func(os.FileInfo) error) error {
 
 // ==================== File data source ====================
 type FileSource struct {
-	unmarshallingMetricSource
+	AbstractUnmarshallingMetricSource
 	FileTransport
 }
 
@@ -110,7 +110,7 @@ func (source *FileSource) read(wg *sync.WaitGroup, filename string) golib.StopCh
 		source.file = file
 	})
 	if err == nil && file != nil {
-		return simpleReadSamples(wg, file.Name(), file, source.Unmarshaller, source.Sink)
+		return simpleReadSamples(wg, file.Name(), file, source.Unmarshaller, source.OutgoingSink)
 	} else {
 		return golib.TaskFinishedError(err)
 	}
@@ -128,8 +128,9 @@ func (source *FileSource) iterateFiles(wg *sync.WaitGroup) golib.StopChan {
 // ==================== File data sink ====================
 type FileSink struct {
 	FileTransport
-	num int
-	abstractSink
+	AbstractMarshallingMetricSink
+	LastHeader Header
+	num        int
 }
 
 func (source *FileSink) String() string {
@@ -137,7 +138,7 @@ func (source *FileSink) String() string {
 }
 
 func (sink *FileSink) Start(wg *sync.WaitGroup) golib.StopChan {
-	log.Println("Writing", sink.marshaller, "samples to", sink.Filename)
+	log.Println("Writing", sink.Marshaller, "samples to", sink.Filename)
 	sink.init()
 	if err := sink.cleanFiles(); err != nil {
 		return golib.TaskFinishedError(fmt.Errorf("Failed to clean result files: %v", err))
@@ -171,9 +172,9 @@ func (sink *FileSink) openNextFile() error {
 }
 
 func (sink *FileSink) Header(header Header) error {
-	newHeader := len(sink.header.Fields) != len(header.Fields)
+	newHeader := len(sink.LastHeader.Fields) != len(header.Fields)
 	if !newHeader {
-		for i, old := range sink.header.Fields {
+		for i, old := range sink.LastHeader.Fields {
 			if old != header.Fields[i] {
 				newHeader = true
 				break
@@ -184,15 +185,15 @@ func (sink *FileSink) Header(header Header) error {
 		if err := sink.openNextFile(); err != nil {
 			return err
 		}
-		sink.header = header
-		return sink.marshaller.WriteHeader(header, sink.file)
+		sink.LastHeader = header
+		return sink.Marshaller.WriteHeader(header, sink.file)
 	}
 	return nil
 }
 
 func (sink *FileSink) Sample(sample Sample, header Header) error {
-	if err := sink.checkSample(sample); err != nil {
+	if err := sample.Check(header); err != nil {
 		return err
 	}
-	return sink.marshaller.WriteSample(sample, header, sink.file)
+	return sink.Marshaller.WriteSample(sample, header, sink.file)
 }

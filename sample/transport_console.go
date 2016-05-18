@@ -9,7 +9,7 @@ import (
 )
 
 type ConsoleSink struct {
-	abstractSink
+	AbstractMarshallingMetricSink
 }
 
 func (sink *ConsoleSink) String() string {
@@ -17,7 +17,7 @@ func (sink *ConsoleSink) String() string {
 }
 
 func (sink *ConsoleSink) Start(wg *sync.WaitGroup) golib.StopChan {
-	log.Println("Printing", sink.marshaller, "samples")
+	log.Println("Printing", sink.Marshaller, "samples")
 	return nil
 }
 
@@ -25,19 +25,18 @@ func (sink *ConsoleSink) Stop() {
 }
 
 func (sink *ConsoleSink) Header(header Header) error {
-	sink.header = header
-	return sink.marshaller.WriteHeader(header, os.Stdout)
+	return sink.Marshaller.WriteHeader(header, os.Stdout)
 }
 
 func (sink *ConsoleSink) Sample(sample Sample, header Header) error {
-	if err := sink.checkSample(sample); err != nil {
+	if err := sample.Check(header); err != nil {
 		return err
 	}
-	return sink.marshaller.WriteSample(sample, header, os.Stdout)
+	return sink.Marshaller.WriteSample(sample, header, os.Stdout)
 }
 
 type ConsoleSource struct {
-	unmarshallingMetricSource
+	AbstractUnmarshallingMetricSource
 }
 
 func (source *ConsoleSource) String() string {
@@ -45,7 +44,7 @@ func (source *ConsoleSource) String() string {
 }
 
 func (source *ConsoleSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	return simpleReadSamples(wg, "stdin", os.Stdin, source.Unmarshaller, source.Sink)
+	return simpleReadSamples(wg, "stdin", os.Stdin, source.Unmarshaller, source.OutgoingSink)
 }
 
 func (source *ConsoleSource) Stop() {

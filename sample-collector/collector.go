@@ -57,7 +57,7 @@ type CollectorSource struct {
 	failedCollectors   []Collector
 	filteredCollectors []Collector
 
-	sink     sample.MetricSink
+	sample.AbstractMetricSource
 	loopTask golib.Task
 }
 
@@ -66,7 +66,7 @@ func (source *CollectorSource) String() string {
 }
 
 func (source *CollectorSource) SetSink(sink sample.MetricSink) {
-	source.sink = sink
+	source.OutgoingSink = sink
 }
 
 func (source *CollectorSource) Start(wg *sync.WaitGroup) golib.StopChan {
@@ -111,7 +111,7 @@ func (source *CollectorSource) collect(wg *sync.WaitGroup) *golib.Stopper {
 		go source.watchFailedCollector(wg, failed, stopper)
 	}
 	wg.Add(1)
-	go source.sinkMetrics(wg, header, values, source.sink, stopper)
+	go source.sinkMetrics(wg, header, values, source.OutgoingSink, stopper)
 	return stopper
 }
 
