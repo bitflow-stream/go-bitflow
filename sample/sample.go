@@ -76,3 +76,35 @@ func (sample *Sample) Check(header Header) error {
 	}
 	return nil
 }
+
+func (header *Header) Equals(other *Header) bool {
+	switch {
+	case header == other:
+		return true
+	case header == nil && other == nil:
+		return true
+	case header == nil || other == nil:
+		return false
+	case header.HasTags != other.HasTags:
+		return false
+	case header.Fields == nil && other.Fields == nil:
+		return true
+	case header.Fields == nil || other.Fields == nil:
+		return false
+	case len(header.Fields) != len(other.Fields):
+		return false
+	}
+	if len(header.Fields) >= 1 {
+		// Compare the array backing the Fields slices
+		if &(header.Fields[0]) == &(other.Fields[0]) {
+			return true
+		}
+	}
+	// Last resort: compare every string pair
+	for i := range header.Fields {
+		if header.Fields[i] != other.Fields[i] {
+			return false
+		}
+	}
+	return true
+}
