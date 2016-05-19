@@ -46,8 +46,9 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 	}
 }
 
-func (p *SamplePipeline) Add(processor SampleProcessor) {
+func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 	p.Processors = append(p.Processors, processor)
+	return p
 }
 
 // ==================== Abstract Processor ====================
