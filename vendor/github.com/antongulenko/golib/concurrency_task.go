@@ -63,6 +63,7 @@ type LoopTask struct {
 	*OneshotCondition
 	loop        func(stop StopChan)
 	Description string
+	StopHook    func()
 }
 
 func (task *LoopTask) Start(wg *sync.WaitGroup) StopChan {
@@ -78,6 +79,9 @@ func (task *LoopTask) Start(wg *sync.WaitGroup) StopChan {
 			}
 			for !cond.Enabled() {
 				loop(stop)
+			}
+			if hook := task.StopHook; hook != nil {
+				hook()
 			}
 		}()
 	}

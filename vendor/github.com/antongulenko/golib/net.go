@@ -39,6 +39,7 @@ type TCPConnectionHandler func(wg *sync.WaitGroup, conn *net.TCPConn)
 type TCPListenerTask struct {
 	Handler        TCPConnectionHandler
 	ListenEndpoint string
+	StopHook       func()
 
 	loopTask *LoopTask
 	listener *net.TCPListener
@@ -69,7 +70,7 @@ func (task *TCPListenerTask) ExtendedStart(start func(addr net.Addr), wg *sync.W
 }
 
 func (task *TCPListenerTask) listen(wg *sync.WaitGroup) *LoopTask {
-	return NewLoopTask("tcp listener", func(_ StopChan) {
+	loop := NewLoopTask("tcp listener", func(_ StopChan) {
 		if listener := task.listener; listener == nil {
 			return
 		} else {
@@ -87,6 +88,8 @@ func (task *TCPListenerTask) listen(wg *sync.WaitGroup) *LoopTask {
 			}
 		}
 	})
+	loop.StopHook = task.StopHook
+	return loop
 }
 
 func (task *TCPListenerTask) Stop() {
