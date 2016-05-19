@@ -77,6 +77,14 @@ func (sample *Sample) Check(header Header) error {
 	return nil
 }
 
+func (sample *Sample) CopyMetadataFrom(other Sample) {
+	sample.Time = other.Time
+	sample.Tags = make(map[string]string)
+	for key, val := range other.Tags {
+		sample.Tags[key] = val
+	}
+}
+
 func (header *Header) Equals(other *Header) bool {
 	switch {
 	case header == other:

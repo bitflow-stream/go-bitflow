@@ -85,6 +85,8 @@ func (p *BatchProcessor) executeSteps() {
 			log.Printf("Executing %v on %v samples with %v metrics...\n", step, len(samples), len(header.Fields))
 			header, samples = step.ProcessBatch(header, samples)
 		}
+		p.header = header
+		p.samples = samples
 	}
 }
 
