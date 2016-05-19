@@ -21,7 +21,7 @@ func (sink *ConsoleSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	return nil
 }
 
-func (sink *ConsoleSink) Stop() {
+func (sink *ConsoleSink) Close() {
 }
 
 func (sink *ConsoleSink) Header(header Header) error {
@@ -44,7 +44,11 @@ func (source *ConsoleSource) String() string {
 }
 
 func (source *ConsoleSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	return simpleReadSamples(wg, "stdin", os.Stdin, source.Unmarshaller, source.OutgoingSink)
+	return golib.WaitErrFunc(wg, func() error {
+		err := readSamplesNamed("stdin", os.Stdin, source.Unmarshaller, source.OutgoingSink)
+		source.CloseSink()
+		return err
+	})
 }
 
 func (source *ConsoleSource) Stop() {

@@ -47,13 +47,18 @@ func (p *DecouplingProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	p.samples = make(chan TaggedSample, p.ChannelBuffer)
 	p.loopTask = golib.NewLoopTask(p.String(), func(stop golib.StopChan) {
 		select {
-		case sample := <-p.samples:
-			if err := p.forward(sample); err != nil {
-				log.Printf("Error forwarding sample to from %v to %v: %v\n", p, p.OutgoingSink, err)
+		case sample, open := <-p.samples:
+			if open {
+				if err := p.forward(sample); err != nil {
+					log.Printf("Error forwarding sample to from %v to %v: %v\n", p, p.OutgoingSink, err)
+				}
+			} else {
+				p.loopTask.EnableOnly()
 			}
 		case <-stop:
 		}
 	})
+	p.loopTask.StopHook = p.loopStopped
 	return p.loopTask.Start(wg)
 }
 
@@ -68,8 +73,12 @@ func (p *DecouplingProcessor) forward(sample TaggedSample) error {
 	}
 }
 
-func (p *DecouplingProcessor) Stop() {
-	p.loopTask.EnableOnly()
+func (p *DecouplingProcessor) Close() {
+	close(p.samples)
+}
+
+func (p *DecouplingProcessor) loopStopped() {
+	p.CloseSink()
 }
 
 func (p *DecouplingProcessor) String() string {
@@ -85,7 +94,7 @@ func (p *SamplePrinter) Header(header sample.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	} else {
-		log.Println("Processing Header:", header)
+		log.Printf("Processing Header len %v, tags: %v\n", len(header.Fields), header.HasTags)
 		return p.OutgoingSink.Header(header)
 	}
 }
@@ -97,7 +106,11 @@ func (p *SamplePrinter) Sample(sample sample.Sample, header sample.Header) error
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	log.Println("Processing Sample:", sample)
+	tags := ""
+	if len(sample.Tags) > 0 {
+		tags = " (" + sample.TagString() + ")"
+	}
+	log.Printf("Processing Sample from %v, len %v%v\n", sample.Time, len(sample.Values), tags)
 	return p.OutgoingSink.Sample(sample, header)
 }
 

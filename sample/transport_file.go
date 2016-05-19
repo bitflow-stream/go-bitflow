@@ -23,18 +23,18 @@ type FileTransport struct {
 	AbstractMarshallingMetricSink
 }
 
-func (transport *FileTransport) Close() error {
-	f := transport.file
+func (t *FileTransport) CloseFile() error {
+	f := t.file
 	if f != nil {
-		transport.file = nil
+		t.file = nil
 		return f.Close()
 	}
 	return nil
 }
 
-func (transport *FileTransport) Stop() {
-	transport.stopped.Enable(func() {
-		if err := transport.Close(); err != nil {
+func (t *FileTransport) close() {
+	t.stopped.Enable(func() {
+		if err := t.CloseFile(); err != nil {
 			log.Println("Error closing file:", err)
 		}
 	})
@@ -45,9 +45,10 @@ func (t *FileTransport) init() {
 	filename := t.Filename
 	index := strings.LastIndex(filename, ".")
 	if index < 0 {
-		index = len(filename)
+		t.prefix, t.suffix = filename, ""
+	} else {
+		t.prefix, t.suffix = filename[:index], filename[index:]
 	}
-	t.prefix, t.suffix = filename[:index], filename[index:]
 }
 
 func (t *FileTransport) buildFilename(num int) string {
@@ -58,10 +59,11 @@ func (t *FileTransport) fileRegex() *regexp.Regexp {
 	return regexp.MustCompile("^" + regexp.QuoteMeta(t.prefix) + "(-[0-9]+)?" + regexp.QuoteMeta(t.suffix) + "$")
 }
 
-func (t *FileTransport) walkFiles(walk func(os.FileInfo) error) error {
+func (t *FileTransport) walkFiles(walk func(os.FileInfo) error) (int, error) {
 	dir := filepath.Dir(t.Filename)
 	r := t.fileRegex()
-	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	num := 0
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -77,6 +79,7 @@ func (t *FileTransport) walkFiles(walk func(os.FileInfo) error) error {
 			return nil
 		}
 	})
+	return num, err
 }
 
 // ==================== File data source ====================
@@ -94,13 +97,17 @@ func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	if _, err := os.Stat(source.Filename); os.IsNotExist(err) {
 		return source.iterateFiles(wg)
 	} else if err == nil {
-		return source.read(wg, source.Filename)
+		return source.read(wg, source.Filename, true)
 	} else {
 		return golib.TaskFinishedError(err)
 	}
 }
 
-func (source *FileSource) read(wg *sync.WaitGroup, filename string) golib.StopChan {
+func (source *FileSource) Stop() {
+	source.close()
+}
+
+func (source *FileSource) read(wg *sync.WaitGroup, filename string, closeSink bool) golib.StopChan {
 	var file *os.File
 	var err error
 	source.stopped.IfElseEnabled(func() {
@@ -110,18 +117,32 @@ func (source *FileSource) read(wg *sync.WaitGroup, filename string) golib.StopCh
 		source.file = file
 	})
 	if err == nil && file != nil {
-		return simpleReadSamples(wg, file.Name(), file, source.Unmarshaller, source.OutgoingSink)
+		return golib.WaitErrFunc(wg, func() error {
+			err := readSamplesNamed(file.Name(), file, source.Unmarshaller, source.OutgoingSink)
+			if closeSink {
+				source.CloseSink()
+			}
+			return err
+		})
 	} else {
+		if closeSink {
+			source.CloseSink()
+		}
 		return golib.TaskFinishedError(err)
 	}
 }
 
 func (source *FileSource) iterateFiles(wg *sync.WaitGroup) golib.StopChan {
 	return golib.WaitErrFunc(wg, func() error {
-		return source.walkFiles(func(info os.FileInfo) error {
-			defer source.Close() // Ignore error
-			return <-source.read(wg, info.Name())
+		num, err := source.walkFiles(func(info os.FileInfo) error {
+			defer source.CloseFile() // Ignore error
+			return <-source.read(wg, info.Name(), false)
 		})
+		if err == nil && num <= 0 {
+			err = errors.New(os.ErrNotExist.Error() + ": " + source.Filename)
+		}
+		source.CloseSink()
+		return err
 	})
 }
 
@@ -147,14 +168,19 @@ func (sink *FileSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	return nil
 }
 
+func (source *FileSink) Close() {
+	source.close()
+}
+
 func (sink *FileSink) cleanFiles() error {
-	return sink.walkFiles(func(info os.FileInfo) error {
+	_, err := sink.walkFiles(func(info os.FileInfo) error {
 		return os.Remove(info.Name())
 	})
+	return err
 }
 
 func (sink *FileSink) openNextFile() error {
-	if err := sink.Close(); err != nil {
+	if err := sink.CloseFile(); err != nil {
 		log.Println("Error closing file:", err)
 	}
 	sink.num++

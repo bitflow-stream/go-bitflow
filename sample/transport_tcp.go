@@ -38,7 +38,7 @@ func (sink *tcpMetricSink) writeConn(conn *net.TCPConn) *tcpWriteConn {
 	}
 }
 
-func (conn *tcpWriteConn) Stop() {
+func (conn *tcpWriteConn) Close() {
 	if conn != nil {
 		conn.err(nil)
 		if samples := conn.samples; samples != nil {
@@ -111,11 +111,11 @@ func (sink *TCPSink) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (sink *TCPSink) closeConnection() {
-	sink.conn.Stop()
+	sink.conn.Close()
 	sink.conn = nil
 }
 
-func (sink *TCPSink) Stop() {
+func (sink *TCPSink) Close() {
 	sink.stopped.Enable(func() {
 		sink.closeConnection()
 	})
@@ -198,6 +198,7 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		case <-stop:
 		}
 	})
+	source.loopTask.StopHook = source.loopStopped
 	return source.loopTask.Start(wg)
 }
 
@@ -207,6 +208,10 @@ func (source *TCPSource) Stop() {
 			_ = conn.Close() // Ignore error
 		}
 	})
+}
+
+func (source *TCPSource) loopStopped() {
+	source.CloseSink()
 }
 
 func (source *TCPSource) connectionClosed() bool {

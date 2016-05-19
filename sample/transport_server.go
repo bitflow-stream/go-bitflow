@@ -20,6 +20,7 @@ func NewTcpListenerSource(endpoint string) MetricSource {
 	source.task = &golib.TCPListenerTask{
 		ListenEndpoint: endpoint,
 		Handler:        source.handleConnection,
+		StopHook:       source.listenerStopped,
 	}
 	return source
 }
@@ -50,6 +51,10 @@ func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.
 		}()
 		tcpReadSamples(conn, source.Unmarshaller, source.OutgoingSink, source.connectionClosed)
 	}()
+}
+
+func (source *TCPListenerSource) listenerStopped() {
+	source.CloseSink()
 }
 
 func (source *TCPListenerSource) connectionClosed() bool {
@@ -93,10 +98,10 @@ func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	}, wg)
 }
 
-func (sink *TCPListenerSink) Stop() {
+func (sink *TCPListenerSink) Close() {
 	sink.task.ExtendedStop(func() {
 		for conn := range sink.connections {
-			conn.Stop()
+			conn.Close()
 		}
 	})
 }
@@ -112,7 +117,7 @@ func (sink *TCPListenerSink) Header(header Header) error {
 	sink.LastHeader = header
 	// Close all running connections, since we have to negotiate a new header.
 	for conn := range sink.connections {
-		conn.Stop()
+		conn.Close()
 	}
 	return nil
 }
@@ -125,7 +130,7 @@ func (sink *TCPListenerSink) Sample(sample Sample, header Header) error {
 		if conn.conn == nil {
 			// Clean up closed connections
 			delete(sink.connections, conn)
-			conn.Stop()
+			conn.Close()
 			continue
 		}
 		conn.samples <- sample

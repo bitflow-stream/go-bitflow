@@ -43,7 +43,7 @@ func (p *BatchProcessor) Sample(sample sample.Sample, header sample.Header) erro
 	return nil
 }
 
-func (p *BatchProcessor) Stop() {
+func (p *BatchProcessor) Close() {
 	if p.header == nil {
 		log.Println(p.String() + " has no samples stored")
 		return
@@ -59,6 +59,7 @@ func (p *BatchProcessor) Stop() {
 			return
 		}
 	}
+	p.CloseSink()
 }
 
 func (p *BatchProcessor) String() string {

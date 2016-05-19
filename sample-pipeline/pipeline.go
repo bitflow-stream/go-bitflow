@@ -13,6 +13,7 @@ type SampleProcessor interface {
 	Header(header sample.Header) error
 	Sample(sample sample.Sample, header sample.Header) error
 	SetSink(sink sample.MetricSink)
+	Close()
 }
 
 type SamplePipeline struct {
@@ -54,6 +55,7 @@ func (p *SamplePipeline) Add(processor SampleProcessor) {
 // SampleProcessor. Parts can be shadowed by embedding the type.
 type AbstractProcessor struct {
 	sample.AbstractMetricSource
+	sample.AbstractMetricSink
 }
 
 func (p *AbstractProcessor) Header(header sample.Header) error {
@@ -78,7 +80,9 @@ func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	return nil
 }
 
-func (p *AbstractProcessor) Stop() {
+func (p *AbstractProcessor) Close() {
+	// Propagate the Close() invocation
+	p.CloseSink()
 }
 
 func (p *AbstractProcessor) String() string {
