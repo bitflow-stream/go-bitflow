@@ -5,6 +5,7 @@ import "sync"
 type OneshotCondition struct {
 	cond    *sync.Cond
 	enabled bool
+	Err     error
 }
 
 func NewOneshotCondition() *OneshotCondition {
@@ -13,7 +14,7 @@ func NewOneshotCondition() *OneshotCondition {
 	}
 }
 
-func (cond *OneshotCondition) Enable(perform func()) {
+func (cond *OneshotCondition) EnableErrFunc(perform func() error) {
 	if cond == nil || cond.cond == nil {
 		return
 	}
@@ -23,14 +24,29 @@ func (cond *OneshotCondition) Enable(perform func()) {
 		return
 	}
 	if perform != nil {
-		perform()
+		cond.Err = perform()
 	}
 	cond.enabled = true
 	cond.cond.Broadcast()
 }
 
+func (cond *OneshotCondition) Enable(perform func()) {
+	cond.EnableErrFunc(func() error {
+		if perform != nil {
+			perform()
+		}
+		return nil
+	})
+}
+
+func (cond *OneshotCondition) EnableErr(err error) {
+	cond.EnableErrFunc(func() error {
+		return err
+	})
+}
+
 func (cond *OneshotCondition) EnableOnly() {
-	cond.Enable(nil)
+	cond.EnableErrFunc(nil)
 }
 
 func (cond *OneshotCondition) Enabled() bool {

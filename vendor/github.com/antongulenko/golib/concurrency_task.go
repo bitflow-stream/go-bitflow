@@ -61,7 +61,8 @@ func (task *CleanupTask) String() string {
 
 type LoopTask struct {
 	*OneshotCondition
-	loop        func(stop StopChan)
+	loop        func(stop StopChan) error
+	Err         error
 	Description string
 	StopHook    func()
 }
@@ -69,7 +70,7 @@ type LoopTask struct {
 func (task *LoopTask) Start(wg *sync.WaitGroup) StopChan {
 	cond := task.OneshotCondition
 	if loop := task.loop; loop != nil {
-		stop := cond.Start(wg)
+		stop := WaitCondition(wg, cond)
 		if wg != nil {
 			wg.Add(1)
 		}
@@ -78,7 +79,10 @@ func (task *LoopTask) Start(wg *sync.WaitGroup) StopChan {
 				defer wg.Done()
 			}
 			for !cond.Enabled() {
-				loop(stop)
+				task.Err = loop(stop)
+				if task.Err != nil {
+					cond.EnableErr(task.Err)
+				}
 			}
 			if hook := task.StopHook; hook != nil {
 				hook()
@@ -93,6 +97,13 @@ func (task *LoopTask) String() string {
 }
 
 func NewLoopTask(description string, loop func(stop StopChan)) *LoopTask {
+	return NewErrLoopTask(description, func(stop StopChan) error {
+		loop(stop)
+		return nil
+	})
+}
+
+func NewErrLoopTask(description string, loop func(stop StopChan) error) *LoopTask {
 	return &LoopTask{
 		OneshotCondition: NewOneshotCondition(),
 		loop:             loop,
@@ -142,8 +153,9 @@ func WaitCondition(wg *sync.WaitGroup, cond *OneshotCondition) StopChan {
 	if cond == nil {
 		return nil
 	}
-	return WaitFunc(wg, func() {
+	return WaitErrFunc(wg, func() error {
 		cond.Wait()
+		return cond.Err
 	})
 }
 
@@ -262,25 +274,29 @@ func (group *TaskGroup) ReverseStop(printTasks bool) {
 	}
 }
 
-func collectErrors(inputs []StopChan, tasks []Task, printWait bool) []error {
-	result := make([]error, 0, len(inputs))
+func PrintErrors(inputs []StopChan, tasks []Task, printWait bool) (numErrors int) {
 	for i, input := range inputs {
 		if input != nil {
 			if printWait {
 				task := tasks[i]
-				log.Printf("Waiting for %v\n", task)
+				log.Println("Waiting for", task)
 			}
 			if err := <-input; err != nil {
-				result = append(result, err)
+				numErrors++
+				log.Println("Error:", err)
 			}
 		}
 	}
-	return result
+	return
 }
 
-func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (Task, []error) {
+func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (reason Task, numErrors int) {
 	var wg sync.WaitGroup
-	choice, err, tasks, channels := group.WaitForAny(&wg)
+	reason, err, tasks, channels := group.WaitForAny(&wg)
+	if err != nil {
+		numErrors++
+		log.Println("Error:", err)
+	}
 	if timeout > 0 {
 		time.AfterFunc(timeout, func() {
 			panic("Waiting for stopping goroutines timed out")
@@ -288,9 +304,8 @@ func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (Task
 	}
 	group.ReverseStop(printWait)
 	wg.Wait()
-	errors := collectErrors(channels, tasks, printWait)
-	errors = append(errors, err)
-	return choice, errors
+	numErrors += PrintErrors(channels, tasks, printWait)
+	return
 }
 
 var (
@@ -312,14 +327,8 @@ func (group *TaskGroup) PrintWaitAndStop() int {
 }
 
 func (group *TaskGroup) TimeoutPrintWaitAndStop(timeout time.Duration, printWait bool) (numErrors int) {
-	reason, errors := group.WaitAndStop(timeout, printWait)
+	reason, numErrors := group.WaitAndStop(timeout, printWait)
 	log.Printf("Stopped because of %v\n", reason)
-	for _, err := range errors {
-		if err != nil {
-			log.Println("Error:", err)
-			numErrors++
-		}
-	}
 	return
 }
 
