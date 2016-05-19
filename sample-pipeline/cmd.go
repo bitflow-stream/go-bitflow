@@ -39,7 +39,7 @@ type CmdSamplePipeline struct {
 	read_console      bool
 	read_tcp_listen   string
 	read_tcp_download string
-	read_file         string
+	read_files        golib.StringSlice
 	sink_console      bool
 	sink_connect      string
 	sink_listen       string
@@ -55,7 +55,7 @@ type CmdSamplePipeline struct {
 func (p *CmdSamplePipeline) ParseFlags() {
 	flag.StringVar(&p.format_input, "i", "b", "Data source format, one of "+supported_formats)
 	flag.BoolVar(&p.read_console, "C", false, "Data source: read from stdin")
-	flag.StringVar(&p.read_file, "F", "", "Data source: read from file")
+	flag.Var(&p.read_files, "F", "Data source: read from file(s)")
 	flag.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
 	flag.StringVar(&p.read_tcp_download, "D", "", "Data source: receive samples by connecting to remote endpoint")
 
@@ -94,9 +94,8 @@ func (p *CmdSamplePipeline) Init() {
 			RetryInterval: tcp_download_retry_interval,
 		})
 	}
-	if p.read_file != "" {
-		p.SetSource(&sample.FileSource{
-			FileTransport: sample.FileTransport{Filename: p.read_file}})
+	if len(p.read_files) > 0 {
+		p.SetSource(&sample.FileSource{Filenames: p.read_files})
 	}
 	if p.Source == nil {
 		log.Println("No data source provided, no data will be received or generated.")
@@ -124,7 +123,7 @@ func (p *CmdSamplePipeline) Init() {
 		sinks = append(sinks, sink)
 	}
 	if p.sink_file != "" {
-		sink := &sample.FileSink{FileTransport: sample.FileTransport{Filename: p.sink_file}}
+		sink := &sample.FileSink{Filename: p.sink_file}
 		sink.SetMarshaller(marshaller(p.format_file))
 		sinks = append(sinks, sink)
 	}

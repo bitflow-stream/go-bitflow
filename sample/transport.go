@@ -95,6 +95,7 @@ func readSamples(input io.Reader, um Unmarshaller, sink MetricSink) (num_samples
 	}
 	log.Printf("Reading %v metrics\n", len(header.Fields))
 
+	// TODO parallelize unmarshalling of samples here (but maintain correct order).
 	for {
 		var sample Sample
 		if sample, err = um.ReadSample(header, reader); err != nil {
