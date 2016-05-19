@@ -57,7 +57,7 @@ func (p *BatchProcessor) Sample(sample sample.Sample, header sample.Header) erro
 }
 
 func (p *BatchProcessor) Close() {
-	defer p.CloseSink()
+	defer p.CloseSink(nil)
 	if p.header == nil {
 		log.Println(p.String(), "has no samples stored")
 		return
@@ -78,7 +78,7 @@ func (p *BatchProcessor) Close() {
 
 func (p *BatchProcessor) executeSteps() {
 	if len(p.Steps) > 0 {
-		log.Printf("Executing %v batch processing steps...\n", len(p.Steps))
+		log.Printf("Executing %v batch processing step(s)...\n", len(p.Steps))
 		header := p.header
 		samples := p.samples
 		for _, step := range p.Steps {

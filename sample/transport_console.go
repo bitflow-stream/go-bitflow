@@ -46,7 +46,7 @@ func (source *ConsoleSource) String() string {
 func (source *ConsoleSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	return golib.WaitErrFunc(wg, func() error {
 		err := readSamplesNamed("stdin", os.Stdin, source.Unmarshaller, source.OutgoingSink)
-		source.CloseSink()
+		source.CloseSink(wg)
 		return err
 	})
 }

@@ -63,10 +63,18 @@ func (s *AbstractMetricSource) CheckSink() error {
 	return nil
 }
 
-func (s *AbstractMetricSource) CloseSink() {
+func (s *AbstractMetricSource) CloseSink(wg *sync.WaitGroup) {
 	// Must be called when this source is stopped
 	if s.OutgoingSink != nil {
-		s.OutgoingSink.Close()
+		if wg == nil {
+			s.OutgoingSink.Close()
+		} else {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				s.OutgoingSink.Close()
+			}()
+		}
 	}
 }
 
@@ -114,8 +122,6 @@ func readSamplesNamed(sourceName string, input io.Reader, um Unmarshaller, sink 
 	num_samples, err = readSamples(input, um, sink)
 	if err == io.EOF {
 		err = nil
-	} else if err != nil {
-		err = fmt.Errorf("Read failed: %v", err)
 	}
 	log.Printf("Read %v %v samples from %v\n", num_samples, um, sourceName)
 	return

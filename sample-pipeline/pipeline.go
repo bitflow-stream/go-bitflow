@@ -83,7 +83,7 @@ func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 
 func (p *AbstractProcessor) Close() {
 	// Propagate the Close() invocation
-	p.CloseSink()
+	p.CloseSink(nil)
 }
 
 func (p *AbstractProcessor) String() string {

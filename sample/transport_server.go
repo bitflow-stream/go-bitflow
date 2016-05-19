@@ -20,7 +20,6 @@ func NewTcpListenerSource(endpoint string) MetricSource {
 	source.task = &golib.TCPListenerTask{
 		ListenEndpoint: endpoint,
 		Handler:        source.handleConnection,
-		StopHook:       source.listenerStopped,
 	}
 	return source
 }
@@ -30,6 +29,9 @@ func (source *TCPListenerSource) String() string {
 }
 
 func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
+	source.task.StopHook = func() {
+		source.CloseSink(wg)
+	}
 	return source.task.ExtendedStart(func(addr net.Addr) {
 		log.Println("Listening for incoming", source.Unmarshaller, "samples on", addr)
 	}, wg)
@@ -51,10 +53,6 @@ func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.
 		}()
 		tcpReadSamples(conn, source.Unmarshaller, source.OutgoingSink, source.connectionClosed)
 	}()
-}
-
-func (source *TCPListenerSource) listenerStopped() {
-	source.CloseSink()
 }
 
 func (source *TCPListenerSource) connectionClosed() bool {

@@ -151,7 +151,7 @@ func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		log.Println("Reading", len(files), "files")
 	}
 	return golib.WaitErrFunc(wg, func() error {
-		return source.readFiles(files)
+		return source.readFiles(wg, files)
 	})
 }
 
@@ -173,8 +173,8 @@ func (source *FileSource) read(filename string) (err error) {
 	return
 }
 
-func (source *FileSource) readFiles(files []string) (err error) {
-	defer source.CloseSink()
+func (source *FileSource) readFiles(wg *sync.WaitGroup, files []string) (err error) {
+	defer source.CloseSink(wg)
 	for _, filename := range files {
 		err = source.read(filename)
 		_ = source.CloseFile() // Drop error

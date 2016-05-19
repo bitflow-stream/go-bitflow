@@ -198,7 +198,9 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		case <-stop:
 		}
 	})
-	source.loopTask.StopHook = source.loopStopped
+	source.loopTask.StopHook = func() {
+		source.CloseSink(wg)
+	}
 	return source.loopTask.Start(wg)
 }
 
@@ -208,10 +210,6 @@ func (source *TCPSource) Stop() {
 			_ = conn.Close() // Ignore error
 		}
 	})
-}
-
-func (source *TCPSource) loopStopped() {
-	source.CloseSink()
 }
 
 func (source *TCPSource) connectionClosed() bool {

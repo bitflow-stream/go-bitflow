@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
@@ -45,20 +46,23 @@ func (p *DecouplingProcessor) Sample(sample sample.Sample, header sample.Header)
 
 func (p *DecouplingProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	p.samples = make(chan TaggedSample, p.ChannelBuffer)
-	p.loopTask = golib.NewLoopTask(p.String(), func(stop golib.StopChan) {
+	p.loopTask = golib.NewErrLoopTask(p.String(), func(stop golib.StopChan) error {
 		select {
 		case sample, open := <-p.samples:
 			if open {
 				if err := p.forward(sample); err != nil {
-					log.Printf("Error forwarding sample from %v to %v: %v\n", p, p.OutgoingSink, err)
+					return fmt.Errorf("Error forwarding sample from %v to %v: %v", p, p.OutgoingSink, err)
 				}
 			} else {
 				p.loopTask.EnableOnly()
 			}
 		case <-stop:
 		}
+		return nil
 	})
-	p.loopTask.StopHook = p.loopStopped
+	p.loopTask.StopHook = func() {
+		p.CloseSink(wg)
+	}
 	return p.loopTask.Start(wg)
 }
 
@@ -75,10 +79,6 @@ func (p *DecouplingProcessor) forward(sample TaggedSample) error {
 
 func (p *DecouplingProcessor) Close() {
 	close(p.samples)
-}
-
-func (p *DecouplingProcessor) loopStopped() {
-	p.CloseSink()
 }
 
 func (p *DecouplingProcessor) String() string {

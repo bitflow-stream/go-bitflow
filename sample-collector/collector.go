@@ -81,16 +81,14 @@ func (source *CollectorSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		stopper.Stop()
 		collectWg.Wait()
 	})
-	source.loopTask.StopHook = source.loopStopped
+	source.loopTask.StopHook = func() {
+		source.CloseSink(wg)
+	}
 	return source.loopTask.Start(wg)
 }
 
 func (source *CollectorSource) Stop() {
 	source.loopTask.Stop()
-}
-
-func (source *CollectorSource) loopStopped() {
-	source.CloseSink()
 }
 
 func (source *CollectorSource) collect(wg *sync.WaitGroup) *golib.Stopper {
