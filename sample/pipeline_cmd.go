@@ -11,11 +11,14 @@ import (
 const (
 	tcp_download_retry_interval = 1000 * time.Millisecond
 	supported_formats           = "(c=CSV, b=binary, t=text)"
+
+	default_file_input    = "c"
+	default_console_input = "c"
+	default_tcp_input     = "b"
 )
 
 var (
 	marshallers = map[string]MetricMarshaller{
-		"":  new(CsvMarshaller), // The default
 		"c": new(CsvMarshaller),
 		"b": new(BinaryMarshaller),
 		"t": new(TextMarshaller),
@@ -24,7 +27,7 @@ var (
 
 func marshaller(format string) MetricMarshaller {
 	if marshaller, ok := marshallers[format]; !ok {
-		log.Fatalf("Illegal data fromat %v, must be one of %v\n", format, supported_formats)
+		log.Fatalf("Illegal data fromat '%v', must be one of %v\n", format, supported_formats)
 		return nil
 	} else {
 		return marshaller
@@ -52,7 +55,7 @@ type CmdSamplePipeline struct {
 
 // Must be called before flag.Parse()
 func (p *CmdSamplePipeline) ParseFlags() {
-	flag.StringVar(&p.format_input, "i", "b", "Data source format, one of "+supported_formats)
+	flag.StringVar(&p.format_input, "i", "", "Data source format, default depends on selected source, one of "+supported_formats)
 	flag.BoolVar(&p.read_console, "C", false, "Data source: read from stdin")
 	flag.Var(&p.read_files, "F", "Data source: read from file(s)")
 	flag.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
@@ -81,26 +84,34 @@ func (p *CmdSamplePipeline) Init() {
 	p.Tasks = golib.NewTaskGroup()
 
 	// ====== Initialize source(s)
+	var unmarshaller string
 	if p.read_console {
 		p.SetSource(new(ConsoleSource))
+		unmarshaller = default_console_input
 	}
 	if p.read_tcp_listen != "" {
 		p.SetSource(NewTcpListenerSource(p.read_tcp_listen))
+		unmarshaller = default_tcp_input
 	}
 	if p.read_tcp_download != "" {
 		p.SetSource(&TCPSource{
 			RemoteAddr:    p.read_tcp_download,
 			RetryInterval: tcp_download_retry_interval,
 		})
+		unmarshaller = default_tcp_input
 	}
 	if len(p.read_files) > 0 {
 		p.SetSource(&FileSource{Filenames: p.read_files})
+		unmarshaller = default_file_input
 	}
 	if p.Source == nil {
 		log.Println("No data source provided, no data will be received or generated.")
 	} else {
+		if p.format_input != "" {
+			unmarshaller = p.format_input
+		}
 		if umSource, ok := p.Source.(UnmarshallingMetricSource); ok {
-			umSource.SetUnmarshaller(marshaller(p.format_input))
+			umSource.SetUnmarshaller(marshaller(unmarshaller))
 		}
 	}
 

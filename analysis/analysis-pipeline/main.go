@@ -8,7 +8,7 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-var _ = new(AbstractProcessor) // validate analysis import
+var _ = new(AbstractProcessor) // validate data2go/analysis import
 
 func main() {
 	var p sample.CmdSamplePipeline
