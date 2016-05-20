@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"bufio"
 	"log"
 	"os"
 	"sync"
@@ -10,7 +11,7 @@ import (
 
 type ConsoleSink struct {
 	AbstractMarshallingMetricSink
-	Reader SampleReader
+	buf *bufio.Writer
 }
 
 func (sink *ConsoleSink) String() string {
@@ -18,22 +19,27 @@ func (sink *ConsoleSink) String() string {
 }
 
 func (sink *ConsoleSink) Start(wg *sync.WaitGroup) golib.StopChan {
+	sink.buf = sink.BufferedWriter(os.Stdout)
 	log.Println("Printing", sink.Marshaller, "samples")
 	return nil
 }
 
 func (sink *ConsoleSink) Close() {
+	if err := sink.buf.Flush(); err != nil {
+		log.Println("Error flushing stdout:", err)
+	}
+	_ = os.Stdout.Close() // Drop error
 }
 
 func (sink *ConsoleSink) Header(header Header) error {
-	return sink.Marshaller.WriteHeader(header, os.Stdout)
+	return sink.Marshaller.WriteHeader(header, sink.buf)
 }
 
 func (sink *ConsoleSink) Sample(sample Sample, header Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	return sink.Marshaller.WriteSample(sample, header, os.Stdout)
+	return sink.Marshaller.WriteSample(sample, header, sink.buf)
 }
 
 type ConsoleSource struct {

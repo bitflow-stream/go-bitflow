@@ -41,6 +41,7 @@ type CmdSamplePipeline struct {
 
 	parallel_parsers int
 	buffered_samples int
+	write_buffer     int
 
 	read_console      bool
 	read_tcp_listen   string
@@ -65,8 +66,9 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
 	flag.StringVar(&p.read_tcp_download, "D", "", "Data source: receive samples by connecting to remote endpoint")
 
-	flag.IntVar(&p.parallel_parsers, "par", runtime.NumCPU(), "Parallel goroutines used for unmarshalling/marshalliing samples")
-	flag.IntVar(&p.buffered_samples, "buf", 10000, "Number of samples buffered in various places")
+	flag.IntVar(&p.parallel_parsers, "par", runtime.NumCPU(), "Parallel goroutines used for unmarshalling samples")
+	flag.IntVar(&p.buffered_samples, "read_buf", 10000, "Number of samples buffered when reading")
+	flag.IntVar(&p.write_buffer, "write_buf", 4096, "Size (byte) of buffered IO for all data sinks")
 
 	flag.BoolVar(&p.sink_console, "p", false, "Data sink: print to stdout")
 	flag.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+supported_formats)
@@ -131,21 +133,25 @@ func (p *CmdSamplePipeline) Init() {
 	var sinks AggregateSink
 	if p.sink_console {
 		sink := new(ConsoleSink)
+		sink.WriteBuffer = p.write_buffer
 		sink.SetMarshaller(marshaller(p.format_console))
 		sinks = append(sinks, sink)
 	}
 	if p.sink_connect != "" {
 		sink := &TCPSink{Endpoint: p.sink_connect}
+		sink.WriteBuffer = p.write_buffer
 		sink.SetMarshaller(marshaller(p.format_connect))
 		sinks = append(sinks, sink)
 	}
 	if p.sink_listen != "" {
 		sink := NewTcpListenerSink(p.sink_listen)
+		sink.WriteBuffer = p.write_buffer
 		sink.SetMarshaller(marshaller(p.format_listen))
 		sinks = append(sinks, sink)
 	}
 	if p.sink_file != "" {
 		sink := &FileSink{Filename: p.sink_file}
+		sink.WriteBuffer = p.write_buffer
 		sink.SetMarshaller(marshaller(p.format_file))
 		sinks = append(sinks, sink)
 	}

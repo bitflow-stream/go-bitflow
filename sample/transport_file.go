@@ -1,14 +1,17 @@
 package sample
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/antongulenko/golib"
 )
@@ -96,7 +99,7 @@ func (group *FileGroup) DeleteFiles() error {
 // ==================== File transport ====================
 type FileTransport struct {
 	AbstractMarshallingMetricSink
-	file    *os.File
+	file    io.WriteCloser
 	stopped *golib.OneshotCondition
 }
 
@@ -171,6 +174,10 @@ func (source *FileSource) read(filename string) (err error) {
 	})
 	if err == nil {
 		err = source.Reader.ReadNamedSamples(file.Name(), file, source.Unmarshaller, source.OutgoingSink)
+		if patherr, ok := err.(*os.PathError); ok && patherr.Err == syscall.EBADF {
+			// The file was most likely intentionally closed
+			err = nil
+		}
 	}
 	return
 }
@@ -195,7 +202,8 @@ type FileSink struct {
 
 	group      FileGroup
 	lastHeader Header
-	num        int
+	file_num   int
+	buf        *bufio.Writer
 }
 
 func (sink *FileSink) String() string {
@@ -209,27 +217,45 @@ func (sink *FileSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	if err := sink.group.DeleteFiles(); err != nil {
 		return golib.TaskFinishedError(fmt.Errorf("Failed to clean result files: %v", err))
 	}
-	sink.num = 0
+	sink.file_num = 0
 	return nil
 }
 
-func (source *FileSink) Close() {
-	source.close()
+func (sink *FileSink) flush() error {
+	if sink.buf != nil {
+		err := sink.buf.Flush()
+		sink.buf = nil
+		return err
+	}
+	return nil
+}
+
+func (sink *FileSink) Close() {
+	if err := sink.flush(); err != nil {
+		log.Println("Error flushing file:", err)
+	}
+	sink.close()
 }
 
 func (sink *FileSink) openNextFile() error {
+	if err := sink.flush(); err != nil {
+		return err
+	}
 	if err := sink.CloseFile(); err != nil {
 		log.Println("Error closing file:", err)
 	}
-	sink.num++
-	name := sink.group.BuildFilename(sink.num)
+	sink.file_num++
+	name := sink.group.BuildFilename(sink.file_num)
 	var err error
 	sink.stopped.IfElseEnabled(func() {
 		err = errors.New("FileSink already stopped")
 	}, func() {
-		sink.file, err = os.Create(name)
+		var file *os.File
+		file, err = os.Create(name)
+		sink.file = file
 		if err == nil {
-			log.Println("Opened file", sink.file.Name())
+			sink.buf = sink.BufferedWriter(file)
+			log.Println("Opened file", file.Name())
 		}
 	})
 	return err
@@ -241,7 +267,7 @@ func (sink *FileSink) Header(header Header) error {
 			return err
 		}
 		sink.lastHeader = header
-		return sink.Marshaller.WriteHeader(header, sink.file)
+		return sink.Marshaller.WriteHeader(header, sink.buf)
 	}
 	return nil
 }
@@ -250,5 +276,5 @@ func (sink *FileSink) Sample(sample Sample, header Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	return sink.Marshaller.WriteSample(sample, header, sink.file)
+	return sink.Marshaller.WriteSample(sample, header, sink.buf)
 }

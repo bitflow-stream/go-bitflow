@@ -1,7 +1,9 @@
 package sample
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/antongulenko/golib"
@@ -32,11 +34,20 @@ func (*AbstractMetricSink) Stop() {
 
 type AbstractMarshallingMetricSink struct {
 	AbstractMetricSink
-	Marshaller Marshaller
+	Marshaller  Marshaller
+	WriteBuffer int
 }
 
 func (sink *AbstractMarshallingMetricSink) SetMarshaller(marshaller Marshaller) {
 	sink.Marshaller = marshaller
+}
+
+func (sink *AbstractMarshallingMetricSink) BufferedWriter(writer io.Writer) *bufio.Writer {
+	if sink.WriteBuffer > 0 {
+		return bufio.NewWriterSize(writer, sink.WriteBuffer)
+	} else {
+		return bufio.NewWriter(writer)
+	}
 }
 
 // ==================== Data Source ====================
