@@ -11,12 +11,15 @@ import (
 // ==================== TCP listener source ====================
 type TCPListenerSource struct {
 	AbstractUnmarshallingMetricSource
-	conn *net.TCPConn
-	task *golib.TCPListenerTask
+	Reader SampleReader
+	conn   *net.TCPConn
+	task   *golib.TCPListenerTask
 }
 
-func NewTcpListenerSource(endpoint string) MetricSource {
-	source := &TCPListenerSource{}
+func NewTcpListenerSource(endpoint string, reader SampleReader) MetricSource {
+	source := &TCPListenerSource{
+		Reader: reader,
+	}
 	source.task = &golib.TCPListenerTask{
 		ListenEndpoint: endpoint,
 		Handler:        source.handleConnection,
@@ -51,7 +54,7 @@ func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.
 			source.conn = nil
 			wg.Done()
 		}()
-		tcpReadSamples(conn, source.Unmarshaller, source.OutgoingSink, source.connectionClosed)
+		source.Reader.ReadTcpSamples(conn, source.Unmarshaller, source.OutgoingSink, source.connectionClosed)
 	}()
 }
 

@@ -35,7 +35,8 @@ func NewFileGroup(filename string) (group FileGroup) {
 }
 
 func (group *FileGroup) BuildFilename(num int) string {
-	return fmt.Sprintf("%v-%v%v", group.prefix, num, group.suffix)
+	base := fmt.Sprintf("%v-%v%v", group.prefix, num, group.suffix)
+	return filepath.Join(group.dir, base)
 }
 
 func (group *FileGroup) FileRegex() *regexp.Regexp {
@@ -122,6 +123,7 @@ func (t *FileTransport) init() {
 // ==================== File data source ====================
 type FileSource struct {
 	AbstractUnmarshallingMetricSource
+	Reader SampleReader
 	FileTransport
 	Filenames []string
 }
@@ -168,7 +170,7 @@ func (source *FileSource) read(filename string) (err error) {
 		source.file = file
 	})
 	if err == nil {
-		err = readSamplesNamed(file.Name(), file, source.Unmarshaller, source.OutgoingSink)
+		err = source.Reader.ReadNamedSamples(file.Name(), file, source.Unmarshaller, source.OutgoingSink)
 	}
 	return
 }

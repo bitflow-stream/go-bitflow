@@ -2,7 +2,10 @@ package sample
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 	"math"
 	"time"
@@ -98,34 +101,77 @@ func (m *BinaryMarshaller) WriteSample(sample Sample, header Header, writer io.W
 	return nil
 }
 
-func (*BinaryMarshaller) ReadSample(header Header, reader *bufio.Reader) (sample Sample, err error) {
-	// Time
-	tim := make([]byte, timeBytes)
-	_, err = io.ReadFull(reader, tim)
+func (*BinaryMarshaller) ReadSampleData(header Header, input *bufio.Reader) ([]byte, error) {
+	valuelen := valBytes * len(header.Fields)
+	minlen := timeBytes + valuelen
+	data := make([]byte, minlen)
+	_, err := io.ReadFull(input, data)
 	if err != nil {
+		return nil, err
+	}
+	if !header.HasTags {
+		return data, nil
+	} else {
+		index := bytes.IndexByte(data[timeBytes:], binary_separator)
+		if index >= 0 {
+			result := make([]byte, minlen+index+1)
+			copy(result, data)
+			_, err := io.ReadFull(input, result[minlen:])
+			return result, err
+		} else {
+			tagRest, err := input.ReadBytes(binary_separator)
+			if err != nil {
+				return nil, err
+			}
+			result := make([]byte, minlen+len(tagRest)+valuelen)
+			_, err = io.ReadFull(input, result[minlen+len(tagRest):])
+			if err != nil {
+				return nil, err
+			}
+			copy(result, data)
+			copy(result[minlen:], tagRest)
+			return result, nil
+		}
+	}
+}
+
+func advanceBytes(data []byte, num int) ([]byte, []byte, error) {
+	if len(data) < num {
+		return nil, nil, fmt.Errorf("Data slice not long enough (%v)", num)
+	}
+	return data[num:], data[:num], nil
+}
+
+func (*BinaryMarshaller) ParseSample(header Header, data []byte) (sample Sample, err error) {
+	// Time
+	var part []byte
+	if data, part, err = advanceBytes(data, timeBytes); err != nil {
 		return
 	}
-	timeVal := binary.BigEndian.Uint64(tim)
+	timeVal := binary.BigEndian.Uint64(part)
 	sample.Time = time.Unix(0, int64(timeVal))
 
 	// Tags
 	if header.HasTags {
-		var tags string
-		if tags, err = reader.ReadString(binary_separator); err != nil {
+		index := bytes.IndexByte(data, binary_separator)
+		if index < 0 {
+			err = errors.New("Binary sample data did not contain tag separator")
 			return
 		}
-		if err = sample.ParseTagString(tags); err != nil {
+		if data, part, err = advanceBytes(data, index+1); err != nil {
+			return
+		}
+		if err = sample.ParseTagString(string(part[:len(part)-1])); err != nil {
 			return
 		}
 	}
 
 	// Values
 	for i := 0; i < len(header.Fields); i++ {
-		val := make([]byte, valBytes)
-		if _, err = io.ReadFull(reader, val); err != nil {
+		if data, part, err = advanceBytes(data, valBytes); err != nil {
 			return
 		}
-		valBits := binary.BigEndian.Uint64(val)
+		valBits := binary.BigEndian.Uint64(part)
 		value := math.Float64frombits(valBits)
 		sample.Values = append(sample.Values, Value(value))
 	}

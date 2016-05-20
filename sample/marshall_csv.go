@@ -38,8 +38,8 @@ func (*CsvMarshaller) WriteHeader(header Header, writer io.Writer) error {
 	return w.Err
 }
 
-func readCsvLine(reader *bufio.Reader) ([]string, bool, error) {
-	line, err := reader.ReadString(csv_newline[0])
+func readCsvLine(reader *bufio.Reader) ([]byte, bool, error) {
+	line, err := reader.ReadBytes(csv_newline[0])
 	eof := err == io.EOF
 	if err != nil && !eof {
 		return nil, false, err
@@ -47,17 +47,22 @@ func readCsvLine(reader *bufio.Reader) ([]string, bool, error) {
 	if len(line) == 0 {
 		return nil, eof, nil
 	}
+	return line, eof, nil
+}
+
+func parseCsvLine(line []byte) []string {
 	line = line[:len(line)-1] // Strip newline char
-	return strings.FieldsFunc(line, func(r rune) bool {
+	return strings.FieldsFunc(string(line), func(r rune) bool {
 		return r == csv_separator_rune
-	}), eof, nil
+	})
 }
 
 func (*CsvMarshaller) ReadHeader(reader *bufio.Reader) (header Header, err error) {
-	fields, eof, err := readCsvLine(reader)
+	line, eof, err := readCsvLine(reader)
 	if err != nil {
 		return
 	}
+	fields := parseCsvLine(line)
 	if len(fields) == 0 && eof {
 		err = io.EOF
 		return
@@ -90,15 +95,12 @@ func (*CsvMarshaller) WriteSample(sample Sample, header Header, writer io.Writer
 	return w.Err
 }
 
-func (*CsvMarshaller) ReadSample(header Header, reader *bufio.Reader) (sample Sample, err error) {
-	fields, eof, err := readCsvLine(reader)
-	if err != nil {
-		return
-	}
-	if len(fields) == 0 && eof {
-		err = io.EOF
-		return
-	}
+func (*CsvMarshaller) ReadSampleData(header Header, input *bufio.Reader) ([]byte, error) {
+	return input.ReadBytes(csv_newline[0])
+}
+
+func (*CsvMarshaller) ParseSample(header Header, data []byte) (sample Sample, err error) {
+	fields := parseCsvLine(data)
 	sample.Time, err = time.Parse(csv_date_format, fields[0])
 	if err != nil {
 		return

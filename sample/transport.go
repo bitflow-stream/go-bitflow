@@ -1,10 +1,7 @@
 package sample
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"log"
 	"sync"
 
 	"github.com/antongulenko/golib"
@@ -90,41 +87,6 @@ type AbstractUnmarshallingMetricSource struct {
 
 func (s *AbstractUnmarshallingMetricSource) SetUnmarshaller(unmarshaller Unmarshaller) {
 	s.Unmarshaller = unmarshaller
-}
-
-func readSamples(input io.Reader, um Unmarshaller, sink MetricSink) (num_samples int, err error) {
-	reader := bufio.NewReader(input)
-	var header Header
-	if header, err = um.ReadHeader(reader); err != nil {
-		return
-	}
-	if err = sink.Header(header); err != nil {
-		return
-	}
-	log.Printf("Reading %v metrics\n", len(header.Fields))
-
-	// TODO parallelize unmarshalling of samples here (but maintain correct order).
-	for {
-		var sample Sample
-		if sample, err = um.ReadSample(header, reader); err != nil {
-			return
-		}
-		if err = sink.Sample(sample, header); err != nil {
-			return
-		}
-		num_samples++
-	}
-}
-
-func readSamplesNamed(sourceName string, input io.Reader, um Unmarshaller, sink MetricSink) (err error) {
-	var num_samples int
-	log.Println("Reading", um, "from", sourceName)
-	num_samples, err = readSamples(input, um, sink)
-	if err == io.EOF {
-		err = nil
-	}
-	log.Printf("Read %v %v samples from %v\n", num_samples, um, sourceName)
-	return
 }
 
 // ==================== Aggregating Sink ====================

@@ -162,12 +162,22 @@ func (m *TextMarshaller) writeLines(lines []string, widths []int, writer io.Writ
 	}
 }
 
-func (*TextMarshaller) ReadHeader(reader *bufio.Reader) (header Header, err error) {
+func (*TextMarshaller) ReadHeader(reader *bufio.Reader) (_ Header, err error) {
 	err = errors.New("Unmarshalling text data is not supported")
 	return
 }
 
-func (*TextMarshaller) ReadSample(header Header, reader *bufio.Reader) (sample Sample, err error) {
+func (*TextMarshaller) ReadSample(header Header, reader *bufio.Reader) (_ Sample, err error) {
+	err = errors.New("Unmarshalling text data is not supported")
+	return
+}
+
+func (*TextMarshaller) ReadSampleData(header Header, input *bufio.Reader) (_ []byte, err error) {
+	err = errors.New("Unmarshalling text data is not supported")
+	return
+}
+
+func (*TextMarshaller) ParseSample(header Header, data []byte) (_ Sample, err error) {
 	err = errors.New("Unmarshalling text data is not supported")
 	return
 }

@@ -27,7 +27,8 @@ type Marshaller interface {
 type Unmarshaller interface {
 	String() string
 	ReadHeader(input *bufio.Reader) (Header, error)
-	ReadSample(header Header, input *bufio.Reader) (Sample, error)
+	ReadSampleData(header Header, input *bufio.Reader) ([]byte, error)
+	ParseSample(header Header, data []byte) (Sample, error)
 }
 
 type MetricMarshaller interface {
@@ -35,7 +36,8 @@ type MetricMarshaller interface {
 	WriteHeader(header Header, output io.Writer) error
 	WriteSample(sample Sample, header Header, output io.Writer) error
 	ReadHeader(input *bufio.Reader) (Header, error)
-	ReadSample(header Header, input *bufio.Reader) (Sample, error)
+	ReadSampleData(header Header, input *bufio.Reader) ([]byte, error)
+	ParseSample(header Header, data []byte) (Sample, error)
 }
 
 // Helper type for more concise Write code by avoiding error checks on every

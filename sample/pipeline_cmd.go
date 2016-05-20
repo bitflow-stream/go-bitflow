@@ -3,6 +3,7 @@ package sample
 import (
 	"flag"
 	"log"
+	"runtime"
 	"time"
 
 	"github.com/antongulenko/golib"
@@ -38,6 +39,9 @@ type CmdSamplePipeline struct {
 	SamplePipeline
 	Tasks *golib.TaskGroup
 
+	parallel_parsers int
+	buffered_samples int
+
 	read_console      bool
 	read_tcp_listen   string
 	read_tcp_download string
@@ -60,6 +64,9 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.Var(&p.read_files, "F", "Data source: read from file(s)")
 	flag.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
 	flag.StringVar(&p.read_tcp_download, "D", "", "Data source: receive samples by connecting to remote endpoint")
+
+	flag.IntVar(&p.parallel_parsers, "par", runtime.NumCPU(), "Parallel goroutines used for unmarshalling/marshalliing samples")
+	flag.IntVar(&p.buffered_samples, "buf", 10000, "Number of samples buffered in various places")
 
 	flag.BoolVar(&p.sink_console, "p", false, "Data sink: print to stdout")
 	flag.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+supported_formats)
@@ -85,23 +92,28 @@ func (p *CmdSamplePipeline) Init() {
 
 	// ====== Initialize source(s)
 	var unmarshaller string
+	reader := SampleReader{
+		ParallelParsers: p.parallel_parsers,
+		BufferedSamples: p.buffered_samples,
+	}
 	if p.read_console {
-		p.SetSource(new(ConsoleSource))
+		p.SetSource(&ConsoleSource{Reader: reader})
 		unmarshaller = default_console_input
 	}
 	if p.read_tcp_listen != "" {
-		p.SetSource(NewTcpListenerSource(p.read_tcp_listen))
+		p.SetSource(NewTcpListenerSource(p.read_tcp_listen, reader))
 		unmarshaller = default_tcp_input
 	}
 	if p.read_tcp_download != "" {
 		p.SetSource(&TCPSource{
 			RemoteAddr:    p.read_tcp_download,
 			RetryInterval: tcp_download_retry_interval,
+			Reader:        reader,
 		})
 		unmarshaller = default_tcp_input
 	}
 	if len(p.read_files) > 0 {
-		p.SetSource(&FileSource{Filenames: p.read_files})
+		p.SetSource(&FileSource{Filenames: p.read_files, Reader: reader})
 		unmarshaller = default_file_input
 	}
 	if p.Source == nil {

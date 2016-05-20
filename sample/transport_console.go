@@ -10,6 +10,7 @@ import (
 
 type ConsoleSink struct {
 	AbstractMarshallingMetricSink
+	Reader SampleReader
 }
 
 func (sink *ConsoleSink) String() string {
@@ -37,6 +38,7 @@ func (sink *ConsoleSink) Sample(sample Sample, header Header) error {
 
 type ConsoleSource struct {
 	AbstractUnmarshallingMetricSource
+	Reader SampleReader
 }
 
 func (source *ConsoleSource) String() string {
@@ -45,7 +47,7 @@ func (source *ConsoleSource) String() string {
 
 func (source *ConsoleSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	return golib.WaitErrFunc(wg, func() error {
-		err := readSamplesNamed("stdin", os.Stdin, source.Unmarshaller, source.OutgoingSink)
+		err := source.Reader.ReadNamedSamples("stdin", os.Stdin, source.Unmarshaller, source.OutgoingSink)
 		source.CloseSink(wg)
 		return err
 	})
