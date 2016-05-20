@@ -1,4 +1,4 @@
-package pipeline
+package analysis
 
 import (
 	"fmt"
@@ -8,6 +8,45 @@ import (
 	"github.com/antongulenko/data2go/sample"
 	"github.com/antongulenko/golib"
 )
+
+// ==================== Abstract Processor ====================
+// This type defines standard implementations for all methods in
+// SampleProcessor. Parts can be shadowed by embedding the type.
+type AbstractProcessor struct {
+	sample.AbstractMetricSource
+	sample.AbstractMetricSink
+}
+
+func (p *AbstractProcessor) Header(header sample.Header) error {
+	if err := p.CheckSink(); err != nil {
+		return err
+	} else {
+		return p.OutgoingSink.Header(header)
+	}
+}
+
+func (p *AbstractProcessor) Sample(sample sample.Sample, header sample.Header) error {
+	if err := p.CheckSink(); err != nil {
+		return err
+	}
+	if err := sample.Check(header); err != nil {
+		return err
+	}
+	return p.OutgoingSink.Sample(sample, header)
+}
+
+func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
+	return nil
+}
+
+func (p *AbstractProcessor) Close() {
+	// Propagate the Close() invocation
+	p.CloseSink(nil)
+}
+
+func (p *AbstractProcessor) String() string {
+	return "AbstractProcessor"
+}
 
 // ==================== DecouplingProcessor ====================
 // Decouple the incoming samples from the MetricSink through a
@@ -85,7 +124,7 @@ func (p *DecouplingProcessor) String() string {
 	return "DecouplingProcessor"
 }
 
-// ==================== SamplePrinter ====================
+// ==================== SamplePrinter (example) ====================
 type SamplePrinter struct {
 	AbstractProcessor
 }

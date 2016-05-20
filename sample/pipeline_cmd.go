@@ -1,11 +1,10 @@
-package pipeline
+package sample
 
 import (
 	"flag"
 	"log"
 	"time"
 
-	"github.com/antongulenko/data2go/sample"
 	"github.com/antongulenko/golib"
 )
 
@@ -15,15 +14,15 @@ const (
 )
 
 var (
-	marshallers = map[string]sample.MetricMarshaller{
-		"":  new(sample.CsvMarshaller), // The default
-		"c": new(sample.CsvMarshaller),
-		"b": new(sample.BinaryMarshaller),
-		"t": new(sample.TextMarshaller),
+	marshallers = map[string]MetricMarshaller{
+		"":  new(CsvMarshaller), // The default
+		"c": new(CsvMarshaller),
+		"b": new(BinaryMarshaller),
+		"t": new(TextMarshaller),
 	}
 )
 
-func marshaller(format string) sample.MetricMarshaller {
+func marshaller(format string) MetricMarshaller {
 	if marshaller, ok := marshallers[format]; !ok {
 		log.Fatalf("Illegal data fromat %v, must be one of %v\n", format, supported_formats)
 		return nil
@@ -70,7 +69,7 @@ func (p *CmdSamplePipeline) ParseFlags() {
 }
 
 // Must be called before p.Init()
-func (p *CmdSamplePipeline) SetSource(source sample.MetricSource) {
+func (p *CmdSamplePipeline) SetSource(source MetricSource) {
 	if p.Source != nil {
 		log.Fatalln("Please provide only one data source")
 	}
@@ -83,47 +82,47 @@ func (p *CmdSamplePipeline) Init() {
 
 	// ====== Initialize source(s)
 	if p.read_console {
-		p.SetSource(new(sample.ConsoleSource))
+		p.SetSource(new(ConsoleSource))
 	}
 	if p.read_tcp_listen != "" {
-		p.SetSource(sample.NewTcpListenerSource(p.read_tcp_listen))
+		p.SetSource(NewTcpListenerSource(p.read_tcp_listen))
 	}
 	if p.read_tcp_download != "" {
-		p.SetSource(&sample.TCPSource{
+		p.SetSource(&TCPSource{
 			RemoteAddr:    p.read_tcp_download,
 			RetryInterval: tcp_download_retry_interval,
 		})
 	}
 	if len(p.read_files) > 0 {
-		p.SetSource(&sample.FileSource{Filenames: p.read_files})
+		p.SetSource(&FileSource{Filenames: p.read_files})
 	}
 	if p.Source == nil {
 		log.Println("No data source provided, no data will be received or generated.")
 	} else {
-		if umSource, ok := p.Source.(sample.UnmarshallingMetricSource); ok {
+		if umSource, ok := p.Source.(UnmarshallingMetricSource); ok {
 			umSource.SetUnmarshaller(marshaller(p.format_input))
 		}
 	}
 
 	// ====== Initialize sink(s) and tasks
-	var sinks sample.AggregateSink
+	var sinks AggregateSink
 	if p.sink_console {
-		sink := new(sample.ConsoleSink)
+		sink := new(ConsoleSink)
 		sink.SetMarshaller(marshaller(p.format_console))
 		sinks = append(sinks, sink)
 	}
 	if p.sink_connect != "" {
-		sink := &sample.TCPSink{Endpoint: p.sink_connect}
+		sink := &TCPSink{Endpoint: p.sink_connect}
 		sink.SetMarshaller(marshaller(p.format_connect))
 		sinks = append(sinks, sink)
 	}
 	if p.sink_listen != "" {
-		sink := sample.NewTcpListenerSink(p.sink_listen)
+		sink := NewTcpListenerSink(p.sink_listen)
 		sink.SetMarshaller(marshaller(p.format_listen))
 		sinks = append(sinks, sink)
 	}
 	if p.sink_file != "" {
-		sink := &sample.FileSink{Filename: p.sink_file}
+		sink := &FileSink{Filename: p.sink_file}
 		sink.SetMarshaller(marshaller(p.format_file))
 		sinks = append(sinks, sink)
 	}

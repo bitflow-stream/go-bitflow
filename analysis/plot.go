@@ -1,4 +1,4 @@
-package pipeline
+package analysis
 
 import (
 	"fmt"

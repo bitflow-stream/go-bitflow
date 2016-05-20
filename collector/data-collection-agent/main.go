@@ -8,9 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antongulenko/data2go/collector"
 	"github.com/antongulenko/data2go/sample"
-	"github.com/antongulenko/data2go/sample-collector"
-	"github.com/antongulenko/data2go/sample-pipeline"
 	"github.com/antongulenko/golib"
 )
 
@@ -67,7 +66,7 @@ func main() {
 	flag.DurationVar(&collect_local_interval, "ci", collect_local_interval, "Interval for collecting local samples")
 	flag.DurationVar(&sink_interval, "si", sink_interval, "Interval for sinking (sending/printing/...) data when collecting local samples")
 
-	var p pipeline.CmdSamplePipeline
+	var p sample.CmdSamplePipeline
 	p.ParseFlags()
 	flag.Parse()
 	defer golib.ProfileCpu()()
