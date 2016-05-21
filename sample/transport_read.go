@@ -12,34 +12,27 @@ import (
 type SampleReader struct {
 	ParallelParsers int
 	BufferedSamples int
+	IoBuffer        int
 }
 
-type sampleReaderState struct {
-	reader         *bufio.Reader
-	err            error
-	num_samples    int
-	read_samples   chan *parsedSample
-	parsed_samples chan *parsedSample
-	wg             sync.WaitGroup
-	header         Header
-	um             Unmarshaller
-	sink           MetricSink
-}
-
-type parsedSample struct {
-	data       []byte
-	sample     Sample
-	parsed     bool
-	parsedCond *sync.Cond
+type SampleInputStream struct {
+	ParallelSampleStream
+	reader      *bufio.Reader
+	num_samples int
+	header      Header
+	um          Unmarshaller
+	sink        MetricSink
 }
 
 func (r *SampleReader) ReadSamples(input io.Reader, um Unmarshaller, sink MetricSink) (int, error) {
-	state := &sampleReaderState{
-		reader:         bufio.NewReader(input),
-		read_samples:   make(chan *parsedSample, r.BufferedSamples),
-		parsed_samples: make(chan *parsedSample, r.BufferedSamples),
-		um:             um,
-		sink:           sink,
+	state := &SampleInputStream{
+		reader: bufio.NewReaderSize(input, r.IoBuffer),
+		um:     um,
+		sink:   sink,
+		ParallelSampleStream: ParallelSampleStream{
+			incoming: make(chan *BufferedSample, r.BufferedSamples),
+			outgoing: make(chan *BufferedSample, r.BufferedSamples),
+		},
 	}
 	if err := state.readHeader(); err != nil {
 		return 0, err
@@ -89,86 +82,72 @@ func (r *SampleReader) ReadTcpSamples(conn *net.TCPConn, um Unmarshaller, sink M
 	log.Println("Received", num_samples, "samples from", conn.RemoteAddr())
 }
 
-func (state *sampleReaderState) hasError() bool {
-	return state.err != nil && state.err != io.EOF
-}
-
-func (state *sampleReaderState) readHeader() (err error) {
-	if state.header, err = state.um.ReadHeader(state.reader); err != nil {
+func (stream *SampleInputStream) readHeader() (err error) {
+	if stream.header, err = stream.um.ReadHeader(stream.reader); err != nil {
 		return
 	}
-	if err = state.sink.Header(state.header); err != nil {
+	if err = stream.sink.Header(stream.header); err != nil {
 		return
 	}
-	log.Printf("Reading %v metrics\n", len(state.header.Fields))
+	log.Printf("Reading %v metrics\n", len(stream.header.Fields))
 	return
 }
 
-func (state *sampleReaderState) readData() {
+func (stream *SampleInputStream) readData() {
 	defer func() {
-		state.wg.Done()
-		close(state.read_samples)
-		close(state.parsed_samples)
+		stream.wg.Done()
+		close(stream.incoming)
+		close(stream.outgoing)
 	}()
 	for {
-		if state.hasError() {
+		if stream.HasError() {
 			return
 		}
-		if data, err := state.um.ReadSampleData(state.header, state.reader); err != nil {
-			state.err = err
+		if data, err := stream.um.ReadSampleData(stream.header, stream.reader); err != nil {
+			stream.err = err
 			return
 		} else {
-			s := &parsedSample{
-				data:       data,
-				parsedCond: sync.NewCond(new(sync.Mutex)),
+			s := &BufferedSample{
+				stream:   &stream.ParallelSampleStream,
+				data:     data,
+				doneCond: sync.NewCond(new(sync.Mutex)),
 			}
-			state.read_samples <- s
-			state.parsed_samples <- s
+			stream.incoming <- s
+			stream.outgoing <- s
 		}
 	}
 }
 
-func (state *sampleReaderState) parseSamples() {
-	defer state.wg.Done()
-	for sample := range state.read_samples {
-		if state.hasError() {
-			break
-		}
-		if parsedSample, err := state.um.ParseSample(state.header, sample.data); err != nil {
-			state.err = err
-			return
-		} else {
-			sample.sample = parsedSample
-		}
-		func() {
-			sample.parsedCond.L.Lock()
-			defer sample.parsedCond.L.Unlock()
-			sample.parsed = true
-			sample.parsedCond.Broadcast()
-		}()
+func (stream *SampleInputStream) parseSamples() {
+	defer stream.wg.Done()
+	for sample := range stream.incoming {
+		stream.parseOne(sample)
 	}
 }
 
-func (state *sampleReaderState) sinkSamples() {
-	defer state.wg.Done()
-	for sample := range state.parsed_samples {
-		if state.hasError() {
+func (stream *SampleInputStream) parseOne(sample *BufferedSample) {
+	defer sample.NotifyDone()
+	if stream.HasError() {
+		return
+	}
+	if parsedSample, err := stream.um.ParseSample(stream.header, sample.data); err != nil {
+		stream.err = err
+		return
+	} else {
+		sample.sample = parsedSample
+	}
+}
+
+func (stream *SampleInputStream) sinkSamples() {
+	defer stream.wg.Done()
+	for sample := range stream.outgoing {
+		if err := sample.WaitDone(); err != nil {
 			return
 		}
-		func() {
-			sample.parsedCond.L.Lock()
-			defer sample.parsedCond.L.Unlock()
-			for !sample.parsed && !state.hasError() {
-				sample.parsedCond.Wait()
-			}
-		}()
-		if state.hasError() {
+		if err := stream.sink.Sample(sample.sample, stream.header); err != nil {
+			stream.err = err
 			return
 		}
-		if err := state.sink.Sample(sample.sample, state.header); err != nil {
-			err = err
-			return
-		}
-		state.num_samples++
+		stream.num_samples++
 	}
 }

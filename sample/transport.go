@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"sync"
@@ -34,20 +33,12 @@ func (*AbstractMetricSink) Stop() {
 
 type AbstractMarshallingMetricSink struct {
 	AbstractMetricSink
-	Marshaller  Marshaller
-	WriteBuffer int
+	Marshaller Marshaller
+	Writer     SampleWriter
 }
 
 func (sink *AbstractMarshallingMetricSink) SetMarshaller(marshaller Marshaller) {
 	sink.Marshaller = marshaller
-}
-
-func (sink *AbstractMarshallingMetricSink) BufferedWriter(writer io.Writer) *bufio.Writer {
-	if sink.WriteBuffer > 0 {
-		return bufio.NewWriterSize(writer, sink.WriteBuffer)
-	} else {
-		return bufio.NewWriter(writer)
-	}
 }
 
 // ==================== Data Source ====================
@@ -148,4 +139,47 @@ func (agg AggregateSink) Sample(sample Sample, header Header) error {
 		}
 	}
 	return errors.NilOrError()
+}
+
+// ==================== Parallel Sample Stream ====================
+
+type ParallelSampleStream struct {
+	err      error
+	incoming chan *BufferedSample
+	outgoing chan *BufferedSample
+	wg       sync.WaitGroup
+}
+
+func (state *ParallelSampleStream) HasError() bool {
+	return state.err != nil && state.err != io.EOF
+}
+
+type BufferedSample struct {
+	stream   *ParallelSampleStream
+	data     []byte
+	sample   Sample
+	done     bool
+	doneCond *sync.Cond
+}
+
+func (sample *BufferedSample) WaitDone() error {
+	if sample.stream.HasError() {
+		return sample.stream.err
+	}
+	sample.doneCond.L.Lock()
+	defer sample.doneCond.L.Unlock()
+	for !sample.done && !sample.stream.HasError() {
+		sample.doneCond.Wait()
+	}
+	if sample.stream.HasError() {
+		return sample.stream.err
+	}
+	return nil
+}
+
+func (sample *BufferedSample) NotifyDone() {
+	sample.doneCond.L.Lock()
+	defer sample.doneCond.L.Unlock()
+	sample.done = true
+	sample.doneCond.Broadcast()
 }

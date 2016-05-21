@@ -72,24 +72,24 @@ func (conn *tcpWriteConn) Run(wg *sync.WaitGroup) {
 		conn.conn = nil // In case of panic, avoid full channel-buffer
 		wg.Done()
 	}()
-	buf := conn.sink.BufferedWriter(conn.conn)
+	connection := conn.conn
+	out := conn.sink.Writer.Open(connection, conn.sink.Marshaller)
 	defer func() {
-		if err := buf.Flush(); err != nil {
+		if err := out.Close(); err != nil {
 			conn.err(err)
 		}
 	}()
 
 	log.Println("Serving", len(conn.sink.LastHeader.Fields), "metrics to", conn.remote)
-	if err := conn.sink.Marshaller.WriteHeader(conn.sink.LastHeader, buf); err != nil {
+	if err := out.Header(conn.sink.LastHeader); err != nil {
 		conn.err(err)
 		return
 	}
 	for sample := range conn.samples {
-		connection := conn.conn
-		if connection == nil {
+		if conn.conn != connection {
 			break
 		}
-		if err := conn.sink.Marshaller.WriteSample(sample, conn.sink.LastHeader, buf); err != nil {
+		if err := out.Sample(sample); err != nil {
 			conn.err(err)
 			break
 		}

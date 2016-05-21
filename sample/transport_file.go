@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -203,7 +202,7 @@ type FileSink struct {
 	group      FileGroup
 	lastHeader Header
 	file_num   int
-	buf        *bufio.Writer
+	stream     *SampleOutputStream
 }
 
 func (sink *FileSink) String() string {
@@ -222,9 +221,9 @@ func (sink *FileSink) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (sink *FileSink) flush() error {
-	if sink.buf != nil {
-		err := sink.buf.Flush()
-		sink.buf = nil
+	if sink.stream != nil {
+		err := sink.stream.Close()
+		sink.stream = nil
 		return err
 	}
 	return nil
@@ -254,7 +253,7 @@ func (sink *FileSink) openNextFile() error {
 		file, err = os.Create(name)
 		sink.file = file
 		if err == nil {
-			sink.buf = sink.BufferedWriter(file)
+			sink.stream = sink.Writer.Open(file, sink.Marshaller)
 			log.Println("Opened file", file.Name())
 		}
 	})
@@ -267,7 +266,7 @@ func (sink *FileSink) Header(header Header) error {
 			return err
 		}
 		sink.lastHeader = header
-		return sink.Marshaller.WriteHeader(header, sink.buf)
+		return sink.stream.Header(header)
 	}
 	return nil
 }
@@ -276,5 +275,5 @@ func (sink *FileSink) Sample(sample Sample, header Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	return sink.Marshaller.WriteSample(sample, header, sink.buf)
+	return sink.stream.Sample(sample)
 }
