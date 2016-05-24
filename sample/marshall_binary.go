@@ -105,7 +105,7 @@ func (*BinaryMarshaller) ReadSampleData(header Header, input *bufio.Reader) ([]b
 	valuelen := valBytes * len(header.Fields)
 	minlen := timeBytes + valuelen
 	data := make([]byte, minlen)
-	_, err := io.ReadFull(input, data)
+	_, err := io.ReadFull(input, data) // Can be io.EOF
 	if err != nil {
 		return nil, err
 	}
@@ -117,22 +117,29 @@ func (*BinaryMarshaller) ReadSampleData(header Header, input *bufio.Reader) ([]b
 			result := make([]byte, minlen+index+1)
 			copy(result, data)
 			_, err := io.ReadFull(input, result[minlen:])
-			return result, err
+			return result, unexpectedEOF(err)
 		} else {
 			tagRest, err := input.ReadBytes(binary_separator)
 			if err != nil {
-				return nil, err
+				return nil, unexpectedEOF(err)
 			}
 			result := make([]byte, minlen+len(tagRest)+valuelen)
 			_, err = io.ReadFull(input, result[minlen+len(tagRest):])
 			if err != nil {
-				return nil, err
+				return nil, unexpectedEOF(err)
 			}
 			copy(result, data)
 			copy(result[minlen:], tagRest)
 			return result, nil
 		}
 	}
+}
+
+func unexpectedEOF(err error) error {
+	if err == io.EOF {
+		return io.ErrUnexpectedEOF
+	}
+	return err
 }
 
 func advanceBytes(data []byte, num int) ([]byte, []byte, error) {

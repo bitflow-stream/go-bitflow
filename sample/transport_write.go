@@ -18,14 +18,19 @@ type SampleOutputStream struct {
 	ParallelSampleStream
 	headerLock     sync.Mutex
 	header         *Header
-	buffered       *bufio.Writer
+	writer         io.Writer
 	marshaller     Marshaller
 	marshallBuffer int
 }
 
+func (w *SampleWriter) OpenBuffered(writer io.Writer, marshaller Marshaller) *SampleOutputStream {
+	buf := bufio.NewWriterSize(writer, w.IoBuffer)
+	return w.Open(buf, marshaller)
+}
+
 func (w *SampleWriter) Open(writer io.Writer, marshaller Marshaller) *SampleOutputStream {
 	stream := &SampleOutputStream{
-		buffered:   bufio.NewWriterSize(writer, w.IoBuffer),
+		writer:     writer,
 		marshaller: marshaller,
 		ParallelSampleStream: ParallelSampleStream{
 			incoming: make(chan *BufferedSample, w.BufferedSamples),
@@ -50,7 +55,10 @@ func (stream *SampleOutputStream) Header(header Header) error {
 		return stream.err
 	}
 	if stream.header == nil {
-		if err := stream.marshaller.WriteHeader(header, stream.buffered); err != nil {
+		if err := stream.marshaller.WriteHeader(header, stream.writer); err != nil {
+			stream.err = err
+		}
+		if err := stream.flushBuffered(); err != nil {
 			stream.err = err
 		}
 		stream.header = &header
@@ -60,6 +68,13 @@ func (stream *SampleOutputStream) Header(header Header) error {
 		}
 	}
 	return stream.err
+}
+
+func (stream *SampleOutputStream) flushBuffered() error {
+	if buf, ok := stream.writer.(*bufio.Writer); ok {
+		return buf.Flush()
+	}
+	return nil
 }
 
 func (stream *SampleOutputStream) Sample(sample Sample) error {
@@ -80,7 +95,7 @@ func (stream *SampleOutputStream) Close() error {
 	close(stream.incoming)
 	close(stream.outgoing)
 	stream.wg.Wait()
-	err := stream.buffered.Flush()
+	err := stream.flushBuffered()
 	if stream.HasError() {
 		err = stream.err
 	}
@@ -119,7 +134,7 @@ func (stream *SampleOutputStream) flush() {
 		if err := sample.WaitDone(); err != nil {
 			return
 		}
-		if _, err := stream.buffered.Write(sample.data); err != nil {
+		if _, err := stream.writer.Write(sample.data); err != nil {
 			stream.err = err
 			return
 		}

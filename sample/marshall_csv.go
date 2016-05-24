@@ -2,6 +2,7 @@ package sample
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -38,35 +39,26 @@ func (*CsvMarshaller) WriteHeader(header Header, writer io.Writer) error {
 	return w.Err
 }
 
-func readCsvLine(reader *bufio.Reader) ([]byte, bool, error) {
-	line, err := reader.ReadBytes(csv_newline[0])
-	eof := err == io.EOF
-	if err != nil && !eof {
-		return nil, false, err
-	}
-	if len(line) == 0 {
-		return nil, eof, nil
-	}
-	return line, eof, nil
-}
-
-func parseCsvLine(line []byte) []string {
-	line = line[:len(line)-1] // Strip newline char
+func splitCsvLine(line []byte) []string {
 	return strings.FieldsFunc(string(line), func(r rune) bool {
 		return r == csv_separator_rune
 	})
 }
 
 func (*CsvMarshaller) ReadHeader(reader *bufio.Reader) (header Header, err error) {
-	line, eof, err := readCsvLine(reader)
-	if err != nil {
+	line, err := reader.ReadBytes(csv_newline[0])
+	if err == io.EOF {
+		err = nil
+	} else if err != nil {
+		return
+	} else if len(line) > 0 {
+		line = line[:len(line)-1] // Strip newline char
+	}
+	if len(line) == 0 {
+		err = errors.New("Empty header")
 		return
 	}
-	fields := parseCsvLine(line)
-	if len(fields) == 0 && eof {
-		err = io.EOF
-		return
-	}
+	fields := splitCsvLine(line)
 	if err = checkFirstCol(fields[0]); err != nil {
 		return
 	}
@@ -96,11 +88,19 @@ func (*CsvMarshaller) WriteSample(sample Sample, header Header, writer io.Writer
 }
 
 func (*CsvMarshaller) ReadSampleData(header Header, input *bufio.Reader) ([]byte, error) {
-	return input.ReadBytes(csv_newline[0])
+	data, err := input.ReadBytes(csv_newline[0])
+	if err == io.EOF {
+		if len(data) > 0 {
+			err = nil
+		}
+	} else if len(data) > 0 {
+		data = data[:len(data)-1] // Strip newline char
+	}
+	return data, err
 }
 
 func (*CsvMarshaller) ParseSample(header Header, data []byte) (sample Sample, err error) {
-	fields := parseCsvLine(data)
+	fields := splitCsvLine(data)
 	sample.Time, err = time.Parse(csv_date_format, fields[0])
 	if err != nil {
 		return

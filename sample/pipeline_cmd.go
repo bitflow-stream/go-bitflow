@@ -18,20 +18,17 @@ const (
 	default_tcp_input     = "b"
 )
 
-var (
-	marshallers = map[string]MetricMarshaller{
-		"c": new(CsvMarshaller),
-		"b": new(BinaryMarshaller),
-		"t": new(TextMarshaller),
-	}
-)
-
 func marshaller(format string) MetricMarshaller {
-	if marshaller, ok := marshallers[format]; !ok {
+	switch format {
+	case "c":
+		return new(CsvMarshaller)
+	case "b":
+		return new(BinaryMarshaller)
+	case "t":
+		return new(TextMarshaller)
+	default:
 		log.Fatalf("Illegal data fromat '%v', must be one of %v\n", format, supported_formats)
 		return nil
-	} else {
-		return marshaller
 	}
 }
 
@@ -139,7 +136,11 @@ func (p *CmdSamplePipeline) Init() {
 	}
 	if p.sink_console {
 		sink := new(ConsoleSink)
-		sink.SetMarshaller(marshaller(p.format_console))
+		m := marshaller(p.format_console)
+		if txt, ok := m.(*TextMarshaller); ok {
+			txt.AssumeStdout = true
+		}
+		sink.SetMarshaller(m)
 		sink.Writer = writer
 		sinks = append(sinks, sink)
 	}

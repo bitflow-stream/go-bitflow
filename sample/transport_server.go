@@ -65,22 +65,22 @@ func (source *TCPListenerSource) connectionClosed() bool {
 func (source *TCPListenerSource) Stop() {
 	source.task.ExtendedStop(func() {
 		if conn := source.conn; conn != nil {
-			source.conn = nil
-			_ = conn.Close() // Drop error
+			source.conn = nil // Make connectionClosed() return true
+			_ = conn.Close()  // Drop error
 		}
 	})
 }
 
 // ==================== TCP listener sink ====================
 type TCPListenerSink struct {
-	tcpMetricSink
-	connections map[*tcpWriteConn]bool
+	TcpMetricSink
+	connections map[*TcpWriteConn]bool
 	task        *golib.TCPListenerTask
 }
 
 func NewTcpListenerSink(endpoint string) *TCPListenerSink {
 	sink := &TCPListenerSink{
-		connections: make(map[*tcpWriteConn]bool),
+		connections: make(map[*TcpWriteConn]bool),
 	}
 	sink.task = &golib.TCPListenerTask{
 		ListenEndpoint: endpoint,
@@ -108,9 +108,7 @@ func (sink *TCPListenerSink) Close() {
 }
 
 func (sink *TCPListenerSink) handleConnection(wg *sync.WaitGroup, conn *net.TCPConn) {
-	writeConn := sink.writeConn(conn)
-	wg.Add(1)
-	go writeConn.Run(wg)
+	writeConn := sink.writeConn(wg, conn)
 	sink.connections[writeConn] = true
 }
 
@@ -118,6 +116,7 @@ func (sink *TCPListenerSink) Header(header Header) error {
 	sink.LastHeader = header
 	// Close all running connections, since we have to negotiate a new header.
 	for conn := range sink.connections {
+		delete(sink.connections, conn)
 		conn.Close()
 	}
 	return nil
@@ -127,7 +126,7 @@ func (sink *TCPListenerSink) Sample(sample Sample, header Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	for conn, _ := range sink.connections {
+	for conn := range sink.connections {
 		if conn.conn == nil {
 			// Clean up closed connections
 			delete(sink.connections, conn)

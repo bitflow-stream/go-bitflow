@@ -26,7 +26,11 @@ type Marshaller interface {
 
 type Unmarshaller interface {
 	String() string
+
+	// io.EOF is not valid
 	ReadHeader(input *bufio.Reader) (Header, error)
+
+	// io.EOF indicates end of stream
 	ReadSampleData(header Header, input *bufio.Reader) ([]byte, error)
 	ParseSample(header Header, data []byte) (Sample, error)
 }

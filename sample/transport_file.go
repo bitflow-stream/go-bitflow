@@ -253,7 +253,7 @@ func (sink *FileSink) openNextFile() error {
 		file, err = os.Create(name)
 		sink.file = file
 		if err == nil {
-			sink.stream = sink.Writer.Open(file, sink.Marshaller)
+			sink.stream = sink.Writer.OpenBuffered(file, sink.Marshaller)
 			log.Println("Opened file", file.Name())
 		}
 	})

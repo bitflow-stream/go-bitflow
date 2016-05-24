@@ -38,10 +38,6 @@ func (r *SampleReader) ReadSamples(input io.Reader, um Unmarshaller, sink Metric
 		return 0, err
 	}
 
-	// Read sample data
-	state.wg.Add(1)
-	go state.readData()
-
 	// Parse samples
 	for i := 0; i < r.ParallelParsers || i < 1; i++ {
 		state.wg.Add(1)
@@ -52,7 +48,11 @@ func (r *SampleReader) ReadSamples(input io.Reader, um Unmarshaller, sink Metric
 	state.wg.Add(1)
 	go state.sinkSamples()
 
+	state.readData()
 	state.wg.Wait()
+	if state.err == io.EOF {
+		state.err = nil // io.EOF is expected
+	}
 	return state.num_samples, state.err
 }
 
@@ -60,23 +60,22 @@ func (r *SampleReader) ReadNamedSamples(sourceName string, input io.Reader, um U
 	var num_samples int
 	log.Println("Reading", um, "from", sourceName)
 	num_samples, err = r.ReadSamples(input, um, sink)
-	if err == io.EOF {
-		err = nil
-	}
 	log.Printf("Read %v %v samples from %v\n", num_samples, um, sourceName)
 	return
 }
 
 func (r *SampleReader) ReadTcpSamples(conn *net.TCPConn, um Unmarshaller, sink MetricSink, checkClosed func() bool) {
-	log.Println("Receiving header from", conn.RemoteAddr())
+	log.Println("Receiving", um, "from", conn.RemoteAddr())
 	var err error
 	var num_samples int
-	if num_samples, err = r.ReadSamples(conn, um, sink); err == io.EOF {
+	if num_samples, err = r.ReadSamples(conn, um, sink); err == nil {
 		log.Println("Connection closed by", conn.RemoteAddr())
-	} else if checkClosed() {
-		log.Println("Connection to", conn.RemoteAddr(), "closed")
-	} else if err != nil {
-		log.Printf("Error receiving samples from %v: %v\n", conn.RemoteAddr(), err)
+	} else {
+		if checkClosed() {
+			log.Println("Connection to", conn.RemoteAddr(), "closed")
+		} else {
+			log.Printf("Error receiving samples from %v: %v\n", conn.RemoteAddr(), err)
+		}
 		_ = conn.Close() // Ignore error
 	}
 	log.Println("Received", num_samples, "samples from", conn.RemoteAddr())
@@ -86,16 +85,15 @@ func (stream *SampleInputStream) readHeader() (err error) {
 	if stream.header, err = stream.um.ReadHeader(stream.reader); err != nil {
 		return
 	}
+	log.Printf("Reading %v metrics\n", len(stream.header.Fields))
 	if err = stream.sink.Header(stream.header); err != nil {
 		return
 	}
-	log.Printf("Reading %v metrics\n", len(stream.header.Fields))
 	return
 }
 
 func (stream *SampleInputStream) readData() {
 	defer func() {
-		stream.wg.Done()
 		close(stream.incoming)
 		close(stream.outgoing)
 	}()

@@ -22,9 +22,10 @@ const (
 )
 
 type TextMarshaller struct {
-	TextWidth int // Ignored if Columns is > 0
-	Columns   int // Will be inferred from TextWidth if <= 0
-	Spacing   int
+	TextWidth    int // Ignored if Columns is > 0
+	Columns      int // Will be inferred from TextWidth if <= 0
+	Spacing      int
+	AssumeStdout bool
 }
 
 func (*TextMarshaller) String() string {
@@ -84,7 +85,7 @@ func (m *TextMarshaller) calculateWidths(lines []string, writer io.Writer) (text
 }
 
 func (m *TextMarshaller) defaultTextWidth(writer io.Writer) int {
-	if writer == os.Stdout {
+	if m.AssumeStdout || writer == os.Stdout {
 		if size, err := golib.GetTerminalSize(); err != nil {
 			log.Println("Failed to get terminal size:", err)
 			return 0

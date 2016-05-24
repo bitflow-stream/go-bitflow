@@ -18,8 +18,8 @@ func (sink *ConsoleSink) String() string {
 }
 
 func (sink *ConsoleSink) Start(wg *sync.WaitGroup) golib.StopChan {
-	sink.stream = sink.Writer.Open(os.Stdout, sink.Marshaller)
 	log.Println("Printing", sink.Marshaller, "samples")
+	sink.stream = sink.Writer.Open(os.Stdout, sink.Marshaller)
 	return nil
 }
 
