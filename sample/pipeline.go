@@ -21,19 +21,20 @@ type SamplePipeline struct {
 
 // After this, tasks.WaitAndExit() or similar can be called to run the pipeline
 func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
+	// First connect all sources with their sinks
 	source := p.Source
-	tasks.Add(source)
 	for _, processor := range p.Processors {
 		if source != nil {
 			source.SetSink(processor)
 		}
 		source = processor
-		tasks.Add(source)
 	}
 	if source != nil {
 		source.SetSink(p.Sink)
 	}
 
+	// Then add all tasks in reverse: start the final sink first.
+	// Each sink must be started before the source can push data into it.
 	if agg, ok := p.Sink.(AggregateSink); ok {
 		for _, sink := range agg {
 			tasks.Add(sink)
@@ -41,6 +42,10 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 	} else {
 		tasks.Add(p.Sink)
 	}
+	for i := len(p.Processors) - 1; i >= 0; i-- {
+		tasks.Add(p.Processors[i])
+	}
+	tasks.Add(p.Source)
 }
 
 func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
