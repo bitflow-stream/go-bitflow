@@ -142,20 +142,17 @@ func unexpectedEOF(err error) error {
 	return err
 }
 
-func advanceBytes(data []byte, num int) ([]byte, []byte, error) {
-	if len(data) < num {
-		return nil, nil, fmt.Errorf("Data slice not long enough (%v)", num)
-	}
-	return data[num:], data[:num], nil
-}
-
 func (*BinaryMarshaller) ParseSample(header Header, data []byte) (sample Sample, err error) {
-	// Time
-	var part []byte
-	if data, part, err = advanceBytes(data, timeBytes); err != nil {
+	// Required size
+	size := timeBytes + len(header.Fields)*valBytes
+	if len(data) < size {
+		err = fmt.Errorf("Data slice not long enough (%v < %v)", len(data), size)
 		return
 	}
-	timeVal := binary.BigEndian.Uint64(part)
+
+	// Time
+	timeVal := binary.BigEndian.Uint64(data[:timeBytes])
+	data = data[timeBytes:]
 	sample.Time = time.Unix(0, int64(timeVal))
 
 	// Tags
@@ -165,20 +162,21 @@ func (*BinaryMarshaller) ParseSample(header Header, data []byte) (sample Sample,
 			err = errors.New("Binary sample data did not contain tag separator")
 			return
 		}
-		if data, part, err = advanceBytes(data, index+1); err != nil {
+		size = index + 1 + len(header.Fields)*valBytes
+		if len(data) != size {
+			err = fmt.Errorf("Data slice wrong len (%v != %v)", len(data), size)
 			return
 		}
-		if err = sample.ParseTagString(string(part[:len(part)-1])); err != nil {
+		if err = sample.ParseTagString(string(data[:index])); err != nil {
 			return
 		}
+		data = data[index+1:]
 	}
 
 	// Values
 	for i := 0; i < len(header.Fields); i++ {
-		if data, part, err = advanceBytes(data, valBytes); err != nil {
-			return
-		}
-		valBits := binary.BigEndian.Uint64(part)
+		valBits := binary.BigEndian.Uint64(data[:valBytes])
+		data = data[valBytes:]
 		value := math.Float64frombits(valBits)
 		sample.Values = append(sample.Values, Value(value))
 	}
