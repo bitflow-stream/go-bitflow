@@ -318,10 +318,6 @@ func init() {
 	flag.DurationVar(&DefaultTaskStopTimeout, "task_stop_timeout", DefaultTaskStopTimeout, "Timeout duration when stopping and waiting for tasks to finish")
 }
 
-func (group *TaskGroup) WaitAndExit() {
-	os.Exit(group.PrintWaitAndStop())
-}
-
 func (group *TaskGroup) PrintWaitAndStop() int {
 	return group.TimeoutPrintWaitAndStop(DefaultTaskStopTimeout, DefaultPrintTaskStopWait)
 }
