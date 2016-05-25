@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"os"
 
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"
@@ -10,14 +11,18 @@ import (
 
 var _ = new(AbstractProcessor) // validate data2go/analysis import
 
-func main() {
+func do_main() int {
 	var p sample.CmdSamplePipeline
 	p.ParseFlags()
 	flag.Parse()
 	defer golib.ProfileCpu()()
 	p.Init()
 	registerProcessingSteps(&p.SamplePipeline)
-	p.StartAndWait()
+	return p.StartAndWait()
+}
+
+func main() {
+	os.Exit(do_main())
 }
 
 func registerProcessingSteps(p *sample.SamplePipeline) {
@@ -26,8 +31,8 @@ func registerProcessingSteps(p *sample.SamplePipeline) {
 	// .Add(new(MinMaxScaling))
 	// .Add(&PCABatchProcessing{ContainedVariance: 0.99})
 
-	//	p.Add(new(SamplePrinter))
-	//	p.Add(new(AbstractProcessor))
-	//	p.Add(&DecouplingProcessor{ChannelBuffer: 200})
-	//	p.Add(&Plotter{OutputFile: "/home/anton/test.jpg", ColorTag: "cls"})
+	// p.Add(new(SamplePrinter))
+	// p.Add(new(AbstractProcessor))
+	// p.Add(&DecouplingProcessor{ChannelBuffer: 150000})
+	// p.Add(&Plotter{OutputFile: "/home/anton/test.jpg", ColorTag: "cls"})
 }

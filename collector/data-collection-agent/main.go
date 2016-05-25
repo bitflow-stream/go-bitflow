@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -49,7 +50,7 @@ var (
 	}
 )
 
-func main() {
+func do_main() int {
 	flag.StringVar(&libvirt_uri, "libvirt", libvirt_uri, "Libvirt connection uri (default is local system)")
 	flag.StringVar(&ovsdb_host, "ovsdb", ovsdb_host, "OVSDB host to connect to. Empty for localhost. Port is "+strconv.Itoa(collector.DefaultOvsdbPort))
 	flag.BoolVar(&print_metrics, "metrics", print_metrics, "Print all available metrics and exit")
@@ -118,14 +119,18 @@ func main() {
 	}
 	if print_metrics {
 		col.PrintMetrics()
-		return
+		return 0
 	}
 	if collect_local {
 		p.SetSource(col)
 	}
 
 	p.Init()
-	p.StartAndWait()
+	return p.StartAndWait()
+}
+
+func main() {
+	os.Exit(do_main())
 }
 
 func splitKeyValue(pair string) (string, string) {
