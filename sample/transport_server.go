@@ -11,12 +11,14 @@ import (
 // ==================== TCP listener source ====================
 type TCPListenerSource struct {
 	AbstractUnmarshallingMetricSource
+	TCPConnCounter
 	Reader SampleReader
-	conn   *net.TCPConn
+	stream *SampleInputStream
+	remote net.Addr
 	task   *golib.TCPListenerTask
 }
 
-func NewTcpListenerSource(endpoint string, reader SampleReader) MetricSource {
+func NewTcpListenerSource(endpoint string, reader SampleReader) *TCPListenerSource {
 	source := &TCPListenerSource{
 		Reader: reader,
 	}
@@ -41,33 +43,46 @@ func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.TCPConn) {
-	if existing := source.conn; existing != nil {
-		log.Printf("Rejecting connection from %v, already connected to %v\n", conn.RemoteAddr(), existing.RemoteAddr())
+	if source.stream != nil {
+		log.Printf("Rejecting connection from %v, already connected to %v.\n", conn.RemoteAddr(), source.remote)
 		_ = conn.Close() // Drop error
 		return
 	}
+	if !source.CountConnectionAccepted(conn) {
+		return
+	}
 	log.Println("Accepted connection from", conn.RemoteAddr())
-	source.conn = conn
+	stream := source.Reader.Open(conn, source.Unmarshaller, source.OutgoingSink)
+	source.stream = stream
+	source.remote = conn.RemoteAddr()
 	wg.Add(1)
 	go func() {
 		defer func() {
-			source.conn = nil
+			source.task.IfRunning(source.closeStream)
 			wg.Done()
 		}()
-		source.Reader.ReadTcpSamples(conn, source.Unmarshaller, source.OutgoingSink, source.connectionClosed)
+		stream.ReadTcpSamples(conn, source.isConnectionClosed)
+		if !source.CountConnectionClosed() {
+			source.Stop()
+		}
 	}()
 }
 
-func (source *TCPListenerSource) connectionClosed() bool {
-	return source.conn == nil
+func (source *TCPListenerSource) isConnectionClosed() bool {
+	return source.stream == nil
+}
+
+func (source *TCPListenerSource) closeStream() {
+	if source.stream != nil {
+		stream := source.stream
+		source.stream = nil // Make isConnectionClosed() return true
+		_ = stream.Close()  // Drop error
+	}
 }
 
 func (source *TCPListenerSource) Stop() {
 	source.task.ExtendedStop(func() {
-		if conn := source.conn; conn != nil {
-			source.conn = nil // Make connectionClosed() return true
-			_ = conn.Close()  // Drop error
-		}
+		source.closeStream()
 	})
 }
 
@@ -76,6 +91,8 @@ type TCPListenerSink struct {
 	TcpMetricSink
 	connections map[*TcpWriteConn]bool
 	task        *golib.TCPListenerTask
+	lastHeader  Header
+	headerLock  sync.Mutex
 }
 
 func NewTcpListenerSink(endpoint string) *TCPListenerSink {
@@ -107,17 +124,31 @@ func (sink *TCPListenerSink) Close() {
 	})
 }
 
-func (sink *TCPListenerSink) handleConnection(wg *sync.WaitGroup, conn *net.TCPConn) {
-	writeConn := sink.writeConn(wg, conn)
+func (sink *TCPListenerSink) handleConnection(_ *sync.WaitGroup, conn *net.TCPConn) {
+	if !sink.CountConnectionAccepted(conn) {
+		return
+	}
+	writeConn, header := sink.openTcpOutputStream(conn)
+	if writeConn != nil {
+		writeConn.Header(header)
+	}
+}
+
+func (sink *TCPListenerSink) openTcpOutputStream(conn *net.TCPConn) (*TcpWriteConn, Header) {
+	sink.headerLock.Lock()
+	defer sink.headerLock.Unlock()
+	writeConn := sink.OpenWriteConn(conn)
 	sink.connections[writeConn] = true
+	return writeConn, sink.lastHeader
 }
 
 func (sink *TCPListenerSink) Header(header Header) error {
-	sink.LastHeader = header
+	sink.headerLock.Lock()
+	defer sink.headerLock.Unlock()
+	sink.lastHeader = header
 	// Close all running connections, since we have to negotiate a new header.
 	for conn := range sink.connections {
-		delete(sink.connections, conn)
-		conn.Close()
+		sink.cleanupConnection(conn)
 	}
 	return nil
 }
@@ -127,13 +158,20 @@ func (sink *TCPListenerSink) Sample(sample Sample, header Header) error {
 		return err
 	}
 	for conn := range sink.connections {
-		if conn.conn == nil {
+		if conn.stream == nil {
 			// Clean up closed connections
-			delete(sink.connections, conn)
-			conn.Close()
+			sink.cleanupConnection(conn)
 			continue
 		}
-		conn.samples <- sample
+		conn.Sample(sample)
 	}
 	return nil
+}
+
+func (sink *TCPListenerSink) cleanupConnection(conn *TcpWriteConn) {
+	delete(sink.connections, conn)
+	conn.Close()
+	if !sink.CountConnectionClosed() {
+		sink.Close()
+	}
 }

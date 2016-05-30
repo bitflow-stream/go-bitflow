@@ -36,10 +36,6 @@ type CmdSamplePipeline struct {
 	SamplePipeline
 	Tasks *golib.TaskGroup
 
-	parallel_marshalling int
-	buffered_samples     int
-	io_buffer            int
-
 	read_console      bool
 	read_tcp_listen   string
 	read_tcp_download string
@@ -53,6 +49,8 @@ type CmdSamplePipeline struct {
 	format_connect    string
 	format_listen     string
 	format_file       string
+	tcp_conn_limit    uint
+	handler           ParallelSampleHandler
 }
 
 // Must be called before flag.Parse()
@@ -63,9 +61,11 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
 	flag.StringVar(&p.read_tcp_download, "D", "", "Data source: receive samples by connecting to remote endpoint")
 
-	flag.IntVar(&p.parallel_marshalling, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
-	flag.IntVar(&p.buffered_samples, "buf", 10000, "Number of samples buffered when (un)marshalling")
-	flag.IntVar(&p.io_buffer, "io_buf", 4096, "Size (byte) of buffered IO when (un)marshalling")
+	flag.UintVar(&p.tcp_conn_limit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
+
+	flag.IntVar(&p.handler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
+	flag.IntVar(&p.handler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling")
+	flag.IntVar(&p.handler.IoBuffer, "io_buf", 4096, "Size (byte) of buffered IO when (un)marshalling")
 
 	flag.BoolVar(&p.sink_console, "p", false, "Data sink: print to stdout")
 	flag.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+supported_formats)
@@ -91,25 +91,25 @@ func (p *CmdSamplePipeline) Init() {
 
 	// ====== Initialize source(s)
 	var unmarshaller string
-	reader := SampleReader{
-		ParallelParsers: p.parallel_marshalling,
-		BufferedSamples: p.buffered_samples,
-		IoBuffer:        p.io_buffer,
-	}
+	reader := SampleReader{p.handler}
 	if p.read_console {
 		p.SetSource(&ConsoleSource{Reader: reader})
 		unmarshaller = default_console_input
 	}
 	if p.read_tcp_listen != "" {
-		p.SetSource(NewTcpListenerSource(p.read_tcp_listen, reader))
+		source := NewTcpListenerSource(p.read_tcp_listen, reader)
+		source.TcpConnLimit = p.tcp_conn_limit
+		p.SetSource(source)
 		unmarshaller = default_tcp_input
 	}
 	if p.read_tcp_download != "" {
-		p.SetSource(&TCPSource{
+		source := &TCPSource{
 			RemoteAddr:    p.read_tcp_download,
 			RetryInterval: tcp_download_retry_interval,
 			Reader:        reader,
-		})
+		}
+		source.TcpConnLimit = p.tcp_conn_limit
+		p.SetSource(source)
 		unmarshaller = default_tcp_input
 	}
 	if len(p.read_files) > 0 {
@@ -118,6 +118,7 @@ func (p *CmdSamplePipeline) Init() {
 	}
 	if p.Source == nil {
 		log.Println("No data source provided, no data will be received or generated.")
+		p.Source = new(EmptyMetricSource)
 	} else {
 		if p.format_input != "" {
 			unmarshaller = p.format_input
@@ -129,11 +130,7 @@ func (p *CmdSamplePipeline) Init() {
 
 	// ====== Initialize sink(s) and tasks
 	var sinks AggregateSink
-	writer := SampleWriter{
-		MarshallingRoutines: p.parallel_marshalling,
-		BufferedSamples:     p.buffered_samples,
-		IoBuffer:            p.io_buffer,
-	}
+	writer := SampleWriter{p.handler}
 	if p.sink_console {
 		sink := new(ConsoleSink)
 		m := marshaller(p.format_console)
@@ -148,12 +145,14 @@ func (p *CmdSamplePipeline) Init() {
 		sink := &TCPSink{Endpoint: p.sink_connect}
 		sink.SetMarshaller(marshaller(p.format_connect))
 		sink.Writer = writer
+		sink.TcpConnLimit = p.tcp_conn_limit
 		sinks = append(sinks, sink)
 	}
 	if p.sink_listen != "" {
 		sink := NewTcpListenerSink(p.sink_listen)
 		sink.SetMarshaller(marshaller(p.format_listen))
 		sink.Writer = writer
+		sink.TcpConnLimit = p.tcp_conn_limit
 		sinks = append(sinks, sink)
 	}
 	if p.sink_file != "" {

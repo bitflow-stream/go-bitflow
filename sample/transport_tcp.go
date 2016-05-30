@@ -12,64 +12,101 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-const (
-	tcp_sample_buffer = 50
-)
+// ==================== TCP connection counter ====================
+type TCPConnCounter struct {
+	closed       uint
+	accepted     uint
+	TcpConnLimit uint
+}
+
+// Return true, if we can handle further connections. Return false, if the application should stop.
+func (counter *TCPConnCounter) CountConnectionClosed() bool {
+	if counter.TcpConnLimit > 0 {
+		counter.closed++
+		if counter.closed >= counter.TcpConnLimit {
+			log.Println("Handled", counter.closed, "TCP connection(s)")
+			return false
+		}
+	}
+	return true
+}
+
+// Return true, if the connection was accepted. Return false, if it was rejected and closed.
+func (counter *TCPConnCounter) CountConnectionAccepted(conn *net.TCPConn) bool {
+	if counter.TcpConnLimit > 0 {
+		if counter.accepted >= counter.TcpConnLimit {
+			log.Printf("Rejecting connection from %v, already accepted %v connections\n", conn.RemoteAddr(), counter.accepted)
+			_ = conn.Close() // Drop error
+			return false
+		}
+		counter.accepted++
+	}
+	return true
+}
 
 // ==================== TCP write connection ====================
 type TcpMetricSink struct {
 	AbstractMarshallingMetricSink
-	LastHeader Header
+	TCPConnCounter
 }
 
 type TcpWriteConn struct {
-	sink      *TcpMetricSink
 	remote    net.Addr
-	conn      *net.TCPConn
 	stream    *SampleOutputStream
-	samples   chan Sample
-	writerWg  sync.WaitGroup
 	closeOnce sync.Once
 }
 
-func (sink *TcpMetricSink) writeConn(wg *sync.WaitGroup, conn *net.TCPConn) *TcpWriteConn {
-	writeConn := &TcpWriteConn{
-		sink:    sink,
-		conn:    conn,
-		remote:  conn.RemoteAddr(),
-		samples: make(chan Sample, tcp_sample_buffer),
-		stream:  sink.Writer.OpenBuffered(conn, sink.Marshaller),
+func (sink *TcpMetricSink) OpenWriteConn(conn *net.TCPConn) *TcpWriteConn {
+	return &TcpWriteConn{
+		remote: conn.RemoteAddr(),
+		stream: sink.Writer.OpenBuffered(conn, sink.Marshaller),
 	}
-	wg.Add(1)
-	writeConn.writerWg.Add(1)
-	go writeConn.run(wg)
-	return writeConn
+}
+
+func (conn *TcpWriteConn) Header(header Header) {
+	log.Println("Serving", len(header.Fields), "metrics to", conn.remote)
+	if err := conn.stream.Header(header); err != nil {
+		conn.doClose(err)
+	}
+}
+
+func (conn *TcpWriteConn) Sample(sample Sample) {
+	if err := conn.stream.Sample(sample); err != nil {
+		conn.doClose(err)
+	}
 }
 
 func (conn *TcpWriteConn) Close() {
 	if conn != nil {
-		conn.closeOnce.Do(func() {
-			if conn.Running() {
-				log.Println("Closing connection to", conn.remote)
-			}
-			close(conn.samples)
-		})
-		conn.writerWg.Wait()
+		conn.doClose(nil)
 	}
 }
 
-func (conn *TcpWriteConn) Running() bool {
-	return conn != nil && conn.conn != nil
+func (conn *TcpWriteConn) doClose(cause error) {
+	conn.closeOnce.Do(func() {
+		conn.printErr(cause)
+		if cause == nil {
+			log.Println("Closing connection to", conn.remote)
+		}
+		if closeErr := conn.stream.Close(); closeErr != nil && cause == nil {
+			log.Printf("Error closing connection to %v: %v\n", conn.remote, closeErr)
+		}
+		conn.stream = nil // Make IsRunning() return false
+	})
+}
+
+func (conn *TcpWriteConn) IsRunning() bool {
+	return conn != nil && conn.stream != nil
 }
 
 func (conn *TcpWriteConn) printErr(err error) {
 	if operr, ok := err.(*net.OpError); ok {
 		if operr.Err == syscall.EPIPE {
-			log.Printf("Connection closed by %v\n", conn.remote)
+			log.Println("Connection closed by", conn.remote)
 			return
 		} else {
 			if syscallerr, ok := operr.Err.(*os.SyscallError); ok && syscallerr.Err == syscall.EPIPE {
-				log.Printf("Connection closed by %v\n", conn.remote)
+				log.Println("Connection closed by", conn.remote)
 				return
 			}
 		}
@@ -79,47 +116,10 @@ func (conn *TcpWriteConn) printErr(err error) {
 	}
 }
 
-func (c *TcpWriteConn) flush(conn *net.TCPConn, reportError bool) {
-	if err := c.stream.Close(); err != nil {
-		if reportError {
-			log.Printf("Error flushing connection to %v: %v\n", c.remote, err)
-		}
-	}
-	if err := conn.Close(); err != nil {
-		if reportError {
-			log.Printf("Error closing connection to %v: %v\n", c.remote, err)
-		}
-	}
-}
-
-func (conn *TcpWriteConn) run(wg *sync.WaitGroup) {
-	connection := conn.conn
-	var err error
-	defer func() {
-		conn.flush(connection, err == nil)
-		conn.conn = nil // Make Running() return false
-		wg.Done()
-		conn.writerWg.Done()
-	}()
-
-	log.Println("Serving", len(conn.sink.LastHeader.Fields), "metrics to", conn.remote)
-	if err = conn.stream.Header(conn.sink.LastHeader); err != nil {
-		conn.printErr(err)
-		return
-	}
-	for sample := range conn.samples {
-		if err = conn.stream.Sample(sample); err != nil {
-			conn.printErr(err)
-			return
-		}
-	}
-}
-
 // ==================== TCP active sink ====================
 type TCPSink struct {
 	TcpMetricSink
 	Endpoint string
-	wg       *sync.WaitGroup
 	conn     *TcpWriteConn
 	stopped  *golib.OneshotCondition
 }
@@ -131,7 +131,6 @@ func (sink *TCPSink) String() string {
 func (sink *TCPSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	log.Println("Sending", sink.Marshaller, "samples to", sink.Endpoint)
 	sink.stopped = golib.NewOneshotCondition()
-	sink.wg = wg
 	return sink.stopped.Start(wg)
 }
 
@@ -146,32 +145,56 @@ func (sink *TCPSink) Close() {
 	})
 }
 
-func (sink *TCPSink) Header(header Header) (err error) {
-	sink.stopped.IfElseEnabled(func() {
-		err = fmt.Errorf("TCP sink to %v already stopped", sink.Endpoint)
-	}, func() {
-		sink.closeConnection() // Stop existing connection to negotiate new header
-		sink.LastHeader = header
-		err = sink.assertConnection()
-	})
-	return
+func (sink *TCPSink) Header(header Header) error {
+	conn, err := sink.getOutputConnection(true)
+	if err != nil {
+		return err
+	}
+	conn.Header(header)
+	return sink.checkConnRunning(conn)
 }
 
-func (sink *TCPSink) Sample(sample Sample, header Header) (err error) {
+func (sink *TCPSink) Sample(sample Sample, header Header) error {
+	if err := sample.Check(header); err != nil {
+		return err
+	}
+	conn, err := sink.getOutputConnection(false)
+	if err != nil {
+		return err
+	}
+	conn.Sample(sample)
+	return sink.checkConnRunning(conn)
+}
+
+func (sink *TCPSink) checkConnRunning(conn *TcpWriteConn) error {
+	if !conn.IsRunning() {
+		return fmt.Errorf("Connection to %v closed", sink.Endpoint)
+	}
+	return nil
+}
+
+func (sink *TCPSink) getOutputConnection(renewConnection bool) (conn *TcpWriteConn, err error) {
+	closeSink := false
 	sink.stopped.IfElseEnabled(func() {
-		err = fmt.Errorf("TCP sink to %v already stopped", sink.Endpoint)
+		err = fmt.Errorf("TCP sink to %v already closed", sink.Endpoint)
 	}, func() {
-		if err = sample.Check(header); err != nil {
-			return
-		}
-		if !sink.conn.Running() {
-			sink.closeConnection() // Cleanup errored connection
+		if !sink.conn.IsRunning() || renewConnection {
+			// Cleanup errored connection or stop existing connection to negotiate new header
+			if sink.conn != nil {
+				if !sink.CountConnectionClosed() {
+					closeSink = true
+				}
+			}
+			sink.closeConnection()
 		}
 		if err = sink.assertConnection(); err != nil {
 			return
 		}
-		sink.conn.samples <- sample
+		conn = sink.conn
 	})
+	if closeSink {
+		sink.Close()
+	}
 	return
 }
 
@@ -185,7 +208,7 @@ func (sink *TCPSink) assertConnection() error {
 		if err != nil {
 			return err
 		}
-		sink.conn = sink.writeConn(sink.wg, conn)
+		sink.conn = sink.OpenWriteConn(conn)
 	}
 	return nil
 }
@@ -193,11 +216,12 @@ func (sink *TCPSink) assertConnection() error {
 // ==================== TCP active source ====================
 type TCPSource struct {
 	AbstractUnmarshallingMetricSource
+	TCPConnCounter
 	RemoteAddr    string
 	RetryInterval time.Duration
 	Reader        SampleReader
 	loopTask      *golib.LoopTask
-	conn          *net.TCPConn
+	stream        *SampleInputStream
 }
 
 func (sink *TCPSource) String() string {
@@ -210,12 +234,7 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		if conn, err := source.dial(); err != nil {
 			log.Println("Error downloading data:", err)
 		} else {
-			source.loopTask.IfElseEnabled(func() {
-				return
-			}, func() {
-				source.conn = conn
-			})
-			source.Reader.ReadTcpSamples(conn, source.Unmarshaller, source.OutgoingSink, source.connectionClosed)
+			source.handleConnection(conn)
 		}
 		select {
 		case <-time.After(source.RetryInterval):
@@ -228,15 +247,25 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	return source.loopTask.Start(wg)
 }
 
+func (source *TCPSource) handleConnection(conn *net.TCPConn) {
+	source.loopTask.IfNotEnabled(func() {
+		source.stream = source.Reader.Open(conn, source.Unmarshaller, source.OutgoingSink)
+	})
+	if !source.loopTask.Enabled() {
+		source.stream.ReadTcpSamples(conn, source.isConnectionClosed)
+		if !source.CountConnectionClosed() {
+			source.Stop()
+		}
+	}
+}
+
 func (source *TCPSource) Stop() {
 	source.loopTask.Enable(func() {
-		if conn := source.conn; conn != nil {
-			_ = conn.Close() // Ignore error
-		}
+		_ = source.stream.Close() // Ignore error
 	})
 }
 
-func (source *TCPSource) connectionClosed() bool {
+func (source *TCPSource) isConnectionClosed() bool {
 	return source.loopTask.Enabled()
 }
 

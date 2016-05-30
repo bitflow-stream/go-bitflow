@@ -91,6 +91,26 @@ func (s *AbstractUnmarshallingMetricSource) SetUnmarshaller(unmarshaller Unmarsh
 	s.Unmarshaller = unmarshaller
 }
 
+// ==================== Empty Source ====================
+
+type EmptyMetricSource struct {
+	AbstractMetricSource
+	wg *sync.WaitGroup
+}
+
+func (s *EmptyMetricSource) Start(wg *sync.WaitGroup) golib.StopChan {
+	s.wg = wg
+	return nil
+}
+
+func (s *EmptyMetricSource) Stop() {
+	s.CloseSink(s.wg)
+}
+
+func (s *EmptyMetricSource) String() string {
+	return "empty metric source"
+}
+
 // ==================== Aggregating Sink ====================
 type AggregateSink []MetricSink
 
@@ -143,11 +163,18 @@ func (agg AggregateSink) Sample(sample Sample, header Header) error {
 
 // ==================== Parallel Sample Stream ====================
 
+type ParallelSampleHandler struct {
+	BufferedSamples int
+	IoBuffer        int
+	ParallelParsers int
+}
+
 type ParallelSampleStream struct {
 	err      error
 	incoming chan *BufferedSample
 	outgoing chan *BufferedSample
 	wg       sync.WaitGroup
+	closed   *golib.OneshotCondition
 }
 
 func (state *ParallelSampleStream) HasError() bool {

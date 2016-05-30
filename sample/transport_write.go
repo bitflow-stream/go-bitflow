@@ -6,39 +6,60 @@ import (
 	"errors"
 	"io"
 	"sync"
+
+	"github.com/antongulenko/golib"
 )
 
 type SampleWriter struct {
-	BufferedSamples     int
-	IoBuffer            int
-	MarshallingRoutines int
+	ParallelSampleHandler
 }
 
 type SampleOutputStream struct {
 	ParallelSampleStream
+	closed         *golib.OneshotCondition
 	headerLock     sync.Mutex
 	header         *Header
-	writer         io.Writer
+	writer         io.WriteCloser
 	marshaller     Marshaller
 	marshallBuffer int
 }
 
-func (w *SampleWriter) OpenBuffered(writer io.Writer, marshaller Marshaller) *SampleOutputStream {
-	buf := bufio.NewWriterSize(writer, w.IoBuffer)
+type BufferedWriteCloser struct {
+	*bufio.Writer
+	Closer io.Closer
+}
+
+func (writer *BufferedWriteCloser) Close() (err error) {
+	err = writer.Writer.Flush()
+	if closeErr := writer.Closer.Close(); err == nil {
+		err = closeErr
+	}
+	return
+}
+
+func (w *SampleWriter) OpenBuffered(writer io.WriteCloser, marshaller Marshaller) *SampleOutputStream {
+	if w.IoBuffer <= 0 {
+		return w.Open(writer, marshaller)
+	}
+	buf := &BufferedWriteCloser{
+		Writer: bufio.NewWriterSize(writer, w.IoBuffer),
+		Closer: writer,
+	}
 	return w.Open(buf, marshaller)
 }
 
-func (w *SampleWriter) Open(writer io.Writer, marshaller Marshaller) *SampleOutputStream {
+func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *SampleOutputStream {
 	stream := &SampleOutputStream{
 		writer:     writer,
 		marshaller: marshaller,
+		closed:     golib.NewOneshotCondition(),
 		ParallelSampleStream: ParallelSampleStream{
 			incoming: make(chan *BufferedSample, w.BufferedSamples),
 			outgoing: make(chan *BufferedSample, w.BufferedSamples),
 		},
 	}
 
-	for i := 0; i < w.MarshallingRoutines || i < 1; i++ {
+	for i := 0; i < w.ParallelParsers || i < 1; i++ {
 		stream.wg.Add(1)
 		go stream.marshall()
 	}
@@ -71,7 +92,7 @@ func (stream *SampleOutputStream) Header(header Header) error {
 }
 
 func (stream *SampleOutputStream) flushBuffered() error {
-	if buf, ok := stream.writer.(*bufio.Writer); ok {
+	if buf, ok := stream.writer.(*BufferedWriteCloser); ok {
 		return buf.Flush()
 	}
 	return nil
@@ -92,14 +113,18 @@ func (stream *SampleOutputStream) Sample(sample Sample) error {
 }
 
 func (stream *SampleOutputStream) Close() error {
-	close(stream.incoming)
-	close(stream.outgoing)
-	stream.wg.Wait()
-	err := stream.flushBuffered()
-	if stream.HasError() {
-		err = stream.err
-	}
-	return err
+	stream.closed.Enable(func() {
+		close(stream.incoming)
+		close(stream.outgoing)
+		stream.wg.Wait()
+		if err := stream.flushBuffered(); !stream.HasError() {
+			stream.err = err
+		}
+		if err := stream.writer.Close(); !stream.HasError() {
+			stream.err = err
+		}
+	})
+	return stream.err
 }
 
 func (stream *SampleOutputStream) marshall() {

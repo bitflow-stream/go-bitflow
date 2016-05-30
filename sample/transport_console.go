@@ -27,7 +27,6 @@ func (sink *ConsoleSink) Close() {
 	if err := sink.stream.Close(); err != nil {
 		log.Println("Error closing stdout output:", err)
 	}
-	_ = os.Stdout.Close() // Drop error
 }
 
 func (sink *ConsoleSink) Header(header Header) error {
@@ -44,6 +43,7 @@ func (sink *ConsoleSink) Sample(sample Sample, header Header) error {
 type ConsoleSource struct {
 	AbstractUnmarshallingMetricSource
 	Reader SampleReader
+	stream *SampleInputStream
 }
 
 func (source *ConsoleSource) String() string {
@@ -51,13 +51,20 @@ func (source *ConsoleSource) String() string {
 }
 
 func (source *ConsoleSource) Start(wg *sync.WaitGroup) golib.StopChan {
+	source.stream = source.Reader.Open(os.Stdin, source.Unmarshaller, source.OutgoingSink)
 	return golib.WaitErrFunc(wg, func() error {
-		err := source.Reader.ReadNamedSamples("stdin", os.Stdin, source.Unmarshaller, source.OutgoingSink)
-		source.CloseSink(wg)
+		defer source.CloseSink(wg)
+		err := source.stream.ReadNamedSamples("stdin")
+		if isFileClosedError(err) {
+			err = nil
+		}
 		return err
 	})
 }
 
 func (source *ConsoleSource) Stop() {
-	_ = os.Stdin.Close() // Drop error
+	err := source.stream.Close()
+	if err != nil && !isFileClosedError(err) {
+		log.Println("Error closing stdin:", err)
+	}
 }

@@ -6,79 +6,105 @@ import (
 	"log"
 	"net"
 	"sync"
+
+	"github.com/antongulenko/golib"
 )
 
 // Unmarshalls samples from an io.Reader, parallelizing the parsing
 type SampleReader struct {
-	ParallelParsers int
-	BufferedSamples int
-	IoBuffer        int
+	ParallelSampleHandler
 }
 
 type SampleInputStream struct {
 	ParallelSampleStream
-	reader      *bufio.Reader
-	num_samples int
-	header      Header
-	um          Unmarshaller
-	sink        MetricSink
+	reader           *bufio.Reader
+	underlyingReader io.ReadCloser
+	num_samples      int
+	numParsers       int
+	header           Header
+	um               Unmarshaller
+	sink             MetricSink
 }
 
-func (r *SampleReader) ReadSamples(input io.Reader, um Unmarshaller, sink MetricSink) (int, error) {
-	state := &SampleInputStream{
-		reader: bufio.NewReaderSize(input, r.IoBuffer),
-		um:     um,
-		sink:   sink,
+func (r *SampleReader) Open(input io.ReadCloser, um Unmarshaller, sink MetricSink) *SampleInputStream {
+	return &SampleInputStream{
+		reader:           bufio.NewReaderSize(input, r.IoBuffer),
+		underlyingReader: input,
+		um:               um,
+		sink:             sink,
+		numParsers:       r.ParallelParsers,
 		ParallelSampleStream: ParallelSampleStream{
 			incoming: make(chan *BufferedSample, r.BufferedSamples),
 			outgoing: make(chan *BufferedSample, r.BufferedSamples),
+			closed:   golib.NewOneshotCondition(),
 		},
 	}
-	if err := state.readHeader(); err != nil {
+}
+
+func (stream *SampleInputStream) ReadSamples() (int, error) {
+	if err := stream.readHeader(); err != nil {
 		return 0, err
 	}
 
 	// Parse samples
-	for i := 0; i < r.ParallelParsers || i < 1; i++ {
-		state.wg.Add(1)
-		go state.parseSamples()
+	for i := 0; i < stream.numParsers || i < 1; i++ {
+		stream.wg.Add(1)
+		go stream.parseSamples()
 	}
 
 	// Forward parsed samples
-	state.wg.Add(1)
-	go state.sinkSamples()
+	stream.wg.Add(1)
+	go stream.sinkSamples()
 
-	state.readData()
-	state.wg.Wait()
-	if state.err == io.EOF {
-		state.err = nil // io.EOF is expected
+	stream.readData()
+	stream.wg.Wait()
+	if stream.err == io.EOF {
+		stream.err = nil // io.EOF is expected
 	}
-	return state.num_samples, state.err
+	return stream.num_samples, stream.err
 }
 
-func (r *SampleReader) ReadNamedSamples(sourceName string, input io.Reader, um Unmarshaller, sink MetricSink) (err error) {
+func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error) {
 	var num_samples int
-	log.Println("Reading", um, "from", sourceName)
-	num_samples, err = r.ReadSamples(input, um, sink)
-	log.Printf("Read %v %v samples from %v\n", num_samples, um, sourceName)
+	log.Println("Reading", stream.um, "from", sourceName)
+	num_samples, err = stream.ReadSamples()
+	log.Printf("Read %v %v samples from %v\n", num_samples, stream.um, sourceName)
 	return
 }
 
-func (r *SampleReader) ReadTcpSamples(conn *net.TCPConn, um Unmarshaller, sink MetricSink, checkClosed func() bool) {
-	log.Println("Receiving", um, "from", conn.RemoteAddr())
+func (stream *SampleInputStream) ReadTcpSamples(conn *net.TCPConn, checkClosed func() bool) {
+	remote := conn.RemoteAddr()
+	log.Println("Receiving", stream.um, "from", remote)
 	var err error
 	var num_samples int
-	if num_samples, err = r.ReadSamples(conn, um, sink); err == nil {
-		log.Println("Connection closed by", conn.RemoteAddr())
+	if num_samples, err = stream.ReadSamples(); err == nil {
+		log.Println("Connection closed by", remote)
 	} else {
 		if checkClosed() {
-			log.Println("Connection to", conn.RemoteAddr(), "closed")
+			log.Println("Connection to", remote, "closed")
 		} else {
-			log.Printf("Error receiving samples from %v: %v\n", conn.RemoteAddr(), err)
+			log.Printf("Error receiving samples from %v: %v\n", remote, err)
 		}
 		_ = conn.Close() // Ignore error
 	}
-	log.Println("Received", num_samples, "samples from", conn.RemoteAddr())
+	log.Println("Received", num_samples, "samples from", remote)
+}
+
+func (stream *SampleInputStream) Close() error {
+	if stream != nil {
+		stream.closeUnderlyingReader()
+		return stream.err
+	}
+	return nil
+}
+
+func (stream *SampleInputStream) closeUnderlyingReader() {
+	stream.closed.Enable(func() {
+		err := stream.underlyingReader.Close()
+		if !stream.HasError() {
+			stream.err = err
+		}
+	})
 }
 
 func (stream *SampleInputStream) readHeader() (err error) {
@@ -94,9 +120,11 @@ func (stream *SampleInputStream) readHeader() (err error) {
 
 func (stream *SampleInputStream) readData() {
 	defer func() {
+		stream.closeUnderlyingReader()
 		close(stream.incoming)
 		close(stream.outgoing)
 	}()
+	closedChan := stream.closed.Start(nil)
 	for {
 		if stream.HasError() {
 			return
@@ -110,8 +138,12 @@ func (stream *SampleInputStream) readData() {
 				data:     data,
 				doneCond: sync.NewCond(new(sync.Mutex)),
 			}
+			select {
+			case stream.outgoing <- s:
+			case <-closedChan:
+				return
+			}
 			stream.incoming <- s
-			stream.outgoing <- s
 		}
 	}
 }

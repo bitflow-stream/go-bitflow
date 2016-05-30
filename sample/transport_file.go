@@ -3,7 +3,6 @@ package sample
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -25,8 +24,11 @@ type FileGroup struct {
 
 func NewFileGroup(filename string) (group FileGroup) {
 	group.filename = filename
-	group.dir = filepath.Dir(filename)
-	base := filepath.Base(filename)
+	var base string
+	group.dir, base = filepath.Split(filename)
+	if group.dir == "" {
+		group.dir = "."
+	}
 	index := strings.LastIndex(base, ".")
 	if index < 0 {
 		group.prefix, group.suffix = base, ""
@@ -95,40 +97,16 @@ func (group *FileGroup) DeleteFiles() error {
 	return err
 }
 
-// ==================== File transport ====================
-type FileTransport struct {
-	AbstractMarshallingMetricSink
-	file    io.WriteCloser
-	stopped *golib.OneshotCondition
-}
-
-func (t *FileTransport) CloseFile() error {
-	if f := t.file; f != nil {
-		t.file = nil
-		return f.Close()
-	}
-	return nil
-}
-
-func (t *FileTransport) close() {
-	t.stopped.Enable(func() {
-		if err := t.CloseFile(); err != nil {
-			log.Println("Error closing file:", err)
-		}
-	})
-}
-
-func (t *FileTransport) init() {
-	t.stopped = golib.NewOneshotCondition()
-}
-
 // ==================== File data source ====================
 type FileSource struct {
 	AbstractUnmarshallingMetricSource
-	Reader SampleReader
-	FileTransport
+	Reader    SampleReader
 	Filenames []string
+	stream    *SampleInputStream
+	closed    *golib.OneshotCondition
 }
+
+var fileSourceClosed = errors.New("file source is closed")
 
 func (source *FileSource) String() string {
 	if len(source.Filenames) == 1 {
@@ -139,17 +117,19 @@ func (source *FileSource) String() string {
 }
 
 func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	source.init()
+	source.closed = golib.NewOneshotCondition()
 	var files []string
 	for _, filename := range source.Filenames {
 		group := NewFileGroup(filename)
 		if groupFiles, err := group.AllFiles(); err != nil {
+			source.CloseSink(wg)
 			return golib.TaskFinishedError(err)
 		} else {
 			files = append(files, groupFiles...)
 		}
 	}
 	if len(files) == 0 {
+		source.CloseSink(wg)
 		return golib.TaskFinishedError(errors.New("No files specified for FileSource"))
 	} else if len(files) > 1 {
 		log.Println("Reading", len(files), "files")
@@ -160,42 +140,56 @@ func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (source *FileSource) Stop() {
-	source.close()
-}
-
-func (source *FileSource) read(filename string) (err error) {
-	var file *os.File
-	source.stopped.IfElseEnabled(func() {
-		err = errors.New("FileSource already stopped")
-	}, func() {
-		file, err = os.Open(filename)
-		source.file = file
+	source.closed.Enable(func() {
+		if source.stream != nil {
+			if err := source.stream.Close(); err != nil && !isFileClosedError(err) {
+				log.Println("Error closing file:", err)
+			}
+		}
 	})
-	if err == nil {
-		err = source.Reader.ReadNamedSamples(file.Name(), file, source.Unmarshaller, source.OutgoingSink)
-		if patherr, ok := err.(*os.PathError); ok && patherr.Err == syscall.EBADF {
-			// The file was most likely intentionally closed
-			err = nil
+}
+
+func (source *FileSource) readFile(filename string) (err error) {
+	if file, openErr := os.Open(filename); err != nil {
+		err = openErr
+	} else {
+		var stream *SampleInputStream
+		source.closed.IfNotEnabled(func() {
+			stream = source.Reader.Open(file, source.Unmarshaller, source.OutgoingSink)
+			source.stream = stream
+		})
+		if stream == nil {
+			err = fileSourceClosed
+		} else {
+			defer stream.Close() // Drop error
+			err = stream.ReadNamedSamples(file.Name())
 		}
 	}
 	return
 }
 
-func (source *FileSource) readFiles(wg *sync.WaitGroup, files []string) (err error) {
+func (source *FileSource) readFiles(wg *sync.WaitGroup, files []string) error {
 	defer source.CloseSink(wg)
+	defer source.closed.EnableOnly()
 	for _, filename := range files {
-		err = source.read(filename)
-		_ = source.CloseFile() // Drop error
-		if err != nil {
-			break
+		err := source.readFile(filename)
+		if isFileClosedError(err) || err == fileSourceClosed {
+			return nil
+		} else if err != nil {
+			return err
 		}
 	}
-	return
+	return nil
+}
+
+func isFileClosedError(err error) bool {
+	// The file was most likely intentionally closed
+	patherr, ok := err.(*os.PathError)
+	return ok && patherr.Err == syscall.EBADF
 }
 
 // ==================== File data sink ====================
 type FileSink struct {
-	FileTransport
 	AbstractMarshallingMetricSink
 	Filename string
 
@@ -203,6 +197,7 @@ type FileSink struct {
 	lastHeader Header
 	file_num   int
 	stream     *SampleOutputStream
+	closed     *golib.OneshotCondition
 }
 
 func (sink *FileSink) String() string {
@@ -210,8 +205,8 @@ func (sink *FileSink) String() string {
 }
 
 func (sink *FileSink) Start(wg *sync.WaitGroup) golib.StopChan {
-	sink.init()
 	log.Println("Writing", sink.Marshaller, "samples to", sink.Filename)
+	sink.closed = golib.NewOneshotCondition()
 	sink.group = NewFileGroup(sink.Filename)
 	if err := sink.group.DeleteFiles(); err != nil {
 		return golib.TaskFinishedError(fmt.Errorf("Failed to clean result files: %v", err))
@@ -222,42 +217,36 @@ func (sink *FileSink) Start(wg *sync.WaitGroup) golib.StopChan {
 
 func (sink *FileSink) flush() error {
 	if sink.stream != nil {
-		err := sink.stream.Close()
-		sink.stream = nil
-		return err
+		return sink.stream.Close()
 	}
 	return nil
 }
 
 func (sink *FileSink) Close() {
-	if err := sink.flush(); err != nil {
-		log.Println("Error flushing file:", err)
-	}
-	sink.close()
+	sink.closed.Enable(func() {
+		if err := sink.flush(); err != nil {
+			log.Println("Error closing file:", err)
+		}
+	})
 }
 
-func (sink *FileSink) openNextFile() error {
-	if err := sink.flush(); err != nil {
-		return err
-	}
-	if err := sink.CloseFile(); err != nil {
-		log.Println("Error closing file:", err)
-	}
-	sink.file_num++
-	name := sink.group.BuildFilename(sink.file_num)
-	var err error
-	sink.stopped.IfElseEnabled(func() {
-		err = errors.New("FileSink already stopped")
+func (sink *FileSink) openNextFile() (err error) {
+	sink.closed.IfElseEnabled(func() {
+		err = errors.New(sink.String() + " is closed")
 	}, func() {
-		var file *os.File
-		file, err = os.Create(name)
-		sink.file = file
+		if err = sink.flush(); err != nil {
+			return
+		}
+		sink.file_num++
+		name := sink.group.BuildFilename(sink.file_num)
+
+		file, err := os.Create(name)
 		if err == nil {
 			sink.stream = sink.Writer.OpenBuffered(file, sink.Marshaller)
 			log.Println("Opened file", file.Name())
 		}
 	})
-	return err
+	return
 }
 
 func (sink *FileSink) Header(header Header) error {
