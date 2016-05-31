@@ -64,9 +64,9 @@ func (cond *OneshotCondition) Wait() {
 	}
 	cond.cond.L.Lock()
 	defer cond.cond.L.Unlock()
-	cond.cond.Wait()
-	// No need to check enabled flag afterwards
-	// because the condition cannot be undone.
+	for !cond.enabled {
+		cond.cond.Wait()
+	}
 }
 
 func (cond *OneshotCondition) IfEnabled(execute func()) {

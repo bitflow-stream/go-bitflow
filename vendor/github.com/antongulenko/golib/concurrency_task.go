@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"runtime/pprof"
 	"sync"
 	"time"
 )
@@ -78,14 +79,14 @@ func (task *LoopTask) Start(wg *sync.WaitGroup) StopChan {
 			if wg != nil {
 				defer wg.Done()
 			}
+			if hook := task.StopHook; hook != nil {
+				defer hook()
+			}
 			for !cond.Enabled() {
 				task.Err = loop(stop)
 				if task.Err != nil {
 					cond.EnableErr(task.Err)
 				}
-			}
-			if hook := task.StopHook; hook != nil {
-				hook()
 			}
 		}()
 	}
@@ -299,6 +300,7 @@ func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (reas
 	}
 	if timeout > 0 {
 		time.AfterFunc(timeout, func() {
+			pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 			panic("Waiting for stopping goroutines timed out")
 		})
 	}

@@ -54,6 +54,13 @@ func (task *TCPListenerTask) Start(wg *sync.WaitGroup) StopChan {
 }
 
 func (task *TCPListenerTask) ExtendedStart(start func(addr net.Addr), wg *sync.WaitGroup) StopChan {
+	hook := task.StopHook
+	defer func() {
+		if hook != nil {
+			hook()
+		}
+	}()
+
 	endpoint, err := net.ResolveTCPAddr("tcp", task.ListenEndpoint)
 	if err != nil {
 		return TaskFinishedError(err)
@@ -65,6 +72,7 @@ func (task *TCPListenerTask) ExtendedStart(start func(addr net.Addr), wg *sync.W
 	if start != nil {
 		start(task.listener.Addr())
 	}
+	hook = nil
 	task.loopTask = task.listen(wg)
 	return task.loopTask.Start(wg)
 }
@@ -108,4 +116,8 @@ func (task *TCPListenerTask) ExtendedStop(stop func()) {
 			}
 		})
 	}
+}
+
+func (task *TCPListenerTask) IfRunning(do func()) {
+	task.loopTask.IfNotEnabled(do)
 }
