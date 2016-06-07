@@ -35,7 +35,7 @@ func registerProcessingSteps(p *sample.SamplePipeline) {
 	// dbscanRtreeCluster(p)
 	// dbscanParallelCluster(p)
 
-	//	p.Add(new(BatchProcessor))
+	// p.Add(new(BatchProcessor))
 	// .Add(new(TimestampSort))
 	// .Add(new(MinMaxScaling))
 	// .Add(new(StandardizationScaling))
@@ -45,8 +45,9 @@ func registerProcessingSteps(p *sample.SamplePipeline) {
 	// p.Add(new(AbstractProcessor))
 	// p.Add(&DecouplingProcessor{ChannelBuffer: 150000})
 
-	// p.Add(&Plotter{OutputFile: home + "/clusters.jpg", ColorTag: "cluster"})
-	// p.Add(&Plotter{OutputFile: home + "/classes.jpg", ColorTag: "cls"})
+	// separatePlots := true
+	// p.Add(&Plotter{OutputFile: home + "/clusters/clusters.jpg", ColorTag: "cluster", SeparatePlots: separatePlots})
+	// p.Add(&Plotter{OutputFile: home + "/clusters/classes.jpg", ColorTag: "cls", SeparatePlots: separatePlots})
 }
 
 func dbscanRtreeCluster(p *sample.SamplePipeline) {
