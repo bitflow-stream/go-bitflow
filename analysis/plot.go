@@ -34,10 +34,11 @@ func init() {
 
 type Plotter struct {
 	AbstractProcessor
-	OutputFile string
-	ColorTag   string
-	plot       *plot.Plot
-	data       map[string]PlotData
+	OutputFile     string
+	ColorTag       string
+	SeparatePlots  bool // If true, every ColorTag value will create a new plot
+	incomingHeader sample.Header
+	data           map[string]PlotData
 }
 
 type PlotData []sample.Sample
@@ -57,28 +58,17 @@ func (p *Plotter) Header(header sample.Header) error {
 	} else if len(header.Fields) < 2 {
 		return fmt.Errorf("Cannot plot header with %v fields, need at least 2", len(header.Fields))
 	} else {
-		if err := p.configurePlot(header); err != nil {
-			return err
-		}
+		p.incomingHeader = header
+		p.data = make(map[string]PlotData)
 		return p.OutgoingSink.Header(header)
 	}
-}
-
-func (p *Plotter) configurePlot(header sample.Header) (err error) {
-	p.data = make(map[string]PlotData)
-	if p.plot, err = plot.New(); err != nil {
-		return
-	}
-	p.plot.X.Label.Text = header.Fields[PlottedXAxis]
-	p.plot.Y.Label.Text = header.Fields[PlottedYAxis]
-	return
 }
 
 func (p *Plotter) Sample(sample sample.Sample, header sample.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	}
-	if err := sample.Check(header); err != nil {
+	if err := sample.Check(p.incomingHeader); err != nil {
 		return err
 	}
 	p.plotSample(sample)
@@ -103,25 +93,64 @@ func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (p *Plotter) Close() {
-	p.savePlot()
+	var err error
+	if p.SeparatePlots {
+		err = p.saveSeparatePlots()
+	} else {
+		err = p.savePlot(p.data, nil, p.OutputFile)
+	}
+	if err != nil {
+		log.Println("Plotting failed:", err)
+	}
 	p.CloseSink(nil)
 }
 
-func (p *Plotter) savePlot() {
-	if p.plot == nil {
-		return
+func (p *Plotter) saveSeparatePlots() error {
+	bounds, err := p.fillPlot(p.data, nil)
+	if err != nil {
+		return err
 	}
-	var parameters []interface{}
+	group := sample.NewFileGroup(p.OutputFile)
 	for name, data := range p.data {
+		plotData := map[string]PlotData{name: data}
+		plotFile := group.BuildFilenameStr(name)
+		if err := p.savePlot(plotData, bounds, plotFile); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Plotter) savePlot(plotData map[string]PlotData, copyBounds *plot.Plot, targetFile string) error {
+	plot, err := p.fillPlot(plotData, copyBounds)
+	if err != nil {
+		return err
+	}
+	return plot.Save(PlotWidth, PlotHeight, targetFile)
+}
+
+func (p *Plotter) fillPlot(plotData map[string]PlotData, copyBounds *plot.Plot) (*plot.Plot, error) {
+	plot, err := plot.New()
+	if err != nil {
+		return nil, err
+	}
+	plot.X.Label.Text = p.incomingHeader.Fields[PlottedXAxis]
+	plot.Y.Label.Text = p.incomingHeader.Fields[PlottedYAxis]
+	if copyBounds != nil {
+		plot.X.Min = copyBounds.X.Min
+		plot.X.Max = copyBounds.X.Max
+		plot.Y.Min = copyBounds.Y.Min
+		plot.Y.Max = copyBounds.Y.Max
+	}
+
+	var parameters []interface{}
+	for name, data := range plotData {
 		parameters = append(parameters, name, data)
 	}
-	if err := plotutil.AddScatters(p.plot, parameters...); err != nil {
-		log.Println("Error creating plot:", err)
-		return
+	if err := plotutil.AddScatters(plot, parameters...); err != nil {
+		return nil, fmt.Errorf("Error creating plot: %v", err)
 	}
-	if err := p.plot.Save(PlotWidth, PlotHeight, p.OutputFile); err != nil {
-		log.Println("Error saving plot:", err)
-	}
+	return plot, nil
 }
 
 func (p *Plotter) String() string {

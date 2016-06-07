@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -39,7 +40,11 @@ func NewFileGroup(filename string) (group FileGroup) {
 }
 
 func (group *FileGroup) BuildFilename(num int) string {
-	base := fmt.Sprintf("%v-%v%v", group.prefix, num, group.suffix)
+	return group.BuildFilenameStr(strconv.Itoa(num))
+}
+
+func (group *FileGroup) BuildFilenameStr(suffix string) string {
+	base := fmt.Sprintf("%v-%v%v", group.prefix, suffix, group.suffix)
 	return filepath.Join(group.dir, base)
 }
 
