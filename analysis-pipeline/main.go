@@ -30,17 +30,16 @@ func main() {
 
 func registerProcessingSteps(p *sample.SamplePipeline) {
 	// p.Add(NewMetricFilter().ExcludeRegex("libvirt|ovsdb")) // .IncludeRegex("cpu|load/|mem/|net-io/|disk-usage///|num_procs"))
-	//	filterNoiseClusters(p)
+	// filterNoiseClusters(p)
 
-	//	dbscanRtreeCluster(p)
-	//	dbscanParallelCluster(p)
+	// dbscanRtreeCluster(p)
+	// dbscanParallelCluster(p)
 
 	//	p.Add(new(BatchProcessor))
 	// .Add(new(TimestampSort))
 	// .Add(new(MinMaxScaling))
 	// .Add(new(StandardizationScaling))
 	// .Add(&PCABatchProcessing{ContainedVariance: 0.99})
-	// .Add(&DbscanBatchClusterer{Eps: 0.1, MinPts: 5})
 
 	// p.Add(new(SamplePrinter))
 	// p.Add(new(AbstractProcessor))
@@ -61,7 +60,7 @@ func dbscanRtreeCluster(p *sample.SamplePipeline) {
 }
 
 func dbscanParallelCluster(p *sample.SamplePipeline) {
-	p.Add(new(BatchProcessor).Add(new(MinMaxScaling)).Add(&DbscanBatchClusterer{Eps: 0.1, MinPts: 5}))
+	p.Add(new(BatchProcessor).Add(new(MinMaxScaling)).Add(&dbscan.ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5}))
 }
 
 func filterNoiseClusters(p *sample.SamplePipeline) {
