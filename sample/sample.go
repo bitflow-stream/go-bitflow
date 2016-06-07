@@ -30,6 +30,13 @@ type Header struct {
 	HasTags bool
 }
 
+func (h *Header) Clone(newFields []string) Header {
+	return Header{
+		HasTags: h.HasTags,
+		Fields:  newFields,
+	}
+}
+
 type Sample struct {
 	Values []Value
 	Time   time.Time
@@ -84,6 +91,13 @@ func (sample *Sample) CopyMetadataFrom(other Sample) {
 	for key, val := range other.Tags {
 		sample.Tags[key] = val
 	}
+}
+
+// All metadata is copied deeply, but values are referencing the old values
+func (sample *Sample) Clone() (result Sample) {
+	result.CopyMetadataFrom(*sample)
+	result.Values = sample.Values
+	return
 }
 
 func (header *Header) Equals(other *Header) bool {
