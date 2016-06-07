@@ -11,6 +11,7 @@ import (
 	"github.com/gonum/plot"
 	"github.com/gonum/plot/plotutil"
 	"github.com/gonum/plot/vg"
+	"github.com/gonum/plot/vg/draw"
 )
 
 const (
@@ -19,6 +20,17 @@ const (
 	PlottedXAxis = 0
 	PlottedYAxis = 1
 )
+
+func init() {
+	plotutil.DefaultColors = append(plotutil.DefaultColors, plotutil.DarkColors...)
+	plotutil.DefaultGlyphShapes = []draw.GlyphDrawer{
+		draw.RingGlyph{},
+		draw.SquareGlyph{},
+		draw.TriangleGlyph{},
+		draw.CrossGlyph{},
+		draw.PlusGlyph{},
+	}
+}
 
 type Plotter struct {
 	AbstractProcessor
