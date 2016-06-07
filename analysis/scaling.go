@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/antongulenko/data2go/sample"
+	"github.com/carbocation/runningvariance"
 )
 
 type MinMaxScaling struct {
@@ -48,4 +49,40 @@ func (s *MinMaxScaling) ProcessBatch(header *sample.Header, samples []*sample.Sa
 
 func (s *MinMaxScaling) String() string {
 	return "Min-Max scaling"
+}
+
+type StandardizationScaling struct {
+}
+
+func GetStats(header *sample.Header, samples []*sample.Sample) []runningvariance.RunningStat {
+	res := make([]runningvariance.RunningStat, len(header.Fields))
+	for _, sample := range samples {
+		for i, val := range sample.Values {
+			res[i].Push(float64(val))
+		}
+	}
+	return res
+}
+
+func (s *StandardizationScaling) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample) {
+	stats := GetStats(header, samples)
+	out := make([]*sample.Sample, len(samples))
+	for num, inSample := range samples {
+		values := make([]sample.Value, len(inSample.Values))
+		for i, val := range inSample.Values {
+			m := stats[i].Mean()
+			s := stats[i].StandardDeviation()
+			res := (float64(val) - m) / s
+			values[i] = sample.Value(res)
+		}
+		var outSample sample.Sample
+		outSample.Values = values
+		outSample.CopyMetadataFrom(*inSample)
+		out[num] = &outSample
+	}
+	return header, out
+}
+
+func (s *StandardizationScaling) String() string {
+	return "Standardization scaling"
 }
