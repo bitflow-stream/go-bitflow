@@ -182,6 +182,10 @@
 			"Rev": "5e675a3055a6f81f9b014b1dc2d5bb5fb8890618"
 		},
 		{
+			"ImportPath": "github.com/mitchellh/go-homedir",
+			"Rev": "1111e456ffea841564ac0fa5f69c26ef44dafec9"
+		},
+		{
 			"ImportPath": "github.com/rgbkrk/libvirt-go",
 			"Comment": "v2.12.0-31-g3cd5aac",
 			"Rev": "3cd5aacf75e3e3a884a0c2f833457dde75b7a1e9"
