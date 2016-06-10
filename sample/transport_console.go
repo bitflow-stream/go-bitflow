@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -19,7 +20,6 @@ func (sink *ConsoleSink) String() string {
 
 func (sink *ConsoleSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	log.Println("Printing", sink.Marshaller, "samples")
-	sink.stream = sink.Writer.Open(os.Stdout, sink.Marshaller)
 	return nil
 }
 
@@ -30,6 +30,8 @@ func (sink *ConsoleSink) Close() {
 }
 
 func (sink *ConsoleSink) Header(header Header) error {
+	sink.Stop()
+	sink.stream = sink.Writer.Open(nopWriteCloser{os.Stdout}, sink.Marshaller)
 	return sink.stream.Header(header)
 }
 
@@ -67,4 +69,14 @@ func (source *ConsoleSource) Stop() {
 	if err != nil && !isFileClosedError(err) {
 		log.Println("Error closing stdin:", err)
 	}
+}
+
+// ====== Helper type
+
+type nopWriteCloser struct {
+	io.WriteCloser
+}
+
+func (nopWriteCloser) Close() error {
+	return nil
 }

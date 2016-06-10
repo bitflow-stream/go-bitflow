@@ -49,15 +49,25 @@ func (data PlotData) Len() int {
 
 func (data PlotData) XY(i int) (x, y float64) {
 	values := data[i].Values
-	return float64(values[PlottedXAxis]), float64(values[PlottedYAxis])
+	if len(values) == 0 {
+		return 0, 0
+	} else if len(values) == 1 {
+		val := float64(values[PlottedXAxis])
+		return val, val
+	} else {
+		return float64(values[PlottedXAxis]), float64(values[PlottedYAxis])
+	}
 }
 
 func (p *Plotter) Header(header sample.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
-	} else if len(header.Fields) < 2 {
-		return fmt.Errorf("Cannot plot header with %v fields, need at least 2", len(header.Fields))
 	} else {
+		if len(header.Fields) == 0 {
+			log.Println("Warning: Not receiving any metrics for plotting")
+		} else if len(header.Fields) == 1 {
+			log.Println("Warning: Plotting only 1 metrics with y=x")
+		}
 		p.incomingHeader = header
 		p.data = make(map[string]PlotData)
 		return p.OutgoingSink.Header(header)
@@ -134,8 +144,14 @@ func (p *Plotter) fillPlot(plotData map[string]PlotData, copyBounds *plot.Plot) 
 	if err != nil {
 		return nil, err
 	}
-	plot.X.Label.Text = p.incomingHeader.Fields[PlottedXAxis]
-	plot.Y.Label.Text = p.incomingHeader.Fields[PlottedYAxis]
+	numFields := len(p.incomingHeader.Fields)
+	if numFields >= 2 {
+		plot.X.Label.Text = p.incomingHeader.Fields[PlottedXAxis]
+		plot.Y.Label.Text = p.incomingHeader.Fields[PlottedYAxis]
+	} else if numFields == 1 {
+		plot.X.Label.Text = p.incomingHeader.Fields[PlottedXAxis]
+		plot.Y.Label.Text = p.incomingHeader.Fields[PlottedXAxis]
+	}
 	if copyBounds != nil {
 		plot.X.Min = copyBounds.X.Min
 		plot.X.Max = copyBounds.X.Max
