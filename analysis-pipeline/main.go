@@ -12,8 +12,6 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
-var home, _ = homedir.Dir()
-
 func do_main() int {
 	var p sample.CmdSamplePipeline
 	p.ParseFlags()
@@ -45,9 +43,13 @@ func registerProcessingSteps(p *sample.SamplePipeline) {
 	// p.Add(new(AbstractProcessor))
 	// p.Add(&DecouplingProcessor{ChannelBuffer: 150000})
 
-	// separatePlots := true
-	// p.Add(&Plotter{OutputFile: home + "/clusters/clusters.jpg", ColorTag: "cluster", SeparatePlots: separatePlots})
-	// p.Add(&Plotter{OutputFile: home + "/clusters/classes.jpg", ColorTag: "cls", SeparatePlots: separatePlots})
+	plots(p, false)
+}
+
+func plots(p *sample.SamplePipeline, separatePlots bool) {
+	home, _ := homedir.Dir()
+	p.Add(&Plotter{OutputFile: home + "/clusters/clusters.jpg", ColorTag: "cluster", SeparatePlots: separatePlots})
+	p.Add(&Plotter{OutputFile: home + "/clusters/classes.jpg", ColorTag: "cls", SeparatePlots: separatePlots})
 }
 
 func dbscanRtreeCluster(p *sample.SamplePipeline) {
