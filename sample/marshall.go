@@ -13,7 +13,10 @@ const (
 
 func checkFirstCol(col string) error {
 	if col != time_col {
-		return fmt.Errorf("Unexpected first column %v, expected %v", col, time_col)
+		if len(col) >= 20 {
+			col = col[:20] + "..."
+		}
+		return fmt.Errorf("First column should be %v, but found: %q", time_col, col)
 	}
 	return nil
 }
