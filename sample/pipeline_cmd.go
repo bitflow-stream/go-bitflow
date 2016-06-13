@@ -34,7 +34,8 @@ func marshaller(format string) MetricMarshaller {
 
 type CmdSamplePipeline struct {
 	SamplePipeline
-	Tasks *golib.TaskGroup
+	Tasks          *golib.TaskGroup
+	SampleReadHook SampleReadHook
 
 	read_console      bool
 	read_tcp_listen   string
@@ -91,7 +92,10 @@ func (p *CmdSamplePipeline) Init() {
 
 	// ====== Initialize source(s)
 	var unmarshaller string
-	reader := SampleReader{p.handler}
+	reader := SampleReader{
+		ParallelSampleHandler: p.handler,
+		ReadHook:              p.SampleReadHook,
+	}
 	if p.read_console {
 		p.SetSource(&ConsoleSource{Reader: reader})
 		unmarshaller = default_console_input

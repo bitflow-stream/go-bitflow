@@ -167,7 +167,8 @@ func (source *FileSource) readFile(filename string) (err error) {
 			err = fileSourceClosed
 		} else {
 			defer stream.Close() // Drop error
-			err = stream.ReadNamedSamples(file.Name())
+			name := file.Name()
+			err = stream.ReadNamedSamples(name)
 		}
 	}
 	return

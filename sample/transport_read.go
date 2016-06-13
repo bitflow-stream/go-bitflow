@@ -13,15 +13,20 @@ import (
 // Unmarshalls samples from an io.Reader, parallelizing the parsing
 type SampleReader struct {
 	ParallelSampleHandler
+	ReadHook SampleReadHook // Allows modifying tags on read samples
 }
+
+type SampleReadHook func(sample *Sample, source string)
 
 type SampleInputStream struct {
 	ParallelSampleStream
+	sampleReader     *SampleReader
 	reader           *bufio.Reader
 	underlyingReader io.ReadCloser
 	num_samples      int
 	numParsers       int
 	header           Header
+	outHeader        Header
 	um               Unmarshaller
 	sink             MetricSink
 }
@@ -29,6 +34,7 @@ type SampleInputStream struct {
 func (r *SampleReader) Open(input io.ReadCloser, um Unmarshaller, sink MetricSink) *SampleInputStream {
 	return &SampleInputStream{
 		reader:           bufio.NewReaderSize(input, r.IoBuffer),
+		sampleReader:     r,
 		underlyingReader: input,
 		um:               um,
 		sink:             sink,
@@ -41,7 +47,7 @@ func (r *SampleReader) Open(input io.ReadCloser, um Unmarshaller, sink MetricSin
 	}
 }
 
-func (stream *SampleInputStream) ReadSamples() (int, error) {
+func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 	if err := stream.readHeader(); err != nil {
 		return 0, err
 	}
@@ -49,7 +55,7 @@ func (stream *SampleInputStream) ReadSamples() (int, error) {
 	// Parse samples
 	for i := 0; i < stream.numParsers || i < 1; i++ {
 		stream.wg.Add(1)
-		go stream.parseSamples()
+		go stream.parseSamples(source)
 	}
 
 	// Forward parsed samples
@@ -67,7 +73,7 @@ func (stream *SampleInputStream) ReadSamples() (int, error) {
 func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error) {
 	var num_samples int
 	log.Println("Reading", stream.um, "from", sourceName)
-	num_samples, err = stream.ReadSamples()
+	num_samples, err = stream.ReadSamples(sourceName)
 	log.Printf("Read %v %v samples from %v\n", num_samples, stream.um, sourceName)
 	return
 }
@@ -77,7 +83,7 @@ func (stream *SampleInputStream) ReadTcpSamples(conn *net.TCPConn, checkClosed f
 	log.Println("Receiving", stream.um, "from", remote)
 	var err error
 	var num_samples int
-	if num_samples, err = stream.ReadSamples(); err == nil {
+	if num_samples, err = stream.ReadSamples(remote.String()); err == nil {
 		log.Println("Connection closed by", remote)
 	} else {
 		if checkClosed() {
@@ -112,7 +118,8 @@ func (stream *SampleInputStream) readHeader() (err error) {
 		return
 	}
 	log.Printf("Reading %v metrics\n", len(stream.header.Fields))
-	if err = stream.sink.Header(stream.header); err != nil {
+	stream.outHeader = Header{Fields: stream.header.Fields, HasTags: true}
+	if err = stream.sink.Header(stream.outHeader); err != nil {
 		return
 	}
 	return
@@ -148,14 +155,14 @@ func (stream *SampleInputStream) readData() {
 	}
 }
 
-func (stream *SampleInputStream) parseSamples() {
+func (stream *SampleInputStream) parseSamples(source string) {
 	defer stream.wg.Done()
 	for sample := range stream.incoming {
-		stream.parseOne(sample)
+		stream.parseOne(source, sample)
 	}
 }
 
-func (stream *SampleInputStream) parseOne(sample *BufferedSample) {
+func (stream *SampleInputStream) parseOne(source string, sample *BufferedSample) {
 	defer sample.NotifyDone()
 	if stream.HasError() {
 		return
@@ -164,6 +171,9 @@ func (stream *SampleInputStream) parseOne(sample *BufferedSample) {
 		stream.err = err
 		return
 	} else {
+		if hook := stream.sampleReader.ReadHook; hook != nil {
+			hook(&parsedSample, source)
+		}
 		sample.sample = parsedSample
 	}
 }
@@ -174,7 +184,7 @@ func (stream *SampleInputStream) sinkSamples() {
 		if err := sample.WaitDone(); err != nil {
 			return
 		}
-		if err := stream.sink.Sample(sample.sample, stream.header); err != nil {
+		if err := stream.sink.Sample(sample.sample, stream.outHeader); err != nil {
 			stream.err = err
 			return
 		}

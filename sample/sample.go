@@ -43,6 +43,14 @@ type Sample struct {
 	Tags   map[string]string
 }
 
+func (sample *Sample) SetTag(name, value string) {
+	// TODO assert consistent ordering of tags...
+	if sample.Tags == nil {
+		sample.Tags = make(map[string]string)
+	}
+	sample.Tags[name] = value
+}
+
 func (sample *Sample) TagString() string {
 	var b bytes.Buffer
 	started := false

@@ -18,7 +18,7 @@ func do_main() int {
 	flag.Parse()
 	defer golib.ProfileCpu()()
 	p.Init()
-	registerProcessingSteps(&p.SamplePipeline)
+	handlePipeline(&p)
 	return p.StartAndWait()
 }
 
@@ -26,14 +26,19 @@ func main() {
 	os.Exit(do_main())
 }
 
+func handlePipeline(pipeline *sample.CmdSamplePipeline) {
+	setSampleSource(pipeline)
+	registerProcessingSteps(&pipeline.SamplePipeline)
+}
+
 func registerProcessingSteps(p *sample.SamplePipeline) {
-	// p.Add(NewMetricFilter().ExcludeRegex("libvirt|ovsdb")) // .IncludeRegex("cpu|load/|mem/|net-io/|disk-usage///|num_procs"))
+	p.Add(NewMetricFilter().ExcludeRegex("libvirt|ovsdb")) // .IncludeRegex("cpu|load/|mem/|net-io/|disk-usage///|num_procs"))
 	// filterNoiseClusters(p)
 
 	// dbscanRtreeCluster(p)
 	// dbscanParallelCluster(p)
 
-	// p.Add(new(BatchProcessor))
+	p.Add(new(BatchProcessor).Add(new(TimestampSort)))
 	// .Add(new(TimestampSort))
 	// .Add(new(MinMaxScaling))
 	// .Add(new(StandardizationScaling))
@@ -71,4 +76,11 @@ func filterNoiseClusters(p *sample.SamplePipeline) {
 	p.Add(&SampleFilter{IncludeFilter: func(s *sample.Sample) bool {
 		return s.Tags[dbscan.ClusterTag] != noise
 	}})
+}
+
+func setSampleSource(pipeline *sample.CmdSamplePipeline) {
+	pipeline.SampleReadHook = func(sample *sample.Sample, source string) {
+		sample.SetTag("cls", source)
+		sample.SetTag("src", source)
+	}
 }
