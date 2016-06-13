@@ -1,10 +1,9 @@
 package dbscan
 
-import "log"
+import (
+	"log"
 
-const (
-	ClusterUnclassified = 0
-	ClusterNoise        = -1
+	"github.com/antongulenko/data2go/analysis"
 )
 
 type Point interface {
@@ -28,7 +27,7 @@ func (d *Dbscan) Cluster(points SetOfPoints) {
 
 		log.Println("Checking point", i)
 
-		if point.GetCluster() == ClusterUnclassified {
+		if point.GetCluster() == analysis.ClusterUnclassified {
 			if d.expandCluster(points, point, clusterId) {
 				clusterId++
 			}
@@ -39,7 +38,7 @@ func (d *Dbscan) Cluster(points SetOfPoints) {
 func (d *Dbscan) expandCluster(points SetOfPoints, point Point, clusterId int) bool {
 	seeds := points.RegionQuery(point, d.Eps)
 	if len(seeds) < d.MinPts {
-		point.SetCluster(ClusterNoise)
+		point.SetCluster(analysis.ClusterNoise)
 		return false
 	} else {
 		d.setClusterIds(seeds, clusterId)
@@ -50,8 +49,8 @@ func (d *Dbscan) expandCluster(points SetOfPoints, point Point, clusterId int) b
 			if len(result) >= d.MinPts {
 				for resultP := range result {
 					resultPCluster := resultP.GetCluster()
-					if resultPCluster == ClusterUnclassified || resultPCluster == ClusterNoise {
-						if resultPCluster == ClusterUnclassified {
+					if resultPCluster == analysis.ClusterUnclassified || resultPCluster == analysis.ClusterNoise {
+						if resultPCluster == analysis.ClusterUnclassified {
 							seeds[resultP] = true
 						}
 						resultP.SetCluster(clusterId)

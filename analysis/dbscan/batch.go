@@ -8,11 +8,6 @@ import (
 	"github.com/carbocation/runningvariance"
 )
 
-const (
-	ClusterTag    = "cluster"
-	ClusterPrefix = "Cluster-"
-)
-
 type DbscanBatchClusterer struct {
 	Dbscan
 
@@ -30,7 +25,7 @@ func (c *DbscanBatchClusterer) printSummary(clusters map[string][]*sample.Sample
 }
 
 func (c *DbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample) {
-	log.Println("Building tree...")
+	log.Println("Building RTree...")
 
 	tree := NewRtreeSetOfPoints(len(header.Fields), c.TreeMinChildren, c.TreeMaxChildren, c.TreePointWidth)
 	for _, sample := range samples {
@@ -38,8 +33,7 @@ func (c *DbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sa
 	}
 
 	log.Println("Clustering ...")
-
-	clusters := tree.Cluster(&c.Dbscan, ClusterTag, ClusterPrefix)
+	clusters := tree.Cluster(&c.Dbscan)
 	c.printSummary(clusters)
 	return header, samples
 }

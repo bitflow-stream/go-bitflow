@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"os"
-	"strconv"
+	"path/filepath"
 
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/analysis/dbscan"
@@ -26,19 +26,20 @@ func main() {
 	os.Exit(do_main())
 }
 
-func handlePipeline(pipeline *sample.CmdSamplePipeline) {
-	setSampleSource(pipeline)
-	registerProcessingSteps(&pipeline.SamplePipeline)
+func handlePipeline(p *sample.CmdSamplePipeline) {
+	//	setSampleTags(p)
+	//	convertFilenames(&p.SamplePipeline)
+	registerProcessingSteps(&p.SamplePipeline)
 }
 
 func registerProcessingSteps(p *sample.SamplePipeline) {
-	p.Add(NewMetricFilter().ExcludeRegex("libvirt|ovsdb")) // .IncludeRegex("cpu|load/|mem/|net-io/|disk-usage///|num_procs"))
+	// p.Add(NewMetricFilter().ExcludeRegex("libvirt|ovsdb")) // .IncludeRegex("cpu|load/|mem/|net-io/|disk-usage///|num_procs"))
 	// filterNoiseClusters(p)
 
 	// dbscanRtreeCluster(p)
 	// dbscanParallelCluster(p)
 
-	p.Add(new(BatchProcessor).Add(new(TimestampSort)))
+	// p.Add(new(BatchProcessor))
 	// .Add(new(TimestampSort))
 	// .Add(new(MinMaxScaling))
 	// .Add(new(StandardizationScaling))
@@ -53,8 +54,8 @@ func registerProcessingSteps(p *sample.SamplePipeline) {
 
 func plots(p *sample.SamplePipeline, separatePlots bool) {
 	home, _ := homedir.Dir()
-	p.Add(&Plotter{OutputFile: home + "/clusters/clusters.jpg", ColorTag: "cluster", SeparatePlots: separatePlots})
-	p.Add(&Plotter{OutputFile: home + "/clusters/classes.jpg", ColorTag: "cls", SeparatePlots: separatePlots})
+	p.Add(&Plotter{OutputFile: home + "/clusters/clusters.jpg", ColorTag: ClusterTag, SeparatePlots: separatePlots})
+	p.Add(&Plotter{OutputFile: home + "/clusters/classes.jpg", ColorTag: ClassTag, SeparatePlots: separatePlots})
 }
 
 func dbscanRtreeCluster(p *sample.SamplePipeline) {
@@ -72,15 +73,23 @@ func dbscanParallelCluster(p *sample.SamplePipeline) {
 }
 
 func filterNoiseClusters(p *sample.SamplePipeline) {
-	noise := dbscan.ClusterPrefix + strconv.Itoa(dbscan.ClusterNoise)
+	noise := ClusterName(ClusterNoise)
 	p.Add(&SampleFilter{IncludeFilter: func(s *sample.Sample) bool {
-		return s.Tags[dbscan.ClusterTag] != noise
+		return s.Tags[ClusterTag] != noise
 	}})
 }
 
-func setSampleSource(pipeline *sample.CmdSamplePipeline) {
+func setSampleTags(pipeline *sample.CmdSamplePipeline) {
 	pipeline.SampleReadHook = func(sample *sample.Sample, source string) {
-		sample.SetTag("cls", source)
-		sample.SetTag("src", source)
+		sample.SetTag(ClassTag, source)
+		sample.SetTag(SourceTag, source)
+	}
+}
+
+func convertFilenames(p *sample.SamplePipeline) {
+	if filesource, ok := p.Source.(*sample.FileSource); ok {
+		filesource.ConvertFilename = func(filename string) string {
+			return filepath.Base(filepath.Dir(filepath.Dir(filename)))
+		}
 	}
 }

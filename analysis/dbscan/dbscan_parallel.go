@@ -5,6 +5,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"
 	parallel_dbscan "github.com/antongulenko/go-DBSCAN"
 	"github.com/carbocation/runningvariance"
@@ -62,14 +63,14 @@ func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *sample.Header, sampl
 	c.printSummary(clusters)
 	outSamples := make([]*sample.Sample, 0, len(samples))
 	for i, clust := range clusters {
-		clusterName := fmt.Sprintf("Cluster-%v", i)
+		clusterName := analysis.ClusterName(i)
 		for _, p := range clust {
 			point, ok := p.(*ParallelDbscanPoint)
 			if !ok {
 				panic(fmt.Sprintf("Wrong parallel_dbscan.ClusterablePoint implementation (%T): %v", p, p))
 			}
 			outSample := point.sample
-			outSample.Tags[ClusterTag] = clusterName
+			outSample.Tags[analysis.ClusterTag] = clusterName
 			outSamples = append(outSamples, outSample)
 		}
 	}

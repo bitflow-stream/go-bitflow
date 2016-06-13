@@ -105,10 +105,11 @@ func (group *FileGroup) DeleteFiles() error {
 // ==================== File data source ====================
 type FileSource struct {
 	AbstractUnmarshallingMetricSource
-	Reader    SampleReader
-	Filenames []string
-	stream    *SampleInputStream
-	closed    *golib.OneshotCondition
+	Reader          SampleReader
+	Filenames       []string
+	ConvertFilename func(string) string // Optional hook for converting the filename to some other string
+	stream          *SampleInputStream
+	closed          *golib.OneshotCondition
 }
 
 var fileSourceClosed = errors.New("file source is closed")
@@ -168,6 +169,9 @@ func (source *FileSource) readFile(filename string) (err error) {
 		} else {
 			defer stream.Close() // Drop error
 			name := file.Name()
+			if converter := source.ConvertFilename; converter != nil {
+				name = converter(name)
+			}
 			err = stream.ReadNamedSamples(name)
 		}
 	}
