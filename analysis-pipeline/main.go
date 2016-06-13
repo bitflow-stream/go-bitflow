@@ -43,7 +43,7 @@ func registerProcessingSteps(p *sample.SamplePipeline) {
 	// p.Add(new(AbstractProcessor))
 	// p.Add(&DecouplingProcessor{ChannelBuffer: 150000})
 
-	plots(p, false)
+	// plots(p, false)
 }
 
 func plots(p *sample.SamplePipeline, separatePlots bool) {
