@@ -3,8 +3,8 @@ package dbscan
 import (
 	"fmt"
 	"log"
-	"strconv"
 
+	"github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"
 	"github.com/dhconnelly/rtreego"
 )
@@ -60,7 +60,7 @@ func (tree *RtreeSetOfPoints) AllPoints() []Point {
 	return tree.allPoints
 }
 
-func (tree *RtreeSetOfPoints) Cluster(d *Dbscan, clusterTag, tagPrefix string) map[string][]*sample.Sample {
+func (tree *RtreeSetOfPoints) Cluster(d *Dbscan) map[string][]*sample.Sample {
 	result := make(map[string][]*sample.Sample, len(tree.allPoints))
 	d.Cluster(tree)
 	for _, point := range tree.allPoints {
@@ -68,8 +68,8 @@ func (tree *RtreeSetOfPoints) Cluster(d *Dbscan, clusterTag, tagPrefix string) m
 		if !ok {
 			panic(fmt.Sprintf("Unexpected Point implementation %T: %v", point, point))
 		}
-		clusterName := tagPrefix + strconv.Itoa(rtreePoint.cluster)
-		rtreePoint.sample.Tags[clusterTag] = clusterName
+		clusterName := analysis.ClusterName(rtreePoint.cluster)
+		rtreePoint.sample.Tags[analysis.ClusterTag] = clusterName
 		result[clusterName] = append(result[clusterName], rtreePoint.sample)
 	}
 	return result
@@ -93,7 +93,7 @@ func NewRtreePoint(s *sample.Sample, width float64) *RtreePoint {
 	}
 	return &RtreePoint{
 		sample:  s,
-		cluster: ClusterUnclassified,
+		cluster: analysis.ClusterUnclassified,
 		point:   point,
 		rect:    point.ToRect(width),
 	}
