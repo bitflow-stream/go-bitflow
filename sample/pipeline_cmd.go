@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"errors"
 	"flag"
 	"log"
 	"runtime"
@@ -62,6 +63,7 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
 	flag.StringVar(&p.read_tcp_download, "D", "", "Data source: receive samples by connecting to remote endpoint")
 
+	flag.Var(&fileRegexValue{p}, "FR", "File Regex: Input files matching regex, previous -F parameter is used as start directory")
 	flag.UintVar(&p.tcp_conn_limit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
 
 	flag.IntVar(&p.handler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
@@ -76,6 +78,29 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.StringVar(&p.format_connect, "sf", "b", "Data format for TCP output, one of "+supported_formats)
 	flag.StringVar(&p.sink_listen, "l", "", "Data sink: accept TCP connections for sending out data")
 	flag.StringVar(&p.format_listen, "lf", "b", "Data format for TCP server output, one of "+supported_formats)
+}
+
+type fileRegexValue struct {
+	pipeline *CmdSamplePipeline
+}
+
+func (f *fileRegexValue) String() string {
+	return ""
+}
+
+func (f *fileRegexValue) Set(param string) error {
+	if len(f.pipeline.read_files) == 0 {
+		return errors.New("-FR flag must appear after -F")
+	}
+	dir := f.pipeline.read_files[0]
+	f.pipeline.read_files = f.pipeline.read_files[1:]
+	files, err := ListMatchingFiles(dir, param)
+	if err != nil {
+		log.Fatalf("Error applying -FR flag: %v\n", err)
+		return err
+	}
+	f.pipeline.read_files = append(f.pipeline.read_files, files...)
+	return nil
 }
 
 // Must be called before p.Init()

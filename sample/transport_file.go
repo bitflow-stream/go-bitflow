@@ -198,6 +198,24 @@ func isFileClosedError(err error) bool {
 	return ok && patherr.Err == syscall.EBADF
 }
 
+func ListMatchingFiles(dir string, regexStr string) ([]string, error) {
+	regex, err := regexp.Compile(regexStr)
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	walkErr := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && regex.MatchString(path) {
+			result = append(result, path)
+		}
+		return nil
+	})
+	return result, walkErr
+}
+
 // ==================== File data sink ====================
 type FileSink struct {
 	AbstractMarshallingMetricSink
