@@ -8,6 +8,7 @@ import (
 	"github.com/antongulenko/golib"
 )
 
+var sampleReadHook sample.SampleReadHook
 var handlePipeline func(p *sample.CmdSamplePipeline)
 
 // Example pipeline with just the basic input and output parts (no data processing)
@@ -18,6 +19,7 @@ func do_main() int {
 	p.ParseFlags()
 	flag.Parse()
 	defer golib.ProfileCpu()()
+	p.SampleReadHook = sampleReadHook
 	p.Init()
 	if handlePipeline != nil {
 		handlePipeline(&p)
