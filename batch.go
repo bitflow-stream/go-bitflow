@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"time"
 
 	"github.com/antongulenko/data2go/sample"
 )
@@ -121,4 +122,112 @@ func (*TimestampSort) ProcessBatch(header *sample.Header, samples []*sample.Samp
 
 func (*TimestampSort) String() string {
 	return "TimestampSort"
+}
+
+// ==================== Multi-header merger ====================
+// Can tolerate multiple headers, fills missing data up with default values.
+type MultiHeaderMerger struct {
+	AbstractProcessor
+	header *sample.Header
+
+	hasTags bool
+	metrics map[string][]sample.Value
+	samples []SampleMetadata
+}
+
+func NewMultiHeaderMerger() *MultiHeaderMerger {
+	return &MultiHeaderMerger{
+		metrics: make(map[string][]sample.Value),
+	}
+}
+
+type SampleMetadata struct {
+	Time time.Time
+	Tags map[string]string
+}
+
+func (p *MultiHeaderMerger) Header(_ sample.Header) error {
+	return p.CheckSink()
+}
+
+func (p *MultiHeaderMerger) Sample(sample sample.Sample, header sample.Header) error {
+	if err := p.CheckSink(); err != nil {
+		return err
+	}
+	if err := sample.Check(header); err != nil {
+		return err
+	}
+	p.addSample(sample, header)
+	return nil
+}
+
+func (p *MultiHeaderMerger) addSample(incomingSample sample.Sample, header sample.Header) {
+	handledMetrics := make(map[string]bool, len(header.Fields))
+	for i, field := range header.Fields {
+		metrics, ok := p.metrics[field]
+		if !ok {
+			metrics = make([]sample.Value, len(p.samples)) // Filled up with zeroes
+		}
+		p.metrics[field] = append(metrics, incomingSample.Values[i])
+		handledMetrics[field] = true
+	}
+	for field := range p.metrics {
+		if ok := handledMetrics[field]; !ok {
+			p.metrics[field] = append(p.metrics[field], 0) // Filled up with zeroes
+		}
+	}
+
+	p.samples = append(p.samples, SampleMetadata{
+		Time: incomingSample.Time,
+		Tags: incomingSample.Tags,
+	})
+	p.hasTags = p.hasTags || header.HasTags
+}
+
+func (p *MultiHeaderMerger) Close() {
+	defer p.CloseSink(nil)
+	if len(p.samples) == 0 {
+		log.Println(p.String(), "has no samples stored")
+		return
+	}
+	log.Println(p, "reconstructing and flushing", len(p.samples), "samples with", len(p.metrics), "metrics")
+	outHeader := p.reconstructHeader()
+	if err := p.OutgoingSink.Header(outHeader); err != nil {
+		log.Println("Error flushing reconstructed header:", err)
+		return
+	}
+	for index := range p.samples {
+		outSample := p.reconstructSample(index, outHeader)
+		if err := p.OutgoingSink.Sample(outSample, outHeader); err != nil {
+			log.Println("Error flushing reconstructed samples:", err)
+			return
+		}
+	}
+}
+
+func (p *MultiHeaderMerger) reconstructHeader() sample.Header {
+	fields := make([]string, 0, len(p.metrics))
+	for field := range p.metrics {
+		fields = append(fields, field)
+	}
+	sort.Strings(fields)
+	return sample.Header{Fields: fields, HasTags: p.hasTags}
+}
+
+func (p *MultiHeaderMerger) reconstructSample(num int, header sample.Header) sample.Sample {
+	values := make([]sample.Value, len(p.metrics))
+	for i, field := range header.Fields {
+		slice := p.metrics[field]
+		if len(slice) != len(p.samples) {
+			// Should never happen
+			panic(fmt.Sprintf("Only %v values for field %v, should be %v", len(slice), field, len(p.samples)))
+		}
+		values[i] = slice[num]
+	}
+	meta := p.samples[num]
+	return sample.Sample{Values: values, Time: meta.Time, Tags: meta.Tags}
+}
+
+func (p *MultiHeaderMerger) String() string {
+	return "MultiHeaderMerger"
 }
