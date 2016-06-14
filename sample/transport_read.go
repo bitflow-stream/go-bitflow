@@ -20,7 +20,7 @@ type SampleReadHook func(sample *Sample, source string)
 
 type SampleInputStream struct {
 	ParallelSampleStream
-	sampleReader     *SampleReader
+	readHook         SampleReadHook
 	reader           *bufio.Reader
 	underlyingReader io.ReadCloser
 	num_samples      int
@@ -34,7 +34,7 @@ type SampleInputStream struct {
 func (r *SampleReader) Open(input io.ReadCloser, um Unmarshaller, sink MetricSink) *SampleInputStream {
 	return &SampleInputStream{
 		reader:           bufio.NewReaderSize(input, r.IoBuffer),
-		sampleReader:     r,
+		readHook:         r.ReadHook,
 		underlyingReader: input,
 		um:               um,
 		sink:             sink,
@@ -118,7 +118,8 @@ func (stream *SampleInputStream) readHeader() (err error) {
 		return
 	}
 	log.Printf("Reading %v metrics\n", len(stream.header.Fields))
-	stream.outHeader = Header{Fields: stream.header.Fields, HasTags: true}
+	hasTags := stream.header.HasTags || stream.readHook != nil
+	stream.outHeader = Header{Fields: stream.header.Fields, HasTags: hasTags}
 	if err = stream.sink.Header(stream.outHeader); err != nil {
 		return
 	}
@@ -171,7 +172,7 @@ func (stream *SampleInputStream) parseOne(source string, sample *BufferedSample)
 		stream.err = err
 		return
 	} else {
-		if hook := stream.sampleReader.ReadHook; hook != nil {
+		if hook := stream.readHook; hook != nil {
 			hook(&parsedSample, source)
 		}
 		sample.sample = parsedSample
