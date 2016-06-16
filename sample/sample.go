@@ -40,21 +40,34 @@ func (h *Header) Clone(newFields []string) Header {
 type Sample struct {
 	Values []Value
 	Time   time.Time
-	Tags   map[string]string
+
+	tags        map[string]string
+	orderedTags []string // All keys from tags, with consistent ordering
 }
 
 func (sample *Sample) SetTag(name, value string) {
-	// TODO assert consistent ordering of tags...
-	if sample.Tags == nil {
-		sample.Tags = make(map[string]string)
+	if sample.tags == nil {
+		sample.tags = make(map[string]string)
 	}
-	sample.Tags[name] = value
+	if _, exists := sample.tags[name]; !exists {
+		sample.orderedTags = append(sample.orderedTags, name)
+	}
+	sample.tags[name] = value
+}
+
+func (sample *Sample) Tag(name string) string {
+	return sample.tags[name]
+}
+
+func (sample *Sample) NumTags() int {
+	return len(sample.tags)
 }
 
 func (sample *Sample) TagString() string {
 	var b bytes.Buffer
 	started := false
-	for key, value := range sample.Tags {
+	for _, key := range sample.orderedTags {
+		value := sample.tags[key]
 		if started {
 			b.Write([]byte(tag_separator))
 		}
@@ -71,7 +84,7 @@ func escapeTagString(str string) string {
 }
 
 func (sample *Sample) ParseTagString(tags string) error {
-	sample.Tags = make(map[string]string)
+	sample.tags = make(map[string]string)
 	fields := strings.FieldsFunc(tags, func(r rune) bool {
 		return r == tag_equals_rune || r == tag_separator_rune
 	})
@@ -79,7 +92,7 @@ func (sample *Sample) ParseTagString(tags string) error {
 		return fmt.Errorf("Illegal tags string: %v", tags)
 	}
 	for i := 0; i < len(fields); i += 2 {
-		sample.Tags[fields[i]] = fields[i+1]
+		sample.SetTag(fields[i], fields[i+1])
 	}
 	return nil
 }
@@ -95,9 +108,11 @@ func (sample *Sample) Check(header Header) error {
 
 func (sample *Sample) CopyMetadataFrom(other Sample) {
 	sample.Time = other.Time
-	sample.Tags = make(map[string]string)
-	for key, val := range other.Tags {
-		sample.Tags[key] = val
+	sample.tags = make(map[string]string, len(other.tags))
+	sample.orderedTags = make([]string, len(other.orderedTags))
+	copy(sample.orderedTags, other.orderedTags)
+	for key, val := range other.tags {
+		sample.tags[key] = val
 	}
 }
 
@@ -138,4 +153,22 @@ func (header *Header) Equals(other *Header) bool {
 		}
 	}
 	return true
+}
+
+type SampleMetadata struct {
+	Time        time.Time
+	Tags        map[string]string
+	orderedTags []string
+}
+
+func (sample *Sample) Metadata() SampleMetadata {
+	return SampleMetadata{
+		Time:        sample.Time,
+		Tags:        sample.tags,
+		orderedTags: sample.orderedTags,
+	}
+}
+
+func (meta *SampleMetadata) NewSample(values []Value) Sample {
+	return Sample{Values: values, Time: meta.Time, tags: meta.Tags, orderedTags: meta.orderedTags}
 }

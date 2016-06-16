@@ -146,7 +146,7 @@ func (p *SamplePrinter) Sample(sample sample.Sample, header sample.Header) error
 		return err
 	}
 	tags := ""
-	if len(sample.Tags) > 0 {
+	if sample.NumTags() > 0 {
 		tags = " (" + sample.TagString() + ")"
 	}
 	log.Printf("Processing Sample from %v, len %v%v\n", sample.Time, len(sample.Values), tags)

@@ -69,7 +69,7 @@ func (tree *RtreeSetOfPoints) Cluster(d *Dbscan) map[string][]*sample.Sample {
 			panic(fmt.Sprintf("Unexpected Point implementation %T: %v", point, point))
 		}
 		clusterName := analysis.ClusterName(rtreePoint.cluster)
-		rtreePoint.sample.Tags[analysis.ClusterTag] = clusterName
+		rtreePoint.sample.SetTag(analysis.ClusterTag, clusterName)
 		result[clusterName] = append(result[clusterName], rtreePoint.sample)
 	}
 	return result

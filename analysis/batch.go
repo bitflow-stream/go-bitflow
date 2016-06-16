@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"sort"
-	"time"
 
 	"github.com/antongulenko/data2go/sample"
 )
@@ -132,18 +131,13 @@ type MultiHeaderMerger struct {
 
 	hasTags bool
 	metrics map[string][]sample.Value
-	samples []SampleMetadata
+	samples []sample.SampleMetadata
 }
 
 func NewMultiHeaderMerger() *MultiHeaderMerger {
 	return &MultiHeaderMerger{
 		metrics: make(map[string][]sample.Value),
 	}
-}
-
-type SampleMetadata struct {
-	Time time.Time
-	Tags map[string]string
 }
 
 func (p *MultiHeaderMerger) Header(_ sample.Header) error {
@@ -177,10 +171,7 @@ func (p *MultiHeaderMerger) addSample(incomingSample sample.Sample, header sampl
 		}
 	}
 
-	p.samples = append(p.samples, SampleMetadata{
-		Time: incomingSample.Time,
-		Tags: incomingSample.Tags,
-	})
+	p.samples = append(p.samples, incomingSample.Metadata())
 	p.hasTags = p.hasTags || header.HasTags
 }
 
@@ -224,8 +215,7 @@ func (p *MultiHeaderMerger) reconstructSample(num int, header sample.Header) sam
 		}
 		values[i] = slice[num]
 	}
-	meta := p.samples[num]
-	return sample.Sample{Values: values, Time: meta.Time, Tags: meta.Tags}
+	return p.samples[num].NewSample(values)
 }
 
 func (p *MultiHeaderMerger) String() string {
