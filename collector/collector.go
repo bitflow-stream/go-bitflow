@@ -207,7 +207,7 @@ func (source *CollectorSource) constructSample(metrics []string) (sample.Header,
 		}
 		set[collector] = true
 	}
-	return sample.Header{fields, samples_have_tags}, values, set
+	return sample.Header{Fields: fields, HasTags: samples_have_tags}, values, set
 }
 
 func (source *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collector, stopper *golib.Stopper, interval time.Duration) {

@@ -203,6 +203,9 @@ func (p *CmdSamplePipeline) Init() {
 func (p *CmdSamplePipeline) StartAndWait() int {
 	p.Construct(p.Tasks)
 	log.Println("Press Ctrl-C to interrupt")
-	p.Tasks.Add(&golib.NoopTask{golib.ExternalInterrupt(), "external interrupt"})
+	p.Tasks.Add(&golib.NoopTask{
+		Chan:        golib.ExternalInterrupt(),
+		Description: "external interrupt",
+	})
 	return p.Tasks.PrintWaitAndStop()
 }

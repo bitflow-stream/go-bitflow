@@ -67,7 +67,6 @@ func (*BinaryMarshaller) ReadHeader(reader *bufio.Reader) (header Header, err er
 		}
 		first = false
 	}
-	return
 }
 
 func (m *BinaryMarshaller) WriteSample(sample Sample, header Header, writer io.Writer) error {
