@@ -86,8 +86,8 @@ func (p *Plotter) Sample(sample sample.Sample, header sample.Header) error {
 }
 
 func (p *Plotter) plotSample(sample sample.Sample) {
-	key, ok := sample.Tags[p.ColorTag]
-	if !ok {
+	key := sample.Tag(p.ColorTag)
+	if key == "" {
 		key = "(none)"
 	}
 	p.data[key] = append(p.data[key], sample)

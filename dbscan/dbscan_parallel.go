@@ -70,7 +70,7 @@ func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *sample.Header, sampl
 				panic(fmt.Sprintf("Wrong parallel_dbscan.ClusterablePoint implementation (%T): %v", p, p))
 			}
 			outSample := point.sample
-			outSample.Tags[analysis.ClusterTag] = clusterName
+			outSample.SetTag(analysis.ClusterTag, clusterName)
 			outSamples = append(outSamples, outSample)
 		}
 	}
