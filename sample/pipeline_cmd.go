@@ -52,6 +52,7 @@ type CmdSamplePipeline struct {
 	format_listen     string
 	format_file       string
 	tcp_conn_limit    uint
+	tcp_listen_limit  uint
 	handler           ParallelSampleHandler
 }
 
@@ -64,6 +65,7 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.Var(&p.read_tcp_download, "D", "Data source: receive samples by connecting to remote endpoint(s)")
 
 	flag.Var(&fileRegexValue{p}, "FR", "File Regex: Input files matching regex, previous -F parameter is used as start directory")
+	flag.UintVar(&p.tcp_listen_limit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
 	flag.UintVar(&p.tcp_conn_limit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
 
 	flag.IntVar(&p.handler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
@@ -127,6 +129,7 @@ func (p *CmdSamplePipeline) Init() {
 	}
 	if p.read_tcp_listen != "" {
 		source := NewTcpListenerSource(p.read_tcp_listen, reader)
+		source.SimultaneousConnections = p.tcp_listen_limit
 		source.TcpConnLimit = p.tcp_conn_limit
 		p.SetSource(source)
 		unmarshaller = default_tcp_input

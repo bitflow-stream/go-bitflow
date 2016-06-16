@@ -12,15 +12,18 @@ import (
 type TCPListenerSource struct {
 	AbstractUnmarshallingMetricSource
 	TCPConnCounter
-	Reader SampleReader
-	stream *SampleInputStream
-	remote net.Addr
-	task   *golib.TCPListenerTask
+	Reader                  SampleReader
+	SimultaneousConnections uint
+
+	task             *golib.TCPListenerTask
+	synchronizedSink MetricSinkBase
+	connections      map[*TCPListenerConnection]bool
 }
 
 func NewTcpListenerSource(endpoint string, reader SampleReader) *TCPListenerSource {
 	source := &TCPListenerSource{
-		Reader: reader,
+		Reader:      reader,
+		connections: make(map[*TCPListenerConnection]bool),
 	}
 	source.task = &golib.TCPListenerTask{
 		ListenEndpoint: endpoint,
@@ -37,14 +40,19 @@ func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	source.task.StopHook = func() {
 		source.CloseSink(wg)
 	}
+	if source.SimultaneousConnections == 1 {
+		source.synchronizedSink = source.OutgoingSink
+	} else {
+		source.synchronizedSink = &SynchronizingMetricSink{OutgoingSink: source.OutgoingSink}
+	}
 	return source.task.ExtendedStart(func(addr net.Addr) {
 		log.Println("Listening for incoming", source.Unmarshaller, "samples on", addr)
 	}, wg)
 }
 
 func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.TCPConn) {
-	if source.stream != nil {
-		log.Printf("Rejecting connection from %v, already connected to %v.\n", conn.RemoteAddr(), source.remote)
+	if source.SimultaneousConnections > 0 && len(source.connections) >= int(source.SimultaneousConnections) {
+		log.Printf("Rejecting connection from %v, already have %v connections\n", conn.RemoteAddr(), len(source.connections))
 		_ = conn.Close() // Drop error
 		return
 	}
@@ -52,38 +60,47 @@ func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.
 		return
 	}
 	log.Println("Accepted connection from", conn.RemoteAddr())
-	stream := source.Reader.Open(conn, source.Unmarshaller, source.OutgoingSink)
-	source.stream = stream
-	source.remote = conn.RemoteAddr()
-	wg.Add(1)
-	go func() {
-		defer func() {
-			source.task.IfRunning(source.closeStream)
-			wg.Done()
-		}()
-		stream.ReadTcpSamples(conn, source.isConnectionClosed)
-		if !source.CountConnectionClosed() {
-			source.Stop()
-		}
-	}()
-}
-
-func (source *TCPListenerSource) isConnectionClosed() bool {
-	return source.stream == nil
-}
-
-func (source *TCPListenerSource) closeStream() {
-	if source.stream != nil {
-		stream := source.stream
-		source.stream = nil // Make isConnectionClosed() return true
-		_ = stream.Close()  // Drop error
+	listenerConn := &TCPListenerConnection{
+		source: source,
+		stream: source.Reader.Open(conn, source.Unmarshaller, source.synchronizedSink),
 	}
+	source.connections[listenerConn] = true
+	wg.Add(1)
+	go listenerConn.readSamples(wg, conn)
 }
 
 func (source *TCPListenerSource) Stop() {
 	source.task.ExtendedStop(func() {
-		source.closeStream()
+		for conn := range source.connections {
+			conn.closeStream()
+		}
 	})
+}
+
+type TCPListenerConnection struct {
+	source *TCPListenerSource
+	stream *SampleInputStream
+}
+
+func (conn *TCPListenerConnection) isConnectionClosed() bool {
+	return conn.stream == nil
+}
+
+func (conn *TCPListenerConnection) readSamples(wg *sync.WaitGroup, connection *net.TCPConn) {
+	defer wg.Done()
+	conn.stream.ReadTcpSamples(connection, conn.isConnectionClosed)
+	if !conn.source.CountConnectionClosed() {
+		conn.source.Stop()
+	}
+	conn.source.task.IfRunning(conn.closeStream)
+}
+
+func (conn *TCPListenerConnection) closeStream() {
+	if stream := conn.stream; stream != nil {
+		conn.stream = nil  // Make isConnectionClosed() return true
+		_ = stream.Close() // Drop error
+		delete(conn.source.connections, conn)
+	}
 }
 
 // ==================== TCP listener sink ====================
