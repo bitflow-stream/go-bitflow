@@ -40,7 +40,7 @@ type CmdSamplePipeline struct {
 
 	read_console      bool
 	read_tcp_listen   string
-	read_tcp_download string
+	read_tcp_download golib.StringSlice
 	read_files        golib.StringSlice
 	sink_console      bool
 	sink_connect      string
@@ -61,7 +61,7 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.BoolVar(&p.read_console, "C", false, "Data source: read from stdin")
 	flag.Var(&p.read_files, "F", "Data source: read from file(s)")
 	flag.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
-	flag.StringVar(&p.read_tcp_download, "D", "", "Data source: receive samples by connecting to remote endpoint")
+	flag.Var(&p.read_tcp_download, "D", "Data source: receive samples by connecting to remote endpoint(s)")
 
 	flag.Var(&fileRegexValue{p}, "FR", "File Regex: Input files matching regex, previous -F parameter is used as start directory")
 	flag.UintVar(&p.tcp_conn_limit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
@@ -131,9 +131,9 @@ func (p *CmdSamplePipeline) Init() {
 		p.SetSource(source)
 		unmarshaller = default_tcp_input
 	}
-	if p.read_tcp_download != "" {
+	if len(p.read_tcp_download) > 0 {
 		source := &TCPSource{
-			RemoteAddr:    p.read_tcp_download,
+			RemoteAddrs:   p.read_tcp_download,
 			RetryInterval: tcp_download_retry_interval,
 			Reader:        reader,
 		}

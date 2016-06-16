@@ -9,10 +9,14 @@ import (
 )
 
 // ==================== Data Sink ====================
-type MetricSink interface {
-	golib.Task
+type MetricSinkBase interface {
 	Header(header Header) error
 	Sample(sample Sample, header Header) error
+}
+
+type MetricSink interface {
+	golib.Task
+	MetricSinkBase
 
 	// Should ignore golib.Task.Stop(), but instead close when Close() is called
 	// This ensures correct order when shutting down.
@@ -209,4 +213,25 @@ func (sample *BufferedSample) NotifyDone() {
 	defer sample.doneCond.L.Unlock()
 	sample.done = true
 	sample.doneCond.Broadcast()
+}
+
+// ==================== Synchronizing Metric Sink ====================
+// Allows multiple goroutines to write data, synchronizes these writes through a mutex
+// Implements MetricSinkBase
+
+type SynchronizingMetricSink struct {
+	OutgoingSink MetricSink
+	mutex        sync.Mutex
+}
+
+func (s *SynchronizingMetricSink) Header(header Header) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return s.OutgoingSink.Header(header)
+}
+
+func (s *SynchronizingMetricSink) Sample(sample Sample, header Header) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return s.OutgoingSink.Sample(sample, header)
 }

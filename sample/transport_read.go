@@ -30,10 +30,10 @@ type SampleInputStream struct {
 	header           Header
 	outHeader        Header
 	um               Unmarshaller
-	sink             MetricSink
+	sink             MetricSinkBase
 }
 
-func (r *SampleReader) Open(input io.ReadCloser, um Unmarshaller, sink MetricSink) *SampleInputStream {
+func (r *SampleReader) Open(input io.ReadCloser, um Unmarshaller, sink MetricSinkBase) *SampleInputStream {
 	return &SampleInputStream{
 		reader:           bufio.NewReaderSize(input, r.IoBuffer),
 		sampleReader:     r,

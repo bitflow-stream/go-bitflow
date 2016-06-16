@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -217,60 +218,115 @@ func (sink *TCPSink) assertConnection() error {
 type TCPSource struct {
 	AbstractUnmarshallingMetricSource
 	TCPConnCounter
-	RemoteAddr    string
+	RemoteAddrs   []string
 	RetryInterval time.Duration
 	Reader        SampleReader
-	loopTask      *golib.LoopTask
-	stream        *SampleInputStream
+
+	downloaders  []*TCPDownloadTask
+	downloadSink MetricSinkBase
 }
 
 func (sink *TCPSource) String() string {
-	return "TCP source from " + sink.RemoteAddr
+	return "TCP download (" + sink.SourceString() + ")"
+}
+
+func (sink *TCPSource) SourceString() string {
+	if len(sink.RemoteAddrs) == 1 {
+		return sink.RemoteAddrs[0]
+	} else {
+		return strconv.Itoa(len(sink.RemoteAddrs)) + " sources"
+	}
 }
 
 func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	log.Println("Downloading", source.Unmarshaller, "data from", source.RemoteAddr)
-	source.loopTask = golib.NewLoopTask("tcp download source", func(stop golib.StopChan) {
-		if conn, err := source.dial(); err != nil {
-			log.Println("Error downloading data:", err)
-		} else {
-			source.handleConnection(conn)
-		}
-		select {
-		case <-time.After(source.RetryInterval):
-		case <-stop:
-		}
-	})
-	source.loopTask.StopHook = func() {
-		source.CloseSink(wg)
+	log.Println("Downloading", source.Unmarshaller, "data from", source.SourceString())
+	channels := make([]golib.StopChan, 0, len(source.RemoteAddrs))
+	if len(source.RemoteAddrs) > 1 {
+		source.downloadSink = &SynchronizingMetricSink{OutgoingSink: source.OutgoingSink}
+	} else {
+		source.downloadSink = source.OutgoingSink
 	}
-	return source.loopTask.Start(wg)
-}
-
-func (source *TCPSource) handleConnection(conn *net.TCPConn) {
-	source.loopTask.IfNotEnabled(func() {
-		source.stream = source.Reader.Open(conn, source.Unmarshaller, source.OutgoingSink)
-	})
-	if !source.loopTask.Enabled() {
-		source.stream.ReadTcpSamples(conn, source.isConnectionClosed)
-		if !source.CountConnectionClosed() {
-			source.Stop()
+	for _, remote := range source.RemoteAddrs {
+		task := &TCPDownloadTask{
+			source: source,
+			remote: remote,
 		}
+		source.downloaders = append(source.downloaders, task)
+		channels = append(channels, task.Start(wg))
 	}
+	return golib.WaitErrFunc(wg, func() error {
+		defer source.CloseSink(wg)
+		var errors golib.MultiError
+		_, err := golib.WaitForAny(channels)
+		errors.Add(err)
+		source.Stop()
+		for _, c := range channels {
+			if c != nil {
+				errors.Add(<-c)
+			}
+		}
+		return errors.NilOrError()
+	})
 }
 
 func (source *TCPSource) Stop() {
-	source.loopTask.Enable(func() {
-		_ = source.stream.Close() // Ignore error
+	for _, downloader := range source.downloaders {
+		downloader.Stop()
+	}
+}
+
+func (source *TCPSource) startStream(conn *net.TCPConn) *SampleInputStream {
+	return source.Reader.Open(conn, source.Unmarshaller, source.downloadSink)
+}
+
+// ==================== Loop connecting to TCP endpoint ====================
+
+type TCPDownloadTask struct {
+	source   *TCPSource
+	remote   string
+	loopTask *golib.LoopTask
+	stream   *SampleInputStream
+}
+
+func (task *TCPDownloadTask) Start(wg *sync.WaitGroup) golib.StopChan {
+	task.loopTask = golib.NewLoopTask("tcp download loop", func(stop golib.StopChan) {
+		if conn, err := task.dial(); err != nil {
+			log.Println("Error downloading from", task.remote+":", err)
+		} else {
+			task.handleConnection(conn)
+		}
+		select {
+		case <-time.After(task.source.RetryInterval):
+		case <-stop:
+		}
+	})
+	return task.loopTask.Start(wg)
+}
+
+func (task *TCPDownloadTask) handleConnection(conn *net.TCPConn) {
+	task.loopTask.IfNotEnabled(func() {
+		task.stream = task.source.startStream(conn)
+	})
+	if !task.loopTask.Enabled() {
+		task.stream.ReadTcpSamples(conn, task.isConnectionClosed)
+		if !task.source.CountConnectionClosed() {
+			task.source.Stop()
+		}
+	}
+}
+
+func (task *TCPDownloadTask) Stop() {
+	task.loopTask.Enable(func() {
+		_ = task.stream.Close() // Ignore error
 	})
 }
 
-func (source *TCPSource) isConnectionClosed() bool {
-	return source.loopTask.Enabled()
+func (task *TCPDownloadTask) isConnectionClosed() bool {
+	return task.loopTask.Enabled()
 }
 
-func (source *TCPSource) dial() (*net.TCPConn, error) {
-	endpoint, err := net.ResolveTCPAddr("tcp", source.RemoteAddr)
+func (task *TCPDownloadTask) dial() (*net.TCPConn, error) {
+	endpoint, err := net.ResolveTCPAddr("tcp", task.remote)
 	if err != nil {
 		return nil, err
 	}
