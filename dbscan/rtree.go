@@ -35,7 +35,7 @@ func (tree *RtreeSetOfPoints) RegionQuery(point Point, eps float64) map[Point]bo
 
 		regionQueryNr++
 		if rtreePoint.regionQueried > 0 {
-			log.Println(fmt.Sprintf("QUERYING AGAIN FOR", rtreePoint.regionQueried, "now at", regionQueryNr))
+			log.Println("QUERYING AGAIN FOR", rtreePoint.regionQueried, "now at", regionQueryNr)
 		}
 		rtreePoint.regionQueried = regionQueryNr
 
