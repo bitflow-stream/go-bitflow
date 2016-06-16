@@ -13,18 +13,20 @@ import (
 // Unmarshalls samples from an io.Reader, parallelizing the parsing
 type SampleReader struct {
 	ParallelSampleHandler
-	ReadHook SampleReadHook // Allows modifying tags on read samples
+	Handler ReadSampleHandler // Optional, for modifying incoming headers/samples based on their source
 }
 
-type SampleReadHook func(sample *Sample, source string)
+type ReadSampleHandler interface {
+	HandleHeader(header *Header, source string) // Allows modifying fields on incoming headers
+	HandleSample(sample *Sample, source string) // Allows modifying tags/values on read samples
+}
 
 type SampleInputStream struct {
 	ParallelSampleStream
-	readHook         SampleReadHook
+	sampleReader     *SampleReader
 	reader           *bufio.Reader
 	underlyingReader io.ReadCloser
 	num_samples      int
-	numParsers       int
 	header           Header
 	outHeader        Header
 	um               Unmarshaller
@@ -34,11 +36,10 @@ type SampleInputStream struct {
 func (r *SampleReader) Open(input io.ReadCloser, um Unmarshaller, sink MetricSink) *SampleInputStream {
 	return &SampleInputStream{
 		reader:           bufio.NewReaderSize(input, r.IoBuffer),
-		readHook:         r.ReadHook,
+		sampleReader:     r,
 		underlyingReader: input,
 		um:               um,
 		sink:             sink,
-		numParsers:       r.ParallelParsers,
 		ParallelSampleStream: ParallelSampleStream{
 			incoming: make(chan *BufferedSample, r.BufferedSamples),
 			outgoing: make(chan *BufferedSample, r.BufferedSamples),
@@ -48,12 +49,12 @@ func (r *SampleReader) Open(input io.ReadCloser, um Unmarshaller, sink MetricSin
 }
 
 func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
-	if err := stream.readHeader(); err != nil {
+	if err := stream.readHeader(source); err != nil {
 		return 0, err
 	}
 
 	// Parse samples
-	for i := 0; i < stream.numParsers || i < 1; i++ {
+	for i := 0; i < stream.sampleReader.ParallelParsers || i < 1; i++ {
 		stream.wg.Add(1)
 		go stream.parseSamples(source)
 	}
@@ -113,13 +114,19 @@ func (stream *SampleInputStream) closeUnderlyingReader() {
 	})
 }
 
-func (stream *SampleInputStream) readHeader() (err error) {
+func (stream *SampleInputStream) readHeader(source string) (err error) {
 	if stream.header, err = stream.um.ReadHeader(stream.reader); err != nil {
 		return
 	}
 	log.Printf("Reading %v metrics\n", len(stream.header.Fields))
-	hasTags := stream.header.HasTags || stream.readHook != nil
-	stream.outHeader = Header{Fields: stream.header.Fields, HasTags: hasTags}
+	stream.outHeader = Header{
+		Fields:  make([]string, len(stream.header.Fields)),
+		HasTags: stream.header.HasTags,
+	}
+	copy(stream.outHeader.Fields, stream.header.Fields)
+	if handler := stream.sampleReader.Handler; handler != nil {
+		handler.HandleHeader(&stream.outHeader, source)
+	}
 	if err = stream.sink.Header(stream.outHeader); err != nil {
 		return
 	}
@@ -172,8 +179,8 @@ func (stream *SampleInputStream) parseOne(source string, sample *BufferedSample)
 		stream.err = err
 		return
 	} else {
-		if hook := stream.readHook; hook != nil {
-			hook(&parsedSample, source)
+		if handler := stream.sampleReader.Handler; handler != nil {
+			handler.HandleSample(&parsedSample, source)
 		}
 		sample.sample = parsedSample
 	}
