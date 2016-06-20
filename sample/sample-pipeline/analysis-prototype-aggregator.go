@@ -14,12 +14,15 @@ func doHandlePipeline_Prototype(p *sample.CmdSamplePipeline) {
 	printer := newTagResultPrinter()
 	printer.Hosts = map[string]map[string]string{
 		"virtual": map[string]string{
-			"192.168.4.177": "bono-1",
-			"192.168.4.178": "sprout-1",
-			"192.168.4.179": "homestead-1",
-			"192.168.4.180": "homer-1",
-			"192.168.4.181": "ellis-1",
-			"192.168.4.182": "ralf-1",
+			"192.168.4.215": "ellis-0",
+			"192.168.4.217": "bono-1",
+			"192.168.4.218": "bono-0",
+			"192.168.4.219": "bono-2",
+			"192.168.4.220": "sprout-1",
+			"192.168.4.221": "sprout-0",
+			"192.168.4.222": "homer-0",
+			"192.168.4.223": "sprout-2",
+			"192.168.4.224": "homestead-0",
 		},
 		"physical": map[string]string{
 			"130.149.249.141": "wally131",
