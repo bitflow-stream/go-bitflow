@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"sort"
 	"time"
 
 	. "github.com/antongulenko/data2go/analysis"
@@ -93,7 +94,7 @@ func (p *tagResultPrinter) printResults() {
 
 		fmt.Println("================================")
 		for _, layer := range p.Layers {
-			fmt.Printf("== %v hosts ==\n", layer)
+			outputs := make([]string, 0, len(p.Hosts[layer]))
 			for ip, hostname := range p.Hosts[layer] {
 				value, ok := summaryCopy[ip]
 				if !ok {
@@ -101,16 +102,26 @@ func (p *tagResultPrinter) printResults() {
 				} else {
 					delete(summaryCopy, ip)
 				}
-				fmt.Println(hostname, "=", value)
+				outputs = append(outputs, fmt.Sprintf("%s = %s", hostname, value))
 			}
+			p.printLines(outputs, layer)
 		}
 		if len(summaryCopy) > 0 {
-			fmt.Printf("== %v hosts ==\n", "unknown")
+			outputs := make([]string, 0, len(summaryCopy))
 			for key, val := range summaryCopy {
-				fmt.Println(key, "=", val)
+				outputs = append(outputs, fmt.Sprintf("%s = %s", key, val))
 			}
+			p.printLines(outputs, "unknown")
 		}
 		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func (p *tagResultPrinter) printLines(lines []string, layer string) {
+	sort.Strings(lines)
+	fmt.Printf("== %v hosts ==\n", layer)
+	for _, out := range lines {
+		fmt.Println(out)
 	}
 }
 
