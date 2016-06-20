@@ -8,6 +8,7 @@ import (
 
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"
+	"github.com/fatih/color"
 )
 
 func doHandlePipeline_Prototype(p *sample.CmdSamplePipeline) {
@@ -105,14 +106,14 @@ func (p *tagResultPrinter) printResults() {
 				} else {
 					delete(summaryCopy, ip)
 				}
-				outputs = append(outputs, fmt.Sprintf("%s = %s", hostname, value))
+				outputs = append(outputs, fmt.Sprintf("%s = %s", color.BlueString(hostname), color.RedString(value)))
 			}
 			p.printLines(outputs, layer)
 		}
 		if len(summaryCopy) > 0 {
 			outputs := make([]string, 0, len(summaryCopy))
 			for key, val := range summaryCopy {
-				outputs = append(outputs, fmt.Sprintf("%s = %s", key, val))
+				outputs = append(outputs, fmt.Sprintf("%s = %s", color.BlueString(key), color.RedString(val)))
 			}
 			p.printLines(outputs, "unknown")
 		}
