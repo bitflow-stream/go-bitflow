@@ -14,9 +14,27 @@ func doHandlePipeline_Prototype(p *sample.CmdSamplePipeline) {
 	printer.Hosts = map[string]map[string]string{
 		"virtual": map[string]string{
 			"192.168.4.177": "bono-1",
+			"192.168.4.178": "sprout-1",
+			"192.168.4.179": "homestead-1",
+			"192.168.4.180": "homer-1",
+			"192.168.4.181": "ellis-1",
+			"192.168.4.182": "ralf-1",
 		},
 		"physical": map[string]string{
-			"192.168.4.131": "wally131",
+			"130.149.249.141": "wally131",
+			"130.149.249.144": "wally134",
+			"130.149.249.145": "wally135",
+			"130.149.249.146": "wally136",
+			"130.149.249.147": "wally137",
+			"130.149.249.148": "wally138",
+			"130.149.249.149": "wally139",
+			"130.149.249.151": "wally141",
+			"130.149.249.152": "wally142",
+			"130.149.249.155": "wally145",
+			"130.149.249.156": "wally146",
+			"130.149.249.157": "wally147",
+			"130.149.249.158": "wally148",
+			"130.149.249.159": "wally149",
 		},
 	}
 	printer.Layers = []string{"virtual", "physical"}
