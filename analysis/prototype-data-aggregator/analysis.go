@@ -12,8 +12,8 @@ import (
 )
 
 func init() {
-	readSampleHandler = &SampleTagger{[]string{SourceTag}} // ClassTag
-	handlePipeline = doHandlePipeline
+	pipeline.ReadSampleHandler = &SampleTagger{[]string{SourceTag}} // ClassTag
+	pipeline.SetupPipeline = doHandlePipeline
 }
 
 func doHandlePipeline(p *sample.CmdSamplePipeline) {
