@@ -11,7 +11,12 @@ import (
 	"github.com/fatih/color"
 )
 
-func doHandlePipeline_Prototype(p *sample.CmdSamplePipeline) {
+func init() {
+	readSampleHandler = &SampleTagger{[]string{SourceTag}} // ClassTag
+	handlePipeline = doHandlePipeline
+}
+
+func doHandlePipeline(p *sample.CmdSamplePipeline) {
 	printer := newTagResultPrinter()
 	printer.Hosts = map[string]map[string]string{
 		"virtual": map[string]string{
@@ -44,6 +49,20 @@ func doHandlePipeline_Prototype(p *sample.CmdSamplePipeline) {
 	}
 	printer.Layers = []string{"virtual", "physical"}
 	p.Add(printer)
+}
+
+type SampleTagger struct {
+	sourceTags []string
+}
+
+func (h *SampleTagger) HandleHeader(header *sample.Header, source string) {
+	header.HasTags = true
+}
+
+func (h *SampleTagger) HandleSample(sample *sample.Sample, source string) {
+	for _, tag := range h.sourceTags {
+		sample.SetTag(tag, source)
+	}
 }
 
 // =========================== Print results of distributed analysis ===========================

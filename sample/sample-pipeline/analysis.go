@@ -11,8 +11,7 @@ import (
 
 func init() {
 	readSampleHandler = &SampleTagger{[]string{SourceTag}} // ClassTag
-	//	handlePipeline = doHandlePipeline
-	handlePipeline = doHandlePipeline_Prototype
+	handlePipeline = doHandlePipeline
 }
 
 func doHandlePipeline(p *sample.CmdSamplePipeline) {
@@ -39,8 +38,6 @@ func registerProcessingSteps(p *sample.SamplePipeline) {
 	// p.Add(&DecouplingProcessor{ChannelBuffer: 150000})
 
 	// plots(p, false)
-
-	p.Add(newTagResultPrinter())
 }
 
 func plots(p *sample.SamplePipeline, separatePlots bool) {
