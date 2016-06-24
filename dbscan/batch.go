@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/antongulenko/data2go/sample"
-	"github.com/carbocation/runningvariance"
+	"github.com/antongulenko/go-onlinestats"
 )
 
 type DbscanBatchClusterer struct {
@@ -17,11 +17,11 @@ type DbscanBatchClusterer struct {
 }
 
 func (c *DbscanBatchClusterer) printSummary(clusters map[string][]*sample.Sample) {
-	var stats runningvariance.RunningStat
+	var stats onlinestats.Running
 	for _, cluster := range clusters {
 		stats.Push(float64(len(cluster)))
 	}
-	log.Printf("%v clusters, avg size %v, size stddev %v\n", len(clusters), stats.Mean(), stats.StandardDeviation())
+	log.Printf("%v clusters, avg size %v, size stddev %v\n", len(clusters), stats.Mean(), stats.Stddev())
 }
 
 func (c *DbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample) {

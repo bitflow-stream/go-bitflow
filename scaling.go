@@ -4,7 +4,7 @@ import (
 	"math"
 
 	"github.com/antongulenko/data2go/sample"
-	"github.com/carbocation/runningvariance"
+	"github.com/antongulenko/go-onlinestats"
 )
 
 type MinMaxScaling struct {
@@ -54,8 +54,8 @@ func (s *MinMaxScaling) String() string {
 type StandardizationScaling struct {
 }
 
-func GetStats(header *sample.Header, samples []*sample.Sample) []runningvariance.RunningStat {
-	res := make([]runningvariance.RunningStat, len(header.Fields))
+func GetStats(header *sample.Header, samples []*sample.Sample) []onlinestats.Running {
+	res := make([]onlinestats.Running, len(header.Fields))
 	for _, sample := range samples {
 		for i, val := range sample.Values {
 			res[i].Push(float64(val))
@@ -71,7 +71,7 @@ func (s *StandardizationScaling) ProcessBatch(header *sample.Header, samples []*
 		values := make([]sample.Value, len(inSample.Values))
 		for i, val := range inSample.Values {
 			m := stats[i].Mean()
-			s := stats[i].StandardDeviation()
+			s := stats[i].Stddev()
 			res := (float64(val) - m) / s
 			values[i] = sample.Value(res)
 		}

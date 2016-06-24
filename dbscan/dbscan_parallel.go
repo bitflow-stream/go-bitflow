@@ -8,7 +8,7 @@ import (
 	"github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"
 	parallel_dbscan "github.com/antongulenko/go-DBSCAN"
-	"github.com/carbocation/runningvariance"
+	"github.com/antongulenko/go-onlinestats"
 )
 
 // This files uses an external implementation of DBSCAN which is designed
@@ -47,11 +47,11 @@ func (c *ParallelDbscanBatchClusterer) cluster(points []parallel_dbscan.Clustera
 }
 
 func (c *ParallelDbscanBatchClusterer) printSummary(clusters [][]parallel_dbscan.ClusterablePoint) {
-	var stats runningvariance.RunningStat
+	var stats onlinestats.Running
 	for _, cluster := range clusters {
 		stats.Push(float64(len(cluster)))
 	}
-	log.Printf("%v clusters, avg size %v, size stddev %v\n", len(clusters), stats.Mean(), stats.StandardDeviation())
+	log.Printf("%v clusters, avg size %v, size stddev %v\n", len(clusters), stats.Mean(), stats.Stddev())
 }
 
 func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample) {
