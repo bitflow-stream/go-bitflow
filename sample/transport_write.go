@@ -113,18 +113,21 @@ func (stream *SampleOutputStream) Sample(sample Sample) error {
 }
 
 func (stream *SampleOutputStream) Close() error {
-	stream.closed.Enable(func() {
-		close(stream.incoming)
-		close(stream.outgoing)
-		stream.wg.Wait()
-		if err := stream.flushBuffered(); !stream.HasError() {
-			stream.err = err
-		}
-		if err := stream.writer.Close(); !stream.HasError() {
-			stream.err = err
-		}
-	})
-	return stream.err
+	if stream != nil {
+		stream.closed.Enable(func() {
+			close(stream.incoming)
+			close(stream.outgoing)
+			stream.wg.Wait()
+			if err := stream.flushBuffered(); !stream.HasError() {
+				stream.err = err
+			}
+			if err := stream.writer.Close(); !stream.HasError() {
+				stream.err = err
+			}
+		})
+		return stream.err
+	}
+	return nil
 }
 
 func (stream *SampleOutputStream) marshall() {
