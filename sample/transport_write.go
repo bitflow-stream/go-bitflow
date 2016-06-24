@@ -70,6 +70,9 @@ func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *Sampl
 }
 
 func (stream *SampleOutputStream) Header(header Header) error {
+	if stream == nil {
+		return nil
+	}
 	stream.headerLock.Lock()
 	defer stream.headerLock.Unlock()
 	if stream.HasError() {
@@ -113,21 +116,21 @@ func (stream *SampleOutputStream) Sample(sample Sample) error {
 }
 
 func (stream *SampleOutputStream) Close() error {
-	if stream != nil {
-		stream.closed.Enable(func() {
-			close(stream.incoming)
-			close(stream.outgoing)
-			stream.wg.Wait()
-			if err := stream.flushBuffered(); !stream.HasError() {
-				stream.err = err
-			}
-			if err := stream.writer.Close(); !stream.HasError() {
-				stream.err = err
-			}
-		})
-		return stream.err
+	if stream == nil {
+		return nil
 	}
-	return nil
+	stream.closed.Enable(func() {
+		close(stream.incoming)
+		close(stream.outgoing)
+		stream.wg.Wait()
+		if err := stream.flushBuffered(); !stream.HasError() {
+			stream.err = err
+		}
+		if err := stream.writer.Close(); !stream.HasError() {
+			stream.err = err
+		}
+	})
+	return stream.err
 }
 
 func (stream *SampleOutputStream) marshall() {
