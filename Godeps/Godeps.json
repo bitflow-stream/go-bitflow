@@ -16,6 +16,10 @@
 			"Rev": "f3e2bae1e0cb5aef83e319133eabfee30013a4a5"
 		},
 		{
+			"ImportPath": "github.com/aclements/go-moremath/mathx",
+			"Rev": "24ddaf78b55ce5e10369ca057d233b7e96a7389e"
+		},
+		{
 			"ImportPath": "github.com/ajstarks/svgo",
 			"Comment": "go.weekly.2012-01-27-130-g672fe54",
 			"Rev": "672fe547df4e49efc6db67a74391368bcb149b37"
@@ -25,12 +29,12 @@
 			"Rev": "447f78b667437a268d4ab68dca78cca1f92e8ca1"
 		},
 		{
-			"ImportPath": "github.com/antongulenko/golib",
-			"Rev": "9c8bc22280a31f984aaad170b1f33863a68fc34b"
+			"ImportPath": "github.com/antongulenko/go-onlinestats",
+			"Rev": "5ff69410145cd15bd908cc2ea44c25d061ff4ad8"
 		},
 		{
-			"ImportPath": "github.com/carbocation/runningvariance",
-			"Rev": "fdcce8a03b6b0a7738fb52457381c120426e0fc3"
+			"ImportPath": "github.com/antongulenko/golib",
+			"Rev": "9c8bc22280a31f984aaad170b1f33863a68fc34b"
 		},
 		{
 			"ImportPath": "github.com/cenk/hub",
@@ -48,6 +52,16 @@
 		{
 			"ImportPath": "github.com/dhconnelly/rtreego",
 			"Rev": "ddfb5d7b877e08f266b663ffc387fb671f615e8d"
+		},
+		{
+			"ImportPath": "github.com/fatih/color",
+			"Comment": "v0.1-19-g87d4004",
+			"Rev": "87d4004f2ab62d0d255e0a38f1680aa534549fe3"
+		},
+		{
+			"ImportPath": "github.com/go-ini/ini",
+			"Comment": "v1.11.0",
+			"Rev": "12f418cc7edc5a618a51407b7ac1f1f512139df3"
 		},
 		{
 			"ImportPath": "github.com/go-ole/go-ole",
@@ -182,6 +196,15 @@
 			"Rev": "5e675a3055a6f81f9b014b1dc2d5bb5fb8890618"
 		},
 		{
+			"ImportPath": "github.com/mattn/go-colorable",
+			"Comment": "v0.0.5",
+			"Rev": "9056b7a9f2d1f2d96498d6d146acd1f9d5ed3d59"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-isatty",
+			"Rev": "56b76bdf51f7708750eac80fa38b952bb9f32639"
+		},
+		{
 			"ImportPath": "github.com/mitchellh/go-homedir",
 			"Rev": "1111e456ffea841564ac0fa5f69c26ef44dafec9"
 		},
@@ -262,6 +285,10 @@
 		{
 			"ImportPath": "golang.org/x/image/tiff/lzw",
 			"Rev": "f551d3a6b7fc11df315ad9e18b404280680f8bec"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "62bee037599929a6e9146f29d10dd5208c43507d"
 		},
 		{
 			"ImportPath": "gopkg.in/xmlpath.v1",
