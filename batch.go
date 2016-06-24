@@ -3,6 +3,7 @@ package analysis
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"sort"
 
 	"github.com/antongulenko/data2go/sample"
@@ -121,6 +122,23 @@ func (*TimestampSort) ProcessBatch(header *sample.Header, samples []*sample.Samp
 
 func (*TimestampSort) String() string {
 	return "TimestampSort"
+}
+
+// ==================== Sample Shuffler ====================
+type SampleShuffler struct {
+}
+
+func (*SampleShuffler) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample) {
+	log.Printf("Shuffling %v samples...\n", len(samples))
+	for i := range samples {
+		j := rand.Intn(i + 1)
+		samples[i], samples[j] = samples[j], samples[i]
+	}
+	return header, samples
+}
+
+func (*SampleShuffler) String() string {
+	return "SampleShuffler"
 }
 
 // ==================== Multi-header merger ====================
