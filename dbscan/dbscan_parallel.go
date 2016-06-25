@@ -54,7 +54,7 @@ func (c *ParallelDbscanBatchClusterer) printSummary(clusters [][]parallel_dbscan
 	log.Printf("%v clusters, avg size %v, size stddev %v\n", len(clusters), stats.Mean(), stats.Stddev())
 }
 
-func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample) {
+func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
 	points := make([]parallel_dbscan.ClusterablePoint, len(samples))
 	for i, sample := range samples {
 		points[i] = &ParallelDbscanPoint{sample: sample}
@@ -74,7 +74,7 @@ func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *sample.Header, sampl
 			outSamples = append(outSamples, outSample)
 		}
 	}
-	return header, outSamples
+	return header, outSamples, nil
 }
 
 func (c *ParallelDbscanBatchClusterer) String() string {
