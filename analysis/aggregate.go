@@ -2,10 +2,13 @@ package analysis
 
 import (
 	"container/list"
+	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/golib"
 )
 
 type FeatureAggregator struct {
@@ -18,13 +21,8 @@ type FeatureAggregator struct {
 	suffixes           []string
 	FeatureWindowStats map[string]*FeatureWindowStats
 
+	inHeader  sample.Header
 	outHeader sample.Header
-}
-
-func NewFeatureAggregator() *FeatureAggregator {
-	return &FeatureAggregator{
-		FeatureWindowStats: make(map[string]*FeatureWindowStats),
-	}
 }
 
 type FeatureAggregatorOperation func(stats *FeatureWindowStats) sample.Value
@@ -43,41 +41,54 @@ func (agg *FeatureAggregator) AddSlope(suffix string) *FeatureAggregator {
 	return agg.Add(suffix, FeatureWindowSlope)
 }
 
-func (agg *FeatureAggregator) Sample(inSample sample.Sample, header sample.Header) error {
+func (agg *FeatureAggregator) Start(wg *sync.WaitGroup) golib.StopChan {
+	agg.FeatureWindowStats = make(map[string]*FeatureWindowStats)
+	return agg.AbstractProcessor.Start(wg)
+}
+
+func (agg *FeatureAggregator) Header(header sample.Header) error {
+	if err := agg.CheckSink(); err != nil {
+		return err
+	} else {
+		if !agg.inHeader.Equals(&header) {
+			outFields := make([]string, 0, len(header.Fields)*(1+len(agg.suffixes)))
+			for _, field := range header.Fields {
+				outFields = append(outFields, field)
+				for _, suffix := range agg.suffixes {
+					outFields = append(outFields, field+suffix)
+				}
+			}
+			agg.outHeader = header.Clone(outFields)
+			agg.inHeader = header
+			log.Println(agg, "increasing header from", len(header.Fields), "to", len(outFields))
+		}
+		return agg.OutgoingSink.Header(agg.outHeader)
+	}
+}
+
+func (agg *FeatureAggregator) Sample(inSample sample.Sample, _ sample.Header) error {
 	if err := agg.CheckSink(); err != nil {
 		return err
 	}
-	if err := inSample.Check(header); err != nil {
+	if err := inSample.Check(agg.inHeader); err != nil {
 		return err
 	}
-	if !agg.outHeader.Equals(&header) {
-		agg.buildOutHeader(header)
-	}
 
-	outValues := make([]sample.Value, len(agg.outHeader.Fields))
-	for i, field := range header.Fields {
+	outValues := make([]sample.Value, 0, len(agg.outHeader.Fields))
+	for i, field := range agg.inHeader.Fields {
 		stats := agg.getFeatureWindowStats(field)
 		inValue := inSample.Values[i]
-		outValues[i] = inValue
+		outValues = append(outValues, inValue)
 		stats.Push(inValue, inSample.Time)
 		agg.flushWindow(stats)
-		for j, operation := range agg.aggregators {
-			outValues[i+1+j] = operation(stats)
+		for _, operation := range agg.aggregators {
+			outValues = append(outValues, operation(stats))
 		}
 	}
 	outSample := inSample.Clone()
 	outSample.Values = outValues
-	return agg.OutgoingSink.Sample(outSample, agg.outHeader)
-}
 
-func (agg *FeatureAggregator) buildOutHeader(header sample.Header) {
-	outFields := make([]string, len(header.Fields)*(1+len(agg.suffixes)))
-	for i, field := range header.Fields {
-		outFields[i] = field
-		for j, suffix := range agg.suffixes {
-			outFields[i+1+j] = field + suffix
-		}
-	}
+	return agg.OutgoingSink.Sample(outSample, agg.outHeader)
 }
 
 func (agg *FeatureAggregator) getFeatureWindowStats(field string) *FeatureWindowStats {
@@ -117,7 +128,7 @@ func (agg *FeatureAggregator) flushWindow(stats *FeatureWindowStats) {
 }
 
 func (agg *FeatureAggregator) String() string {
-	return "Feature Aggregator: " + strings.Join(agg.suffixes, ", ")
+	return "Feature Aggregator (" + strings.Join(agg.suffixes, ", ") + ")"
 }
 
 type FeatureWindowStats struct {
