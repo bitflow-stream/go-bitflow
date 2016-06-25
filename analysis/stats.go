@@ -62,10 +62,11 @@ func (stats *StoreStats) Sample(inSample sample.Sample, header sample.Header) er
 }
 
 func (stats *StoreStats) Close() {
+	defer stats.CloseSink(nil)
 	if err := stats.StoreStatistics(); err != nil {
 		log.Println("Error storing feature statistics:", err)
+		stats.Error(err)
 	}
-	stats.CloseSink(nil)
 }
 
 func (stats *StoreStats) StoreStatistics() error {

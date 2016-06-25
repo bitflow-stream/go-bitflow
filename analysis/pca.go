@@ -138,7 +138,7 @@ type PCABatchProcessing struct {
 	ContainedVariance float64
 }
 
-func (p *PCABatchProcessing) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample) {
+func (p *PCABatchProcessing) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
 	variance := p.ContainedVariance
 	if variance <= 0 {
 		variance = DefaultContainedVariance
@@ -146,8 +146,9 @@ func (p *PCABatchProcessing) ProcessBatch(header *sample.Header, samples []*samp
 	log.Println("Computing PCA model...")
 	var model PCAModel
 	if err := model.ComputeModel(samples); err != nil {
-		log.Printf("Error in %v: %v\n", p, err)
-		return header, nil
+		err := fmt.Errorf("Error in %v: %v\n", p, err)
+		log.Println(err)
+		return header, nil, err
 	}
 	comp, variance := model.ComponentsContainingVariance(variance)
 	log.Println(model.Report(DefaultContainedVariance))
@@ -169,7 +170,7 @@ func (p *PCABatchProcessing) ProcessBatch(header *sample.Header, samples []*samp
 		HasTags: header.HasTags,
 		Fields:  outFields,
 	}
-	return outHeader, outputSamples
+	return outHeader, outputSamples, nil
 }
 
 func (p *PCABatchProcessing) String() string {

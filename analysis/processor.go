@@ -15,6 +15,7 @@ import (
 type AbstractProcessor struct {
 	sample.AbstractMetricSource
 	sample.AbstractMetricSink
+	stopChan chan error
 }
 
 func (p *AbstractProcessor) Header(header sample.Header) error {
@@ -36,7 +37,18 @@ func (p *AbstractProcessor) Sample(sample sample.Sample, header sample.Header) e
 }
 
 func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
-	return nil
+	p.stopChan = make(chan error, 2)
+	return p.stopChan
+}
+
+func (p *AbstractProcessor) CloseSink(wg *sync.WaitGroup) {
+	// If there was no error, make sure the channel still returns something.
+	p.stopChan <- nil
+	p.AbstractMetricSource.CloseSink(wg)
+}
+
+func (p *AbstractProcessor) Error(err error) {
+	p.stopChan <- err
 }
 
 func (p *AbstractProcessor) Close() {

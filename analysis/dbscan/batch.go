@@ -24,7 +24,7 @@ func (c *DbscanBatchClusterer) printSummary(clusters map[string][]*sample.Sample
 	log.Printf("%v clusters, avg size %v, size stddev %v\n", len(clusters), stats.Mean(), stats.Stddev())
 }
 
-func (c *DbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample) {
+func (c *DbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
 	log.Println("Building RTree...")
 
 	tree := NewRtreeSetOfPoints(len(header.Fields), c.TreeMinChildren, c.TreeMaxChildren, c.TreePointWidth)
@@ -35,7 +35,7 @@ func (c *DbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sa
 	log.Println("Clustering ...")
 	clusters := tree.Cluster(&c.Dbscan)
 	c.printSummary(clusters)
-	return header, samples
+	return header, samples, nil
 }
 
 func (c *DbscanBatchClusterer) String() string {

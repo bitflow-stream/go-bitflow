@@ -26,7 +26,7 @@ func GetMinMax(header *sample.Header, samples []*sample.Sample) ([]float64, []fl
 	return min, max
 }
 
-func (s *MinMaxScaling) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample) {
+func (s *MinMaxScaling) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
 	min, max := GetMinMax(header, samples)
 	out := make([]*sample.Sample, len(samples))
 	for num, inSample := range samples {
@@ -44,7 +44,7 @@ func (s *MinMaxScaling) ProcessBatch(header *sample.Header, samples []*sample.Sa
 		outSample.CopyMetadataFrom(*inSample)
 		out[num] = &outSample
 	}
-	return header, out
+	return header, out, nil
 }
 
 func (s *MinMaxScaling) String() string {
@@ -64,7 +64,7 @@ func GetStats(header *sample.Header, samples []*sample.Sample) []onlinestats.Run
 	return res
 }
 
-func (s *StandardizationScaling) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample) {
+func (s *StandardizationScaling) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
 	stats := GetStats(header, samples)
 	out := make([]*sample.Sample, len(samples))
 	for num, inSample := range samples {
@@ -80,7 +80,7 @@ func (s *StandardizationScaling) ProcessBatch(header *sample.Header, samples []*
 		outSample.CopyMetadataFrom(*inSample)
 		out[num] = &outSample
 	}
-	return header, out
+	return header, out, nil
 }
 
 func (s *StandardizationScaling) String() string {
