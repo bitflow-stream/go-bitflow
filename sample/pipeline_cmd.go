@@ -35,10 +35,8 @@ func marshaller(format string) MetricMarshaller {
 
 type CmdSamplePipeline struct {
 	SamplePipeline
-	Tasks *golib.TaskGroup
-
+	Tasks             *golib.TaskGroup
 	ReadSampleHandler ReadSampleHandler
-	SetupPipeline     func(*CmdSamplePipeline) // Only for RunMain()
 
 	read_console      bool
 	read_tcp_listen   string
@@ -210,15 +208,4 @@ func (p *CmdSamplePipeline) StartAndWait() int {
 		Description: "external interrupt",
 	})
 	return p.Tasks.PrintWaitAndStop()
-}
-
-func (p *CmdSamplePipeline) RunMain() int {
-	p.ParseFlags()
-	flag.Parse()
-	defer golib.ProfileCpu()()
-	p.Init()
-	if setup := p.SetupPipeline; setup != nil {
-		setup(p)
-	}
-	return p.StartAndWait()
 }
