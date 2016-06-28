@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strconv"
 
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/analysis/dbscan"
@@ -9,7 +10,7 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
-var setSampleSource = &SampleTagger{[]string{SourceTag}}
+var setSampleSource = &SampleTagger{SourceTags: []string{SourceTag}, DontOverwrite: true}
 
 func init() {
 	RegisterAnalysis("", setSampleSource, nil)
@@ -29,7 +30,7 @@ func handlePipelineGeneric(pipe *sample.CmdSamplePipeline) {
 	// dbscanParallelCluster(p)
 	// p.Add(NewMultiHeaderMerger())
 
-	// p.Add(new(BatchProcessor).Add(new(SampleShuffler)))
+	// p.Add(new(BatchProcessor))
 	// .Add(new(TimestampSort))
 	// .Add(new(MinMaxScaling))
 	// .Add(new(StandardizationScaling))
@@ -78,7 +79,8 @@ func convertFilenames(p *sample.SamplePipeline) {
 }
 
 type SampleTagger struct {
-	sourceTags []string
+	SourceTags    []string
+	DontOverwrite bool
 }
 
 func (h *SampleTagger) HandleHeader(header *sample.Header, source string) {
@@ -86,7 +88,13 @@ func (h *SampleTagger) HandleHeader(header *sample.Header, source string) {
 }
 
 func (h *SampleTagger) HandleSample(sample *sample.Sample, source string) {
-	for _, tag := range h.sourceTags {
+	for _, tag := range h.SourceTags {
+		if h.DontOverwrite {
+			tagBase := tag
+			for i := 0; sample.HasTag(tag); i++ {
+				tag = tagBase + strconv.FormatInt(int64(i), 10)
+			}
+		}
 		sample.SetTag(tag, source)
 	}
 }

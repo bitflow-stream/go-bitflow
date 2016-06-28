@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"sort"
+	"strings"
 
 	"github.com/antongulenko/data2go/sample"
 )
@@ -97,7 +98,19 @@ func (p *BatchProcessor) executeSteps() {
 }
 
 func (p *BatchProcessor) String() string {
-	return "BatchProcessor"
+	steps := make([]string, len(p.Steps))
+	for i, step := range p.Steps {
+		steps[i] = step.String()
+	}
+	var extra string
+	if len(p.Steps) == 0 {
+		extra = "s"
+	} else if len(p.Steps) == 1 {
+		extra = ": "
+	} else {
+		extra = "s: "
+	}
+	return fmt.Sprintf("BatchProcessor %v step%s%v", len(p.Steps), extra, strings.Join(steps, ", "))
 }
 
 // ==================== Timestamp sort ====================
