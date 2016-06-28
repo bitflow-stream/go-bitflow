@@ -3,6 +3,7 @@ package sample
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -51,6 +52,7 @@ func (sample *Sample) SetTag(name, value string) {
 	}
 	if _, exists := sample.tags[name]; !exists {
 		sample.orderedTags = append(sample.orderedTags, name)
+		sort.Strings(sample.orderedTags)
 	}
 	sample.tags[name] = value
 }
