@@ -32,7 +32,10 @@ func (err MultiError) Error() string {
 		var buf bytes.Buffer
 		fmt.Fprintf(&buf, "Multiple errors:\n")
 		for i, e := range err {
-			fmt.Fprintf(&buf, "\t%v. %v\n", i+1, e)
+			if i > 0 {
+				fmt.Fprintf(&buf, "\n")
+			}
+			fmt.Fprintf(&buf, "\t%v. %v", i+1, e)
 		}
 		return buf.String()
 	}
