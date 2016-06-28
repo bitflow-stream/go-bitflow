@@ -43,8 +43,8 @@ type CmdSamplePipeline struct {
 	read_tcp_download      golib.StringSlice
 	read_files             golib.StringSlice
 	sink_console           bool
-	sink_connect           string
-	sink_listen            string
+	sink_connect           golib.StringSlice
+	sink_listen            golib.StringSlice
 	sink_file              string
 	format_input           string
 	format_console         string
@@ -78,9 +78,9 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+supported_formats)
 	flag.StringVar(&p.sink_file, "f", "", "Data sink: write data to file")
 	flag.StringVar(&p.format_file, "ff", "c", "Data format for file output, one of "+supported_formats)
-	flag.StringVar(&p.sink_connect, "s", "", "Data sink: send data to specified TCP endpoint")
+	flag.Var(&p.sink_connect, "s", "Data sink: send data to specified TCP endpoint")
 	flag.StringVar(&p.format_connect, "sf", "b", "Data format for TCP output, one of "+supported_formats)
-	flag.StringVar(&p.sink_listen, "l", "", "Data sink: accept TCP connections for sending out data")
+	flag.Var(&p.sink_listen, "l", "Data sink: accept TCP connections for sending out data")
 	flag.StringVar(&p.format_listen, "lf", "b", "Data format for TCP server output, one of "+supported_formats)
 }
 
@@ -176,15 +176,15 @@ func (p *CmdSamplePipeline) Init() {
 		sink.Writer = writer
 		sinks = append(sinks, sink)
 	}
-	if p.sink_connect != "" {
-		sink := &TCPSink{Endpoint: p.sink_connect, PrintErrors: !p.tcp_drop_active_errors}
+	for _, endpoint := range p.sink_connect {
+		sink := &TCPSink{Endpoint: endpoint, PrintErrors: !p.tcp_drop_active_errors}
 		sink.SetMarshaller(marshaller(p.format_connect))
 		sink.Writer = writer
 		sink.TcpConnLimit = p.tcp_conn_limit
 		sinks = append(sinks, sink)
 	}
-	if p.sink_listen != "" {
-		sink := NewTcpListenerSink(p.sink_listen)
+	for _, endpoint := range p.sink_listen {
+		sink := NewTcpListenerSink(endpoint)
 		sink.SetMarshaller(marshaller(p.format_listen))
 		sink.Writer = writer
 		sink.TcpConnLimit = p.tcp_conn_limit
