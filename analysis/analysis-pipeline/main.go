@@ -47,7 +47,25 @@ func do_main() int {
 	if setup := analysis.SetupPipeline; setup != nil {
 		setup(&p)
 	}
+	printPipeline(p.Processors)
 	return p.StartAndWait()
+}
+
+func printPipeline(p []sample.SampleProcessor) {
+	if len(p) == 0 {
+		log.Println("Empty analysis pipeline")
+	} else if len(p) == 1 {
+		log.Println("Analysis:", p[0])
+	} else {
+		log.Println("Analysis pipeline:")
+		for i, proc := range p {
+			indent := "├─"
+			if i == len(p)-1 {
+				indent = "└─"
+			}
+			log.Printf("%s %v\n", indent, proc)
+		}
+	}
 }
 
 func allAnalyses() []string {

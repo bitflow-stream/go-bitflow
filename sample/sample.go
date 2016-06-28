@@ -46,6 +46,11 @@ type Sample struct {
 	orderedTags []string // All keys from tags, with consistent ordering
 }
 
+func (sample *Sample) HasTag(name string) bool {
+	_, ok := sample.tags[name]
+	return ok
+}
+
 func (sample *Sample) SetTag(name, value string) {
 	if sample.tags == nil {
 		sample.tags = make(map[string]string)
