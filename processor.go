@@ -42,13 +42,18 @@ func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (p *AbstractProcessor) CloseSink(wg *sync.WaitGroup) {
-	// If there was no error, make sure the channel still returns something.
-	p.stopChan <- nil
+	if c := p.stopChan; c != nil {
+		// If there was no error, make sure the channel still returns something.
+		c <- nil
+		p.stopChan = nil
+	}
 	p.AbstractMetricSource.CloseSink(wg)
 }
 
 func (p *AbstractProcessor) Error(err error) {
-	p.stopChan <- err
+	if c := p.stopChan; c != nil {
+		c <- err
+	}
 }
 
 func (p *AbstractProcessor) Close() {

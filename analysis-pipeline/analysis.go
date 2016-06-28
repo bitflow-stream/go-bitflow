@@ -2,7 +2,6 @@ package main
 
 import (
 	"path/filepath"
-	"strconv"
 
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/analysis/dbscan"
@@ -10,7 +9,7 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
-var setSampleSource = &SampleTagger{SourceTags: []string{SourceTag}, DontOverwrite: true}
+var setSampleSource = &SampleTagger{[]string{SourceTag}}
 
 func init() {
 	RegisterAnalysis("", setSampleSource, nil)
@@ -20,17 +19,17 @@ func init() {
 
 // For ad-hoc experiments...
 func handlePipelineGeneric(pipe *sample.CmdSamplePipeline) {
-	// convertFilenames(&pipe.SamplePipeline)
-	// p := &pipe.SamplePipeline
+	convertFilenames(&pipe.SamplePipeline)
+	p := &pipe.SamplePipeline
 
-	// p.Add(NewMetricFilter().ExcludeRegex("libvirt|ovsdb")) // .IncludeRegex("cpu|load/|mem/|net-io/|disk-usage///|num_procs"))
+	p.Add(NewMetricFilter().ExcludeRegex("libvirt|ovsdb")) // .IncludeRegex("cpu|load/|mem/|net-io/|disk-usage///|num_procs"))
 	// filterNoiseClusters(p)
 
 	// dbscanRtreeCluster(p)
-	// dbscanParallelCluster(p)
-	// p.Add(NewMultiHeaderMerger())
+	dbscanParallelCluster(p)
+	p.Add(NewMultiHeaderMerger())
 
-	// p.Add(new(BatchProcessor))
+	//	p.Add(new(BatchProcessor).Add(new(SampleShuffler)).Add(&PCABatchProcessing{ContainedVariance: 0.99}))
 	// .Add(new(TimestampSort))
 	// .Add(new(MinMaxScaling))
 	// .Add(new(StandardizationScaling))
@@ -40,7 +39,7 @@ func handlePipelineGeneric(pipe *sample.CmdSamplePipeline) {
 	// p.Add(new(AbstractProcessor))
 	// p.Add(&DecouplingProcessor{ChannelBuffer: 150000})
 
-	// plots(p, false)
+	plots(p, false)
 }
 
 func plots(p *sample.SamplePipeline, separatePlots bool) {
@@ -79,8 +78,7 @@ func convertFilenames(p *sample.SamplePipeline) {
 }
 
 type SampleTagger struct {
-	SourceTags    []string
-	DontOverwrite bool
+	sourceTags []string
 }
 
 func (h *SampleTagger) HandleHeader(header *sample.Header, source string) {
@@ -88,13 +86,7 @@ func (h *SampleTagger) HandleHeader(header *sample.Header, source string) {
 }
 
 func (h *SampleTagger) HandleSample(sample *sample.Sample, source string) {
-	for _, tag := range h.SourceTags {
-		if h.DontOverwrite {
-			tagBase := tag
-			for i := 0; sample.HasTag(tag); i++ {
-				tag = tagBase + strconv.FormatInt(int64(i), 10)
-			}
-		}
+	for _, tag := range h.sourceTags {
 		sample.SetTag(tag, source)
 	}
 }

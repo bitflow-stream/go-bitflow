@@ -95,11 +95,12 @@ func (p *Plotter) plotSample(sample sample.Sample) {
 
 func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
 	if file, err := os.Create(p.OutputFile); err != nil {
+		// Check if file can be create to quickly fail
 		return golib.TaskFinishedError(err)
 	} else {
 		_ = file.Close() // Drop error
 	}
-	return nil
+	return p.AbstractProcessor.Start(wg)
 }
 
 func (p *Plotter) Close() {
@@ -110,7 +111,7 @@ func (p *Plotter) Close() {
 		err = p.savePlot(p.data, nil, p.OutputFile)
 	}
 	if err != nil {
-		log.Println("Plotting failed:", err)
+		p.Error(err)
 	}
 	p.CloseSink(nil)
 }
@@ -170,5 +171,5 @@ func (p *Plotter) fillPlot(plotData map[string]PlotData, copyBounds *plot.Plot) 
 }
 
 func (p *Plotter) String() string {
-	return "Plotter"
+	return fmt.Sprintf("Plotter (color: %s)(file: %s)", p.ColorTag, p.OutputFile)
 }
