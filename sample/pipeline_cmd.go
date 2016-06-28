@@ -38,22 +38,23 @@ type CmdSamplePipeline struct {
 	Tasks             *golib.TaskGroup
 	ReadSampleHandler ReadSampleHandler
 
-	read_console      bool
-	read_tcp_listen   string
-	read_tcp_download golib.StringSlice
-	read_files        golib.StringSlice
-	sink_console      bool
-	sink_connect      string
-	sink_listen       string
-	sink_file         string
-	format_input      string
-	format_console    string
-	format_connect    string
-	format_listen     string
-	format_file       string
-	tcp_conn_limit    uint
-	tcp_listen_limit  uint
-	handler           ParallelSampleHandler
+	read_console           bool
+	read_tcp_listen        string
+	read_tcp_download      golib.StringSlice
+	read_files             golib.StringSlice
+	sink_console           bool
+	sink_connect           string
+	sink_listen            string
+	sink_file              string
+	format_input           string
+	format_console         string
+	format_connect         string
+	format_listen          string
+	format_file            string
+	tcp_conn_limit         uint
+	tcp_listen_limit       uint
+	tcp_drop_active_errors bool
+	handler                ParallelSampleHandler
 }
 
 // Must be called before flag.Parse()
@@ -67,6 +68,7 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.Var(&fileRegexValue{p}, "FR", "File Regex: Input files matching regex, previous -F parameter is used as start directory")
 	flag.UintVar(&p.tcp_listen_limit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
 	flag.UintVar(&p.tcp_conn_limit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
+	flag.BoolVar(&p.tcp_drop_active_errors, "tcp_drop_err", false, "Dont print errors when establishing actie TCP connection (for sink/source) fails.")
 
 	flag.IntVar(&p.handler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
 	flag.IntVar(&p.handler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling")
@@ -139,6 +141,7 @@ func (p *CmdSamplePipeline) Init() {
 			RemoteAddrs:   p.read_tcp_download,
 			RetryInterval: tcp_download_retry_interval,
 			Reader:        reader,
+			PrintErrors:   !p.tcp_drop_active_errors,
 		}
 		source.TcpConnLimit = p.tcp_conn_limit
 		p.SetSource(source)
@@ -174,7 +177,7 @@ func (p *CmdSamplePipeline) Init() {
 		sinks = append(sinks, sink)
 	}
 	if p.sink_connect != "" {
-		sink := &TCPSink{Endpoint: p.sink_connect}
+		sink := &TCPSink{Endpoint: p.sink_connect, PrintErrors: !p.tcp_drop_active_errors}
 		sink.SetMarshaller(marshaller(p.format_connect))
 		sink.Writer = writer
 		sink.TcpConnLimit = p.tcp_conn_limit

@@ -120,9 +120,10 @@ func (conn *TcpWriteConn) printErr(err error) {
 // ==================== TCP active sink ====================
 type TCPSink struct {
 	TcpMetricSink
-	Endpoint string
-	conn     *TcpWriteConn
-	stopped  *golib.OneshotCondition
+	Endpoint    string
+	PrintErrors bool
+	conn        *TcpWriteConn
+	stopped     *golib.OneshotCondition
 }
 
 func (sink *TCPSink) String() string {
@@ -149,6 +150,9 @@ func (sink *TCPSink) Close() {
 func (sink *TCPSink) Header(header Header) error {
 	conn, err := sink.getOutputConnection(true)
 	if err != nil {
+		if !sink.PrintErrors {
+			err = nil
+		}
 		return err
 	}
 	conn.Header(header)
@@ -161,6 +165,9 @@ func (sink *TCPSink) Sample(sample Sample, header Header) error {
 	}
 	conn, err := sink.getOutputConnection(false)
 	if err != nil {
+		if !sink.PrintErrors {
+			err = nil
+		}
 		return err
 	}
 	conn.Sample(sample)
@@ -218,6 +225,7 @@ func (sink *TCPSink) assertConnection() error {
 type TCPSource struct {
 	AbstractUnmarshallingMetricSource
 	TCPConnCounter
+	PrintErrors   bool
 	RemoteAddrs   []string
 	RetryInterval time.Duration
 	Reader        SampleReader
@@ -291,7 +299,9 @@ type TCPDownloadTask struct {
 func (task *TCPDownloadTask) Start(wg *sync.WaitGroup) golib.StopChan {
 	task.loopTask = golib.NewLoopTask("tcp download loop", func(stop golib.StopChan) {
 		if conn, err := task.dial(); err != nil {
-			log.Println("Error downloading from", task.remote+":", err)
+			if task.source.PrintErrors {
+				log.Println("Error downloading from", task.remote+":", err)
+			}
 		} else {
 			task.handleConnection(conn)
 		}
