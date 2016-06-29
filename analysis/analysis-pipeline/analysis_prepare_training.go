@@ -17,6 +17,7 @@ func init() {
 	targetFile := flag.String("featureStats", "", "Target file for printing feature statistics (for -e aggregate_scale)")
 	RegisterAnalysis("aggregate_scale", nil, aggregate_and_scale(targetFile))
 	RegisterAnalysis("shuffle", nil, shuffle_data)
+	RegisterAnalysis("filter_basic", setSampleSource, filter_basic)
 }
 
 func prepare_training_data_shuffled(p *sample.CmdSamplePipeline) {
@@ -50,4 +51,8 @@ func aggregate_and_scale(targetFile *string) func(p *sample.CmdSamplePipeline) {
 		}
 		p.Add(new(BatchProcessor).Add(new(StandardizationScaling)).Add(new(SampleShuffler)))
 	}
+}
+
+func filter_basic(p *sample.CmdSamplePipeline) {
+	p.Add(NewMetricFilter().IncludeRegex("^cpu$|^mem/percent$|^net-io/bytes$|^disk-io/[s|v]da/ioTime$"))
 }
