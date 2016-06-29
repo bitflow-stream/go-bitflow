@@ -89,6 +89,9 @@ func (m *TextMarshaller) defaultTextWidth(writer io.Writer) int {
 		if size, err := golib.GetTerminalSize(); err != nil {
 			log.Println("Failed to get terminal size:", err)
 			return 0
+		} else if size.Col == 0 {
+			log.Println("Warning: terminal size returned as 0, using default:", text_marshaller_default_width)
+			return text_marshaller_default_width
 		} else {
 			return int(size.Col)
 		}
