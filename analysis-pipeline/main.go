@@ -11,8 +11,7 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-// Can be filled/configured from init() functions
-var DefaultAnalysis = ""
+// Can be filled from init() functions using RegisterAnalysis()
 var registry = make(map[string]analysis)
 
 type analysis struct {
@@ -32,23 +31,39 @@ func main() {
 }
 
 func do_main() int {
-	analysisName := flag.String("e", DefaultAnalysis, fmt.Sprintf("Select one of the following analysis pipelines to execute: %v", allAnalyses()))
+	var analysisNames golib.StringSlice
+	flag.Var(&analysisNames, "e", fmt.Sprintf("Select one or more of the following analysis pipelines to execute: %v", allAnalyses()))
 
 	var p sample.CmdSamplePipeline
 	p.ParseFlags()
 	flag.Parse()
-	analysis, ok := registry[*analysisName]
-	if !ok {
-		log.Fatalf("Analysis pipeline '%v' not registered. Available: %v\n", *analysisName, allAnalyses())
+	analyses := resolvePipeline(&p, analysisNames)
+	if len(analyses) > 0 {
+		// If multiple analyses are selected, use the SampleHandler of the first one
+		p.ReadSampleHandler = analyses[0].SampleHandler
 	}
-	p.ReadSampleHandler = analysis.SampleHandler
 	defer golib.ProfileCpu()()
 	p.Init()
-	if setup := analysis.SetupPipeline; setup != nil {
-		setup(&p)
+
+	for _, analysis := range analyses {
+		if setup := analysis.SetupPipeline; setup != nil {
+			setup(&p)
+		}
 	}
 	printPipeline(p.Processors)
 	return p.StartAndWait()
+}
+
+func resolvePipeline(p *sample.CmdSamplePipeline, analysisNames golib.StringSlice) []analysis {
+	result := make([]analysis, len(analysisNames))
+	for i, name := range analysisNames {
+		analysis, ok := registry[name]
+		if !ok {
+			log.Fatalf("Analysis pipeline '%v' not registered. Available: %v\n", name, allAnalyses())
+		}
+		result[i] = analysis
+	}
+	return result
 }
 
 func printPipeline(p []sample.SampleProcessor) {

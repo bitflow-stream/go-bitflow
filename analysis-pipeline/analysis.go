@@ -19,17 +19,18 @@ func init() {
 
 // For ad-hoc experiments...
 func handlePipelineGeneric(pipe *sample.CmdSamplePipeline) {
-	convertFilenames(&pipe.SamplePipeline)
-	p := &pipe.SamplePipeline
+	// convertFilenames(&pipe.SamplePipeline)
+	// p := &pipe.SamplePipeline
 
-	p.Add(NewMetricFilter().ExcludeRegex("libvirt|ovsdb")) // .IncludeRegex("cpu|load/|mem/|net-io/|disk-usage///|num_procs"))
+	// p.Add(NewMetricFilter().ExcludeRegex("libvirt|ovsdb")) // .IncludeRegex("cpu|load/|mem/|net-io/|disk-usage///|num_procs"))
 	// filterNoiseClusters(p)
 
 	// dbscanRtreeCluster(p)
-	dbscanParallelCluster(p)
-	p.Add(NewMultiHeaderMerger())
+	// dbscanParallelCluster(p)
+	// p.Add(NewMultiHeaderMerger())
 
-	//	p.Add(new(BatchProcessor).Add(new(SampleShuffler)).Add(&PCABatchProcessing{ContainedVariance: 0.99}))
+	//	p.Add(new(BatchProcessor))
+	// .Add(new(SampleShuffler))
 	// .Add(new(TimestampSort))
 	// .Add(new(MinMaxScaling))
 	// .Add(new(StandardizationScaling))
@@ -39,7 +40,7 @@ func handlePipelineGeneric(pipe *sample.CmdSamplePipeline) {
 	// p.Add(new(AbstractProcessor))
 	// p.Add(&DecouplingProcessor{ChannelBuffer: 150000})
 
-	plots(p, false)
+	// plots(p, false)
 }
 
 func plots(p *sample.SamplePipeline, separatePlots bool) {
