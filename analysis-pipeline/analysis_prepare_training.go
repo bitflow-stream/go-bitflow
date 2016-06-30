@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"math/rand"
 	"path/filepath"
 	"time"
 
@@ -29,6 +30,7 @@ func init() {
 	RegisterAnalysis("filter_basic", setSampleSource, filter_basic)
 
 	RegisterAnalysis("merge_hosts", host_tagger, merge_hosts)
+	RegisterAnalysis("pick_10percent", nil, pick_10percent)
 }
 
 func prepare_training_data_shuffled(p *sample.CmdSamplePipeline) {
@@ -86,4 +88,12 @@ func merge_hosts(p *sample.CmdSamplePipeline) {
 			}
 		}
 	}
+}
+
+func pick_10percent(p *sample.CmdSamplePipeline) {
+	p.Add(&SampleFilter{
+		IncludeFilter: func(inSample *sample.Sample) bool {
+			return rand.Int63()%10 == 0
+		},
+	})
 }
