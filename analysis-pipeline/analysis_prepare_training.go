@@ -73,6 +73,8 @@ func filter_basic(p *sample.CmdSamplePipeline) {
 }
 
 func merge_hosts(p *sample.CmdSamplePipeline) {
+	p.Add(new(MultiHeaderMerger))
+
 	suffix_len := len("-1.xxx")
 	if filesource, ok := p.Source.(*sample.FileSource); ok {
 		filesource.ConvertFilename = func(filename string) string {
