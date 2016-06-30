@@ -113,32 +113,50 @@ func (p *BatchProcessor) String() string {
 	return fmt.Sprintf("BatchProcessor %v step%s%v", len(p.Steps), extra, strings.Join(steps, ", "))
 }
 
-// ==================== Timestamp sort ====================
-type TimestampSort struct {
+// ==================== Tag & Timestamp sort ====================
+// Sort based on given Tags, use Timestamp as last sort criterion
+type SampleSorter struct {
+	Tags []string
 }
 
-type SampleSlice []*sample.Sample
+type SampleSlice struct {
+	samples []*sample.Sample
+	sorter  *SampleSorter
+}
 
 func (s SampleSlice) Len() int {
-	return len(s)
+	return len(s.samples)
 }
 
 func (s SampleSlice) Less(i, j int) bool {
-	return s[i].Time.Before(s[j].Time)
+	a := s.samples[i]
+	b := s.samples[j]
+	for _, tag := range s.sorter.Tags {
+		tagA := a.Tag(tag)
+		tagB := b.Tag(tag)
+		if tagA == tagB {
+			continue
+		}
+		return tagA < tagB
+	}
+	return a.Time.Before(b.Time)
 }
 
 func (s SampleSlice) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
+	s.samples[i], s.samples[j] = s.samples[j], s.samples[i]
 }
 
-func (*TimestampSort) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
+func (sorter *SampleSorter) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
 	log.Printf("Sorting %v samples...\n", len(samples))
-	sort.Sort(SampleSlice(samples))
+	sort.Sort(SampleSlice{samples, sorter})
 	return header, samples, nil
 }
 
-func (*TimestampSort) String() string {
-	return "TimestampSort"
+func (sorter *SampleSorter) String() string {
+	all := make([]string, len(sorter.Tags)+1)
+	copy(all, sorter.Tags)
+	all[len(all)-1] = "Timestamp"
+	return "Sort: " + strings.Join(all, ", ")
 }
 
 // ==================== Sample Shuffler ====================

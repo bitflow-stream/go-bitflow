@@ -3,10 +3,18 @@ package main
 import (
 	"flag"
 	"log"
+	"path/filepath"
 	"time"
 
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"
+)
+
+const host_tag = "host"
+
+var (
+	host_sorter = &SampleSorter{[]string{host_tag}}
+	host_tagger = &SampleTagger{[]string{host_tag}}
 )
 
 func init() {
@@ -17,7 +25,10 @@ func init() {
 	targetFile := flag.String("featureStats", "", "Target file for printing feature statistics (for -e aggregate_scale)")
 	RegisterAnalysis("aggregate_scale", nil, aggregate_and_scale(targetFile))
 	RegisterAnalysis("shuffle", nil, shuffle_data)
+	RegisterAnalysis("sort", nil, sort_data)
 	RegisterAnalysis("filter_basic", setSampleSource, filter_basic)
+
+	RegisterAnalysis("merge_hosts", host_tagger, merge_hosts)
 }
 
 func prepare_training_data_shuffled(p *sample.CmdSamplePipeline) {
@@ -27,7 +38,7 @@ func prepare_training_data_shuffled(p *sample.CmdSamplePipeline) {
 
 func prepare_training_data_sorted(p *sample.CmdSamplePipeline) {
 	prepare_training_data(p)
-	p.Add(new(BatchProcessor).Add(new(TimestampSort)))
+	p.Add(new(BatchProcessor).Add(host_sorter))
 }
 
 func prepare_training_data(p *sample.CmdSamplePipeline) {
@@ -40,9 +51,13 @@ func shuffle_data(p *sample.CmdSamplePipeline) {
 	p.Add(new(BatchProcessor).Add(new(SampleShuffler)))
 }
 
+func sort_data(p *sample.CmdSamplePipeline) {
+	p.Add(new(BatchProcessor).Add(host_sorter))
+}
+
 func aggregate_and_scale(targetFile *string) func(p *sample.CmdSamplePipeline) {
 	return func(p *sample.CmdSamplePipeline) {
-		p.Add(new(BatchProcessor).Add(new(TimestampSort)))
+		p.Add(new(BatchProcessor).Add(host_sorter))
 		p.Add((&FeatureAggregator{WindowDuration: 10 * time.Second}).AddAvg("_avg").AddSlope("_slope"))
 		if targetFile == nil || *targetFile == "" {
 			log.Println("Warning: --featureStats not given, not storing feature statistics")
@@ -55,4 +70,18 @@ func aggregate_and_scale(targetFile *string) func(p *sample.CmdSamplePipeline) {
 
 func filter_basic(p *sample.CmdSamplePipeline) {
 	p.Add(NewMetricFilter().IncludeRegex("^cpu$|^mem/percent$|^net-io/bytes$|^disk-io/[s|v]da/ioTime$"))
+}
+
+func merge_hosts(p *sample.CmdSamplePipeline) {
+	suffix_len := len("-1.xxx")
+	if filesource, ok := p.Source.(*sample.FileSource); ok {
+		filesource.ConvertFilename = func(filename string) string {
+			name := filepath.Base(filename)
+			if len(name) >= suffix_len {
+				return name[:len(name)-suffix_len]
+			} else {
+				return name
+			}
+		}
+	}
 }
