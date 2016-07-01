@@ -13,7 +13,10 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-const samples_have_tags = false
+// Can be used to modify collected headers and samples
+var CollectedSampleHandler sample.ReadSampleHandler
+
+const SampleSource = "collected"
 
 // ==================== Metric ====================
 type Metric struct {
@@ -207,7 +210,11 @@ func (source *CollectorSource) constructSample(metrics []string) (sample.Header,
 		}
 		set[collector] = true
 	}
-	return sample.Header{Fields: fields, HasTags: samples_have_tags}, values, set
+	header := sample.Header{Fields: fields}
+	if handler := CollectedSampleHandler; handler != nil {
+		handler.HandleHeader(&header, SampleSource)
+	}
+	return header, values, set
 }
 
 func (source *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Collector, stopper *golib.Stopper, interval time.Duration) {
@@ -254,6 +261,9 @@ func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header sample.Hea
 				sample := sample.Sample{
 					Time:   time.Now(),
 					Values: values,
+				}
+				if handler := CollectedSampleHandler; handler != nil {
+					handler.HandleSample(&sample, SampleSource)
 				}
 				if err := sink.Sample(sample, header); err != nil {
 					// When a sample fails, try sending the header again
