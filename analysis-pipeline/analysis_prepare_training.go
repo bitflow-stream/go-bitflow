@@ -15,7 +15,7 @@ const host_tag = "host"
 
 var (
 	host_sorter = &SampleSorter{[]string{host_tag}}
-	host_tagger = &SampleTagger{[]string{host_tag}}
+	host_tagger = &SampleTagger{SourceTags: []string{host_tag}, DontOverwrite: true}
 )
 
 func init() {

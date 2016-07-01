@@ -55,6 +55,9 @@ func do_main() int {
 }
 
 func resolvePipeline(p *sample.CmdSamplePipeline, analysisNames golib.StringSlice) []analysis {
+	if len(analysisNames) == 0 {
+		analysisNames = append(analysisNames, "") // The default
+	}
 	result := make([]analysis, len(analysisNames))
 	for i, name := range analysisNames {
 		analysis, ok := registry[name]
