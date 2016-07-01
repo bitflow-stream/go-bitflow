@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strconv"
 
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/analysis/dbscan"
@@ -9,10 +10,11 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
-var setSampleSource = &SampleTagger{[]string{SourceTag}}
+var setSampleSource = &SampleTagger{SourceTags: []string{SourceTag}, DontOverwrite: true}
 
 func init() {
 	RegisterAnalysis("", setSampleSource, nil)
+	RegisterAnalysis("source", &SampleTagger{SourceTags: []string{SourceTag}, DontOverwrite: false}, nil)
 	RegisterAnalysis("no-source", nil, nil)
 	RegisterAnalysis("x", setSampleSource, handlePipelineGeneric)
 }
@@ -79,7 +81,8 @@ func convertFilenames(p *sample.SamplePipeline) {
 }
 
 type SampleTagger struct {
-	sourceTags []string
+	SourceTags    []string
+	DontOverwrite bool
 }
 
 func (h *SampleTagger) HandleHeader(header *sample.Header, source string) {
@@ -87,7 +90,14 @@ func (h *SampleTagger) HandleHeader(header *sample.Header, source string) {
 }
 
 func (h *SampleTagger) HandleSample(sample *sample.Sample, source string) {
-	for _, tag := range h.sourceTags {
+	for _, tag := range h.SourceTags {
+		if h.DontOverwrite {
+			base := tag
+			tag = base
+			for i := 0; sample.HasTag(tag); i++ {
+				tag = base + strconv.Itoa(i)
+			}
+		}
 		sample.SetTag(tag, source)
 	}
 }
