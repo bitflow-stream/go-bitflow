@@ -81,20 +81,6 @@ func (s *AbstractMetricSource) CloseSink(wg *sync.WaitGroup) {
 	}
 }
 
-type UnmarshallingMetricSource interface {
-	MetricSource
-	SetUnmarshaller(unmarshaller Unmarshaller) // Must be called before Start()
-}
-
-type AbstractUnmarshallingMetricSource struct {
-	AbstractMetricSource
-	Unmarshaller Unmarshaller
-}
-
-func (s *AbstractUnmarshallingMetricSource) SetUnmarshaller(unmarshaller Unmarshaller) {
-	s.Unmarshaller = unmarshaller
-}
-
 // ==================== Empty Source ====================
 
 type EmptyMetricSource struct {

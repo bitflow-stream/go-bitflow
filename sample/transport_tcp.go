@@ -223,7 +223,7 @@ func (sink *TCPSink) assertConnection() error {
 
 // ==================== TCP active source ====================
 type TCPSource struct {
-	AbstractUnmarshallingMetricSource
+	AbstractMetricSource
 	TCPConnCounter
 	PrintErrors   bool
 	RemoteAddrs   []string
@@ -247,7 +247,7 @@ func (sink *TCPSource) SourceString() string {
 }
 
 func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	log.Println("Downloading", source.Unmarshaller, "data from", source.SourceString())
+	log.Println("Downloading", source.Reader.Format(), "data from", source.SourceString())
 	channels := make([]golib.StopChan, 0, len(source.RemoteAddrs))
 	if len(source.RemoteAddrs) > 1 {
 		source.downloadSink = &SynchronizingMetricSink{OutgoingSink: source.OutgoingSink}
@@ -284,7 +284,7 @@ func (source *TCPSource) Stop() {
 }
 
 func (source *TCPSource) startStream(conn *net.TCPConn) *SampleInputStream {
-	return source.Reader.Open(conn, source.Unmarshaller, source.downloadSink)
+	return source.Reader.Open(conn, source.downloadSink)
 }
 
 // ==================== Loop connecting to TCP endpoint ====================

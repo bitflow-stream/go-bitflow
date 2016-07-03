@@ -13,7 +13,8 @@ import (
 // Unmarshalls samples from an io.Reader, parallelizing the parsing
 type SampleReader struct {
 	ParallelSampleHandler
-	Handler ReadSampleHandler // Optional, for modifying incoming headers/samples based on their source
+	Handler      ReadSampleHandler // Optional, for modifying incoming headers/samples based on their source
+	Unmarshaller Unmarshaller
 }
 
 type ReadSampleHandler interface {
@@ -23,22 +24,22 @@ type ReadSampleHandler interface {
 
 type SampleInputStream struct {
 	ParallelSampleStream
+	um               Unmarshaller
 	sampleReader     *SampleReader
 	reader           *bufio.Reader
 	underlyingReader io.ReadCloser
 	num_samples      int
 	header           Header
 	outHeader        Header
-	um               Unmarshaller
 	sink             MetricSinkBase
 }
 
-func (r *SampleReader) Open(input io.ReadCloser, um Unmarshaller, sink MetricSinkBase) *SampleInputStream {
+func (r *SampleReader) Open(input io.ReadCloser, sink MetricSinkBase) *SampleInputStream {
 	return &SampleInputStream{
+		um:               r.Unmarshaller,
 		reader:           bufio.NewReaderSize(input, r.IoBuffer),
 		sampleReader:     r,
 		underlyingReader: input,
-		um:               um,
 		sink:             sink,
 		ParallelSampleStream: ParallelSampleStream{
 			incoming: make(chan *BufferedSample, r.BufferedSamples),
@@ -73,15 +74,15 @@ func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 
 func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error) {
 	var num_samples int
-	log.Println("Reading", stream.um, "from", sourceName)
+	log.Println("Reading", stream.Format(), "from", sourceName)
 	num_samples, err = stream.ReadSamples(sourceName)
-	log.Printf("Read %v %v samples from %v\n", num_samples, stream.um, sourceName)
+	log.Printf("Read %v %v samples from %v\n", num_samples, stream.Format(), sourceName)
 	return
 }
 
 func (stream *SampleInputStream) ReadTcpSamples(conn *net.TCPConn, checkClosed func() bool) {
 	remote := conn.RemoteAddr()
-	log.Println("Receiving", stream.um, "from", remote)
+	log.Println("Receiving", stream.Format(), "from", remote)
 	var err error
 	var num_samples int
 	if num_samples, err = stream.ReadSamples(remote.String()); err == nil {
@@ -114,11 +115,32 @@ func (stream *SampleInputStream) closeUnderlyingReader() {
 	})
 }
 
+func (reader *SampleReader) Format() string {
+	if reader.Unmarshaller == nil {
+		return "auto-detected"
+	} else {
+		return reader.Unmarshaller.String()
+	}
+}
+
+func (stream *SampleInputStream) Format() string {
+	if stream.um == nil {
+		return "auto-detected"
+	} else {
+		return stream.um.String()
+	}
+}
+
 func (stream *SampleInputStream) readHeader(source string) (err error) {
+	if stream.um == nil {
+		if stream.um, err = detectFormat(stream.reader); err != nil {
+			return
+		}
+	}
 	if stream.header, err = stream.um.ReadHeader(stream.reader); err != nil {
 		return
 	}
-	log.Printf("Reading %v metrics\n", len(stream.header.Fields))
+	log.Printf("Reading %v %v metrics\n", len(stream.header.Fields), stream.um)
 	stream.outHeader = Header{
 		Fields:  make([]string, len(stream.header.Fields)),
 		HasTags: stream.header.HasTags,

@@ -12,23 +12,34 @@ import (
 
 const (
 	tcp_download_retry_interval = 1000 * time.Millisecond
-	supported_formats           = "(c=CSV, b=binary, t=text)"
-
-	default_file_input    = "c"
-	default_console_input = "c"
-	default_tcp_input     = "b"
+	input_formats               = "(a=auto, c=CSV, b=binary)"
+	output_formats              = "(t=text, c=CSV, b=binary)"
 )
 
-func marshaller(format string) MetricMarshaller {
+func marshaller(format string) Marshaller {
 	switch format {
+	case "t":
+		return new(TextMarshaller)
 	case "c":
 		return new(CsvMarshaller)
 	case "b":
 		return new(BinaryMarshaller)
-	case "t":
-		return new(TextMarshaller)
 	default:
-		log.Fatalf("Illegal data fromat '%v', must be one of %v\n", format, supported_formats)
+		log.Fatalf("Illegal data output fromat '%v', must be one of %v\n", format, output_formats)
+		return nil
+	}
+}
+
+func unmarshaller(format string) Unmarshaller {
+	switch format {
+	case "a":
+		return nil
+	case "c":
+		return new(CsvMarshaller)
+	case "b":
+		return new(BinaryMarshaller)
+	default:
+		log.Fatalf("Illegal data input fromat '%v', must be one of %v\n", format, input_formats)
 		return nil
 	}
 }
@@ -59,7 +70,7 @@ type CmdSamplePipeline struct {
 
 // Must be called before flag.Parse()
 func (p *CmdSamplePipeline) ParseFlags() {
-	flag.StringVar(&p.format_input, "i", "", "Data source format, default depends on selected source, one of "+supported_formats)
+	flag.StringVar(&p.format_input, "i", "a", "Force data input format, default is auto-detect, one of "+input_formats)
 	flag.BoolVar(&p.read_console, "C", false, "Data source: read from stdin")
 	flag.Var(&p.read_files, "F", "Data source: read from file(s)")
 	flag.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
@@ -71,17 +82,17 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.BoolVar(&p.tcp_drop_active_errors, "tcp_drop_err", false, "Dont print errors when establishing actie TCP connection (for sink/source) fails.")
 
 	flag.IntVar(&p.handler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
-	flag.IntVar(&p.handler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling")
-	flag.IntVar(&p.handler.IoBuffer, "io_buf", 4096, "Size (byte) of buffered IO when (un)marshalling")
+	flag.IntVar(&p.handler.BufferedSamples, "buf", 0, "Number of samples buffered when (un)marshalling. Defaults are selected based on transport.")
+	flag.IntVar(&p.handler.IoBuffer, "io_buf", 0, "Size (byte) of buffered IO when (un)marshalling. Defaults are selected based on transport.")
 
 	flag.BoolVar(&p.sink_console, "p", false, "Data sink: print to stdout")
-	flag.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+supported_formats)
+	flag.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+output_formats)
 	flag.StringVar(&p.sink_file, "f", "", "Data sink: write data to file")
-	flag.StringVar(&p.format_file, "ff", "c", "Data format for file output, one of "+supported_formats)
+	flag.StringVar(&p.format_file, "ff", "c", "Data format for file output, one of "+output_formats)
 	flag.Var(&p.sink_connect, "s", "Data sink: send data to specified TCP endpoint")
-	flag.StringVar(&p.format_connect, "sf", "b", "Data format for TCP output, one of "+supported_formats)
+	flag.StringVar(&p.format_connect, "sf", "b", "Data format for TCP output, one of "+output_formats)
 	flag.Var(&p.sink_listen, "l", "Data sink: accept TCP connections for sending out data")
-	flag.StringVar(&p.format_listen, "lf", "b", "Data format for TCP server output, one of "+supported_formats)
+	flag.StringVar(&p.format_listen, "lf", "b", "Data format for TCP server output, one of "+output_formats)
 }
 
 type fileRegexValue struct {
@@ -120,21 +131,19 @@ func (p *CmdSamplePipeline) Init() {
 	p.Tasks = golib.NewTaskGroup()
 
 	// ====== Initialize source(s)
-	var unmarshaller string
 	reader := SampleReader{
 		ParallelSampleHandler: p.handler,
 		Handler:               p.ReadSampleHandler,
+		Unmarshaller:          unmarshaller(p.format_input),
 	}
 	if p.read_console {
 		p.SetSource(&ConsoleSource{Reader: reader})
-		unmarshaller = default_console_input
 	}
 	if p.read_tcp_listen != "" {
 		source := NewTcpListenerSource(p.read_tcp_listen, reader)
 		source.SimultaneousConnections = p.tcp_listen_limit
 		source.TcpConnLimit = p.tcp_conn_limit
 		p.SetSource(source)
-		unmarshaller = default_tcp_input
 	}
 	if len(p.read_tcp_download) > 0 {
 		source := &TCPSource{
@@ -145,22 +154,13 @@ func (p *CmdSamplePipeline) Init() {
 		}
 		source.TcpConnLimit = p.tcp_conn_limit
 		p.SetSource(source)
-		unmarshaller = default_tcp_input
 	}
 	if len(p.read_files) > 0 {
 		p.SetSource(&FileSource{Filenames: p.read_files, Reader: reader})
-		unmarshaller = default_file_input
 	}
 	if p.Source == nil {
 		log.Println("No data source provided, no data will be received or generated.")
 		p.Source = new(EmptyMetricSource)
-	} else {
-		if p.format_input != "" {
-			unmarshaller = p.format_input
-		}
-		if umSource, ok := p.Source.(UnmarshallingMetricSource); ok {
-			umSource.SetUnmarshaller(marshaller(unmarshaller))
-		}
 	}
 
 	// ====== Initialize sink(s) and tasks

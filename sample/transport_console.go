@@ -43,7 +43,7 @@ func (sink *ConsoleSink) Sample(sample Sample, header Header) error {
 }
 
 type ConsoleSource struct {
-	AbstractUnmarshallingMetricSource
+	AbstractMetricSource
 	Reader SampleReader
 	stream *SampleInputStream
 }
@@ -53,7 +53,7 @@ func (source *ConsoleSource) String() string {
 }
 
 func (source *ConsoleSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	source.stream = source.Reader.Open(os.Stdin, source.Unmarshaller, source.OutgoingSink)
+	source.stream = source.Reader.Open(os.Stdin, source.OutgoingSink)
 	return golib.WaitErrFunc(wg, func() error {
 		defer source.CloseSink(wg)
 		err := source.stream.ReadNamedSamples("stdin")

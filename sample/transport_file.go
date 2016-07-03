@@ -104,7 +104,7 @@ func (group *FileGroup) DeleteFiles() error {
 
 // ==================== File data source ====================
 type FileSource struct {
-	AbstractUnmarshallingMetricSource
+	AbstractMetricSource
 	Reader          SampleReader
 	Filenames       []string
 	ConvertFilename func(string) string // Optional hook for converting the filename to some other string
@@ -161,7 +161,7 @@ func (source *FileSource) readFile(filename string) (err error) {
 	} else {
 		var stream *SampleInputStream
 		source.closed.IfNotEnabled(func() {
-			stream = source.Reader.Open(file, source.Unmarshaller, source.OutgoingSink)
+			stream = source.Reader.Open(file, source.OutgoingSink)
 			source.stream = stream
 		})
 		if stream == nil {

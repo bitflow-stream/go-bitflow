@@ -10,7 +10,7 @@ import (
 
 // ==================== TCP listener source ====================
 type TCPListenerSource struct {
-	AbstractUnmarshallingMetricSource
+	AbstractMetricSource
 	TCPConnCounter
 	Reader                  SampleReader
 	SimultaneousConnections uint
@@ -46,7 +46,7 @@ func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		source.synchronizedSink = &SynchronizingMetricSink{OutgoingSink: source.OutgoingSink}
 	}
 	return source.task.ExtendedStart(func(addr net.Addr) {
-		log.Println("Listening for incoming", source.Unmarshaller, "samples on", addr)
+		log.Println("Listening for incoming", source.Reader.Format(), "samples on", addr)
 	}, wg)
 }
 
@@ -62,7 +62,7 @@ func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.
 	log.Println("Accepted connection from", conn.RemoteAddr())
 	listenerConn := &TCPListenerConnection{
 		source: source,
-		stream: source.Reader.Open(conn, source.Unmarshaller, source.synchronizedSink),
+		stream: source.Reader.Open(conn, source.synchronizedSink),
 	}
 	source.connections[listenerConn] = true
 	wg.Add(1)

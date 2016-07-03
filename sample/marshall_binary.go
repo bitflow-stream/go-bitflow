@@ -14,7 +14,7 @@ import (
 const (
 	timeBytes        = 8
 	valBytes         = 8
-	binary_separator = byte('\n')
+	binary_separator = '\n'
 )
 
 type BinaryMarshaller struct {
