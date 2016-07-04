@@ -58,15 +58,6 @@ type Unmarshaller interface {
 	ParseSample(header Header, data []byte) (Sample, error)
 }
 
-type MetricMarshaller interface {
-	String() string
-	WriteHeader(header Header, output io.Writer) error
-	WriteSample(sample Sample, header Header, output io.Writer) error
-	ReadHeader(input *bufio.Reader) (Header, error)
-	ReadSampleData(header Header, input *bufio.Reader) ([]byte, error)
-	ParseSample(header Header, data []byte) (Sample, error)
-}
-
 // Helper type for more concise Write code by avoiding error checks on every
 // Write() invokation. Overhead: additional no-op Write()/WriteStr() calls
 // after an error has occurred (which is the exception).

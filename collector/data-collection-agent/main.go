@@ -42,12 +42,6 @@ var (
 		regexp.MustCompile("^net-proto/tcp/(MaxConn|RtpAlgorithm|RtpMin|RtoMax)$"), // Some irrelevant TCP/IP settings
 		regexp.MustCompile("^net-proto/ip/(DefaultTTL|Forwarding)$"),
 	}
-	marshallers = map[string]sample.MetricMarshaller{
-		"":  new(sample.CsvMarshaller), // The default
-		"c": new(sample.CsvMarshaller),
-		"b": new(sample.BinaryMarshaller),
-		"t": new(sample.TextMarshaller),
-	}
 )
 
 func do_main() int {
