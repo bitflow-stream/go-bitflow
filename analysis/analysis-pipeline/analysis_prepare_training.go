@@ -29,6 +29,7 @@ func init() {
 	RegisterAnalysis("shuffle", nil, shuffle_data)
 	RegisterAnalysis("sort", nil, sort_data)
 	RegisterAnalysis("filter_basic", setSampleSource, filter_basic)
+	RegisterAnalysis("filter_hypervisor", setSampleSource, filter_hypervisor)
 
 	RegisterAnalysis("merge_hosts", host_tagger, merge_hosts)
 	RegisterAnalysis("pick_10percent", nil, pick_10percent)
@@ -73,6 +74,10 @@ func aggregate_and_scale(targetFile *string) func(p *sample.CmdSamplePipeline) {
 
 func filter_basic(p *sample.CmdSamplePipeline) {
 	p.Add(NewMetricFilter().IncludeRegex("^cpu$|^mem/percent$|^net-io/bytes$|^disk-io/[s|v]da/ioTime$"))
+}
+
+func filter_hypervisor(p *sample.CmdSamplePipeline) {
+	p.Add(NewMetricFilter().ExcludeRegex("^ovsdb/|^libvirt/"))
 }
 
 func merge_hosts(p *sample.CmdSamplePipeline) {
