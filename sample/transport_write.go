@@ -37,12 +37,12 @@ func (writer *BufferedWriteCloser) Close() (err error) {
 	return
 }
 
-func (w *SampleWriter) OpenBuffered(writer io.WriteCloser, marshaller Marshaller) *SampleOutputStream {
-	if w.IoBuffer <= 0 {
+func (w *SampleWriter) OpenBuffered(writer io.WriteCloser, marshaller Marshaller, io_buffer int) *SampleOutputStream {
+	if io_buffer <= 0 {
 		return w.Open(writer, marshaller)
 	}
 	buf := &BufferedWriteCloser{
-		Writer: bufio.NewWriterSize(writer, w.IoBuffer),
+		Writer: bufio.NewWriterSize(writer, io_buffer),
 		Closer: writer,
 	}
 	return w.Open(buf, marshaller)

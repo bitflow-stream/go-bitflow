@@ -10,6 +10,8 @@ import (
 	"github.com/antongulenko/golib"
 )
 
+const input_io_buffer = 16 // Needed for auto-detecting stream format
+
 // Unmarshalls samples from an io.Reader, parallelizing the parsing
 type SampleReader struct {
 	ParallelSampleHandler
@@ -37,7 +39,7 @@ type SampleInputStream struct {
 func (r *SampleReader) Open(input io.ReadCloser, sink MetricSinkBase) *SampleInputStream {
 	return &SampleInputStream{
 		um:               r.Unmarshaller,
-		reader:           bufio.NewReaderSize(input, r.IoBuffer),
+		reader:           bufio.NewReaderSize(input, input_io_buffer),
 		sampleReader:     r,
 		underlyingReader: input,
 		sink:             sink,

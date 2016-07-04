@@ -60,7 +60,7 @@ type TcpWriteConn struct {
 func (sink *TcpMetricSink) OpenWriteConn(conn *net.TCPConn) *TcpWriteConn {
 	return &TcpWriteConn{
 		remote: conn.RemoteAddr(),
-		stream: sink.Writer.OpenBuffered(conn, sink.Marshaller),
+		stream: sink.Writer.Open(conn, sink.Marshaller),
 	}
 }
 

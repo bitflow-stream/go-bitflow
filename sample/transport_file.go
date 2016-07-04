@@ -220,6 +220,7 @@ func ListMatchingFiles(dir string, regexStr string) ([]string, error) {
 type FileSink struct {
 	AbstractMarshallingMetricSink
 	Filename string
+	IoBuffer int
 
 	group      FileGroup
 	lastHeader Header
@@ -270,7 +271,7 @@ func (sink *FileSink) openNextFile() (err error) {
 
 		file, err := os.Create(name)
 		if err == nil {
-			sink.stream = sink.Writer.OpenBuffered(file, sink.Marshaller)
+			sink.stream = sink.Writer.OpenBuffered(file, sink.Marshaller, sink.IoBuffer)
 			log.Println("Opened file", file.Name())
 		}
 	})

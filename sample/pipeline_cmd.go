@@ -66,6 +66,7 @@ type CmdSamplePipeline struct {
 	tcp_listen_limit       uint
 	tcp_drop_active_errors bool
 	handler                ParallelSampleHandler
+	io_buf                 int
 }
 
 // Must be called before flag.Parse()
@@ -82,8 +83,8 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.BoolVar(&p.tcp_drop_active_errors, "tcp_drop_err", false, "Dont print errors when establishing actie TCP connection (for sink/source) fails.")
 
 	flag.IntVar(&p.handler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
-	flag.IntVar(&p.handler.BufferedSamples, "buf", 0, "Number of samples buffered when (un)marshalling. Defaults are selected based on transport.")
-	flag.IntVar(&p.handler.IoBuffer, "io_buf", 0, "Size (byte) of buffered IO when (un)marshalling. Defaults are selected based on transport.")
+	flag.IntVar(&p.handler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling.")
+	flag.IntVar(&p.io_buf, "io_buf", 4096, "Size (byte) of buffered IO when writing files.")
 
 	flag.BoolVar(&p.sink_console, "p", false, "Data sink: print to stdout")
 	flag.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+output_formats)
@@ -191,7 +192,7 @@ func (p *CmdSamplePipeline) Init() {
 		sinks = append(sinks, sink)
 	}
 	if p.sink_file != "" {
-		sink := &FileSink{Filename: p.sink_file}
+		sink := &FileSink{Filename: p.sink_file, IoBuffer: p.io_buf}
 		sink.SetMarshaller(marshaller(p.format_file))
 		sink.Writer = writer
 		sinks = append(sinks, sink)

@@ -155,7 +155,6 @@ func (agg AggregateSink) Sample(sample Sample, header Header) error {
 
 type ParallelSampleHandler struct {
 	BufferedSamples int
-	IoBuffer        int
 	ParallelParsers int
 }
 
