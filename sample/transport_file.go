@@ -44,8 +44,13 @@ func (group *FileGroup) BuildFilename(num int) string {
 }
 
 func (group *FileGroup) BuildFilenameStr(suffix string) string {
-	base := fmt.Sprintf("%v-%v%v", group.prefix, suffix, group.suffix)
-	return filepath.Join(group.dir, base)
+	var filename string
+	if suffix == "" {
+		filename = group.prefix + group.suffix
+	} else {
+		filename = fmt.Sprintf("%s-%s%s", group.prefix, suffix, group.suffix)
+	}
+	return filepath.Join(group.dir, filename)
 }
 
 func (group *FileGroup) FileRegex() *regexp.Regexp {
@@ -266,8 +271,13 @@ func (sink *FileSink) openNextFile() (err error) {
 		if err = sink.flush(); err != nil {
 			return
 		}
+		var name string
+		if sink.file_num == 0 {
+			name = sink.group.BuildFilenameStr("")
+		} else {
+			name = sink.group.BuildFilename(sink.file_num)
+		}
 		sink.file_num++
-		name := sink.group.BuildFilename(sink.file_num)
 
 		file, err := os.Create(name)
 		if err == nil {
