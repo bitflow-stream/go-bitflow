@@ -89,7 +89,7 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.BoolVar(&p.sink_console, "p", false, "Data sink: print to stdout")
 	flag.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+output_formats)
 	flag.StringVar(&p.sink_file, "f", "", "Data sink: write data to file")
-	flag.StringVar(&p.format_file, "ff", "c", "Data format for file output, one of "+output_formats)
+	flag.StringVar(&p.format_file, "ff", "b", "Data format for file output, one of "+output_formats)
 	flag.Var(&p.sink_connect, "s", "Data sink: send data to specified TCP endpoint")
 	flag.StringVar(&p.format_connect, "sf", "b", "Data format for TCP output, one of "+output_formats)
 	flag.Var(&p.sink_listen, "l", "Data sink: accept TCP connections for sending out data")
