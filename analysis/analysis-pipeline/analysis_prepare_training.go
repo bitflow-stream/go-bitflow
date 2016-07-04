@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	. "github.com/antongulenko/data2go/analysis"
@@ -77,15 +78,14 @@ func filter_basic(p *sample.CmdSamplePipeline) {
 func merge_hosts(p *sample.CmdSamplePipeline) {
 	p.Add(NewMultiHeaderMerger())
 
-	suffix_len := len("-1.xxx")
+	suffix_regex := regexp.MustCompile("\\....$")  // Strip file ending
+	num_regex := regexp.MustCompile("(-[0-9]+)?$") // Strip optional appended numbering
 	if filesource, ok := p.Source.(*sample.FileSource); ok {
 		filesource.ConvertFilename = func(filename string) string {
 			name := filepath.Base(filename)
-			if len(name) >= suffix_len {
-				return name[:len(name)-suffix_len]
-			} else {
-				return name
-			}
+			name = suffix_regex.ReplaceAllString(name, "")
+			name = num_regex.ReplaceAllString(name, "")
+			return name
 		}
 	}
 }
