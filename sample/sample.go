@@ -20,7 +20,7 @@ var (
 	tagStringEscaper = strings.NewReplacer(
 		tag_equals, tag_replacement,
 		tag_separator, tag_replacement,
-		csv_separator, tag_replacement,
+		string(csv_separator), tag_replacement,
 		csv_newline, tag_replacement)
 )
 

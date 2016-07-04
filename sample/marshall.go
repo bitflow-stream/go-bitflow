@@ -32,7 +32,7 @@ func detectFormat(input *bufio.Reader) (Unmarshaller, error) {
 		return nil, err
 	}
 	switch peeked[peekNum-1] {
-	case csv_separator_rune:
+	case csv_separator:
 		return new(CsvMarshaller), nil
 	case binary_separator:
 		return new(BinaryMarshaller), nil
