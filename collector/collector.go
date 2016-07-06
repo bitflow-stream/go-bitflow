@@ -128,7 +128,7 @@ func (source *CollectorSource) initCollectors() {
 	source.filteredCollectors = make([]Collector, 0, len(collectorRegistry))
 	for collector, _ := range collectorRegistry {
 		if err := source.initCollector(collector); err != nil {
-			log.Warnf("Failed to initialize data collector %v: %v", collector, err)
+			log.Warnf("%v failed: %v", collector, err)
 			source.failedCollectors = append(source.failedCollectors, collector)
 			continue
 		}
