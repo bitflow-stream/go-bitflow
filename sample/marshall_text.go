@@ -1,9 +1,7 @@
 package sample
 
 import (
-	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,7 +15,7 @@ const (
 	text_date_format = "2006-01-02 15:04:05.999"
 
 	// Defaults will be applied if value is <= 0
-	test_marshaller_default_spacing = 3
+	text_marshaller_default_spacing = 3
 	text_marshaller_default_width   = 200 // Automatic for stdin.
 	text_marshaller_header_char     = '='
 )
@@ -38,9 +36,8 @@ func (m *TextMarshaller) WriteHeader(header Header, writer io.Writer) error {
 }
 
 func (m *TextMarshaller) WriteSample(sample Sample, header Header, writer io.Writer) error {
-	if len(header.Fields) != len(sample.Values) {
-		return fmt.Errorf("Cannot write text sample of length %v, expected %v",
-			len(sample.Values), len(header.Fields))
+	if err := sample.Check(header); err != nil {
+		return err
 	}
 	headerStr := sample.Time.Format(text_date_format)
 	if header.HasTags {
@@ -66,7 +63,7 @@ func (m *TextMarshaller) WriteSample(sample Sample, header Header, writer io.Wri
 func (m *TextMarshaller) calculateWidths(lines []string, writer io.Writer) (textWidth int, columnWidths []int) {
 	spacing := m.Spacing
 	if spacing <= 0 {
-		spacing = test_marshaller_default_spacing
+		spacing = text_marshaller_default_spacing
 	}
 	if m.Columns > 0 {
 		columnWidths = m.columnWidths(lines, m.Columns, spacing)
@@ -91,7 +88,7 @@ func (m *TextMarshaller) defaultTextWidth(writer io.Writer) int {
 			log.Warnln("Failed to get terminal size:", err)
 			return 0
 		} else if size.Col == 0 {
-			log.Warnln("Warning: terminal size returned as 0, using default:", text_marshaller_default_width)
+			log.Warnln("Terminal size returned as 0, using default:", text_marshaller_default_width)
 			return text_marshaller_default_width
 		} else {
 			return int(size.Col)
@@ -115,7 +112,7 @@ func (m *TextMarshaller) numberOfColumns(lines []string, textWidth int, spacing 
 				}
 			}
 			width = length
-			columnCounter = 0
+			columnCounter = 1
 		} else {
 			width += length
 			columnCounter++
@@ -165,24 +162,4 @@ func (m *TextMarshaller) writeLines(lines []string, widths []int, writer io.Writ
 			}
 		}
 	}
-}
-
-func (*TextMarshaller) ReadHeader(reader *bufio.Reader) (_ Header, err error) {
-	err = errors.New("Unmarshalling text data is not supported")
-	return
-}
-
-func (*TextMarshaller) ReadSample(header Header, reader *bufio.Reader) (_ Sample, err error) {
-	err = errors.New("Unmarshalling text data is not supported")
-	return
-}
-
-func (*TextMarshaller) ReadSampleData(header Header, input *bufio.Reader) (_ []byte, err error) {
-	err = errors.New("Unmarshalling text data is not supported")
-	return
-}
-
-func (*TextMarshaller) ParseSample(header Header, data []byte) (_ Sample, err error) {
-	err = errors.New("Unmarshalling text data is not supported")
-	return
 }
