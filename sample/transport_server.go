@@ -47,20 +47,20 @@ func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		source.synchronizedSink = &SynchronizingMetricSink{OutgoingSink: source.OutgoingSink}
 	}
 	return source.task.ExtendedStart(func(addr net.Addr) {
-		log.Println("Listening for incoming", source.Reader.Format(), "samples on", addr)
+		log.WithField("format", source.Reader.Format()).Println("Listening for incoming data on", addr)
 	}, wg)
 }
 
 func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.TCPConn) {
 	if source.SimultaneousConnections > 0 && len(source.connections) >= int(source.SimultaneousConnections) {
-		log.Printf("Rejecting connection from %v, already have %v connections\n", conn.RemoteAddr(), len(source.connections))
+		log.WithField("remote", conn.RemoteAddr()).Warnln("Rejecting connection, already have", len(source.connections), "connections")
 		_ = conn.Close() // Drop error
 		return
 	}
 	if !source.CountConnectionAccepted(conn) {
 		return
 	}
-	log.Println("Accepted connection from", conn.RemoteAddr())
+	log.WithField("remote", conn.RemoteAddr()).Println("Accepted connection")
 	listenerConn := &TCPListenerConnection{
 		source: source,
 		stream: source.Reader.Open(conn, source.synchronizedSink),
@@ -130,7 +130,7 @@ func (sink *TCPListenerSink) String() string {
 
 func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	return sink.task.ExtendedStart(func(addr net.Addr) {
-		log.Println("Listening for", sink.Marshaller, "sample output connections on", addr)
+		log.WithField("format", sink.Marshaller).Println("Listening for output connections on", addr)
 	}, wg)
 }
 

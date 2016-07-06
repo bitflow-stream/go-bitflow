@@ -144,7 +144,7 @@ func (t *cpuTime) DiffValue(logback LogbackValue, d time.Duration) sample.Value 
 		}
 		return sample.Value((t2Busy - t1Busy) / (t2All - t1All) * 100)
 	} else {
-		log.Printf("Error: Cannot diff %v (%T) and %v (%T)\n", t, t, logback, logback)
+		log.Errorf("Cannot diff %v (%T) and %v (%T)", t, t, logback, logback)
 		return sample.Value(0)
 	}
 }
@@ -167,7 +167,7 @@ func (t *cpuTime) AddValue(incoming LogbackValue) LogbackValue {
 			},
 		}
 	} else {
-		log.Printf("Error: Cannot add %v (%T) and %v (%T)\n", t, t, incoming, incoming)
+		log.Errorf("Cannot add %v (%T) and %v (%T)", t, t, incoming, incoming)
 		return StoredValue(0)
 	}
 }
@@ -398,10 +398,10 @@ func (reader *protoStatReader) update() error {
 			}
 			return nil
 		} else {
-			return fmt.Errorf("Counter %v not found in protocol %v in PsutilNetProtoCollector\n", reader.field, reader.protocol)
+			return fmt.Errorf("Counter", reader.field, "not found in protocol", reader.protocol, "in PsutilNetProtoCollector")
 		}
 	} else {
-		return fmt.Errorf("Protocol %v not found in PsutilNetProtoCollector\n", reader.protocol)
+		return fmt.Errorf("Protocol", reader.protocol, "not found in PsutilNetProtoCollector")
 	}
 }
 
@@ -494,7 +494,7 @@ func (reader *diskIOReader) checkDisk() *disk.IOCountersStat {
 	if disk, ok := reader.col.disks[reader.disk]; ok {
 		return &disk
 	} else {
-		log.Printf("Warning: disk-io counters for disk %v not found\n", reader.disk)
+		log.Warnf("disk-io counters for disk %v not found", reader.disk)
 		return nil
 	}
 }
@@ -654,7 +654,7 @@ func (reader *diskUsageReader) checkDisk() *disk.UsageStat {
 	if disk, ok := reader.col.usage[reader.partition]; ok {
 		return disk
 	} else {
-		log.Printf("Warning: disk-usage counters for partition %v not found\n", reader.partition)
+		log.Warnf("disk-usage counters for partition %v not found", reader.partition)
 		return nil
 	}
 }
@@ -741,7 +741,7 @@ type PsutilProcessCollector struct {
 
 func (col *PsutilProcessCollector) logErr(pid int32, err error) {
 	if err != nil && col.PrintErrors {
-		log.Printf("Error getting info about %s process %v: %v\n", col.GroupName, pid, err)
+		log.Errorf("Getting info about %s process %v: %v", col.GroupName, pid, err)
 	}
 }
 
@@ -826,8 +826,7 @@ func (col *PsutilProcessCollector) updatePids() error {
 		}
 	}
 	if len(col.pids) == 0 && errors > 0 && col.PrintErrors {
-		col.logErr(-1, fmt.Errorf("Warning: Observing no processes, failed to check %v out of %v PIDs.\n",
-			errors, len(pids)))
+		col.logErr(-1, fmt.Errorf("Warning: Observing no processes, failed to check", errors, "out of", len(pids), "PIDs."))
 	}
 
 	if col.PidUpdateInterval > 0 {

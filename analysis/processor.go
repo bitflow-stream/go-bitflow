@@ -151,7 +151,7 @@ func (p *SamplePrinter) Header(header sample.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	} else {
-		log.Printf("Processing Header len %v, tags: %v\n", len(header.Fields), header.HasTags)
+		log.Println("Processing Header len:", len(header.Fields), "tags:", header.HasTags)
 		return p.OutgoingSink.Header(header)
 	}
 }
@@ -165,9 +165,9 @@ func (p *SamplePrinter) Sample(sample sample.Sample, header sample.Header) error
 	}
 	tags := ""
 	if sample.NumTags() > 0 {
-		tags = " (" + sample.TagString() + ")"
+		tags = "(" + sample.TagString() + ")"
 	}
-	log.Printf("Processing Sample from %v, len %v%v\n", sample.Time, len(sample.Values), tags)
+	log.Println("Processing Sample time:", sample.Time, "len:", len(sample.Values), tags)
 	return p.OutgoingSink.Sample(sample, header)
 }
 

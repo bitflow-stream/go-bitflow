@@ -155,7 +155,7 @@ func (source *FileSource) Stop() {
 	source.closed.Enable(func() {
 		if source.stream != nil {
 			if err := source.stream.Close(); err != nil && !isFileClosedError(err) {
-				log.Println("Error closing file:", err)
+				log.Errorln("Error closing file:", err)
 			}
 		}
 	})
@@ -240,7 +240,7 @@ func (sink *FileSink) String() string {
 }
 
 func (sink *FileSink) Start(wg *sync.WaitGroup) golib.StopChan {
-	log.Println("Writing", sink.Marshaller, "samples to", sink.Filename)
+	log.WithFields(log.Fields{"file": sink.Filename, "format": sink.Marshaller}).Println("Writing samples")
 	sink.closed = golib.NewOneshotCondition()
 	sink.group = NewFileGroup(sink.Filename)
 	if err := sink.group.DeleteFiles(); err != nil {
@@ -260,7 +260,7 @@ func (sink *FileSink) flush() error {
 func (sink *FileSink) Close() {
 	sink.closed.Enable(func() {
 		if err := sink.flush(); err != nil {
-			log.Println("Error closing file:", err)
+			log.Errorln("Error closing file:", err)
 		}
 	})
 }
@@ -283,7 +283,7 @@ func (sink *FileSink) openNextFile() (err error) {
 		file, err := os.Create(name)
 		if err == nil {
 			sink.stream = sink.Writer.OpenBuffered(file, sink.Marshaller, sink.IoBuffer)
-			log.Println("Opened file", file.Name())
+			log.WithField("file", file.Name()).Println("Opened file")
 		}
 	})
 	return

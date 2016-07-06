@@ -77,28 +77,30 @@ func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 
 func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error) {
 	var num_samples int
-	log.Println("Reading", stream.Format(), "from", sourceName)
+	l := log.WithFields(log.Fields{"source": sourceName, "format": stream.Format()})
+	l.Println("Reading samples")
 	num_samples, err = stream.ReadSamples(sourceName)
-	log.Printf("Read %v %v samples from %v\n", num_samples, stream.Format(), sourceName)
+	l.Println("Read %v samples", num_samples)
 	return
 }
 
 func (stream *SampleInputStream) ReadTcpSamples(conn *net.TCPConn, checkClosed func() bool) {
 	remote := conn.RemoteAddr()
-	log.Println("Receiving", stream.Format(), "from", remote)
+	l := log.WithFields(log.Fields{"remote": remote, "format": stream.Format()})
+	l.Println("Receiving data")
 	var err error
 	var num_samples int
 	if num_samples, err = stream.ReadSamples(remote.String()); err == nil {
-		log.Println("Connection closed by", remote)
+		l.Println("Connection closed by remote")
 	} else {
 		if checkClosed() {
-			log.Println("Connection to", remote, "closed")
+			l.Println("Connection closed")
 		} else {
-			log.Printf("Error receiving samples from %v: %v\n", remote, err)
+			l.Errorln("Error receiving samples:", err)
 		}
 		_ = conn.Close() // Ignore error
 	}
-	log.Println("Received", num_samples, "samples from", remote)
+	l.Println("Received", num_samples, "samples")
 }
 
 func (stream *SampleInputStream) Close() error {
@@ -143,7 +145,7 @@ func (stream *SampleInputStream) readHeader(source string) (err error) {
 	if stream.header, err = stream.um.ReadHeader(stream.reader); err != nil {
 		return
 	}
-	log.Printf("Reading %v %v metrics\n", len(stream.header.Fields), stream.um)
+	log.WithField("format", stream.um).Println("Reading", len(stream.header.Fields), "metrics")
 	stream.outHeader = Header{
 		Fields:  make([]string, len(stream.header.Fields)),
 		HasTags: stream.header.HasTags,

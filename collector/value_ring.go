@@ -123,7 +123,7 @@ func (val StoredValue) DiffValue(logback LogbackValue, interval time.Duration) s
 	case *StoredValue:
 		return sample.Value(val-*previous) / sample.Value(interval.Seconds())
 	default:
-		log.Printf("Error: Cannot diff %v (%T) and %v (%T)\n", val, val, logback, logback)
+		log.Errorf("Cannot diff %v (%T) and %v (%T)", val, val, logback, logback)
 		return sample.Value(0)
 	}
 }
@@ -135,7 +135,7 @@ func (val StoredValue) AddValue(incoming LogbackValue) LogbackValue {
 	case *StoredValue:
 		return StoredValue(val + *other)
 	default:
-		log.Printf("Error: Cannot add %v (%T) and %v (%T)\n", val, val, incoming, incoming)
+		log.Errorf("Cannot add %v (%T) and %v (%T)", val, val, incoming, incoming)
 		return StoredValue(0)
 	}
 }

@@ -100,7 +100,7 @@ func (source *CollectorSource) collect(wg *sync.WaitGroup) *golib.Stopper {
 	metrics := source.FilteredMetrics()
 	sort.Strings(metrics)
 	header, values, collectors := source.constructSample(metrics)
-	log.Printf("Locally collecting %v metrics through %v collectors\n", len(metrics), len(collectors))
+	log.Println("Locally collecting", len(metrics), "metrics through", len(collectors), "collectors")
 
 	stopper := golib.NewStopper()
 	for _, collector := range source.collectors {
@@ -128,7 +128,7 @@ func (source *CollectorSource) initCollectors() {
 	source.filteredCollectors = make([]Collector, 0, len(collectorRegistry))
 	for collector, _ := range collectorRegistry {
 		if err := source.initCollector(collector); err != nil {
-			log.Printf("Failed to initialize data collector %v: %v\n", collector, err)
+			log.Warnf("Failed to initialize data collector %v: %v", collector, err)
 			source.failedCollectors = append(source.failedCollectors, collector)
 			continue
 		}
@@ -199,14 +199,14 @@ func (source *CollectorSource) constructSample(metrics []string) (sample.Header,
 	for i, metricName := range metrics {
 		collector := source.collectorFor(metricName)
 		if collector == nil {
-			log.Println("No collector found for", metricName)
+			log.Warnln("No collector found for", metricName)
 			continue
 		}
 		fields[i] = metricName
 		metric := Metric{metricName, i, values}
 
 		if err := collector.Collect(&metric); err != nil {
-			log.Printf("Error starting collector for %v: %v\n", metricName, err)
+			log.Errorf("Error starting collector for %v: %v", metricName, err)
 			continue
 		}
 		set[collector] = true
@@ -223,11 +223,11 @@ func (source *CollectorSource) updateCollector(wg *sync.WaitGroup, collector Col
 	for {
 		err := collector.Update()
 		if err == MetricsChanged {
-			log.Printf("Metrics of %v have changed! Restarting metric collection.\n", collector)
+			log.Warnf("Metrics of %v have changed! Restarting metric collection.", collector)
 			stopper.Stop()
 			return
 		} else if err != nil {
-			log.Println("Warning: Update of", collector, "failed:", err)
+			log.Warnln("Update of", collector, "failed:", err)
 		}
 		if stopper.Stopped(interval) {
 			return
@@ -253,7 +253,7 @@ func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header sample.Hea
 	defer wg.Done()
 	for {
 		if err := sink.Header(header); err != nil {
-			log.Printf("Warning: Failed to sink header for %v metrics: %v\n", len(header.Fields), err)
+			log.Warnf("Failed to sink header for %v metrics: %v", len(header.Fields), err)
 		} else {
 			if stopper.IsStopped() {
 				return
@@ -268,7 +268,7 @@ func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header sample.Hea
 				}
 				if err := sink.Sample(sample, header); err != nil {
 					// When a sample fails, try sending the header again
-					log.Printf("Warning: Failed to sink %v metrics: %v\n", len(values), err)
+					log.Warnf("Failed to sink %v metrics: %v", len(values), err)
 					break
 				}
 				if stopper.Stopped(source.SinkInterval) {
@@ -363,7 +363,12 @@ func (source *AbstractCollector) UpdateMetrics() {
 }
 
 func (source *AbstractCollector) String() string {
-	return fmt.Sprintf("%s (%v metrics)", source.name, len(source.metrics))
+	l := len(source.metrics)
+	if l > 0 {
+		return fmt.Sprintf("%s (%v metrics)", source.name, len(source.metrics))
+	} else {
+		return source.name
+	}
 }
 
 // ================================= Goroutine pool for collector tasks =================================

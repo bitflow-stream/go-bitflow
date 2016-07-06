@@ -2,7 +2,6 @@ package golib
 
 import (
 	"flag"
-	"log"
 	"syscall"
 )
 
@@ -18,9 +17,9 @@ func init() {
 func ConfigureOpenFilesLimit() {
 	if ConfiguredOpenFilesLimit > 0 {
 		if err := SetOpenFilesLimit(ConfiguredOpenFilesLimit); err != nil {
-			log.Println("Failed to set open files limit to %v: %v", ConfiguredOpenFilesLimit, err)
+			Log.Println("Failed to set open files limit to %v: %v", ConfiguredOpenFilesLimit, err)
 		} else {
-			log.Println("Successfully set open files limit to %v", ConfiguredOpenFilesLimit)
+			Log.Println("Successfully set open files limit to %v", ConfiguredOpenFilesLimit)
 		}
 	}
 }

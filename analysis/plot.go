@@ -65,9 +65,9 @@ func (p *Plotter) Header(header sample.Header) error {
 		return err
 	} else {
 		if len(header.Fields) == 0 {
-			log.Println("Warning: Not receiving any metrics for plotting")
+			log.Warnln("Not receiving any metrics for plotting")
 		} else if len(header.Fields) == 1 {
-			log.Println("Warning: Plotting only 1 metrics with y=x")
+			log.Warnln("Plotting only 1 metrics with y=x")
 		}
 		p.incomingHeader = header
 		p.data = make(map[string]PlotData)

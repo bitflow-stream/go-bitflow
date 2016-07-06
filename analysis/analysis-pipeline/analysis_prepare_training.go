@@ -65,7 +65,7 @@ func aggregate_and_scale(targetFile *string) func(p *sample.CmdSamplePipeline) {
 		p.Add(new(BatchProcessor).Add(host_sorter))
 		p.Add((&FeatureAggregator{WindowDuration: 10 * time.Second}).AddAvg("_avg").AddSlope("_slope"))
 		if targetFile == nil || *targetFile == "" {
-			log.Println("Warning: --featureStats not given, not storing feature statistics")
+			log.Warnln("--featureStats not given, not storing feature statistics")
 		} else {
 			p.Add(NewStoreStats(*targetFile))
 		}

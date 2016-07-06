@@ -62,21 +62,21 @@ func (p *BatchProcessor) Sample(sample sample.Sample, header sample.Header) erro
 func (p *BatchProcessor) Close() {
 	defer p.CloseSink(nil)
 	if p.header == nil {
-		log.Println(p.String(), "has no samples stored")
+		log.Warnln(p.String(), "has no samples stored")
 		return
 	}
 	p.executeSteps()
 	log.Println("Flushing", len(p.samples), "batched samples")
 	if err := p.OutgoingSink.Header(*p.header); err != nil {
 		err = fmt.Errorf("Error flushing batch header: %v", err)
-		log.Println(err)
+		log.Errorln(err)
 		p.Error(err)
 		return
 	}
 	for _, sample := range p.samples {
 		if err := p.OutgoingSink.Sample(*sample, *p.header); err != nil {
 			err = fmt.Errorf("Error flushing batch: %v", err)
-			log.Println(err)
+			log.Errorln(err)
 			p.Error(err)
 			return
 		}
@@ -85,9 +85,9 @@ func (p *BatchProcessor) Close() {
 
 func (p *BatchProcessor) executeSteps() {
 	if len(p.Steps) > 0 {
-		log.Printf("Executing %v batch processing step(s)...\n", len(p.Steps))
+		log.Println("Executing", len(p.Steps), "batch processing step(s)")
 		for _, step := range p.Steps {
-			log.Printf("Executing %v on %v samples with %v metrics...\n", step, len(p.samples), len(p.header.Fields))
+			log.Println("Executing", step, "on", len(p.samples), "samples with", len(p.header.Fields), "metrics")
 			var err error
 			p.header, p.samples, err = step.ProcessBatch(p.header, p.samples)
 			if err != nil {
@@ -148,7 +148,7 @@ func (s SampleSlice) Swap(i, j int) {
 }
 
 func (sorter *SampleSorter) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
-	log.Printf("Sorting %v samples...\n", len(samples))
+	log.Println("Sorting", len(samples), "samples")
 	sort.Sort(SampleSlice{samples, sorter})
 	return header, samples, nil
 }
@@ -165,7 +165,7 @@ type SampleShuffler struct {
 }
 
 func (*SampleShuffler) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
-	log.Printf("Shuffling %v samples...\n", len(samples))
+	log.Println("Shuffling", len(samples), "samples")
 	for i := range samples {
 		j := rand.Intn(i + 1)
 		samples[i], samples[j] = samples[j], samples[i]
@@ -232,14 +232,14 @@ func (p *MultiHeaderMerger) addSample(incomingSample sample.Sample, header sampl
 func (p *MultiHeaderMerger) Close() {
 	defer p.CloseSink(nil)
 	if len(p.samples) == 0 {
-		log.Println(p.String(), "has no samples stored")
+		log.Warnln(p.String(), "has no samples stored")
 		return
 	}
 	log.Println(p, "reconstructing and flushing", len(p.samples), "samples with", len(p.metrics), "metrics")
 	outHeader := p.reconstructHeader()
 	if err := p.OutgoingSink.Header(outHeader); err != nil {
 		err = fmt.Errorf("Error flushing reconstructed header: %v", err)
-		log.Println(err)
+		log.Errorln(err)
 		p.Error(err)
 		return
 	}
@@ -247,7 +247,7 @@ func (p *MultiHeaderMerger) Close() {
 		outSample := p.reconstructSample(index, outHeader)
 		if err := p.OutgoingSink.Sample(outSample, outHeader); err != nil {
 			err = fmt.Errorf("Error flushing reconstructed samples: %v", err)
-			log.Println(err)
+			log.Errorln(err)
 			p.Error(err)
 			return
 		}

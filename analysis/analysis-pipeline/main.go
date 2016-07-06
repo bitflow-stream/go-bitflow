@@ -63,7 +63,7 @@ func resolvePipeline(p *sample.CmdSamplePipeline, analysisNames golib.StringSlic
 	for i, name := range analysisNames {
 		analysis, ok := registry[name]
 		if !ok {
-			log.Fatalf("Analysis pipeline '%v' not registered. Available: %v\n", name, allAnalyses())
+			log.Fatalf("Analysis pipeline '%v' not registered. Available: %v", name, allAnalyses())
 		}
 		result[i] = analysis
 	}
@@ -82,7 +82,7 @@ func printPipeline(p []sample.SampleProcessor) {
 			if i == len(p)-1 {
 				indent = "└─"
 			}
-			log.Printf("%s %v\n", indent, proc)
+			log.Println(indent + proc.String())
 		}
 	}
 }

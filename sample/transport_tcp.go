@@ -26,7 +26,7 @@ func (counter *TCPConnCounter) CountConnectionClosed() bool {
 	if counter.TcpConnLimit > 0 {
 		counter.closed++
 		if counter.closed >= counter.TcpConnLimit {
-			log.Println("Handled", counter.closed, "TCP connection(s)")
+			log.Warnln("Handled", counter.closed, "TCP connection(s)")
 			return false
 		}
 	}
@@ -37,7 +37,7 @@ func (counter *TCPConnCounter) CountConnectionClosed() bool {
 func (counter *TCPConnCounter) CountConnectionAccepted(conn *net.TCPConn) bool {
 	if counter.TcpConnLimit > 0 {
 		if counter.accepted >= counter.TcpConnLimit {
-			log.Printf("Rejecting connection from %v, already accepted %v connections\n", conn.RemoteAddr(), counter.accepted)
+			log.WithField("remote", conn.RemoteAddr()).Warnln("Rejecting connection, already accepted", counter.accepted, "connections")
 			_ = conn.Close() // Drop error
 			return false
 		}
@@ -53,20 +53,20 @@ type TcpMetricSink struct {
 }
 
 type TcpWriteConn struct {
-	remote    net.Addr
 	stream    *SampleOutputStream
 	closeOnce sync.Once
+	log       *log.Entry
 }
 
 func (sink *TcpMetricSink) OpenWriteConn(conn *net.TCPConn) *TcpWriteConn {
 	return &TcpWriteConn{
-		remote: conn.RemoteAddr(),
 		stream: sink.Writer.Open(conn, sink.Marshaller),
+		log:    log.WithField("remote", conn.RemoteAddr()),
 	}
 }
 
 func (conn *TcpWriteConn) Header(header Header) {
-	log.Println("Serving", len(header.Fields), "metrics to", conn.remote)
+	conn.log.Println("Serving", len(header.Fields), "metrics")
 	if err := conn.stream.Header(header); err != nil {
 		conn.doClose(err)
 	}
@@ -88,10 +88,10 @@ func (conn *TcpWriteConn) doClose(cause error) {
 	conn.closeOnce.Do(func() {
 		conn.printErr(cause)
 		if cause == nil {
-			log.Println("Closing connection to", conn.remote)
+			conn.log.Println("Closing connection")
 		}
 		if closeErr := conn.stream.Close(); closeErr != nil && cause == nil {
-			log.Printf("Error closing connection to %v: %v\n", conn.remote, closeErr)
+			conn.log.Errorln("Error closing connection:", closeErr)
 		}
 		conn.stream = nil // Make IsRunning() return false
 	})
@@ -104,17 +104,17 @@ func (conn *TcpWriteConn) IsRunning() bool {
 func (conn *TcpWriteConn) printErr(err error) {
 	if operr, ok := err.(*net.OpError); ok {
 		if operr.Err == syscall.EPIPE {
-			log.Println("Connection closed by", conn.remote)
+			conn.log.Println("Connection closed by remote")
 			return
 		} else {
 			if syscallerr, ok := operr.Err.(*os.SyscallError); ok && syscallerr.Err == syscall.EPIPE {
-				log.Println("Connection closed by", conn.remote)
+				conn.log.Println("Connection closed by remote")
 				return
 			}
 		}
 	}
 	if err != nil {
-		log.Printf("TCP write to %v failed, closing connection. %v\n", conn.remote, err)
+		conn.log.Errorln("TCP write failed, closing connection:", err)
 	}
 }
 
@@ -132,7 +132,7 @@ func (sink *TCPSink) String() string {
 }
 
 func (sink *TCPSink) Start(wg *sync.WaitGroup) golib.StopChan {
-	log.Println("Sending", sink.Marshaller, "samples to", sink.Endpoint)
+	log.WithField("format", sink.Marshaller).Println("Sending data to", sink.Endpoint)
 	sink.stopped = golib.NewOneshotCondition()
 	return sink.stopped.Start(wg)
 }
@@ -248,7 +248,7 @@ func (sink *TCPSource) SourceString() string {
 }
 
 func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	log.Println("Downloading", source.Reader.Format(), "data from", source.SourceString())
+	log.WithField("format", source.Reader.Format()).Println("Downloading from", source.SourceString())
 	channels := make([]golib.StopChan, 0, len(source.RemoteAddrs))
 	if len(source.RemoteAddrs) > 1 {
 		source.downloadSink = &SynchronizingMetricSink{OutgoingSink: source.OutgoingSink}
@@ -301,7 +301,7 @@ func (task *TCPDownloadTask) Start(wg *sync.WaitGroup) golib.StopChan {
 	task.loopTask = golib.NewLoopTask("tcp download loop", func(stop golib.StopChan) {
 		if conn, err := task.dial(); err != nil {
 			if task.source.PrintErrors {
-				log.Println("Error downloading from", task.remote+":", err)
+				log.WithField("remote", task.remote).Errorln("Error downloading data:", err)
 			}
 		} else {
 			task.handleConnection(conn)

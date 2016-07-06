@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/signal"
 	"reflect"
@@ -266,7 +265,7 @@ func (group *TaskGroup) ReverseStop(printTasks bool) {
 			go func(task Task) {
 				defer wg.Done()
 				if printTasks {
-					log.Printf("Stopping %v\n", task)
+					Log.Println("Stopping", task)
 				}
 				task.Stop()
 			}(task)
@@ -280,11 +279,11 @@ func PrintErrors(inputs []StopChan, tasks []Task, printWait bool) (numErrors int
 		if input != nil {
 			if printWait {
 				task := tasks[i]
-				log.Println("Waiting for", task)
+				Log.Println("Waiting for", task)
 			}
 			if err := <-input; err != nil {
 				numErrors++
-				log.Println("Error:", err)
+				Log.Errorln(err)
 			}
 		}
 	}
@@ -296,7 +295,7 @@ func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (reas
 	reason, err, tasks, channels := group.WaitForAny(&wg)
 	if err != nil {
 		numErrors++
-		log.Println("Error:", err)
+		Log.Errorln(err)
 	}
 	if timeout > 0 {
 		time.AfterFunc(timeout, func() {
@@ -326,7 +325,7 @@ func (group *TaskGroup) PrintWaitAndStop() int {
 
 func (group *TaskGroup) TimeoutPrintWaitAndStop(timeout time.Duration, printWait bool) (numErrors int) {
 	reason, numErrors := group.WaitAndStop(timeout, printWait)
-	log.Printf("Stopped because of %v\n", reason)
+	Log.Println("Stopped because of", reason)
 	return
 }
 

@@ -270,7 +270,7 @@ func (val LogbackCpuVal) DiffValue(logback LogbackValue, interval time.Duration)
 	case *LogbackCpuVal:
 		return sample.Value(val-*previous) / sample.Value(interval.Nanoseconds())
 	default:
-		log.Printf("Error: Cannot diff %v (%T) and %v (%T)\n", val, val, logback, logback)
+		log.Errorf("Cannot diff %v (%T) and %v (%T)", val, val, logback, logback)
 		return sample.Value(0)
 	}
 }
@@ -282,7 +282,7 @@ func (val LogbackCpuVal) AddValue(logback LogbackValue) LogbackValue {
 	case *LogbackCpuVal:
 		return StoredValue(val + *previous)
 	default:
-		log.Printf("Error: Cannot add %v (%T) and %v (%T)\n", val, val, logback, logback)
+		log.Errorf("Cannot add %v (%T) and %v (%T)", val, val, logback, logback)
 		return StoredValue(0)
 	}
 }

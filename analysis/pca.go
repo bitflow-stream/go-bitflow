@@ -147,13 +147,13 @@ func (p *PCABatchProcessing) ProcessBatch(header *sample.Header, samples []*samp
 	log.Println("Computing PCA model...")
 	var model PCAModel
 	if err := model.ComputeModel(samples); err != nil {
-		err := fmt.Errorf("Error in %v: %v\n", p, err)
-		log.Println(err)
-		return header, nil, err
+		outErr := fmt.Errorf("Error in %v: %v", p, err)
+		log.Errorln(outErr)
+		return header, nil, outErr
 	}
 	comp, variance := model.ComponentsContainingVariance(variance)
 	log.Println(model.Report(DefaultContainedVariance))
-	log.Printf("Projecting data into %v components (variance %.4f)...\n", comp, variance)
+	log.Printf("Projecting data into %v components (variance %.4f)...", comp, variance)
 	proj := model.Project(comp)
 
 	// TODO this could be done in one matrix

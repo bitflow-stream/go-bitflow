@@ -3,6 +3,7 @@ package sample
 import (
 	"errors"
 	"flag"
+	"os"
 	"runtime"
 	"time"
 
@@ -17,6 +18,16 @@ const (
 	output_formats              = "(t=text, c=CSV, b=binary)"
 )
 
+func init() {
+	// Configure logging output
+	log.SetOutput(os.Stderr)
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp:   true,
+		TimestampFormat: time.StampMilli,
+	})
+	golib.Log = log.StandardLogger()
+}
+
 func marshaller(format string) Marshaller {
 	switch format {
 	case "t":
@@ -26,7 +37,7 @@ func marshaller(format string) Marshaller {
 	case "b":
 		return new(BinaryMarshaller)
 	default:
-		log.Fatalf("Illegal data output fromat '%v', must be one of %v\n", format, output_formats)
+		log.WithField("format", format).Fatalln("Illegal data input fromat, must be one of", output_formats)
 		return nil
 	}
 }
@@ -40,7 +51,7 @@ func unmarshaller(format string) Unmarshaller {
 	case "b":
 		return new(BinaryMarshaller)
 	default:
-		log.Fatalf("Illegal data input fromat '%v', must be one of %v\n", format, input_formats)
+		log.WithField("format", format).Fatalln("Illegal data input fromat, must be one of", input_formats)
 		return nil
 	}
 }
@@ -113,7 +124,7 @@ func (f *fileRegexValue) Set(param string) error {
 	f.pipeline.read_files = f.pipeline.read_files[1:]
 	files, err := ListMatchingFiles(dir, param)
 	if err != nil {
-		log.Fatalf("Error applying -FR flag: %v\n", err)
+		log.Fatalln("Error applying -FR flag:", err)
 		return err
 	}
 	f.pipeline.read_files = append(f.pipeline.read_files, files...)
@@ -161,7 +172,7 @@ func (p *CmdSamplePipeline) Init() {
 		p.SetSource(&FileSource{Filenames: p.read_files, Reader: reader})
 	}
 	if p.Source == nil {
-		log.Println("No data source provided, no data will be received or generated.")
+		log.Warnln("No data source provided, no data will be received or generated.")
 		p.Source = new(EmptyMetricSource)
 	}
 
@@ -199,7 +210,7 @@ func (p *CmdSamplePipeline) Init() {
 		sinks = append(sinks, sink)
 	}
 	if len(sinks) == 0 {
-		log.Println("No data sinks selected, data will not be output anywhere.")
+		log.Warnln("No data sinks selected, data will not be output anywhere.")
 	}
 	p.Sink = sinks
 }

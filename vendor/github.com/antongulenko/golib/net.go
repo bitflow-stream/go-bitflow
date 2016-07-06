@@ -2,7 +2,6 @@ package golib
 
 import (
 	"errors"
-	"log"
 	"net"
 	"sync"
 )
@@ -85,7 +84,7 @@ func (task *TCPListenerTask) listen(wg *sync.WaitGroup) *LoopTask {
 			conn, err := listener.AcceptTCP()
 			if err != nil {
 				if task.listener != nil {
-					log.Println("Error accepting connection:", err)
+					Log.Errorln("Error accepting connection:", err)
 				}
 			} else {
 				task.loopTask.IfElseEnabled(func() {

@@ -2,7 +2,6 @@ package golib
 
 import (
 	"flag"
-	"log"
 	"os"
 	"runtime/pprof"
 )
@@ -18,7 +17,7 @@ func ProfileCpu() (stopProfiling func()) {
 	if CpuProfileFile != "" {
 		f, err := os.Create(CpuProfileFile)
 		if err != nil {
-			log.Fatalln(err)
+			Log.Fatalln(err)
 		} else {
 			pprof.StartCPUProfile(f)
 			return pprof.StopCPUProfile

@@ -20,13 +20,13 @@ func (sink *ConsoleSink) String() string {
 }
 
 func (sink *ConsoleSink) Start(wg *sync.WaitGroup) golib.StopChan {
-	log.Println("Printing", sink.Marshaller, "samples")
+	log.WithField("format", sink.Marshaller).Println("Printing samples")
 	return nil
 }
 
 func (sink *ConsoleSink) Close() {
 	if err := sink.stream.Close(); err != nil {
-		log.Println("Error closing stdout output:", err)
+		log.Errorln("Error closing stdout output:", err)
 	}
 }
 
@@ -68,7 +68,7 @@ func (source *ConsoleSource) Start(wg *sync.WaitGroup) golib.StopChan {
 func (source *ConsoleSource) Stop() {
 	err := source.stream.Close()
 	if err != nil && !isFileClosedError(err) {
-		log.Println("Error closing stdin:", err)
+		log.Errorln("Error closing stdin:", err)
 	}
 }
 
