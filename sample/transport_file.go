@@ -113,6 +113,7 @@ type FileSource struct {
 	AbstractMetricSource
 	Reader          SampleReader
 	Filenames       []string
+	IoBuffer        int
 	ConvertFilename func(string) string // Optional hook for converting the filename to some other string
 	stream          *SampleInputStream
 	closed          *golib.OneshotCondition
@@ -167,7 +168,7 @@ func (source *FileSource) readFile(filename string) (err error) {
 	} else {
 		var stream *SampleInputStream
 		source.closed.IfNotEnabled(func() {
-			stream = source.Reader.Open(file, source.OutgoingSink)
+			stream = source.Reader.OpenBuffered(file, source.OutgoingSink, source.IoBuffer)
 			source.stream = stream
 		})
 		if stream == nil {

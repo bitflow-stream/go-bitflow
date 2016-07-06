@@ -38,9 +38,13 @@ type SampleInputStream struct {
 }
 
 func (r *SampleReader) Open(input io.ReadCloser, sink MetricSinkBase) *SampleInputStream {
+	return r.OpenBuffered(input, sink, input_io_buffer)
+}
+
+func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink MetricSinkBase, bufSize int) *SampleInputStream {
 	return &SampleInputStream{
 		um:               r.Unmarshaller,
-		reader:           bufio.NewReaderSize(input, input_io_buffer),
+		reader:           bufio.NewReaderSize(input, bufSize),
 		sampleReader:     r,
 		underlyingReader: input,
 		sink:             sink,

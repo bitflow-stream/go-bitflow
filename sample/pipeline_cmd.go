@@ -169,7 +169,7 @@ func (p *CmdSamplePipeline) Init() {
 		p.SetSource(source)
 	}
 	if len(p.read_files) > 0 {
-		p.SetSource(&FileSource{Filenames: p.read_files, Reader: reader})
+		p.SetSource(&FileSource{Filenames: p.read_files, Reader: reader, IoBuffer: p.io_buf})
 	}
 	if p.Source == nil {
 		log.Warnln("No data source provided, no data will be received or generated.")
