@@ -80,7 +80,7 @@ func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error)
 	l := log.WithFields(log.Fields{"source": sourceName, "format": stream.Format()})
 	l.Println("Reading samples")
 	num_samples, err = stream.ReadSamples(sourceName)
-	l.Println("Read %v samples", num_samples)
+	l.Println("Read", num_samples, "samples")
 	return
 }
 
@@ -145,7 +145,7 @@ func (stream *SampleInputStream) readHeader(source string) (err error) {
 	if stream.header, err = stream.um.ReadHeader(stream.reader); err != nil {
 		return
 	}
-	log.WithField("format", stream.um).Println("Reading", len(stream.header.Fields), "metrics")
+	log.WithFields(log.Fields{"format": stream.um, "source": source}).Println("Reading", len(stream.header.Fields), "metrics")
 	stream.outHeader = Header{
 		Fields:  make([]string, len(stream.header.Fields)),
 		HasTags: stream.header.HasTags,
