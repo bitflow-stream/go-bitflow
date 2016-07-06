@@ -3,9 +3,10 @@ package collector
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"gopkg.in/xmlpath.v1"
 

@@ -3,9 +3,10 @@ package sample
 import (
 	"bufio"
 	"io"
-	"log"
 	"net"
 	"sync"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/golib"
 )

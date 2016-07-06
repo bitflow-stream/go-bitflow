@@ -1,9 +1,10 @@
 package sample
 
 import (
-	"log"
 	"net"
 	"sync"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/golib"
 )

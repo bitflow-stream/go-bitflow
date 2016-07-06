@@ -3,11 +3,12 @@ package collector
 import (
 	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"sort"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/data2go/sample"
 	"github.com/antongulenko/golib"

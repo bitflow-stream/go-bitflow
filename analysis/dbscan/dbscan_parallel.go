@@ -2,8 +2,9 @@ package dbscan
 
 import (
 	"fmt"
-	"log"
 	"sync"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"

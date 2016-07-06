@@ -2,9 +2,10 @@ package analysis
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sync"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/data2go/sample"
 	"github.com/antongulenko/golib"

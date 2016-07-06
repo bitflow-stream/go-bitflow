@@ -3,9 +3,10 @@ package sample
 import (
 	"errors"
 	"flag"
-	"log"
 	"runtime"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/golib"
 )

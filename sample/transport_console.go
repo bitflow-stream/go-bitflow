@@ -2,9 +2,10 @@ package sample
 
 import (
 	"io"
-	"log"
 	"os"
 	"sync"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/golib"
 )

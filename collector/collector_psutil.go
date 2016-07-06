@@ -3,7 +3,6 @@ package collector
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/data2go/sample"
 	"github.com/shirou/gopsutil/cpu"

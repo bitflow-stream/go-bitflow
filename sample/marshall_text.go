@@ -6,8 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/golib"
 )

@@ -3,7 +3,6 @@ package sample
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/golib"
 )

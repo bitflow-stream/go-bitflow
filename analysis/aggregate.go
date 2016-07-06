@@ -2,10 +2,11 @@ package analysis
 
 import (
 	"container/list"
-	"log"
 	"strings"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/data2go/sample"
 	"github.com/antongulenko/golib"

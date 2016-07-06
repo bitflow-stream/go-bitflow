@@ -2,13 +2,14 @@ package sample
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"strconv"
 	"sync"
 	"syscall"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/golib"
 )
