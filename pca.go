@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/data2go/sample"
 	"github.com/gonum/matrix/mat64"

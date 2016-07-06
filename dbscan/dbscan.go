@@ -1,7 +1,7 @@
 package dbscan
 
 import (
-	"log"
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/data2go/analysis"
 )

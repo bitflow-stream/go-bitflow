@@ -2,11 +2,12 @@ package main
 
 import (
 	"flag"
-	"log"
 	"math/rand"
 	"path/filepath"
 	"regexp"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"

@@ -2,10 +2,11 @@ package analysis
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"sort"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/data2go/sample"
 )
