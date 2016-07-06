@@ -22,7 +22,7 @@ func (c *DbscanBatchClusterer) printSummary(clusters map[string][]*sample.Sample
 	for _, cluster := range clusters {
 		stats.Push(float64(len(cluster)))
 	}
-	log.Printf("%v clusters, avg size %v, size stddev %v\n", len(clusters), stats.Mean(), stats.Stddev())
+	log.Printf("%v clusters, avg size %v, size stddev %v", len(clusters), stats.Mean(), stats.Stddev())
 }
 
 func (c *DbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
