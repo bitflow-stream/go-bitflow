@@ -16,8 +16,11 @@ import (
 )
 
 const (
-	NO_FLAGS              = 0
-	DomainReparseInterval = 5 * time.Minute
+	NO_FLAGS            = 0
+	FETCH_DOMAINS_FLAGS = libvirt.VIR_CONNECT_LIST_DOMAINS_ACTIVE | libvirt.VIR_CONNECT_LIST_DOMAINS_RUNNING
+
+	tolerated_vm_update_errors = 3
+	DomainReparseInterval      = 1 * time.Minute
 )
 const (
 	LibvirtNetIoLogback   = 50
@@ -114,7 +117,7 @@ func (col *LibvirtCollector) fetchDomains(checkChange bool) error {
 	if err != nil {
 		return err
 	}
-	domains, err := conn.ListAllDomains(NO_FLAGS) // No flags: return all domains
+	domains, err := conn.ListAllDomains(FETCH_DOMAINS_FLAGS) // No flags: return all domains
 	if err != nil {
 		return err
 	}
@@ -137,19 +140,22 @@ func (col *LibvirtCollector) fetchDomains(checkChange bool) error {
 }
 
 func (col *LibvirtCollector) updateVms() error {
+	var res golib.MultiError
 	for _, vmReader := range col.vmReaders {
-		if err := vmReader.update(); err != nil {
-			return err
+		res.Add(vmReader.update())
+		if len(res) > tolerated_vm_update_errors {
+			// Update other VMs, even if some of them fail
+			break
 		}
 	}
-	return nil
+	return res.NilOrError()
 }
 
 func (col *LibvirtCollector) connection() (*libvirt.VirConnection, error) {
 	conn := col.conn
 	if conn != nil {
 		if alive, err := conn.IsAlive(); err != nil || !alive {
-			log.Println("Libvirt alive connection check failed:", err)
+			log.Warnln("Libvirt alive connection check failed:", err)
 			col.Close()
 			conn = nil
 		}
@@ -168,7 +174,7 @@ func (col *LibvirtCollector) connection() (*libvirt.VirConnection, error) {
 func (col *LibvirtCollector) Close() {
 	if col.conn != nil {
 		if err := col.conn.UnrefAndCloseConnection(); err != nil {
-			log.Println("Error closing libvirt connection:", err)
+			log.Errorln("Error closing libvirt connection:", err)
 		}
 		col.conn = nil
 	}
