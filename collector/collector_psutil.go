@@ -434,16 +434,20 @@ func (col *PsutilDiskIOCollector) Init() error {
 			disk:           disk,
 			readRing:       NewValueRing(DiskIoLogback, DiskIoInterval),
 			writeRing:      NewValueRing(DiskIoLogback, DiskIoInterval),
+			ioRing:         NewValueRing(DiskIoLogback, DiskIoInterval),
 			readBytesRing:  NewValueRing(DiskIoLogback, DiskIoInterval),
 			writeBytesRing: NewValueRing(DiskIoLogback, DiskIoInterval),
+			ioBytesRing:    NewValueRing(DiskIoLogback, DiskIoInterval),
 			readTimeRing:   NewValueRing(DiskIoLogback, DiskIoInterval),
 			writeTimeRing:  NewValueRing(DiskIoLogback, DiskIoInterval),
 			ioTimeRing:     NewValueRing(DiskIoLogback, DiskIoInterval),
 		}
 		col.readers[name+"read"] = reader.readRead
 		col.readers[name+"write"] = reader.readWrite
+		col.readers[name+"io"] = reader.readIo
 		col.readers[name+"readBytes"] = reader.readReadBytes
 		col.readers[name+"writeBytes"] = reader.readWriteBytes
+		col.readers[name+"ioBytes"] = reader.readIoBytes
 		col.readers[name+"readTime"] = reader.readReadTime
 		col.readers[name+"writeTime"] = reader.readWriteTime
 		col.readers[name+"ioTime"] = reader.readIoTime
@@ -483,8 +487,10 @@ type diskIOReader struct {
 
 	readRing       ValueRing
 	writeRing      ValueRing
+	ioRing         ValueRing
 	readBytesRing  ValueRing
 	writeBytesRing ValueRing
+	ioBytesRing    ValueRing
 	readTimeRing   ValueRing
 	writeTimeRing  ValueRing
 	ioTimeRing     ValueRing
@@ -518,6 +524,13 @@ func (reader *diskIOReader) readWrite() sample.Value {
 	return sample.Value(0)
 }
 
+func (reader *diskIOReader) readIo() sample.Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return reader.value(disk.ReadCount+disk.WriteCount, &reader.ioRing)
+	}
+	return sample.Value(0)
+}
+
 func (reader *diskIOReader) readReadBytes() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
 		return reader.value(disk.ReadBytes, &reader.readBytesRing)
@@ -528,6 +541,13 @@ func (reader *diskIOReader) readReadBytes() sample.Value {
 func (reader *diskIOReader) readWriteBytes() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
 		return reader.value(disk.WriteBytes, &reader.writeBytesRing)
+	}
+	return sample.Value(0)
+}
+
+func (reader *diskIOReader) readIoBytes() sample.Value {
+	if disk := reader.checkDisk(); disk != nil {
+		return reader.value(disk.ReadBytes+disk.WriteBytes, &reader.ioBytesRing)
 	}
 	return sample.Value(0)
 }
@@ -727,8 +747,10 @@ type PsutilProcessCollector struct {
 	cpu                    ValueRing
 	ioRead                 ValueRing
 	ioWrite                ValueRing
+	ioTotal                ValueRing
 	ioReadBytes            ValueRing
 	ioWriteBytes           ValueRing
+	ioBytesTotal           ValueRing
 	ctx_switch_voluntary   ValueRing
 	ctx_switch_involuntary ValueRing
 	net                    netIoCounters
@@ -752,8 +774,10 @@ func (col *PsutilProcessCollector) Init() error {
 	col.cpu = NewValueRing(CpuTimeLogback, CpuInterval)
 	col.ioRead = NewValueRing(DiskIoLogback, DiskIoInterval)
 	col.ioWrite = NewValueRing(DiskIoLogback, DiskIoInterval)
+	col.ioTotal = NewValueRing(DiskIoLogback, DiskIoInterval)
 	col.ioReadBytes = NewValueRing(DiskIoLogback, DiskIoInterval)
 	col.ioWriteBytes = NewValueRing(DiskIoLogback, DiskIoInterval)
+	col.ioBytesTotal = NewValueRing(DiskIoLogback, DiskIoInterval)
 	col.ctx_switch_voluntary = NewValueRing(CtxSwitchLogback, CtxSwitchInterval)
 	col.ctx_switch_involuntary = NewValueRing(CtxSwitchLogback, CtxSwitchInterval)
 	col.net = NewNetIoCounters(NetIoLogback, NetIoInterval)
@@ -764,8 +788,10 @@ func (col *PsutilProcessCollector) Init() error {
 
 		"proc/" + col.GroupName + "/disk/read":       col.ioRead.GetDiff,
 		"proc/" + col.GroupName + "/disk/write":      col.ioWrite.GetDiff,
+		"proc/" + col.GroupName + "/disk/io":         col.ioTotal.GetDiff,
 		"proc/" + col.GroupName + "/disk/readBytes":  col.ioReadBytes.GetDiff,
 		"proc/" + col.GroupName + "/disk/writeBytes": col.ioWriteBytes.GetDiff,
+		"proc/" + col.GroupName + "/disk/ioBytes":    col.ioBytesTotal.GetDiff,
 
 		"proc/" + col.GroupName + "/ctxSwitch/voluntary":   col.ctx_switch_voluntary.GetDiff,
 		"proc/" + col.GroupName + "/ctxSwitch/involuntary": col.ctx_switch_involuntary.GetDiff,
@@ -916,8 +942,10 @@ func (col *SingleProcessCollector) updateDisk() error {
 		col.safeUpdate(func() {
 			col.ioRead.AddToHead(StoredValue(io.ReadCount))
 			col.ioWrite.AddToHead(StoredValue(io.WriteCount))
+			col.ioTotal.AddToHead(StoredValue(io.ReadCount + io.WriteCount))
 			col.ioReadBytes.AddToHead(StoredValue(io.ReadBytes))
 			col.ioWriteBytes.AddToHead(StoredValue(io.WriteBytes))
+			col.ioBytesTotal.AddToHead(StoredValue(io.ReadBytes + io.WriteBytes))
 		})
 	}
 	return nil
