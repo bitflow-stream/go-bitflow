@@ -19,9 +19,10 @@ var (
 	sink_interval          = 500 * time.Millisecond
 	collect_local          = false
 
-	all_metrics          = false
-	user_include_metrics golib.StringSlice
-	user_exclude_metrics golib.StringSlice
+	all_metrics           = false
+	include_basic_metrics = false
+	user_include_metrics  golib.StringSlice
+	user_exclude_metrics  golib.StringSlice
 
 	proc_collectors      golib.StringSlice
 	proc_collector_regex golib.StringSlice
@@ -42,6 +43,12 @@ var (
 		regexp.MustCompile("^net-proto/tcp/(MaxConn|RtpAlgorithm|RtpMin|RtoMax)$"), // Some irrelevant TCP/IP settings
 		regexp.MustCompile("^net-proto/ip/(DefaultTTL|Forwarding)$"),
 	}
+	includeBasicMetricsRegexes = []*regexp.Regexp{
+		regexp.MustCompile("^(cpu|mem/percent)$"),
+		regexp.MustCompile("^disk-io/.../(io|ioTime|ioBytes)$"),
+		regexp.MustCompile("^net-io/(bytes|packets|dropped|errors)$"),
+		regexp.MustCompile("^proc/.+/(cpu|mem/rss|disk/(io|ioBytes)|net-io/(bytes|packets|dropped|errors))$"),
+	}
 )
 
 func do_main() int {
@@ -51,6 +58,7 @@ func do_main() int {
 	flag.BoolVar(&all_metrics, "a", all_metrics, "Disable built-in filters on available metrics")
 	flag.Var(&user_exclude_metrics, "exclude", "Metrics to exclude (only with -c, substring match)")
 	flag.Var(&user_include_metrics, "include", "Metrics to include exclusively (only with -c, substring match)")
+	flag.BoolVar(&include_basic_metrics, "basic", include_basic_metrics, "Include only a certain basic subset of metrics")
 
 	flag.Var(&proc_collectors, "proc", "'key=substring' Processes to collect metrics for (substring match on entire command line)")
 	flag.Var(&proc_collector_regex, "proc_regex", "'key=regex' Processes to collect metrics for (regex match on entire command line)")
@@ -95,6 +103,9 @@ func do_main() int {
 
 	if all_metrics {
 		excludeMetricsRegexes = nil
+	}
+	if include_basic_metrics {
+		includeMetricsRegexes = append(includeMetricsRegexes, includeBasicMetricsRegexes...)
 	}
 	for _, exclude := range user_exclude_metrics {
 		excludeMetricsRegexes = append(excludeMetricsRegexes,
