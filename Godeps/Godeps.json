@@ -39,7 +39,7 @@
 		},
 		{
 			"ImportPath": "github.com/antongulenko/golib",
-			"Rev": "758a389e354b34dea61fe5980b9b424251539bb9"
+			"Rev": "063c8a43108b0f08f138053a8610a1556d135150"
 		},
 		{
 			"ImportPath": "github.com/cenk/hub",
@@ -201,6 +201,10 @@
 			"Rev": "5e675a3055a6f81f9b014b1dc2d5bb5fb8890618"
 		},
 		{
+			"ImportPath": "github.com/lunixbochs/vtclean",
+			"Rev": "4fbf7632a2c6d3fbdb9931439bdbbeded02cbe36"
+		},
+		{
 			"ImportPath": "github.com/mattn/go-colorable",
 			"Comment": "v0.0.5",
 			"Rev": "9056b7a9f2d1f2d96498d6d146acd1f9d5ed3d59"
@@ -294,6 +298,14 @@
 		{
 			"ImportPath": "golang.org/x/sys/unix",
 			"Rev": "62bee037599929a6e9146f29d10dd5208c43507d"
+		},
+		{
+			"ImportPath": "golang.org/x/text/transform",
+			"Rev": "ce78b075c2fbd48520f4995b173eb9fe18b56ef3"
+		},
+		{
+			"ImportPath": "golang.org/x/text/unicode/norm",
+			"Rev": "ce78b075c2fbd48520f4995b173eb9fe18b56ef3"
 		},
 		{
 			"ImportPath": "gopkg.in/xmlpath.v1",
