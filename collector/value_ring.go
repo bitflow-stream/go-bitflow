@@ -14,7 +14,8 @@ type ValueRing struct {
 	values []TimedValue
 	head   int // actually head+1
 
-	aggregator LogbackValue
+	aggregator   LogbackValue
+	previousDiff sample.Value
 }
 
 func NewValueRing(length int, interval time.Duration) ValueRing {
@@ -93,6 +94,18 @@ func (ring *ValueRing) get(before time.Time) (result TimedValue) {
 }
 
 func (ring *ValueRing) GetDiff() sample.Value {
+	val := ring.GetRawDiff()
+	if val < 0 {
+		// Likely means a number has overflown. Temporarily stick to same value.
+		val = ring.previousDiff
+	} else {
+		ring.previousDiff = val
+	}
+	return val
+}
+
+func (ring *ValueRing) GetRawDiff() sample.Value {
+	// Can return negative values due to number overflows
 	return ring.GetDiffInterval(ring.interval)
 }
 

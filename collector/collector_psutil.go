@@ -130,7 +130,7 @@ func (t *cpuTime) getAllBusy() (float64, float64) {
 	return busy + t.Idle + t.Iowait, busy
 }
 
-func (t *cpuTime) DiffValue(logback LogbackValue, d time.Duration) sample.Value {
+func (t *cpuTime) DiffValue(logback LogbackValue, _ time.Duration) sample.Value {
 	if previous, ok := logback.(*cpuTime); ok {
 		// Calculation based on https://github.com/shirou/gopsutil/blob/master/cpu/cpu_unix.go
 		t1All, t1Busy := previous.getAllBusy()
