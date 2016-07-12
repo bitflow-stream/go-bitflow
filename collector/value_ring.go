@@ -93,23 +93,38 @@ func (ring *ValueRing) get(before time.Time) (result TimedValue) {
 	return
 }
 
+func (ring *ValueRing) flush(start int) {
+	// Flush all older values, starting (including) the start
+	if start < 0 {
+		start += len(ring.values)
+	}
+	for i := start; i >= 0; i-- {
+		if ring.values[i].val == nil {
+			return
+		}
+		ring.values[i].val = nil
+	}
+	for i := len(ring.values) - 1; i >= ring.head; i-- {
+		if ring.values[i].val == nil {
+			return
+		}
+		ring.values[i].val = nil
+	}
+}
+
 func (ring *ValueRing) GetDiff() sample.Value {
-	val := ring.GetRawDiff()
+	val := ring.getDiffInterval(ring.interval)
 	if val < 0 {
 		// Likely means a number has overflown. Temporarily stick to same value.
 		val = ring.previousDiff
+		ring.flush(ring.head - 2) // Only keep the latest sample
 	} else {
 		ring.previousDiff = val
 	}
 	return val
 }
 
-func (ring *ValueRing) GetRawDiff() sample.Value {
-	// Can return negative values due to number overflows
-	return ring.GetDiffInterval(ring.interval)
-}
-
-func (ring *ValueRing) GetDiffInterval(before time.Duration) sample.Value {
+func (ring *ValueRing) getDiffInterval(before time.Duration) sample.Value {
 	head := ring.getHead()
 	if head.val == nil {
 		// Probably empty ring
