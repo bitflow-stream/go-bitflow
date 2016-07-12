@@ -22,12 +22,6 @@ const (
 	tolerated_vm_update_errors = 3
 	DomainReparseInterval      = 1 * time.Minute
 )
-const (
-	LibvirtNetIoLogback   = 50
-	LibvirtNetIoInterval  = 1 * time.Second
-	LibvirtCpuTimeLogback = 10
-	LibvirtCpuInterval    = 1 * time.Second
-)
 
 /*
 	// TODO info about the node/hypervisor?
@@ -45,8 +39,8 @@ const (
 	v.GetAutostart()
 */
 
-func RegisterLibvirtCollector(connectUri string) {
-	RegisterCollector(&LibvirtCollector{ConnectUri: connectUri})
+func RegisterLibvirtCollector(connectUri string, factory *ValueRingFactory) {
+	RegisterCollector(&LibvirtCollector{ConnectUri: connectUri, Factory: factory})
 }
 
 func LibvirtSsh(host string, keyfile string) string {
@@ -64,6 +58,7 @@ func LibvirtLocal() string {
 type LibvirtCollector struct {
 	AbstractCollector
 	ConnectUri string
+	Factory    *ValueRingFactory
 	conn       *libvirt.VirConnection
 	domains    map[string]libvirt.VirDomain
 	vmReaders  []*vmMetricsCollector
@@ -83,11 +78,11 @@ func (col *LibvirtCollector) Init() error {
 			col:  col,
 			name: name,
 			readers: []*activatedMetricsReader{
-				&activatedMetricsReader{NewVmGeneralReader(), false},
+				&activatedMetricsReader{NewVmGeneralReader(col.Factory), false},
 				&activatedMetricsReader{new(memoryStatReader), false},
-				&activatedMetricsReader{NewCpuStatReader(), false},
+				&activatedMetricsReader{NewCpuStatReader(col.Factory), false},
 				&activatedMetricsReader{new(blockStatReader), false},
-				&activatedMetricsReader{NewInterfaceStatReader(), false},
+				&activatedMetricsReader{NewInterfaceStatReader(col.Factory), false},
 			},
 		}
 		for _, reader := range vmReader.readers {
@@ -261,9 +256,9 @@ type vmGeneralReader struct {
 	cpu  ValueRing
 }
 
-func NewVmGeneralReader() *vmGeneralReader {
+func NewVmGeneralReader(factory *ValueRingFactory) *vmGeneralReader {
 	return &vmGeneralReader{
-		cpu: NewValueRing(LibvirtCpuTimeLogback, LibvirtCpuInterval),
+		cpu: factory.NewValueRing(),
 	}
 }
 
@@ -400,12 +395,12 @@ type cpuStatReader struct {
 	cpu_virt   ValueRing
 }
 
-func NewCpuStatReader() *cpuStatReader {
+func NewCpuStatReader(factory *ValueRingFactory) *cpuStatReader {
 	return &cpuStatReader{
-		cpu_system: NewValueRing(LibvirtCpuTimeLogback, LibvirtCpuInterval),
-		cpu_user:   NewValueRing(LibvirtCpuTimeLogback, LibvirtCpuInterval),
-		cpu_total:  NewValueRing(LibvirtCpuTimeLogback, LibvirtCpuInterval),
-		cpu_virt:   NewValueRing(LibvirtCpuTimeLogback, LibvirtCpuInterval),
+		cpu_system: factory.NewValueRing(),
+		cpu_user:   factory.NewValueRing(),
+		cpu_total:  factory.NewValueRing(),
+		cpu_virt:   factory.NewValueRing(),
 	}
 }
 
@@ -519,9 +514,9 @@ type interfaceStatReader struct {
 	net              netIoCounters
 }
 
-func NewInterfaceStatReader() *interfaceStatReader {
+func NewInterfaceStatReader(factory *ValueRingFactory) *interfaceStatReader {
 	return &interfaceStatReader{
-		net: NewNetIoCounters(NetIoLogback, NetIoInterval),
+		net: NewNetIoCounters(factory),
 	}
 }
 

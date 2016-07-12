@@ -32,6 +32,10 @@ var (
 	print_metrics = false
 	libvirt_uri   = collector.LibvirtLocal() // collector.LibvirtSsh("host", "keyfile")
 	ovsdb_host    = ""
+
+	valueFactory = collector.ValueRingFactory{
+		Interval: time.Second,
+	}
 )
 
 var (
@@ -76,10 +80,11 @@ func do_main() int {
 	defer golib.ProfileCpu()()
 
 	// ====== Configure collectors
-	collector.RegisterMockCollector()
-	collector.RegisterPsutilCollectors()
-	collector.RegisterLibvirtCollector(libvirt_uri)
-	collector.RegisterOvsdbCollector(ovsdb_host)
+	valueFactory.Length = int(valueFactory.Interval/collect_local_interval) * 3 // Make sure enough samples can be buffered
+	collector.RegisterMockCollector(&valueFactory)
+	collector.RegisterPsutilCollectors(&valueFactory)
+	collector.RegisterLibvirtCollector(libvirt_uri, &valueFactory)
+	collector.RegisterOvsdbCollector(ovsdb_host, &valueFactory)
 	if len(proc_collectors) > 0 || len(proc_collector_regex) > 0 {
 		regexes := make(map[string][]*regexp.Regexp)
 		for _, substr := range proc_collectors {

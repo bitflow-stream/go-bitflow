@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -8,21 +9,29 @@ import (
 	"github.com/antongulenko/data2go/sample"
 )
 
-type ValueRing struct {
-	interval time.Duration // Can be set to use GetDefaultDiff()
+type ValueRingFactory struct {
+	Length   int
+	Interval time.Duration
+}
 
-	values []TimedValue
-	head   int // actually head+1
+func (factory *ValueRingFactory) NewValueRing() ValueRing {
+	return ValueRing{
+		values:   make([]TimedValue, factory.Length),
+		interval: factory.Interval,
+		lock:     new(sync.Mutex),
+	}
+}
+
+type ValueRing struct {
+	interval time.Duration
+	values   []TimedValue
+	head     int // actually head+1
 
 	aggregator   LogbackValue
 	previousDiff sample.Value
-}
 
-func NewValueRing(length int, interval time.Duration) ValueRing {
-	return ValueRing{
-		values:   make([]TimedValue, length),
-		interval: interval,
-	}
+	// Serializes GetDiff() and FlushHead()
+	lock *sync.Mutex
 }
 
 type LogbackValue interface {
@@ -44,6 +53,9 @@ func (ring *ValueRing) AddToHead(val LogbackValue) {
 }
 
 func (ring *ValueRing) FlushHead() {
+	ring.lock.Lock()
+	defer ring.lock.Unlock()
+
 	ring.values[ring.head] = TimedValue{time.Now(), ring.aggregator}
 	if ring.head >= len(ring.values)-1 {
 		ring.head = 0
@@ -56,6 +68,41 @@ func (ring *ValueRing) FlushHead() {
 func (ring *ValueRing) Add(val LogbackValue) {
 	ring.AddToHead(val)
 	ring.FlushHead()
+}
+
+func (ring *ValueRing) GetDiff() sample.Value {
+	ring.lock.Lock()
+	defer ring.lock.Unlock()
+
+	val := ring.getDiffInterval(ring.interval)
+	if val < 0 {
+		// Likely means a number has overflown. Temporarily stick to same value.
+		val = ring.previousDiff
+		ring.flush(ring.head - 2) // Only keep the latest sample
+	} else {
+		ring.previousDiff = val
+	}
+	return val
+}
+
+// ============================ Internal functions ============================
+
+func (ring *ValueRing) getDiffInterval(before time.Duration) sample.Value {
+	head := ring.getHead()
+	if head.val == nil {
+		// Probably empty ring
+		return sample.Value(0)
+	}
+	beforeTime := head.Time.Add(-before)
+	previous := ring.get(beforeTime)
+	if previous.val == nil {
+		return sample.Value(0)
+	}
+	interval := head.Time.Sub(previous.Time)
+	if interval == 0 {
+		return sample.Value(0)
+	}
+	return head.val.DiffValue(previous.val, interval)
 }
 
 func (ring *ValueRing) getHead() TimedValue {
@@ -110,36 +157,6 @@ func (ring *ValueRing) flush(start int) {
 		}
 		ring.values[i].val = nil
 	}
-}
-
-func (ring *ValueRing) GetDiff() sample.Value {
-	val := ring.getDiffInterval(ring.interval)
-	if val < 0 {
-		// Likely means a number has overflown. Temporarily stick to same value.
-		val = ring.previousDiff
-		ring.flush(ring.head - 2) // Only keep the latest sample
-	} else {
-		ring.previousDiff = val
-	}
-	return val
-}
-
-func (ring *ValueRing) getDiffInterval(before time.Duration) sample.Value {
-	head := ring.getHead()
-	if head.val == nil {
-		// Probably empty ring
-		return sample.Value(0)
-	}
-	beforeTime := head.Time.Add(-before)
-	previous := ring.get(beforeTime)
-	if previous.val == nil {
-		return sample.Value(0)
-	}
-	interval := head.Time.Sub(previous.Time)
-	if interval == 0 {
-		return sample.Value(0)
-	}
-	return head.val.DiffValue(previous.val, interval)
 }
 
 type StoredValue sample.Value

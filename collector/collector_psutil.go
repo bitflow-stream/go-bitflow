@@ -23,26 +23,13 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
-const (
-	NetIoLogback      = 50
-	NetIoInterval     = 1 * time.Second
-	CpuTimeLogback    = 10
-	CpuInterval       = 1 * time.Second
-	DiskIoLogback     = 50
-	DiskIoInterval    = 1 * time.Second
-	CtxSwitchLogback  = 50
-	CtxSwitchInterval = 1 * time.Second
-	NetProtoLogback   = 50
-	NetProtoInterval  = 1 * time.Second
-)
-
-func RegisterPsutilCollectors() {
+func RegisterPsutilCollectors(factory *ValueRingFactory) {
 	RegisterCollector(new(PsutilMemCollector))
-	RegisterCollector(new(PsutilCpuCollector))
+	RegisterCollector(&PsutilCpuCollector{Factory: factory})
 	RegisterCollector(new(PsutilLoadCollector))
-	RegisterCollector(new(PsutilNetCollector))
-	RegisterCollector(new(PsutilNetProtoCollector))
-	RegisterCollector(new(PsutilDiskIOCollector))
+	RegisterCollector(&PsutilNetCollector{Factory: factory})
+	RegisterCollector(&PsutilNetProtoCollector{Factory: factory})
+	RegisterCollector(&PsutilDiskIOCollector{Factory: factory})
 	RegisterCollector(new(PsutilDiskUsageCollector))
 	RegisterCollector(new(PsutilMiscCollector))
 }
@@ -95,12 +82,13 @@ func hostProcFile(parts ...string) string {
 // ==================== CPU ====================
 type PsutilCpuCollector struct {
 	AbstractCollector
-	ring ValueRing
+	Factory *ValueRingFactory
+	ring    ValueRing
 }
 
 func (col *PsutilCpuCollector) Init() error {
 	col.Reset(col)
-	col.ring = NewValueRing(CpuTimeLogback, CpuInterval)
+	col.ring = col.Factory.NewValueRing()
 	col.readers = map[string]MetricReader{
 		"cpu": col.ring.GetDiff,
 	}
@@ -211,6 +199,8 @@ func (col *PsutilLoadCollector) readLoad15() sample.Value {
 // ==================== Net IO Counters ====================
 type PsutilNetCollector struct {
 	AbstractCollector
+	Factory *ValueRingFactory
+
 	counters netIoCounters
 }
 
@@ -227,7 +217,7 @@ type netIoCounters struct {
 
 func (col *PsutilNetCollector) Init() error {
 	col.Reset(col)
-	col.counters = NewNetIoCounters(NetIoLogback, NetIoInterval)
+	col.counters = NewNetIoCounters(col.Factory)
 	col.readers = make(map[string]MetricReader)
 	col.counters.Register(col.readers, "net-io")
 	return nil
@@ -245,16 +235,16 @@ func (col *PsutilNetCollector) Update() (err error) {
 	return
 }
 
-func NewNetIoCounters(logback int, interval time.Duration) netIoCounters {
+func NewNetIoCounters(factory *ValueRingFactory) netIoCounters {
 	return netIoCounters{
-		bytes:      NewValueRing(logback, interval),
-		packets:    NewValueRing(logback, interval),
-		rx_bytes:   NewValueRing(logback, interval),
-		rx_packets: NewValueRing(logback, interval),
-		tx_bytes:   NewValueRing(logback, interval),
-		tx_packets: NewValueRing(logback, interval),
-		errors:     NewValueRing(logback, interval),
-		dropped:    NewValueRing(logback, interval),
+		bytes:      factory.NewValueRing(),
+		packets:    factory.NewValueRing(),
+		rx_bytes:   factory.NewValueRing(),
+		rx_packets: factory.NewValueRing(),
+		tx_bytes:   factory.NewValueRing(),
+		tx_packets: factory.NewValueRing(),
+		errors:     factory.NewValueRing(),
+		dropped:    factory.NewValueRing(),
 	}
 }
 
@@ -311,6 +301,8 @@ var absoluteNetProtoValues = map[string]bool{
 
 type PsutilNetProtoCollector struct {
 	AbstractCollector
+	Factory *ValueRingFactory
+
 	protocols    map[string]psnet.ProtoCountersStat
 	protoReaders []*protoStatReader
 }
@@ -329,7 +321,7 @@ func (col *PsutilNetProtoCollector) Init() error {
 		for statName, _ := range counters.Stats {
 			var ring *ValueRing
 			if !absoluteNetProtoValues[statName] {
-				ringVal := NewValueRing(NetProtoLogback, NetProtoInterval)
+				ringVal := col.Factory.NewValueRing()
 				ring = &ringVal
 			}
 			name := "net-proto/" + proto + "/" + statName
@@ -398,10 +390,10 @@ func (reader *protoStatReader) update() error {
 			}
 			return nil
 		} else {
-			return fmt.Errorf("Counter", reader.field, "not found in protocol", reader.protocol, "in PsutilNetProtoCollector")
+			return fmt.Errorf("Counter %v not found in protocol %v in PsutilNetProtoCollector", reader.field, reader.protocol)
 		}
 	} else {
-		return fmt.Errorf("Protocol", reader.protocol, "not found in PsutilNetProtoCollector")
+		return fmt.Errorf("Protocol %v not found in PsutilNetProtoCollector", reader.protocol)
 	}
 }
 
@@ -416,6 +408,8 @@ func (reader *protoStatReader) read() sample.Value {
 // ==================== Disk IO ====================
 type PsutilDiskIOCollector struct {
 	AbstractCollector
+	Factory *ValueRingFactory
+
 	disks map[string]disk.IOCountersStat
 }
 
@@ -432,15 +426,15 @@ func (col *PsutilDiskIOCollector) Init() error {
 		reader := &diskIOReader{
 			col:            col,
 			disk:           disk,
-			readRing:       NewValueRing(DiskIoLogback, DiskIoInterval),
-			writeRing:      NewValueRing(DiskIoLogback, DiskIoInterval),
-			ioRing:         NewValueRing(DiskIoLogback, DiskIoInterval),
-			readBytesRing:  NewValueRing(DiskIoLogback, DiskIoInterval),
-			writeBytesRing: NewValueRing(DiskIoLogback, DiskIoInterval),
-			ioBytesRing:    NewValueRing(DiskIoLogback, DiskIoInterval),
-			readTimeRing:   NewValueRing(DiskIoLogback, DiskIoInterval),
-			writeTimeRing:  NewValueRing(DiskIoLogback, DiskIoInterval),
-			ioTimeRing:     NewValueRing(DiskIoLogback, DiskIoInterval),
+			readRing:       col.Factory.NewValueRing(),
+			writeRing:      col.Factory.NewValueRing(),
+			ioRing:         col.Factory.NewValueRing(),
+			readBytesRing:  col.Factory.NewValueRing(),
+			writeBytesRing: col.Factory.NewValueRing(),
+			ioBytesRing:    col.Factory.NewValueRing(),
+			readTimeRing:   col.Factory.NewValueRing(),
+			writeTimeRing:  col.Factory.NewValueRing(),
+			ioTimeRing:     col.Factory.NewValueRing(),
 		}
 		col.readers[name+"read"] = reader.readRead
 		col.readers[name+"write"] = reader.readWrite
@@ -731,6 +725,7 @@ func (col *PsutilMiscCollector) readNumProcs() sample.Value {
 // ==================== Process Metrics ====================
 type PsutilProcessCollector struct {
 	AbstractCollector
+	factory *ValueRingFactory
 
 	// Settings
 	CmdlineFilter     []*regexp.Regexp
@@ -761,26 +756,20 @@ type PsutilProcessCollector struct {
 	numThreads             int32
 }
 
-func (col *PsutilProcessCollector) logErr(pid int32, err error) {
-	if err != nil && col.PrintErrors {
-		log.Errorf("Getting info about %s process %v: %v", col.GroupName, pid, err)
-	}
-}
-
 func (col *PsutilProcessCollector) Init() error {
 	col.own_pid = int32(os.Getpid())
 	col.cpu_factor = 100 / float64(runtime.NumCPU())
 	col.Reset(col)
-	col.cpu = NewValueRing(CpuTimeLogback, CpuInterval)
-	col.ioRead = NewValueRing(DiskIoLogback, DiskIoInterval)
-	col.ioWrite = NewValueRing(DiskIoLogback, DiskIoInterval)
-	col.ioTotal = NewValueRing(DiskIoLogback, DiskIoInterval)
-	col.ioReadBytes = NewValueRing(DiskIoLogback, DiskIoInterval)
-	col.ioWriteBytes = NewValueRing(DiskIoLogback, DiskIoInterval)
-	col.ioBytesTotal = NewValueRing(DiskIoLogback, DiskIoInterval)
-	col.ctx_switch_voluntary = NewValueRing(CtxSwitchLogback, CtxSwitchInterval)
-	col.ctx_switch_involuntary = NewValueRing(CtxSwitchLogback, CtxSwitchInterval)
-	col.net = NewNetIoCounters(NetIoLogback, NetIoInterval)
+	col.cpu = col.factory.NewValueRing()
+	col.ioRead = col.factory.NewValueRing()
+	col.ioWrite = col.factory.NewValueRing()
+	col.ioTotal = col.factory.NewValueRing()
+	col.ioReadBytes = col.factory.NewValueRing()
+	col.ioWriteBytes = col.factory.NewValueRing()
+	col.ioBytesTotal = col.factory.NewValueRing()
+	col.ctx_switch_voluntary = col.factory.NewValueRing()
+	col.ctx_switch_involuntary = col.factory.NewValueRing()
+	col.net = NewNetIoCounters(col.factory)
 
 	col.readers = map[string]MetricReader{
 		"proc/" + col.GroupName + "/num": col.readNumProc,
@@ -834,14 +823,18 @@ func (col *PsutilProcessCollector) updatePids() error {
 		if err != nil {
 			// Process does not exist anymore
 			errors++
-			col.logErr(pid, err)
+			if col.PrintErrors {
+				log.WithField("pid", pid).Errorln(err)
+			}
 			continue
 		}
 		cmdline, err := proc.Cmdline()
 		if err != nil {
 			// Probably a permission error
 			errors++
-			col.logErr(pid, err)
+			if col.PrintErrors {
+				log.WithField("pid", pid).Errorln("Obtaining process cmdline failed:", err)
+			}
 			continue
 		}
 		for _, regex := range col.CmdlineFilter {
@@ -852,7 +845,7 @@ func (col *PsutilProcessCollector) updatePids() error {
 		}
 	}
 	if len(col.pids) == 0 && errors > 0 && col.PrintErrors {
-		col.logErr(-1, fmt.Errorf("Warning: Observing no processes, failed to check", errors, "out of", len(pids), "PIDs."))
+		log.Errorln("Warning: Observing no processes, failed to check", errors, "out of", len(pids), "PIDs")
 	}
 
 	if col.PidUpdateInterval > 0 {
@@ -877,7 +870,9 @@ func (col *PsutilProcessCollector) updateValues() {
 		if err := proc.update(); err != nil {
 			// Process probably does not exist anymore
 			delete(col.pids, pid)
-			col.logErr(pid, err)
+			if col.PrintErrors {
+				log.WithField("pid", pid).Errorln("Process info update failed:", err)
+			}
 		}
 	}
 

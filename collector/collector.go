@@ -17,7 +17,7 @@ import (
 // Can be used to modify collected headers and samples
 var CollectedSampleHandler sample.ReadSampleHandler
 
-const SampleSource = "collected"
+const CollectorSampleSource = "collected"
 
 // ==================== Metric ====================
 type Metric struct {
@@ -48,8 +48,10 @@ func RegisterCollector(collector Collector) {
 // ================================= Collector Source =================================
 var MetricsChanged = errors.New("Metrics of this collector have changed")
 
-const FailedCollectorCheckInterval = 5 * time.Second
-const FilteredCollectorCheckInterval = 30 * time.Second
+const (
+	FailedCollectorCheckInterval   = 5 * time.Second
+	FilteredCollectorCheckInterval = 30 * time.Second
+)
 
 type CollectorSource struct {
 	CollectInterval time.Duration
@@ -213,7 +215,7 @@ func (source *CollectorSource) constructSample(metrics []string) (sample.Header,
 	}
 	header := sample.Header{Fields: fields}
 	if handler := CollectedSampleHandler; handler != nil {
-		handler.HandleHeader(&header, SampleSource)
+		handler.HandleHeader(&header, CollectorSampleSource)
 	}
 	return header, values, set
 }
@@ -264,7 +266,7 @@ func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header sample.Hea
 					Values: values,
 				}
 				if handler := CollectedSampleHandler; handler != nil {
-					handler.HandleSample(&sample, SampleSource)
+					handler.HandleSample(&sample, CollectorSampleSource)
 				}
 				if err := sink.Sample(sample, header); err != nil {
 					// When a sample fails, try sending the header again

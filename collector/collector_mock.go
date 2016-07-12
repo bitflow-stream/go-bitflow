@@ -9,9 +9,9 @@ import (
 
 const _max_mock_val = 15
 
-func RegisterMockCollector() {
+func RegisterMockCollector(factory *ValueRingFactory) {
 	RegisterCollector(&MockCollector{
-		ring: NewValueRing(100, time.Second),
+		ring: factory.NewValueRing(),
 	})
 }
 

@@ -66,16 +66,17 @@ type WriteCascade struct {
 	Err    error
 }
 
-func (w *WriteCascade) Write(bytes []byte) {
+func (w *WriteCascade) Write(bytes []byte) error {
 	if w.Err == nil {
 		_, w.Err = w.Writer.Write(bytes)
 	}
+	return nil
 }
 
-func (w *WriteCascade) WriteStr(str string) {
-	w.Write([]byte(str))
+func (w *WriteCascade) WriteStr(str string) error {
+	return w.Write([]byte(str))
 }
 
-func (w *WriteCascade) WriteByte(b byte) {
-	w.Write([]byte{b})
+func (w *WriteCascade) WriteByte(b byte) error {
+	return w.Write([]byte{b})
 }

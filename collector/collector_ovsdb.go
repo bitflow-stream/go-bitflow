@@ -15,18 +15,19 @@ const (
 	DefaultOvsdbPort = libovsdb.DefaultPort
 )
 
-func RegisterOvsdbCollector(Host string) {
-	RegisterOvsdbCollectorPort(Host, 0)
+func RegisterOvsdbCollector(Host string, factory *ValueRingFactory) {
+	RegisterOvsdbCollectorPort(Host, 0, factory)
 }
 
-func RegisterOvsdbCollectorPort(host string, port int) {
-	RegisterCollector(&OvsdbCollector{Host: host, Port: port})
+func RegisterOvsdbCollectorPort(host string, port int, factory *ValueRingFactory) {
+	RegisterCollector(&OvsdbCollector{Host: host, Port: port, Factory: factory})
 }
 
 type OvsdbCollector struct {
 	AbstractCollector
-	Host string
-	Port int
+	Host    string
+	Port    int
+	Factory *ValueRingFactory
 
 	client           *libovsdb.OvsdbClient
 	lastUpdateError  error
@@ -59,7 +60,7 @@ func (col *OvsdbCollector) getReader(name string) *ovsdbInterfaceReader {
 	reader := &ovsdbInterfaceReader{
 		col:      col,
 		name:     name,
-		counters: NewNetIoCounters(OvsdbLogback, OvsdbInterval),
+		counters: NewNetIoCounters(col.Factory),
 	}
 	col.interfaceReaders[name] = reader
 	return reader
