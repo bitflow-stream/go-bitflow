@@ -201,14 +201,14 @@ func (col *ovsdbInterfaceReader) update(stats map[string]float64) {
 		"rx_frame_err",
 		"rx_over_err",
 		"tx_errors",
-	}, &col.counters.errors)
-	col.fillValues(stats, []string{"rx_dropped", "tx_dropped"}, &col.counters.dropped)
-	col.fillValues(stats, []string{"rx_bytes", "tx_bytes"}, &col.counters.bytes)
-	col.fillValues(stats, []string{"rx_packets", "tx_packets"}, &col.counters.packets)
-	col.fillValues(stats, []string{"rx_bytes"}, &col.counters.rx_bytes)
-	col.fillValues(stats, []string{"rx_packets"}, &col.counters.rx_packets)
-	col.fillValues(stats, []string{"tx_bytes"}, &col.counters.tx_bytes)
-	col.fillValues(stats, []string{"tx_packets"}, &col.counters.tx_packets)
+	}, col.counters.errors)
+	col.fillValues(stats, []string{"rx_dropped", "tx_dropped"}, col.counters.dropped)
+	col.fillValues(stats, []string{"rx_bytes", "tx_bytes"}, col.counters.bytes)
+	col.fillValues(stats, []string{"rx_packets", "tx_packets"}, col.counters.packets)
+	col.fillValues(stats, []string{"rx_bytes"}, col.counters.rx_bytes)
+	col.fillValues(stats, []string{"rx_packets"}, col.counters.rx_packets)
+	col.fillValues(stats, []string{"tx_bytes"}, col.counters.tx_bytes)
+	col.fillValues(stats, []string{"tx_packets"}, col.counters.tx_packets)
 }
 
 // ==================== OVSDB Notifications ====================

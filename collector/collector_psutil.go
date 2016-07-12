@@ -23,7 +23,7 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
-func RegisterPsutilCollectors(factory *ValueRingFactory) {
+func RegisterPsutilCollectors(osInfoUpdate time.Duration, factory *ValueRingFactory) {
 	RegisterCollector(new(PsutilMemCollector))
 	RegisterCollector(&PsutilCpuCollector{Factory: factory})
 	RegisterCollector(new(PsutilLoadCollector))
@@ -32,6 +32,7 @@ func RegisterPsutilCollectors(factory *ValueRingFactory) {
 	RegisterCollector(&PsutilDiskIOCollector{Factory: factory})
 	RegisterCollector(new(PsutilDiskUsageCollector))
 	RegisterCollector(new(PsutilMiscCollector))
+	go UpdateRunningPids(osInfoUpdate)
 }
 
 // ==================== Memory ====================
@@ -83,7 +84,7 @@ func hostProcFile(parts ...string) string {
 type PsutilCpuCollector struct {
 	AbstractCollector
 	Factory *ValueRingFactory
-	ring    ValueRing
+	ring    *ValueRing
 }
 
 func (col *PsutilCpuCollector) Init() error {
@@ -205,14 +206,14 @@ type PsutilNetCollector struct {
 }
 
 type netIoCounters struct {
-	bytes      ValueRing
-	packets    ValueRing
-	rx_bytes   ValueRing
-	rx_packets ValueRing
-	tx_bytes   ValueRing
-	tx_packets ValueRing
-	errors     ValueRing
-	dropped    ValueRing
+	bytes      *ValueRing
+	packets    *ValueRing
+	rx_bytes   *ValueRing
+	rx_packets *ValueRing
+	tx_bytes   *ValueRing
+	tx_packets *ValueRing
+	errors     *ValueRing
+	dropped    *ValueRing
 }
 
 func (col *PsutilNetCollector) Init() error {
@@ -321,8 +322,7 @@ func (col *PsutilNetProtoCollector) Init() error {
 		for statName, _ := range counters.Stats {
 			var ring *ValueRing
 			if !absoluteNetProtoValues[statName] {
-				ringVal := col.Factory.NewValueRing()
-				ring = &ringVal
+				ring = col.Factory.NewValueRing()
 			}
 			name := "net-proto/" + proto + "/" + statName
 			protoReader := &protoStatReader{
@@ -479,15 +479,15 @@ type diskIOReader struct {
 	col  *PsutilDiskIOCollector
 	disk string
 
-	readRing       ValueRing
-	writeRing      ValueRing
-	ioRing         ValueRing
-	readBytesRing  ValueRing
-	writeBytesRing ValueRing
-	ioBytesRing    ValueRing
-	readTimeRing   ValueRing
-	writeTimeRing  ValueRing
-	ioTimeRing     ValueRing
+	readRing       *ValueRing
+	writeRing      *ValueRing
+	ioRing         *ValueRing
+	readBytesRing  *ValueRing
+	writeBytesRing *ValueRing
+	ioBytesRing    *ValueRing
+	readTimeRing   *ValueRing
+	writeTimeRing  *ValueRing
+	ioTimeRing     *ValueRing
 }
 
 func (reader *diskIOReader) checkDisk() *disk.IOCountersStat {
@@ -506,63 +506,63 @@ func (reader *diskIOReader) value(val uint64, ring *ValueRing) sample.Value {
 
 func (reader *diskIOReader) readRead() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return reader.value(disk.ReadCount, &reader.readRing)
+		return reader.value(disk.ReadCount, reader.readRing)
 	}
 	return sample.Value(0)
 }
 
 func (reader *diskIOReader) readWrite() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return reader.value(disk.WriteCount, &reader.writeRing)
+		return reader.value(disk.WriteCount, reader.writeRing)
 	}
 	return sample.Value(0)
 }
 
 func (reader *diskIOReader) readIo() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return reader.value(disk.ReadCount+disk.WriteCount, &reader.ioRing)
+		return reader.value(disk.ReadCount+disk.WriteCount, reader.ioRing)
 	}
 	return sample.Value(0)
 }
 
 func (reader *diskIOReader) readReadBytes() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return reader.value(disk.ReadBytes, &reader.readBytesRing)
+		return reader.value(disk.ReadBytes, reader.readBytesRing)
 	}
 	return sample.Value(0)
 }
 
 func (reader *diskIOReader) readWriteBytes() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return reader.value(disk.WriteBytes, &reader.writeBytesRing)
+		return reader.value(disk.WriteBytes, reader.writeBytesRing)
 	}
 	return sample.Value(0)
 }
 
 func (reader *diskIOReader) readIoBytes() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return reader.value(disk.ReadBytes+disk.WriteBytes, &reader.ioBytesRing)
+		return reader.value(disk.ReadBytes+disk.WriteBytes, reader.ioBytesRing)
 	}
 	return sample.Value(0)
 }
 
 func (reader *diskIOReader) readReadTime() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return reader.value(disk.ReadTime, &reader.readTimeRing)
+		return reader.value(disk.ReadTime, reader.readTimeRing)
 	}
 	return sample.Value(0)
 }
 
 func (reader *diskIOReader) readWriteTime() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return reader.value(disk.WriteTime, &reader.writeTimeRing)
+		return reader.value(disk.WriteTime, reader.writeTimeRing)
 	}
 	return sample.Value(0)
 }
 
 func (reader *diskIOReader) readIoTime() sample.Value {
 	if disk := reader.checkDisk(); disk != nil {
-		return reader.value(disk.IoTime, &reader.ioTimeRing)
+		return reader.value(disk.IoTime, reader.ioTimeRing)
 	}
 	return sample.Value(0)
 }
@@ -693,6 +693,18 @@ var osInformation struct {
 	pids []int32
 }
 
+// This is required for PsutilMiscCollector and PsutilProcessCollector
+func UpdateRunningPids(interval time.Duration) {
+	for {
+		if pids, err := process.Pids(); err != nil {
+			log.Errorln("Failed to update PIDs:", err)
+		} else {
+			osInformation.pids = pids
+		}
+		time.Sleep(interval)
+	}
+}
+
 type PsutilMiscCollector struct {
 	AbstractCollector
 }
@@ -706,16 +718,9 @@ func (col *PsutilMiscCollector) Init() error {
 	return nil
 }
 
-func (col *PsutilMiscCollector) Update() (err error) {
-	pids, err := process.Pids()
-	if err != nil {
-		return err
-	}
-	osInformation.pids = pids
-	if err == nil {
-		col.UpdateMetrics()
-	}
-	return
+func (col *PsutilMiscCollector) Update() error {
+	col.UpdateMetrics()
+	return nil
 }
 
 func (col *PsutilMiscCollector) readNumProcs() sample.Value {
@@ -725,7 +730,7 @@ func (col *PsutilMiscCollector) readNumProcs() sample.Value {
 // ==================== Process Metrics ====================
 type PsutilProcessCollector struct {
 	AbstractCollector
-	factory *ValueRingFactory
+	Factory *ValueRingFactory
 
 	// Settings
 	CmdlineFilter     []*regexp.Regexp
@@ -737,62 +742,44 @@ type PsutilProcessCollector struct {
 	own_pid     int32
 	cpu_factor  float64
 	pids        map[int32]*SingleProcessCollector
-
-	updateLock             sync.Mutex
-	cpu                    ValueRing
-	ioRead                 ValueRing
-	ioWrite                ValueRing
-	ioTotal                ValueRing
-	ioReadBytes            ValueRing
-	ioWriteBytes           ValueRing
-	ioBytesTotal           ValueRing
-	ctx_switch_voluntary   ValueRing
-	ctx_switch_involuntary ValueRing
-	net                    netIoCounters
-	mem_rss                uint64
-	mem_vms                uint64
-	mem_swap               uint64
-	numFds                 int32
-	numThreads             int32
 }
 
 func (col *PsutilProcessCollector) Init() error {
 	col.own_pid = int32(os.Getpid())
 	col.cpu_factor = 100 / float64(runtime.NumCPU())
 	col.Reset(col)
-	col.cpu = col.factory.NewValueRing()
-	col.ioRead = col.factory.NewValueRing()
-	col.ioWrite = col.factory.NewValueRing()
-	col.ioTotal = col.factory.NewValueRing()
-	col.ioReadBytes = col.factory.NewValueRing()
-	col.ioWriteBytes = col.factory.NewValueRing()
-	col.ioBytesTotal = col.factory.NewValueRing()
-	col.ctx_switch_voluntary = col.factory.NewValueRing()
-	col.ctx_switch_involuntary = col.factory.NewValueRing()
-	col.net = NewNetIoCounters(col.factory)
 
+	prefix := "proc/" + col.GroupName
 	col.readers = map[string]MetricReader{
-		"proc/" + col.GroupName + "/num": col.readNumProc,
-		"proc/" + col.GroupName + "/cpu": col.cpu.GetDiff,
+		prefix + "/num": col.readNumProc,
+		prefix + "/cpu": col.readCpu,
 
-		"proc/" + col.GroupName + "/disk/read":       col.ioRead.GetDiff,
-		"proc/" + col.GroupName + "/disk/write":      col.ioWrite.GetDiff,
-		"proc/" + col.GroupName + "/disk/io":         col.ioTotal.GetDiff,
-		"proc/" + col.GroupName + "/disk/readBytes":  col.ioReadBytes.GetDiff,
-		"proc/" + col.GroupName + "/disk/writeBytes": col.ioWriteBytes.GetDiff,
-		"proc/" + col.GroupName + "/disk/ioBytes":    col.ioBytesTotal.GetDiff,
+		prefix + "/disk/read":       col.readIoRead,
+		prefix + "/disk/write":      col.readIoWrite,
+		prefix + "/disk/io":         col.readIo,
+		prefix + "/disk/readBytes":  col.readBytesRead,
+		prefix + "/disk/writeBytes": col.readBytesWrite,
+		prefix + "/disk/ioBytes":    col.readBytes,
 
-		"proc/" + col.GroupName + "/ctxSwitch/voluntary":   col.ctx_switch_voluntary.GetDiff,
-		"proc/" + col.GroupName + "/ctxSwitch/involuntary": col.ctx_switch_involuntary.GetDiff,
+		prefix + "/ctxSwitch":             col.readCtxSwitch,
+		prefix + "/ctxSwitch/voluntary":   col.readCtxSwitchVoluntary,
+		prefix + "/ctxSwitch/involuntary": col.readCtxSwitchInvoluntary,
 
-		"proc/" + col.GroupName + "/mem/rss":  col.readMemRss,
-		"proc/" + col.GroupName + "/mem/vms":  col.readMemVms,
-		"proc/" + col.GroupName + "/mem/swap": col.readMemSwap,
-		"proc/" + col.GroupName + "/fds":      col.readFds,
-		"proc/" + col.GroupName + "/threads":  col.readThreads,
+		prefix + "/mem/rss":  col.readMemRss,
+		prefix + "/mem/vms":  col.readMemVms,
+		prefix + "/mem/swap": col.readMemSwap,
+		prefix + "/fds":      col.readFds,
+		prefix + "/threads":  col.readThreads,
+
+		prefix + "/net-io/bytes":      col.readNetBytes,
+		prefix + "/net-io/packets":    col.readNetPackets,
+		prefix + "/net-io/rx_bytes":   col.readNetRxBytes,
+		prefix + "/net-io/rx_packets": col.readNetRxPackets,
+		prefix + "/net-io/tx_bytes":   col.readNetTxBytes,
+		prefix + "/net-io/tx_packets": col.readNetTxPackets,
+		prefix + "/net-io/errors":     col.readNetErrors,
+		prefix + "/net-io/dropped":    col.readNetDropped,
 	}
-	col.net.Register(col.readers, "proc/"+col.GroupName+"/net-io")
-
 	return nil
 }
 
@@ -800,7 +787,7 @@ func (col *PsutilProcessCollector) Update() (err error) {
 	if err := col.updatePids(); err != nil {
 		return err
 	}
-	col.updateValues()
+	col.updateProcesses()
 	if err == nil {
 		col.UpdateMetrics()
 	}
@@ -812,7 +799,7 @@ func (col *PsutilProcessCollector) updatePids() error {
 		return nil
 	}
 
-	col.pids = make(map[int32]*SingleProcessCollector)
+	newPids := make(map[int32]*SingleProcessCollector)
 	errors := 0
 	pids := osInformation.pids
 	for _, pid := range pids {
@@ -824,7 +811,7 @@ func (col *PsutilProcessCollector) updatePids() error {
 			// Process does not exist anymore
 			errors++
 			if col.PrintErrors {
-				log.WithField("pid", pid).Errorln(err)
+				log.WithField("pid", pid).Errorln("Checking process failed:", err)
 			}
 			continue
 		}
@@ -839,14 +826,19 @@ func (col *PsutilProcessCollector) updatePids() error {
 		}
 		for _, regex := range col.CmdlineFilter {
 			if regex.MatchString(cmdline) {
-				col.pids[pid] = MakeProcessCollector(col, proc)
+				procCollector, ok := col.pids[pid]
+				if !ok {
+					procCollector = col.MakeProcessCollector(proc, col.Factory)
+				}
+				newPids[pid] = procCollector
 				break
 			}
 		}
 	}
-	if len(col.pids) == 0 && errors > 0 && col.PrintErrors {
+	if len(newPids) == 0 && errors > 0 && col.PrintErrors {
 		log.Errorln("Warning: Observing no processes, failed to check", errors, "out of", len(pids), "PIDs")
 	}
+	col.pids = newPids
 
 	if col.PidUpdateInterval > 0 {
 		col.pidsUpdated = true
@@ -859,13 +851,7 @@ func (col *PsutilProcessCollector) updatePids() error {
 	return nil
 }
 
-func (col *PsutilProcessCollector) updateValues() {
-	col.numFds = 0
-	col.numThreads = 0
-	col.mem_rss = 0
-	col.mem_vms = 0
-	col.mem_swap = 0
-
+func (col *PsutilProcessCollector) updateProcesses() {
 	for pid, proc := range col.pids {
 		if err := proc.update(); err != nil {
 			// Process probably does not exist anymore
@@ -875,33 +861,212 @@ func (col *PsutilProcessCollector) updateValues() {
 			}
 		}
 	}
-
-	col.cpu.FlushHead()
-	col.ioRead.FlushHead()
-	col.ioWrite.FlushHead()
-	col.ioReadBytes.FlushHead()
-	col.ioWriteBytes.FlushHead()
-	col.ctx_switch_voluntary.FlushHead()
-	col.ctx_switch_involuntary.FlushHead()
-	col.net.FlushHead()
 }
 
-func (col *PsutilProcessCollector) safeUpdate(update func()) {
-	col.updateLock.Lock()
-	defer col.updateLock.Unlock()
-	update()
+func (col *PsutilProcessCollector) readNumProc() sample.Value {
+	return sample.Value(len(col.pids))
+}
+
+func (col *PsutilProcessCollector) readCpu() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.cpu.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readIoRead() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.ioRead.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readIoWrite() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.ioWrite.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readIo() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.ioTotal.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readBytesRead() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.ioReadBytes.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readBytesWrite() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.ioWriteBytes.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readBytes() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.ioBytesTotal.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readCtxSwitchVoluntary() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.ctxSwitchVoluntary.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readCtxSwitchInvoluntary() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.ctxSwitchInvoluntary.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readCtxSwitch() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.ctxSwitchInvoluntary.GetDiff())
+		res += sample.Value(proc.ctxSwitchVoluntary.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readMemRss() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.mem_rss)
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readMemVms() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.mem_vms)
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readMemSwap() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.mem_swap)
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readFds() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.numFds)
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readThreads() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.numThreads)
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readNetBytes() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.net.bytes.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readNetPackets() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.net.packets.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readNetRxBytes() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.net.rx_bytes.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readNetRxPackets() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.net.rx_packets.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readNetTxBytes() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.net.tx_bytes.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readNetTxPackets() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.net.tx_packets.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readNetErrors() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.net.errors.GetDiff())
+	}
+	return
+}
+
+func (col *PsutilProcessCollector) readNetDropped() (res sample.Value) {
+	for _, proc := range col.pids {
+		res += sample.Value(proc.net.dropped.GetDiff())
+	}
+	return
 }
 
 type SingleProcessCollector struct {
-	*PsutilProcessCollector
+	parent *PsutilProcessCollector
 	*process.Process
 	tasks CollectorTasks
+
+	updateLock           sync.Mutex
+	cpu                  *ValueRing
+	ioRead               *ValueRing
+	ioWrite              *ValueRing
+	ioTotal              *ValueRing
+	ioReadBytes          *ValueRing
+	ioWriteBytes         *ValueRing
+	ioBytesTotal         *ValueRing
+	ctxSwitchVoluntary   *ValueRing
+	ctxSwitchInvoluntary *ValueRing
+	net                  netIoCounters
+	mem_rss              uint64
+	mem_vms              uint64
+	mem_swap             uint64
+	numFds               int32
+	numThreads           int32
 }
 
-func MakeProcessCollector(collector *PsutilProcessCollector, proc *process.Process) *SingleProcessCollector {
+func (collector *PsutilProcessCollector) MakeProcessCollector(proc *process.Process, factory *ValueRingFactory) *SingleProcessCollector {
 	col := &SingleProcessCollector{
-		PsutilProcessCollector: collector,
-		Process:                proc,
+		parent:  collector,
+		Process: proc,
+
+		cpu:                  factory.NewValueRing(),
+		ioRead:               factory.NewValueRing(),
+		ioWrite:              factory.NewValueRing(),
+		ioTotal:              factory.NewValueRing(),
+		ioReadBytes:          factory.NewValueRing(),
+		ioWriteBytes:         factory.NewValueRing(),
+		ioBytesTotal:         factory.NewValueRing(),
+		ctxSwitchVoluntary:   factory.NewValueRing(),
+		ctxSwitchInvoluntary: factory.NewValueRing(),
+		net:                  NewNetIoCounters(factory),
 	}
 	col.tasks = CollectorTasks{
 		col.updateCpu,
@@ -922,10 +1087,8 @@ func (col *SingleProcessCollector) updateCpu() error {
 	if cpu, err := col.Times(); err != nil {
 		return fmt.Errorf("Failed to get CPU info: %v", err)
 	} else {
-		busy := (cpu.Total() - cpu.Idle) * col.cpu_factor
-		col.safeUpdate(func() {
-			col.cpu.AddToHead(StoredValue(busy))
-		})
+		busy := (cpu.Total() - cpu.Idle) * col.parent.cpu_factor
+		col.cpu.Add(StoredValue(busy))
 	}
 	return nil
 }
@@ -934,14 +1097,12 @@ func (col *SingleProcessCollector) updateDisk() error {
 	if io, err := col.IOCounters(); err != nil {
 		return fmt.Errorf("Failed to get disk-IO info: %v", err)
 	} else {
-		col.safeUpdate(func() {
-			col.ioRead.AddToHead(StoredValue(io.ReadCount))
-			col.ioWrite.AddToHead(StoredValue(io.WriteCount))
-			col.ioTotal.AddToHead(StoredValue(io.ReadCount + io.WriteCount))
-			col.ioReadBytes.AddToHead(StoredValue(io.ReadBytes))
-			col.ioWriteBytes.AddToHead(StoredValue(io.WriteBytes))
-			col.ioBytesTotal.AddToHead(StoredValue(io.ReadBytes + io.WriteBytes))
-		})
+		col.ioRead.Add(StoredValue(io.ReadCount))
+		col.ioWrite.Add(StoredValue(io.WriteCount))
+		col.ioTotal.Add(StoredValue(io.ReadCount + io.WriteCount))
+		col.ioReadBytes.Add(StoredValue(io.ReadBytes))
+		col.ioWriteBytes.Add(StoredValue(io.WriteBytes))
+		col.ioBytesTotal.Add(StoredValue(io.ReadBytes + io.WriteBytes))
 	}
 	return nil
 }
@@ -951,11 +1112,9 @@ func (col *SingleProcessCollector) updateMemory() error {
 	if mem, err := col.MemoryInfo(); err != nil {
 		return fmt.Errorf("Failed to get memory info: %v", err)
 	} else {
-		col.safeUpdate(func() {
-			col.mem_rss += mem.RSS
-			col.mem_vms += mem.VMS
-			col.mem_swap += mem.Swap
-		})
+		col.mem_rss = mem.RSS
+		col.mem_vms = mem.VMS
+		col.mem_swap = mem.Swap
 	}
 	return nil
 }
@@ -968,9 +1127,7 @@ func (col *SingleProcessCollector) updateNet() error {
 		if len(counters) != 1 {
 			return fmt.Errorf("gopsutil/process/Process.NetIOCounters() returned %v NetIOCountersStat instead of %v", len(counters), 1)
 		}
-		col.safeUpdate(func() {
-			col.net.AddToHead(&counters[0])
-		})
+		col.net.Add(&counters[0])
 	}
 	return nil
 }
@@ -980,9 +1137,7 @@ func (col *SingleProcessCollector) updateOpenFiles() error {
 	if num, err := col.procNumFds(); err != nil {
 		return fmt.Errorf("Failed to get number of open files: %v", err)
 	} else {
-		col.safeUpdate(func() {
-			col.numFds += num
-		})
+		col.numFds = num
 	}
 	return nil
 }
@@ -992,11 +1147,9 @@ func (col *SingleProcessCollector) updateMisc() error {
 	if numThreads, ctxSwitches, err := col.procGetMisc(); err != nil {
 		return fmt.Errorf("Failed to get number of threads/ctx-switches: %v", err)
 	} else {
-		col.safeUpdate(func() {
-			col.numThreads += numThreads
-			col.ctx_switch_voluntary.AddToHead(StoredValue(ctxSwitches.Voluntary))
-			col.ctx_switch_involuntary.AddToHead(StoredValue(ctxSwitches.Involuntary))
-		})
+		col.numThreads = numThreads
+		col.ctxSwitchVoluntary.Add(StoredValue(ctxSwitches.Voluntary))
+		col.ctxSwitchInvoluntary.Add(StoredValue(ctxSwitches.Involuntary))
 	}
 	return nil
 }
@@ -1061,28 +1214,4 @@ func (col *SingleProcessCollector) procGetMisc() (numThreads int32, numCtxSwitch
 		}
 	}
 	return
-}
-
-func (col *PsutilProcessCollector) readNumProc() sample.Value {
-	return sample.Value(len(col.pids))
-}
-
-func (col *PsutilProcessCollector) readMemRss() sample.Value {
-	return sample.Value(col.mem_rss)
-}
-
-func (col *PsutilProcessCollector) readMemVms() sample.Value {
-	return sample.Value(col.mem_vms)
-}
-
-func (col *PsutilProcessCollector) readMemSwap() sample.Value {
-	return sample.Value(col.mem_swap)
-}
-
-func (col *PsutilProcessCollector) readFds() sample.Value {
-	return sample.Value(col.numFds)
-}
-
-func (col *PsutilProcessCollector) readThreads() sample.Value {
-	return sample.Value(col.numThreads)
 }

@@ -14,11 +14,10 @@ type ValueRingFactory struct {
 	Interval time.Duration
 }
 
-func (factory *ValueRingFactory) NewValueRing() ValueRing {
-	return ValueRing{
+func (factory *ValueRingFactory) NewValueRing() *ValueRing {
+	return &ValueRing{
 		values:   make([]TimedValue, factory.Length),
 		interval: factory.Interval,
-		lock:     new(sync.Mutex),
 	}
 }
 
@@ -31,7 +30,7 @@ type ValueRing struct {
 	previousDiff sample.Value
 
 	// Serializes GetDiff() and FlushHead()
-	lock *sync.Mutex
+	lock sync.Mutex
 }
 
 type LogbackValue interface {

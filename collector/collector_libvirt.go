@@ -253,7 +253,7 @@ type vmMetricsReader interface {
 // ==================== General VM info ====================
 type vmGeneralReader struct {
 	info libvirt.VirDomainInfo
-	cpu  ValueRing
+	cpu  *ValueRing
 }
 
 func NewVmGeneralReader(factory *ValueRingFactory) *vmGeneralReader {
@@ -389,10 +389,10 @@ const (
 )
 
 type cpuStatReader struct {
-	cpu_total  ValueRing
-	cpu_system ValueRing
-	cpu_user   ValueRing
-	cpu_virt   ValueRing
+	cpu_total  *ValueRing
+	cpu_system *ValueRing
+	cpu_user   *ValueRing
+	cpu_virt   *ValueRing
 }
 
 func NewCpuStatReader(factory *ValueRingFactory) *cpuStatReader {

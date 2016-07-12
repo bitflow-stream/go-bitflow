@@ -19,7 +19,7 @@ func RegisterMockCollector(factory *ValueRingFactory) {
 type MockCollector struct {
 	AbstractCollector
 	val       sample.Value
-	ring      ValueRing
+	ring      *ValueRing
 	startOnce sync.Once
 }
 

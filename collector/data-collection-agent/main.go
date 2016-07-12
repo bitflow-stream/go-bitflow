@@ -82,7 +82,7 @@ func do_main() int {
 	// ====== Configure collectors
 	valueFactory.Length = int(valueFactory.Interval/collect_local_interval) * 3 // Make sure enough samples can be buffered
 	collector.RegisterMockCollector(&valueFactory)
-	collector.RegisterPsutilCollectors(&valueFactory)
+	collector.RegisterPsutilCollectors(collect_local_interval*3/2, &valueFactory) // Update PIDs more often then metrics
 	collector.RegisterLibvirtCollector(libvirt_uri, &valueFactory)
 	collector.RegisterOvsdbCollector(ovsdb_host, &valueFactory)
 	if len(proc_collectors) > 0 || len(proc_collector_regex) > 0 {
@@ -104,6 +104,7 @@ func do_main() int {
 				GroupName:         key,
 				PrintErrors:       proc_show_errors,
 				PidUpdateInterval: proc_update_pids,
+				Factory:           &valueFactory,
 			})
 		}
 	}

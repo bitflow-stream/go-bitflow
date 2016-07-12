@@ -244,7 +244,7 @@ func (source *CollectorSource) watchFailedCollector(wg *sync.WaitGroup, collecto
 			return
 		}
 		if err := source.initCollector(collector); err == nil {
-			log.Println("Collector", collector, "is not failing anymore. Restarting metric collection.")
+			log.Warnln("Collector", collector, "is not failing anymore. Restarting metric collection.")
 			stopper.Stop()
 			return
 		}
@@ -255,7 +255,7 @@ func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header sample.Hea
 	defer wg.Done()
 	for {
 		if err := sink.Header(header); err != nil {
-			log.Warnf("Failed to sink header for %v metrics: %v", len(header.Fields), err)
+			log.Warnln("Failed to sink header for", len(header.Fields), "metrics:", err)
 		} else {
 			if stopper.IsStopped() {
 				return
@@ -270,7 +270,7 @@ func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header sample.Hea
 				}
 				if err := sink.Sample(sample, header); err != nil {
 					// When a sample fails, try sending the header again
-					log.Warnf("Failed to sink %v metrics: %v", len(values), err)
+					log.Warnln("Failed to sink", len(values), "metrics:", err)
 					break
 				}
 				if stopper.Stopped(source.SinkInterval) {
