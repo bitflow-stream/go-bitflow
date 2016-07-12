@@ -37,6 +37,7 @@ var (
 var (
 	includeMetricsRegexes []*regexp.Regexp
 	excludeMetricsRegexes = []*regexp.Regexp{
+		regexp.MustCompile("^mock$"),
 		regexp.MustCompile("^net-proto/(UdpLite|IcmpMsg)"),                         // Some extended protocol-metrics
 		regexp.MustCompile("^disk-io/...[0-9]"),                                    // Disk IO for specific partitions
 		regexp.MustCompile("^disk-usage//.+/(used|free)$"),                         // All partitions except root
@@ -75,6 +76,7 @@ func do_main() int {
 	defer golib.ProfileCpu()()
 
 	// ====== Configure collectors
+	collector.RegisterMockCollector()
 	collector.RegisterPsutilCollectors()
 	collector.RegisterLibvirtCollector(libvirt_uri)
 	collector.RegisterOvsdbCollector(ovsdb_host)
