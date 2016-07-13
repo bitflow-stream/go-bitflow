@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -41,12 +40,7 @@ func (m *TextMarshaller) WriteSample(sample Sample, header Header, writer io.Wri
 	}
 	headerStr := sample.Time.Format(text_date_format)
 	if header.HasTags {
-		var b bytes.Buffer
-		b.WriteString(headerStr)
-		b.WriteString(" (")
-		b.WriteString(sample.TagString())
-		b.WriteString(")")
-		headerStr = b.String()
+		headerStr = fmt.Sprintf("%s (%s)", headerStr, sample.TagString())
 	}
 	lines := make([]string, 0, len(sample.Values))
 	for i, value := range sample.Values {
@@ -66,7 +60,7 @@ func (m *TextMarshaller) calculateWidths(lines []string, writer io.Writer) (text
 		spacing = text_marshaller_default_spacing
 	}
 	if m.Columns > 0 {
-		columnWidths = m.columnWidths(lines, m.Columns, spacing)
+		columnWidths = m.fixedColumnWidths(lines, m.Columns, spacing)
 		for _, width := range columnWidths {
 			textWidth += width
 		}
@@ -76,8 +70,19 @@ func (m *TextMarshaller) calculateWidths(lines []string, writer io.Writer) (text
 		} else {
 			textWidth = m.defaultTextWidth(writer)
 		}
-		columns := m.numberOfColumns(lines, textWidth, spacing)
-		columnWidths = m.columnWidths(lines, columns, spacing)
+		columnWidths = m.variableColumnWidths(lines, textWidth, spacing)
+	}
+	return
+}
+
+func (m *TextMarshaller) fixedColumnWidths(lines []string, columns int, spacing int) (widths []int) {
+	widths = make([]int, columns)
+	for i, line := range lines {
+		col := i % columns
+		length := len(line) + spacing
+		if widths[col] < length {
+			widths[col] = length
+		}
 	}
 	return
 }
@@ -98,39 +103,31 @@ func (m *TextMarshaller) defaultTextWidth(writer io.Writer) int {
 	}
 }
 
-func (m *TextMarshaller) numberOfColumns(lines []string, textWidth int, spacing int) int {
-	columns := len(lines)
-	columnCounter := 0
-	width := 0
-	for _, line := range lines {
+func (m *TextMarshaller) variableColumnWidths(strings []string, textWidth int, spacing int) []int {
+	columns := make([]int, len(strings))
+	strLengths := make([]int, len(strings))
+	for i, line := range strings {
 		length := len(line) + spacing
-		if width+length > textWidth {
-			if columns > columnCounter {
-				columns = columnCounter
-				if columns <= 1 {
-					break
-				}
+		columns[i] = length
+		strLengths[i] = length
+	}
+	for len(columns) > 1 {
+		columns = columns[:len(columns)-1]
+		for i, strLen := range strLengths {
+			col := i % len(columns)
+			if columns[col] < strLen {
+				columns[col] = strLen
 			}
-			width = length
-			columnCounter = 1
-		} else {
-			width += length
-			columnCounter++
+		}
+		lineLen := 0
+		for _, strLen := range columns {
+			lineLen += strLen
+		}
+		if lineLen <= textWidth {
+			break
 		}
 	}
 	return columns
-}
-
-func (m *TextMarshaller) columnWidths(lines []string, columns int, spacing int) (widths []int) {
-	widths = make([]int, columns)
-	for i, line := range lines {
-		col := i % columns
-		length := len(line) + spacing
-		if widths[col] < length {
-			widths[col] = length
-		}
-	}
-	return
 }
 
 func (m *TextMarshaller) writeHeader(header string, textWidth int, writer io.Writer) {
