@@ -15,6 +15,7 @@ import (
 	"unsafe"
 
 	"github.com/shirou/gopsutil/internal/common"
+	"github.com/shirou/gopsutil/process"
 )
 
 // from utmpx.h
@@ -37,6 +38,7 @@ func Info() (*InfoStat, error) {
 		ret.PlatformFamily = family
 		ret.PlatformVersion = version
 	}
+
 	system, role, err := Virtualization()
 	if err == nil {
 		ret.VirtualizationSystem = system
@@ -47,6 +49,11 @@ func Info() (*InfoStat, error) {
 	if err == nil {
 		ret.BootTime = boot
 		ret.Uptime = uptime(boot)
+	}
+
+	procs, err := process.Pids()
+	if err == nil {
+		ret.Procs = uint64(len(procs))
 	}
 
 	return ret, nil
@@ -131,12 +138,12 @@ func PlatformInformation() (string, string, string, error) {
 	if err != nil {
 		return "", "", "", err
 	}
-	out, err := exec.Command(uname, "-s").Output()
+	out, err := invoke.Command(uname, "-s")
 	if err == nil {
 		platform = strings.ToLower(strings.TrimSpace(string(out)))
 	}
 
-	out, err = exec.Command(uname, "-r").Output()
+	out, err = invoke.Command(uname, "-r")
 	if err == nil {
 		version = strings.ToLower(strings.TrimSpace(string(out)))
 	}

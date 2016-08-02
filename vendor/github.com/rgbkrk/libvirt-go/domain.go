@@ -337,7 +337,10 @@ func (d *VirDomain) GetInterfaceParameters(device string, params *VirTypedParame
 		cParams = nil
 	}
 
-	result := int(C.virDomainGetInterfaceParameters(d.ptr, C.CString(device), (C.virTypedParameterPtr)(cParams), (*C.int)(unsafe.Pointer(nParams)), C.uint(flags)))
+	cDevice := C.CString(device)
+	defer C.free(unsafe.Pointer(cDevice))
+	result := int(C.virDomainGetInterfaceParameters(d.ptr, cDevice,
+		(C.virTypedParameterPtr)(cParams), (*C.int)(unsafe.Pointer(nParams)), C.uint(flags)))
 	if result == -1 {
 		return result, GetLastError()
 	}
@@ -516,6 +519,16 @@ func (d *VirDomain) DetachDeviceFlags(xml string, flags uint) error {
 	cXml := C.CString(xml)
 	defer C.free(unsafe.Pointer(cXml))
 	result := C.virDomainDetachDeviceFlags(d.ptr, cXml, C.uint(flags))
+	if result == -1 {
+		return GetLastError()
+	}
+	return nil
+}
+
+func (d *VirDomain) UpdateDeviceFlags(xml string, flags uint) error {
+	cXml := C.CString(xml)
+	defer C.free(unsafe.Pointer(cXml))
+	result := C.virDomainUpdateDeviceFlags(d.ptr, cXml, C.uint(flags))
 	if result == -1 {
 		return GetLastError()
 	}

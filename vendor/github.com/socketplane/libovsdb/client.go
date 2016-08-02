@@ -10,6 +10,7 @@ import (
 
 	"github.com/cenk/rpc2"
 	"github.com/cenk/rpc2/jsonrpc"
+	"os"
 )
 
 // OvsdbClient is an OVSDB client
@@ -41,18 +42,9 @@ const DefaultAddress = "127.0.0.1"
 // DefaultPort is the default port used for a connection
 const DefaultPort = 6640
 
-// Connect creates an OVSDB connection and returns and OvsdbClient
-func Connect(ipAddr string, port int) (*OvsdbClient, error) {
-	if ipAddr == "" {
-		ipAddr = DefaultAddress
-	}
-
-	if port <= 0 {
-		port = DefaultPort
-	}
-
-	target := fmt.Sprintf("%s:%d", ipAddr, port)
-	conn, err := net.Dial("tcp", target)
+// ConnectUsingProtocol creates an OVSDB connection and returns and OvsdbClient
+func ConnectUsingProtocol(protocol string, target string) (*OvsdbClient, error) {
+	conn, err := net.Dial(protocol, target)
 
 	if err != nil {
 		return nil, err
@@ -79,6 +71,30 @@ func Connect(ipAddr string, port int) (*OvsdbClient, error) {
 		}
 	}
 	return ovs, nil
+}
+
+// Connect creates an OVSDB connection and returns and OvsdbClient
+func Connect(ipAddr string, port int) (*OvsdbClient, error) {
+	if ipAddr == "" {
+		ipAddr = DefaultAddress
+	}
+
+	if port <= 0 {
+		port = DefaultPort
+	}
+
+	target := fmt.Sprintf("%s:%d", ipAddr, port)
+	return ConnectUsingProtocol("tcp", target)
+}
+
+// ConnectWithUnixSocket makes a OVSDB Connection via a Unix Socket
+func ConnectWithUnixSocket(socketFile string) (*OvsdbClient, error) {
+
+	if _, err := os.Stat(socketFile); os.IsNotExist(err) {
+		return nil, errors.New("Invalid socket file")
+	}
+
+	return ConnectUsingProtocol("unix", socketFile)
 }
 
 // Register registers the supplied NotificationHandler to recieve OVSDB Notifications

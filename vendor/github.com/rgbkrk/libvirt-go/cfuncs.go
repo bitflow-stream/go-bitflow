@@ -1,12 +1,7 @@
 package libvirt
 
 /*
- * Golang 1.6 doesn't support C pointers to go memory.
- * A hacky-solution might be some multi-threaded approach to support domain events, but let's make it work
- * without domain events for now.
- */
-
-/*
+#cgo CFLAGS: -Wno-implicit-function-declaration
 #cgo LDFLAGS: -lvirt
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
@@ -96,14 +91,32 @@ int domainEventDeviceRemovedCallback_cgo(virConnectPtr c, virDomainPtr d,
 }
 
 void freeGoCallback_cgo(void* goCallbackId) {
-   freeCallbackId((size_t)goCallbackId);
+   freeCallbackId((long)goCallbackId);
 }
 
 int virConnectDomainEventRegisterAny_cgo(virConnectPtr c,  virDomainPtr d,
-						                             int eventID, virConnectDomainEventGenericCallback cb,
-                                         int goCallbackId) {
-    void* id = (void*)0 + goCallbackId; // Hack to silence the warning
+                                         int eventID, virConnectDomainEventGenericCallback cb,
+                                         long goCallbackId) {
+    void* id = (void*)goCallbackId;
     return virConnectDomainEventRegisterAny(c, d, eventID, cb, id, freeGoCallback_cgo);
 }
+
+void errorGlobalCallback_cgo(void *userData, virErrorPtr error)
+{
+    globalErrorCallback(error);
+}
+
+void errorConnCallback_cgo(void *userData, virErrorPtr error)
+{
+    connErrorCallback((long)userData, error);
+}
+
+void virConnSetErrorFunc_cgo(virConnectPtr c, long goCallbackId, virErrorFunc cb)
+{
+    void* id = (void*)goCallbackId;
+    virConnSetErrorFunc(c, id, cb);
+}
+
+
 */
 import "C"
