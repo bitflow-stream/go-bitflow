@@ -11,6 +11,7 @@ import (
 
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/golib"
 )
 
 const host_tag = "host"
@@ -18,6 +19,9 @@ const host_tag = "host"
 var (
 	host_sorter = &SampleSorter{[]string{host_tag}}
 	host_tagger = &SampleTagger{SourceTags: []string{host_tag}, DontOverwrite: true}
+
+	metric_filter_include golib.StringSlice
+	metric_filter_exclude golib.StringSlice
 )
 
 func init() {
@@ -34,6 +38,10 @@ func init() {
 
 	RegisterAnalysis("merge_hosts", host_tagger, merge_hosts)
 	RegisterAnalysis("pick_10percent", nil, pick_10percent)
+
+	RegisterAnalysis("filter_metrics", nil, filter_metrics)
+	flag.Var(&metric_filter_include, "metrics_include", "Include regex used with '-e filter_metrics'")
+	flag.Var(&metric_filter_exclude, "metrics_exclude", "Exclude regex used with '-e filter_metrics'")
 }
 
 func prepare_training_data_shuffled(p *sample.CmdSamplePipeline) {
@@ -102,4 +110,15 @@ func pick_10percent(p *sample.CmdSamplePipeline) {
 			return rand.Int63()%10 == 0
 		},
 	})
+}
+
+func filter_metrics(p *sample.CmdSamplePipeline) {
+	filter := NewMetricFilter()
+	for _, include := range metric_filter_include {
+		filter.IncludeRegex(include)
+	}
+	for _, exclude := range metric_filter_exclude {
+		filter.ExcludeRegex(exclude)
+	}
+	p.Add(filter)
 }
