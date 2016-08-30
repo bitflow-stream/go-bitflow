@@ -179,17 +179,24 @@ type BufferedSample struct {
 }
 
 func (sample *BufferedSample) WaitDone() error {
-	if sample.stream.HasError() {
-		return sample.stream.err
-	}
+	// TODO the flushing routing (for both Reader and Writer) should finish
+	// all its buffered samples, regardless if there was an error elsewhere.
+	// Should be tested for all transports (TCP, file, console, ...)
+	/*
+		if sample.stream.HasError() {
+			return sample.stream.err
+		}
+	*/
 	sample.doneCond.L.Lock()
 	defer sample.doneCond.L.Unlock()
 	for !sample.done && !sample.stream.HasError() {
 		sample.doneCond.Wait()
 	}
-	if sample.stream.HasError() {
-		return sample.stream.err
-	}
+	/*
+		if sample.stream.HasError() {
+			return sample.stream.err
+		}
+	*/
 	return nil
 }
 

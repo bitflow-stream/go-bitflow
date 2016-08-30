@@ -203,11 +203,16 @@ func (stream *SampleInputStream) parseSamples(source string) {
 
 func (stream *SampleInputStream) parseOne(source string, sample *BufferedSample) {
 	defer sample.NotifyDone()
-	if stream.HasError() {
-		return
-	}
+	// TODO See BufferedSample.WaitDone()
+	/*
+		if stream.HasError() {
+			return
+		}
+	*/
 	if parsedSample, err := stream.um.ParseSample(stream.header, sample.data); err != nil {
-		stream.err = err
+		if !stream.HasError() {
+			stream.err = err
+		}
 		return
 	} else {
 		if handler := stream.sampleReader.Handler; handler != nil {

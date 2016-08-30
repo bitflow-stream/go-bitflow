@@ -142,11 +142,16 @@ func (stream *SampleOutputStream) marshall() {
 
 func (stream *SampleOutputStream) marshallOne(sample *BufferedSample) {
 	defer sample.NotifyDone()
-	if stream.HasError() {
-		return
-	}
+	// TODO See BufferedSample.WaitDone()
+	/*
+		if stream.HasError() {
+			return
+		}
+	*/
 	if stream.header == nil {
-		stream.err = errors.New("Cannot write Sample before a Header")
+		if !stream.HasError() {
+			stream.err = errors.New("Cannot write Sample before a Header")
+		}
 		return
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, stream.marshallBuffer))

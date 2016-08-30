@@ -113,6 +113,7 @@ type FileSource struct {
 	AbstractMetricSource
 	Reader          SampleReader
 	Filenames       []string
+	Robust          bool // Set to true to only print Warnings when reading a file fails
 	IoBuffer        int
 	ConvertFilename func(string) string // Optional hook for converting the filename to some other string
 	stream          *SampleInputStream
@@ -193,7 +194,12 @@ func (source *FileSource) readFiles(wg *sync.WaitGroup, files []string) error {
 		if isFileClosedError(err) || err == fileSourceClosed {
 			return nil
 		} else if err != nil {
-			return err
+			if source.Robust {
+				log.WithFields(log.Fields{"file": filename}).Warnln("Error reading file:", err)
+				return nil
+			} else {
+				return err
+			}
 		}
 	}
 	return nil

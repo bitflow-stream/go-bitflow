@@ -77,6 +77,7 @@ type CmdSamplePipeline struct {
 	tcp_conn_limit         uint
 	tcp_listen_limit       uint
 	tcp_drop_active_errors bool
+	robust_files           bool
 	handler                ParallelSampleHandler
 	io_buf                 int
 }
@@ -92,7 +93,8 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.Var(&fileRegexValue{p}, "FR", "File Regex: Input files matching regex, previous -F parameter is used as start directory")
 	flag.UintVar(&p.tcp_listen_limit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
 	flag.UintVar(&p.tcp_conn_limit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
-	flag.BoolVar(&p.tcp_drop_active_errors, "tcp_drop_err", false, "Dont print errors when establishing actie TCP connection (for sink/source) fails.")
+	flag.BoolVar(&p.tcp_drop_active_errors, "tcp_drop_err", false, "Don't print errors when establishing actie TCP connection (for sink/source) fails")
+	flag.BoolVar(&p.robust_files, "robust", false, "Only print warnings for errors when reading files")
 
 	flag.IntVar(&p.handler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
 	flag.IntVar(&p.handler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling.")
@@ -169,7 +171,12 @@ func (p *CmdSamplePipeline) Init() {
 		p.SetSource(source)
 	}
 	if len(p.read_files) > 0 {
-		p.SetSource(&FileSource{Filenames: p.read_files, Reader: reader, IoBuffer: p.io_buf})
+		p.SetSource(&FileSource{
+			Filenames: p.read_files,
+			Reader:    reader,
+			IoBuffer:  p.io_buf,
+			Robust:    p.robust_files,
+		})
 	}
 	if p.Source == nil {
 		log.Warnln("No data source provided, no data will be received or generated.")
