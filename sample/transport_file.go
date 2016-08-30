@@ -191,12 +191,14 @@ func (source *FileSource) readFiles(wg *sync.WaitGroup, files []string) error {
 	defer source.closed.EnableOnly()
 	for _, filename := range files {
 		err := source.readFile(filename)
-		if isFileClosedError(err) || err == fileSourceClosed {
+		if err == fileSourceClosed {
 			return nil
+		} else if isFileClosedError(err) {
+			continue
 		} else if err != nil {
 			if source.Robust {
 				log.WithFields(log.Fields{"file": filename}).Warnln("Error reading file:", err)
-				return nil
+				continue
 			} else {
 				return err
 			}
