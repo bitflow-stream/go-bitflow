@@ -42,6 +42,8 @@ func init() {
 	RegisterAnalysis("filter_metrics", nil, filter_metrics)
 	flag.Var(&metric_filter_include, "metrics_include", "Include regex used with '-e filter_metrics'")
 	flag.Var(&metric_filter_exclude, "metrics_exclude", "Exclude regex used with '-e filter_metrics'")
+
+	RegisterAnalysis("merge_headers", nil, merge_headers)
 }
 
 func prepare_training_data_shuffled(p *sample.CmdSamplePipeline) {
@@ -121,4 +123,8 @@ func filter_metrics(p *sample.CmdSamplePipeline) {
 		filter.ExcludeRegex(exclude)
 	}
 	p.Add(filter)
+}
+
+func merge_headers(p *sample.CmdSamplePipeline) {
+	p.Add(NewMultiHeaderMerger())
 }
