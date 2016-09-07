@@ -3,7 +3,6 @@ package sample
 import (
 	"errors"
 	"flag"
-	"os"
 	"runtime"
 	"time"
 
@@ -17,16 +16,6 @@ const (
 	input_formats               = "(a=auto, c=CSV, b=binary)"
 	output_formats              = "(t=text, c=CSV, b=binary)"
 )
-
-func init() {
-	// Configure logging output
-	log.SetOutput(os.Stderr)
-	log.SetFormatter(&log.TextFormatter{
-		FullTimestamp:   true,
-		TimestampFormat: time.StampMilli,
-	})
-	golib.Log = log.StandardLogger()
-}
 
 func marshaller(format string) Marshaller {
 	switch format {
@@ -143,6 +132,7 @@ func (p *CmdSamplePipeline) SetSource(source MetricSource) {
 
 // Must be called before accessing p.Tasks and calling p.StartAndWait()
 func (p *CmdSamplePipeline) Init() {
+	ConfigureLogging()
 	p.Tasks = golib.NewTaskGroup()
 
 	// ====== Initialize source(s)
