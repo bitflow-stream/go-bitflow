@@ -38,13 +38,15 @@ func (p *AbstractProcessor) Sample(sample sample.Sample, header sample.Header) e
 }
 
 func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
+	// Chan buffer of 2 makes sure the Processor can report an error and then
+	// call AbstractProcessor.CloseSink() without worrying if the error has been reported previously or not.
 	p.stopChan = make(chan error, 2)
 	return p.stopChan
 }
 
 func (p *AbstractProcessor) CloseSink(wg *sync.WaitGroup) {
 	if c := p.stopChan; c != nil {
-		// If there was no error, make sure the channel still returns something.
+		// If there was no error, make sure the channel still returns something to signal that this task is done.
 		c <- nil
 		p.stopChan = nil
 	}

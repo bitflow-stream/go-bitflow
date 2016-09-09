@@ -65,25 +65,24 @@ func (p *BatchProcessor) Close() {
 		log.Warnln(p.String(), "has no samples stored")
 		return
 	}
-	p.executeSteps()
-	log.Println("Flushing", len(p.samples), "batched samples")
-	if err := p.OutgoingSink.Header(*p.header); err != nil {
-		err = fmt.Errorf("Error flushing batch header: %v", err)
-		log.Errorln(err)
+	if err := p.executeSteps(); err != nil {
 		p.Error(err)
-		return
-	}
-	for _, sample := range p.samples {
-		if err := p.OutgoingSink.Sample(*sample, *p.header); err != nil {
-			err = fmt.Errorf("Error flushing batch: %v", err)
-			log.Errorln(err)
-			p.Error(err)
+	} else {
+		log.Println("Flushing", len(p.samples), "batched samples")
+		if err := p.OutgoingSink.Header(*p.header); err != nil {
+			p.Error(fmt.Errorf("Error flushing batch header: %v", err))
 			return
+		}
+		for _, sample := range p.samples {
+			if err := p.OutgoingSink.Sample(*sample, *p.header); err != nil {
+				p.Error(fmt.Errorf("Error flushing batch: %v", err))
+				return
+			}
 		}
 	}
 }
 
-func (p *BatchProcessor) executeSteps() {
+func (p *BatchProcessor) executeSteps() error {
 	if len(p.Steps) > 0 {
 		log.Println("Executing", len(p.Steps), "batch processing step(s)")
 		for _, step := range p.Steps {
@@ -91,11 +90,14 @@ func (p *BatchProcessor) executeSteps() {
 			var err error
 			p.header, p.samples, err = step.ProcessBatch(p.header, p.samples)
 			if err != nil {
-				p.Error(err)
-				return
+				return err
 			}
 		}
+		if p.header == nil {
+			return fmt.Errorf("Cannot flush %v samples because no valid header was returned by last batch processing step", len(p.samples))
+		}
 	}
+	return nil
 }
 
 func (p *BatchProcessor) String() string {
