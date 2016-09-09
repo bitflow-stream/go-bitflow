@@ -38,6 +38,14 @@
 			"Rev": "5ff69410145cd15bd908cc2ea44c25d061ff4ad8"
 		},
 		{
+			"ImportPath": "github.com/antongulenko/golearn/base",
+			"Rev": "187df4e291f9aad471acfcc16645465c728fea66"
+		},
+		{
+			"ImportPath": "github.com/antongulenko/golearn/linear_models",
+			"Rev": "187df4e291f9aad471acfcc16645465c728fea66"
+		},
+		{
 			"ImportPath": "github.com/antongulenko/golib",
 			"Rev": "5a6d0f3b88f33cf4e35d0149c8f17bda2b2f6df6"
 		},
