@@ -43,10 +43,10 @@ func NewLinearRegression(header *sample.Header, fieldNames []string) (LinearRegr
 
 func (reg *LinearRegression) FormulaString() string {
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "%v = %.6f", reg.Model.Cls.GetName(), reg.Model.Disturbance)
+	fmt.Fprintf(&buf, "%v = %g", reg.Model.Cls.GetName(), reg.Model.Disturbance)
 	coeff := reg.Model.RegressionCoefficients
 	for i, attr := range reg.Model.Attrs {
-		fmt.Fprintf(&buf, " + %.6f %v", coeff[i], attr.GetName())
+		fmt.Fprintf(&buf, " + %g %v", coeff[i], attr.GetName())
 	}
 	return buf.String()
 }
@@ -75,7 +75,7 @@ func (reg *LinearRegression) Predict(data base.FixedDataGrid) ([]float64, error)
 	if err != nil {
 		return nil, err
 	}
-	num, _ := data.Size()
+	_, num := data.Size()
 	res := make([]float64, num)
 	for i := range res {
 		valBytes := prediction.Get(classAttr, i)

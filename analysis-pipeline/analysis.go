@@ -1,103 +1,52 @@
 package main
 
 import (
-	"path/filepath"
 	"strconv"
+
+	log "github.com/Sirupsen/logrus"
 
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/analysis/dbscan"
-	"github.com/antongulenko/data2go/sample"
-	"github.com/mitchellh/go-homedir"
+	"github.com/antongulenko/data2go/analysis/regression"
 )
 
-var setSampleSource = &SampleTagger{SourceTags: []string{SourceTag}, DontOverwrite: true}
-
 func init() {
-	RegisterAnalysis("", setSampleSource, nil)
-	RegisterAnalysis("source", &SampleTagger{SourceTags: []string{SourceTag}, DontOverwrite: false}, nil)
-	RegisterAnalysis("no-source", nil, nil)
-	RegisterAnalysis("x", setSampleSource, handlePipelineGeneric)
+	RegisterAnalysis("dbscan", dbscan_rtree)
+	RegisterAnalysis("dbscan_parallel", dbscan_parallel)
+	RegisterAnalysis("pca", pca_analysis) // param: contained variance 0..1
+	RegisterAnalysis("regression", linear_regression)
+	RegisterAnalysis("regression_brute", linear_regression_bruteforce)
+}
+func linear_regression(p *SamplePipeline, _ string) {
+	p.Batch(&regression.LinearRegressionBatchProcessor{})
 }
 
-// For ad-hoc experiments...
-func handlePipelineGeneric(pipe *sample.CmdSamplePipeline) {
-	// convertFilenames(&pipe.SamplePipeline)
-	// p := &pipe.SamplePipeline
-
-	// p.Add(NewMetricFilter().ExcludeRegex("libvirt|ovsdb")) // .IncludeRegex("cpu|load/|mem/|net-io/|disk-usage///|num_procs"))
-	// filterNoiseClusters(p)
-
-	// dbscanRtreeCluster(p)
-	// dbscanParallelCluster(p)
-	// p.Add(NewMultiHeaderMerger())
-
-	//	p.Add(new(BatchProcessor))
-	// .Add(new(SampleShuffler))
-	// .Add(new(TimestampSort))
-	// .Add(new(MinMaxScaling))
-	// .Add(new(StandardizationScaling))
-	// .Add(&PCABatchProcessing{ContainedVariance: 0.99})
-
-	// p.Add(new(SamplePrinter))
-	// p.Add(new(AbstractProcessor))
-	// p.Add(&DecouplingProcessor{ChannelBuffer: 150000})
-
-	// plots(p, false)
+func linear_regression_bruteforce(p *SamplePipeline, _ string) {
+	p.Batch(&regression.LinearRegressionBruteForce{})
 }
 
-func plots(p *sample.SamplePipeline, separatePlots bool) {
-	home, _ := homedir.Dir()
-	p.Add(&Plotter{OutputFile: home + "/clusters/clusters.jpg", ColorTag: ClusterTag, SeparatePlots: separatePlots})
-	p.Add(&Plotter{OutputFile: home + "/clusters/classes.jpg", ColorTag: ClassTag, SeparatePlots: separatePlots})
-}
-
-func dbscanRtreeCluster(p *sample.SamplePipeline) {
-	p.Add(new(BatchProcessor).Add(new(MinMaxScaling)).Add(
-		&dbscan.DbscanBatchClusterer{
-			Dbscan:          dbscan.Dbscan{Eps: 0.1, MinPts: 5},
-			TreeMinChildren: 25,
-			TreeMaxChildren: 50,
-			TreePointWidth:  0.0001,
-		}))
-}
-
-func dbscanParallelCluster(p *sample.SamplePipeline) {
-	p.Add(new(BatchProcessor).Add(new(MinMaxScaling)).Add(&dbscan.ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5}))
-}
-
-func filterNoiseClusters(p *sample.SamplePipeline) {
-	noise := ClusterName(ClusterNoise)
-	p.Add(&SampleFilter{IncludeFilter: func(s *sample.Sample) bool {
-		return s.Tag(ClusterTag) != noise
-	}})
-}
-
-func convertFilenames(p *sample.SamplePipeline) {
-	if filesource, ok := p.Source.(*sample.FileSource); ok {
-		filesource.ConvertFilename = func(filename string) string {
-			return filepath.Base(filepath.Dir(filepath.Dir(filename)))
+func pca_analysis(pipe *SamplePipeline, params string) {
+	variance := 0.99
+	if params != "" {
+		var err error
+		if variance, err = strconv.ParseFloat(params, 64); err != nil {
+			log.Fatalln("Failed to parse parameter for -e pca:", err)
 		}
+	} else {
+		log.Println("No parameter for -e pca, default contained variance:", variance)
 	}
+	pipe.Batch(&PCABatchProcessing{ContainedVariance: variance})
 }
 
-type SampleTagger struct {
-	SourceTags    []string
-	DontOverwrite bool
+func dbscan_rtree(pipe *SamplePipeline, _ string) {
+	pipe.Batch(&dbscan.DbscanBatchClusterer{
+		Dbscan:          dbscan.Dbscan{Eps: 0.1, MinPts: 5},
+		TreeMinChildren: 25,
+		TreeMaxChildren: 50,
+		TreePointWidth:  0.0001,
+	})
 }
 
-func (h *SampleTagger) HandleHeader(header *sample.Header, source string) {
-	header.HasTags = true
-}
-
-func (h *SampleTagger) HandleSample(sample *sample.Sample, source string) {
-	for _, tag := range h.SourceTags {
-		if h.DontOverwrite {
-			base := tag
-			tag = base
-			for i := 0; sample.HasTag(tag); i++ {
-				tag = base + strconv.Itoa(i)
-			}
-		}
-		sample.SetTag(tag, source)
-	}
+func dbscan_parallel(pipe *SamplePipeline, _ string) {
+	pipe.Batch(&dbscan.ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5})
 }
