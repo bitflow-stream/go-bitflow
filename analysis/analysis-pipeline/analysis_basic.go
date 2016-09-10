@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -34,6 +35,8 @@ func init() {
 
 	RegisterAnalysis("plot", plot)
 	RegisterAnalysis("separate_plots", separate_plots)
+
+	RegisterAnalysis("stats", feature_stats)
 
 	RegisterAnalysis("filter_metrics", filter_metrics)
 	flag.Var(&metric_filter_include, "metrics_include", "Include regex used with '-e filter_metrics'")
@@ -68,6 +71,7 @@ func pick_x_percent(p *SamplePipeline, params string) {
 	}
 	counter := float64(0)
 	p.Add(&SampleFilter{
+		Description: fmt.Sprintf("Pick %.2f%%", pick_percentage*100),
 		IncludeFilter: func(inSample *sample.Sample) bool {
 			counter += pick_percentage
 			if counter > 1.0 {
@@ -106,7 +110,12 @@ func filter_tag(p *SamplePipeline, params string) {
 		}
 	}
 	tag := params[:index]
+	sign := "!="
+	if equals {
+		sign = "=="
+	}
 	p.Add(&SampleFilter{
+		Description: fmt.Sprintf("Filter tag %v %s %v", tag, sign, val),
 		IncludeFilter: func(inSample *sample.Sample) bool {
 			if equals {
 				return inSample.Tag(tag) == val
@@ -149,6 +158,14 @@ func decouple_samples(pipe *SamplePipeline, params string) {
 		log.Println("No parameter for -e decouple, default channel buffer:", buf)
 	}
 	pipe.Add(&DecouplingProcessor{ChannelBuffer: buf})
+}
+
+func feature_stats(pipe *SamplePipeline, params string) {
+	if params == "" {
+		log.Fatalln("-e stats needs parameter: file to store feature statistics")
+	} else {
+		pipe.Add(NewStoreStats(params))
+	}
 }
 
 type SampleTagger struct {
