@@ -5,26 +5,37 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 
+	"github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"
 	"github.com/antongulenko/golib"
 )
 
-// Can be filled from init() functions using RegisterAnalysis()
-var registry = make(map[string]analysis)
+type AnalysisFunc func(pipeline *SamplePipeline, params string)
 
-type analysis struct {
-	SampleHandler sample.ReadSampleHandler
-	SetupPipeline func(*sample.CmdSamplePipeline)
+// Can be filled from init() functions using RegisterAnalysis()
+var analysis_registry = map[string]AnalysisFunc{
+	"": nil,
+}
+var handler_registry = map[string]sample.ReadSampleHandler{
+	"": nil,
 }
 
-func RegisterAnalysis(name string, sampleHandler sample.ReadSampleHandler, setupPipeline func(*sample.CmdSamplePipeline)) {
-	registry[name] = analysis{
-		SampleHandler: sampleHandler,
-		SetupPipeline: setupPipeline,
+func RegisterSampleHandler(name string, sampleHandler sample.ReadSampleHandler) {
+	if _, ok := handler_registry[name]; ok {
+		log.Fatalln("Sample handler already registered:", name)
 	}
+	handler_registry[name] = sampleHandler
+}
+
+func RegisterAnalysis(name string, setupPipeline AnalysisFunc) {
+	if _, ok := analysis_registry[name]; ok {
+		log.Fatalln("Analysis already registered:", name)
+	}
+	analysis_registry[name] = setupPipeline
 }
 
 func main() {
@@ -33,39 +44,53 @@ func main() {
 
 func do_main() int {
 	var analysisNames golib.StringSlice
+	var readSampleHandler string
 	flag.Var(&analysisNames, "e", fmt.Sprintf("Select one or more of the following analysis pipelines to execute: %v", allAnalyses()))
+	flag.StringVar(&readSampleHandler, "h", "", fmt.Sprintf("Select an optional sample handler for handling incoming samples: %v", allHandlers()))
 
-	var p sample.CmdSamplePipeline
+	var p SamplePipeline
 	p.ParseFlags()
 	flag.Parse()
-	analyses := resolvePipeline(&p, analysisNames)
-	if len(analyses) > 0 {
-		// If multiple analyses are selected, use the SampleHandler of the first one
-		p.ReadSampleHandler = analyses[0].SampleHandler
+	analyses := resolvePipeline(analysisNames)
+	handler, ok := handler_registry[readSampleHandler]
+	if !ok {
+		log.Fatalf("Sample handler '%v' not registered. Available: %v", readSampleHandler, allHandlers())
 	}
 	defer golib.ProfileCpu()()
 	p.Init()
 
+	p.ReadSampleHandler = handler
 	for _, analysis := range analyses {
-		if setup := analysis.SetupPipeline; setup != nil {
-			setup(&p)
+		if setup := analysis.setup; setup != nil {
+			setup(&p, analysis.params)
 		}
 	}
 	printPipeline(p.Processors)
 	return p.StartAndWait()
 }
 
-func resolvePipeline(p *sample.CmdSamplePipeline, analysisNames golib.StringSlice) []analysis {
+type parameterizedAnalysis struct {
+	setup  AnalysisFunc
+	params string
+}
+
+func resolvePipeline(analysisNames golib.StringSlice) []parameterizedAnalysis {
 	if len(analysisNames) == 0 {
 		analysisNames = append(analysisNames, "") // The default
 	}
-	result := make([]analysis, len(analysisNames))
+	result := make([]parameterizedAnalysis, len(analysisNames))
 	for i, name := range analysisNames {
-		analysis, ok := registry[name]
+		params := ""
+		if index := strings.IndexRune(name, ','); index >= 0 {
+			full := name
+			name = full[:index]
+			params = name[index+1:]
+		}
+		analysisFunc, ok := analysis_registry[name]
 		if !ok {
 			log.Fatalf("Analysis pipeline '%v' not registered. Available: %v", name, allAnalyses())
 		}
-		result[i] = analysis
+		result[i] = parameterizedAnalysis{analysisFunc, params}
 	}
 	return result
 }
@@ -88,10 +113,41 @@ func printPipeline(p []sample.SampleProcessor) {
 }
 
 func allAnalyses() []string {
-	all := make([]string, 0, len(registry))
-	for name := range registry {
+	all := make([]string, 0, len(analysis_registry))
+	for name := range analysis_registry {
 		all = append(all, name)
 	}
 	sort.Strings(all)
 	return all
+}
+
+func allHandlers() []string {
+	all := make([]string, 0, len(handler_registry))
+	for name := range handler_registry {
+		if name != "" {
+			all = append(all, name)
+		}
+	}
+	sort.Strings(all)
+	return all
+}
+
+type SamplePipeline struct {
+	sample.CmdSamplePipeline
+	batch *analysis.BatchProcessor
+}
+
+func (pipeline *SamplePipeline) Add(step sample.SampleProcessor) *SamplePipeline {
+	pipeline.batch = nil
+	pipeline.CmdSamplePipeline.Add(step)
+	return pipeline
+}
+
+func (pipeline *SamplePipeline) Batch(proc analysis.BatchProcessingStep) *SamplePipeline {
+	if pipeline.batch == nil {
+		pipeline.batch = new(analysis.BatchProcessor)
+		pipeline.CmdSamplePipeline.Add(pipeline.batch)
+	}
+	pipeline.batch.Add(proc)
+	return pipeline
 }

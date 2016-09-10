@@ -12,11 +12,10 @@ import (
 )
 
 type LinearRegressionBatchProcessor struct {
-	Fields []string
 }
 
 func (reg *LinearRegressionBatchProcessor) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
-	regression, err := NewLinearRegression(header, reg.Fields)
+	regression, err := NewLinearRegression(header, header.Fields)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -27,9 +26,11 @@ func (reg *LinearRegressionBatchProcessor) ProcessBatch(header *sample.Header, s
 	if err := regression.Fit(allSamples); err != nil {
 		return nil, nil, err
 	}
-
-	log.Printf("Regression trained, formula: %v", regression.FormulaString())
-
+	if mse, err := regression.MeanSquaredError(regression.TrainData); err != nil {
+		log.Warnln("Failed to evaluate trained regression (%v): %v", regression.FormulaString(), err)
+	} else {
+		log.Printf("Linear Regression MSE %g: %v", mse, regression.FormulaString())
+	}
 	return header, samples, nil
 }
 
@@ -59,7 +60,7 @@ func (brute *LinearRegressionBruteForce) ProcessBatch(header *sample.Header, sam
 		allSamples[i] = *sample
 	}
 
-	num_routines := runtime.NumCPU() * 2
+	num_routines := runtime.NumCPU()
 	var wg sync.WaitGroup
 	wg.Add(num_routines + 1)
 	varCombinations := make(chan []int, num_routines*5)
@@ -76,7 +77,7 @@ func (brute *LinearRegressionBruteForce) ProcessBatch(header *sample.Header, sam
 	resultWg.Wait()
 
 	for _, reg := range brute.results {
-		log.Printf("MSE %.6f: %v", reg.MSE, reg.FormulaString())
+		log.Printf("MSE %g: %v", reg.MSE, reg.FormulaString())
 	}
 	log.Println("Computed", brute.numCombinations, "regressions,", brute.invalidRegressions, "ignored,", len(brute.results), "valid")
 
@@ -122,6 +123,7 @@ func (brute *LinearRegressionBruteForce) computeRegressions(wg *sync.WaitGroup, 
 func (brute *LinearRegressionBruteForce) handleResults(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for result := range brute.resultChan {
+		result.TrainData = nil // Release input data since MSE is already computed
 		brute.results = append(brute.results, result)
 		sort.Sort(brute.results)
 	}
