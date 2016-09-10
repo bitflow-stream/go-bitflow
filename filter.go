@@ -10,6 +10,7 @@ import (
 type AbstractMetricFilter struct {
 	AbstractProcessor
 	IncludeFilter func(name string) bool // Return true if metric should be INcluded
+	Description   fmt.Stringer
 
 	inHeader   sample.Header
 	outHeader  sample.Header
@@ -54,7 +55,11 @@ func (p *AbstractMetricFilter) Sample(inSample sample.Sample, _ sample.Header) e
 }
 
 func (p *AbstractMetricFilter) String() string {
-	return "Generic MetricFilter"
+	if desc := p.Description; desc == nil {
+		return "Generic MetricFilter"
+	} else {
+		return desc.String()
+	}
 }
 
 type MetricFilter struct {
@@ -65,6 +70,7 @@ type MetricFilter struct {
 
 func NewMetricFilter() *MetricFilter {
 	res := new(MetricFilter)
+	res.Description = res
 	res.AbstractMetricFilter.IncludeFilter = res.filter
 	return res
 }
@@ -119,6 +125,7 @@ func (p *MetricFilter) String() string {
 
 type SampleFilter struct {
 	AbstractProcessor
+	Description   string
 	IncludeFilter func(inSample *sample.Sample) bool // Return true if sample should be INcluded
 }
 
@@ -137,5 +144,9 @@ func (p *SampleFilter) Sample(inSample sample.Sample, header sample.Header) erro
 }
 
 func (p *SampleFilter) String() string {
-	return "Sample Filter"
+	if p.Description == "" {
+		return "Sample Filter"
+	} else {
+		return "Sample Filter: " + p.Description
+	}
 }

@@ -84,7 +84,7 @@ func resolvePipeline(analysisNames golib.StringSlice) []parameterizedAnalysis {
 		if index := strings.IndexRune(name, ','); index >= 0 {
 			full := name
 			name = full[:index]
-			params = name[index+1:]
+			params = full[index+1:]
 		}
 		analysisFunc, ok := analysis_registry[name]
 		if !ok {

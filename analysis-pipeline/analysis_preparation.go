@@ -5,8 +5,6 @@ import (
 	"regexp"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
-
 	. "github.com/antongulenko/data2go/analysis"
 	"github.com/antongulenko/data2go/sample"
 )
@@ -14,7 +12,7 @@ import (
 func init() {
 	RegisterSampleHandler("host", &SampleTagger{SourceTags: []string{"host"}, DontOverwrite: true})
 
-	RegisterAnalysis("aggregate_scale", aggregate_and_scale) // Param: file for storing feature stats
+	RegisterAnalysis("aggregate_scale", aggregate_and_scale)
 	RegisterAnalysis("filter_basic", filter_basic)
 	RegisterAnalysis("filter_hypervisor", filter_hypervisor)
 	RegisterAnalysis("merge_hosts", merge_hosts)
@@ -24,11 +22,7 @@ func init() {
 func aggregate_and_scale(p *SamplePipeline, params string) {
 	p.Batch(&SampleSorter{[]string{"host"}})
 	p.Add((&FeatureAggregator{WindowDuration: 10 * time.Second}).AddAvg("_avg").AddSlope("_slope"))
-	if params == "" {
-		log.Warnln("No parameter given to -e aggregate_scale, not storing feature statistics")
-	} else {
-		p.Add(NewStoreStats(params))
-	}
+	// TODO FeatureStats should be taken here
 	p.Batch(new(StandardizationScaling)).Batch(new(SampleShuffler))
 }
 
