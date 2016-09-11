@@ -12,18 +12,16 @@ import (
 func init() {
 	RegisterSampleHandler("host", &SampleTagger{SourceTags: []string{"host"}, DontOverwrite: true})
 
-	RegisterAnalysis("aggregate_scale", aggregate_and_scale)
+	RegisterAnalysis("aggregate_10s", aggregate_data_10s)
 	RegisterAnalysis("filter_basic", filter_basic)
 	RegisterAnalysis("filter_hypervisor", filter_hypervisor)
 	RegisterAnalysis("merge_hosts", merge_hosts)
 	RegisterAnalysis("convert_filenames", convert_filenames)
 }
 
-func aggregate_and_scale(p *SamplePipeline, params string) {
-	p.Batch(&SampleSorter{[]string{"host"}})
+func aggregate_data_10s(p *SamplePipeline, _ string) {
+	// TODO properly parameterize the aggregator, move to analysis_basic.go
 	p.Add((&FeatureAggregator{WindowDuration: 10 * time.Second}).AddAvg("_avg").AddSlope("_slope"))
-	// TODO FeatureStats should be taken here
-	p.Batch(new(StandardizationScaling)).Batch(new(SampleShuffler))
 }
 
 func filter_basic(p *SamplePipeline, _ string) {
@@ -35,7 +33,7 @@ func filter_hypervisor(p *SamplePipeline, _ string) {
 }
 
 func merge_hosts(p *SamplePipeline, _ string) {
-	p.Add(NewMultiHeaderMerger())
+	merge_headers(p, "")
 
 	suffix_regex := regexp.MustCompile("\\....$")  // Strip file ending
 	num_regex := regexp.MustCompile("(-[0-9]+)?$") // Strip optional appended numbering

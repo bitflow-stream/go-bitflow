@@ -76,10 +76,7 @@ func (p *Plotter) Header(header sample.Header) error {
 }
 
 func (p *Plotter) Sample(sample sample.Sample, header sample.Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	}
-	if err := sample.Check(p.incomingHeader); err != nil {
+	if err := p.Check(sample, p.incomingHeader); err != nil {
 		return err
 	}
 	p.plotSample(sample)

@@ -28,13 +28,20 @@ func (p *AbstractProcessor) Header(header sample.Header) error {
 }
 
 func (p *AbstractProcessor) Sample(sample sample.Sample, header sample.Header) error {
+	if err := p.Check(sample, header); err != nil {
+		return err
+	}
+	return p.OutgoingSink.Sample(sample, header)
+}
+
+func (p *AbstractProcessor) Check(sample sample.Sample, header sample.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	}
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	return p.OutgoingSink.Sample(sample, header)
+	return nil
 }
 
 func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
@@ -93,10 +100,7 @@ func (p *DecouplingProcessor) Header(header sample.Header) error {
 }
 
 func (p *DecouplingProcessor) Sample(sample sample.Sample, header sample.Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	}
-	if err := sample.Check(header); err != nil {
+	if err := p.Check(sample, header); err != nil {
 		return err
 	}
 	p.samples <- TaggedSample{Sample: &sample, Header: &header}
@@ -159,10 +163,7 @@ func (p *SamplePrinter) Header(header sample.Header) error {
 }
 
 func (p *SamplePrinter) Sample(sample sample.Sample, header sample.Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	}
-	if err := sample.Check(header); err != nil {
+	if err := p.Check(sample, header); err != nil {
 		return err
 	}
 	tags := ""

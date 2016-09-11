@@ -46,10 +46,7 @@ func (p *BatchProcessor) Header(header sample.Header) error {
 }
 
 func (p *BatchProcessor) Sample(sample sample.Sample, header sample.Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	}
-	if err := sample.Check(header); err != nil {
+	if err := p.Check(sample, header); err != nil {
 		return err
 	}
 	if err := p.checkHeader(&header); err != nil {
@@ -201,10 +198,7 @@ func (p *MultiHeaderMerger) Header(_ sample.Header) error {
 }
 
 func (p *MultiHeaderMerger) Sample(sample sample.Sample, header sample.Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	}
-	if err := sample.Check(header); err != nil {
+	if err := p.Check(sample, header); err != nil {
 		return err
 	}
 	p.addSample(sample, header)

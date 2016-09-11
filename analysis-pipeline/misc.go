@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	RegisterAnalysis("print_tags", print_tags) // param: tag to print
+	RegisterAnalysisParams("print_tags", print_tags, "tag to print")
 }
 
 type UniqueTagPrinter struct {
