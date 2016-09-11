@@ -16,6 +16,8 @@ type SampleWriter struct {
 
 type SampleOutputStream struct {
 	ParallelSampleStream
+	incoming       chan *BufferedSample
+	outgoing       chan *BufferedSample
 	closed         *golib.OneshotCondition
 	headerLock     sync.Mutex
 	header         *Header
@@ -53,10 +55,8 @@ func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *Sampl
 		writer:     writer,
 		marshaller: marshaller,
 		closed:     golib.NewOneshotCondition(),
-		ParallelSampleStream: ParallelSampleStream{
-			incoming: make(chan *BufferedSample, w.BufferedSamples),
-			outgoing: make(chan *BufferedSample, w.BufferedSamples),
-		},
+		incoming:   make(chan *BufferedSample, w.BufferedSamples),
+		outgoing:   make(chan *BufferedSample, w.BufferedSamples),
 	}
 
 	for i := 0; i < w.ParallelParsers || i < 1; i++ {
@@ -142,12 +142,9 @@ func (stream *SampleOutputStream) marshall() {
 
 func (stream *SampleOutputStream) marshallOne(sample *BufferedSample) {
 	defer sample.NotifyDone()
-	// TODO See BufferedSample.WaitDone()
-	/*
-		if stream.HasError() {
-			return
-		}
-	*/
+	if stream.HasError() {
+		return
+	}
 	if stream.header == nil {
 		if !stream.HasError() {
 			stream.err = errors.New("Cannot write Sample before a Header")
@@ -167,7 +164,8 @@ func (stream *SampleOutputStream) marshallOne(sample *BufferedSample) {
 func (stream *SampleOutputStream) flush() {
 	defer stream.wg.Done()
 	for sample := range stream.outgoing {
-		if err := sample.WaitDone(); err != nil {
+		sample.WaitDone()
+		if stream.HasError() {
 			return
 		}
 		if _, err := stream.writer.Write(sample.data); err != nil {

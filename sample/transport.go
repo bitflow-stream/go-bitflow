@@ -142,6 +142,10 @@ func (agg AggregateSink) Header(header Header) error {
 }
 
 func (agg AggregateSink) Sample(sample Sample, header Header) error {
+	if len(agg) == 0 {
+		// Perform sanity check, since no child-sinks are there to perform it
+		return sample.Check(header)
+	}
 	var errors golib.MultiError
 	for _, sink := range agg {
 		if err := sink.Sample(sample, header); err != nil {
@@ -159,11 +163,9 @@ type ParallelSampleHandler struct {
 }
 
 type ParallelSampleStream struct {
-	err      error
-	incoming chan *BufferedSample
-	outgoing chan *BufferedSample
-	wg       sync.WaitGroup
-	closed   *golib.OneshotCondition
+	err    error
+	wg     sync.WaitGroup
+	closed *golib.OneshotCondition
 }
 
 func (state *ParallelSampleStream) HasError() bool {
@@ -178,26 +180,12 @@ type BufferedSample struct {
 	doneCond *sync.Cond
 }
 
-func (sample *BufferedSample) WaitDone() error {
-	// TODO the flushing routing (for both Reader and Writer) should finish
-	// all its buffered samples, regardless if there was an error elsewhere.
-	// Should be tested for all transports (TCP, file, console, ...)
-	/*
-		if sample.stream.HasError() {
-			return sample.stream.err
-		}
-	*/
+func (sample *BufferedSample) WaitDone() {
 	sample.doneCond.L.Lock()
 	defer sample.doneCond.L.Unlock()
-	for !sample.done && !sample.stream.HasError() {
+	for !sample.done {
 		sample.doneCond.Wait()
 	}
-	/*
-		if sample.stream.HasError() {
-			return sample.stream.err
-		}
-	*/
-	return nil
 }
 
 func (sample *BufferedSample) NotifyDone() {

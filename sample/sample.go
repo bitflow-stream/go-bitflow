@@ -104,7 +104,7 @@ func (sample *Sample) ParseTagString(tags string) error {
 	return nil
 }
 
-// TODO make sure this is called at consistent places
+// This must be called in the Sample() method of every MetricSink implementation
 func (sample *Sample) Check(header Header) error {
 	if len(sample.Values) != len(header.Fields) {
 		return fmt.Errorf("Unexpected number of values in sample: %v, expected %v",

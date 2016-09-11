@@ -68,10 +68,7 @@ func (agg *FeatureAggregator) Header(header sample.Header) error {
 }
 
 func (agg *FeatureAggregator) Sample(inSample sample.Sample, _ sample.Header) error {
-	if err := agg.CheckSink(); err != nil {
-		return err
-	}
-	if err := inSample.Check(agg.inHeader); err != nil {
+	if err := agg.Check(inSample, agg.inHeader); err != nil {
 		return err
 	}
 

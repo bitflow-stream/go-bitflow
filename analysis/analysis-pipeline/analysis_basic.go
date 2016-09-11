@@ -22,25 +22,31 @@ func init() {
 	RegisterSampleHandler("src", &SampleTagger{SourceTags: []string{SourceTag}})
 	RegisterSampleHandler("src-append", &SampleTagger{SourceTags: []string{SourceTag}, DontOverwrite: true})
 
-	RegisterAnalysis("decouple", decouple_samples)
+	RegisterAnalysisParams("decouple", decouple_samples, "number of buffered samples")
 	RegisterAnalysis("merge_headers", merge_headers)
-	RegisterAnalysis("pick", pick_x_percent)   // param: samples to keep 0..1
-	RegisterAnalysis("filter_tag", filter_tag) // param: tag=value or tag!=value
+	RegisterAnalysisParams("pick", pick_x_percent, "samples to keep 0..1")
+	RegisterAnalysis("print", print_samples)
+	RegisterAnalysisParams("filter_tag", filter_tag, "tag=value or tag!=value")
 
 	RegisterAnalysis("shuffle", shuffle_data)
-	RegisterAnalysis("sort", sort_data) // Param: comma-separated list of tags
+	RegisterAnalysisParams("sort", sort_data, "comma-separated list of tags")
 
-	RegisterAnalysis("min_max", normalize_min_max)
+	RegisterAnalysis("scale_min_max", normalize_min_max)
 	RegisterAnalysis("standardize", normalize_standardize)
 
-	RegisterAnalysis("plot", plot)
-	RegisterAnalysis("separate_plots", separate_plots)
+	RegisterAnalysisParams("plot", plot, "[<color tag>,]<output filename>")
+	RegisterAnalysisParams("plot_separate", separate_plots, "same as plot")
 
-	RegisterAnalysis("stats", feature_stats)
+	RegisterAnalysisParams("stats", feature_stats, "output filename for metric statistics")
+	RegisterAnalysisParams("remap", remap_features, "comma-separated list of metrics")
 
 	RegisterAnalysis("filter_metrics", filter_metrics)
 	flag.Var(&metric_filter_include, "metrics_include", "Include regex used with '-e filter_metrics'")
 	flag.Var(&metric_filter_exclude, "metrics_exclude", "Exclude regex used with '-e filter_metrics'")
+}
+
+func print_samples(p *SamplePipeline, _ string) {
+	p.Add(new(SamplePrinter))
 }
 
 func shuffle_data(p *SamplePipeline, _ string) {
@@ -48,7 +54,10 @@ func shuffle_data(p *SamplePipeline, _ string) {
 }
 
 func sort_data(p *SamplePipeline, params string) {
-	tags := strings.Split(params, ",")
+	var tags []string
+	if params != "" {
+		tags = strings.Split(params, ",")
+	}
 	p.Batch(&SampleSorter{tags})
 }
 
@@ -166,6 +175,14 @@ func feature_stats(pipe *SamplePipeline, params string) {
 	} else {
 		pipe.Add(NewStoreStats(params))
 	}
+}
+
+func remap_features(pipe *SamplePipeline, params string) {
+	var metrics []string
+	if params != "" {
+		metrics = strings.Split(params, ",")
+	}
+	pipe.Add(NewMetricMapper(metrics))
 }
 
 type SampleTagger struct {

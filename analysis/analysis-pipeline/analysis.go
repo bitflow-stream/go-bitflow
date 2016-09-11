@@ -13,7 +13,7 @@ import (
 func init() {
 	RegisterAnalysis("dbscan", dbscan_rtree)
 	RegisterAnalysis("dbscan_parallel", dbscan_parallel)
-	RegisterAnalysis("pca", pca_analysis) // param: contained variance 0..1
+	RegisterAnalysisParams("pca", pca_analysis, "contained variance 0..1")
 	RegisterAnalysis("regression", linear_regression)
 	RegisterAnalysis("regression_brute", linear_regression_bruteforce)
 }

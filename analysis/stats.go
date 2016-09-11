@@ -41,10 +41,7 @@ func (stats *FeatureStats) Push(values ...float64) {
 }
 
 func (stats *StoreStats) Sample(inSample sample.Sample, header sample.Header) error {
-	if err := stats.CheckSink(); err != nil {
-		return err
-	}
-	if err := inSample.Check(header); err != nil {
+	if err := stats.Check(inSample, header); err != nil {
 		return err
 	}
 	for index, field := range header.Fields {

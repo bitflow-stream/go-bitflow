@@ -25,8 +25,15 @@ type ReadSampleHandler interface {
 	HandleSample(sample *Sample, source string) // Allows modifying tags/values on read samples
 }
 
+type BufferedIncomingSample struct {
+	BufferedSample
+	ParserError bool
+}
+
 type SampleInputStream struct {
 	ParallelSampleStream
+	incoming         chan *BufferedIncomingSample
+	outgoing         chan *BufferedIncomingSample
 	um               Unmarshaller
 	sampleReader     *SampleReader
 	reader           *bufio.Reader
@@ -48,10 +55,10 @@ func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink MetricSinkBase, bu
 		sampleReader:     r,
 		underlyingReader: input,
 		sink:             sink,
+		incoming:         make(chan *BufferedIncomingSample, r.BufferedSamples),
+		outgoing:         make(chan *BufferedIncomingSample, r.BufferedSamples),
 		ParallelSampleStream: ParallelSampleStream{
-			incoming: make(chan *BufferedSample, r.BufferedSamples),
-			outgoing: make(chan *BufferedSample, r.BufferedSamples),
-			closed:   golib.NewOneshotCondition(),
+			closed: golib.NewOneshotCondition(),
 		},
 	}
 }
@@ -179,10 +186,12 @@ func (stream *SampleInputStream) readData() {
 			stream.err = err
 			return
 		} else {
-			s := &BufferedSample{
-				stream:   &stream.ParallelSampleStream,
-				data:     data,
-				doneCond: sync.NewCond(new(sync.Mutex)),
+			s := &BufferedIncomingSample{
+				BufferedSample: BufferedSample{
+					stream:   &stream.ParallelSampleStream,
+					data:     data,
+					doneCond: sync.NewCond(new(sync.Mutex)),
+				},
 			}
 			select {
 			case stream.outgoing <- s:
@@ -201,18 +210,13 @@ func (stream *SampleInputStream) parseSamples(source string) {
 	}
 }
 
-func (stream *SampleInputStream) parseOne(source string, sample *BufferedSample) {
+func (stream *SampleInputStream) parseOne(source string, sample *BufferedIncomingSample) {
 	defer sample.NotifyDone()
-	// TODO See BufferedSample.WaitDone()
-	/*
-		if stream.HasError() {
-			return
-		}
-	*/
 	if parsedSample, err := stream.um.ParseSample(stream.header, sample.data); err != nil {
 		if !stream.HasError() {
 			stream.err = err
 		}
+		sample.ParserError = true
 		return
 	} else {
 		if handler := stream.sampleReader.Handler; handler != nil {
@@ -225,7 +229,9 @@ func (stream *SampleInputStream) parseOne(source string, sample *BufferedSample)
 func (stream *SampleInputStream) sinkSamples() {
 	defer stream.wg.Done()
 	for sample := range stream.outgoing {
-		if err := sample.WaitDone(); err != nil {
+		sample.WaitDone()
+		if sample.ParserError {
+			// The first parser error makes the input stream stop.
 			return
 		}
 		if err := stream.sink.Sample(sample.sample, stream.outHeader); err != nil {

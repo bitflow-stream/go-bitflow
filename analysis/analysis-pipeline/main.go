@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
@@ -16,9 +17,15 @@ import (
 
 type AnalysisFunc func(pipeline *SamplePipeline, params string)
 
+type registeredAnalysis struct {
+	Name   string
+	Func   AnalysisFunc
+	Params string
+}
+
 // Can be filled from init() functions using RegisterAnalysis()
-var analysis_registry = map[string]AnalysisFunc{
-	"": nil,
+var analysis_registry = map[string]registeredAnalysis{
+	"": registeredAnalysis{"", nil, ""},
 }
 var handler_registry = map[string]sample.ReadSampleHandler{
 	"": nil,
@@ -32,10 +39,14 @@ func RegisterSampleHandler(name string, sampleHandler sample.ReadSampleHandler) 
 }
 
 func RegisterAnalysis(name string, setupPipeline AnalysisFunc) {
+	RegisterAnalysisParams(name, setupPipeline, "")
+}
+
+func RegisterAnalysisParams(name string, setupPipeline AnalysisFunc, paramDescription string) {
 	if _, ok := analysis_registry[name]; ok {
 		log.Fatalln("Analysis already registered:", name)
 	}
-	analysis_registry[name] = setupPipeline
+	analysis_registry[name] = registeredAnalysis{name, setupPipeline, paramDescription}
 }
 
 func main() {
@@ -44,17 +55,21 @@ func main() {
 
 func do_main() int {
 	var analysisNames golib.StringSlice
-	var readSampleHandler string
-	flag.Var(&analysisNames, "e", fmt.Sprintf("Select one or more of the following analysis pipelines to execute: %v", allAnalyses()))
-	flag.StringVar(&readSampleHandler, "h", "", fmt.Sprintf("Select an optional sample handler for handling incoming samples: %v", allHandlers()))
+	flag.Var(&analysisNames, "e", fmt.Sprintf("Select one or more analyses to execute. Use -analysis for listing all analyses."))
+	readSampleHandler := flag.String("h", "", fmt.Sprintf("Select an optional sample handler for handling incoming samples: %v", allHandlers()))
+	printAnalyses := flag.Bool("analyses", false, "Print a list of available analyses and exit.")
 
 	var p SamplePipeline
 	p.ParseFlags()
 	flag.Parse()
+	if *printAnalyses {
+		fmt.Printf("Available analyses:%v\n", allAnalyses())
+		return 0
+	}
 	analyses := resolvePipeline(analysisNames)
-	handler, ok := handler_registry[readSampleHandler]
+	handler, ok := handler_registry[*readSampleHandler]
 	if !ok {
-		log.Fatalf("Sample handler '%v' not registered. Available: %v", readSampleHandler, allHandlers())
+		log.Fatalf("Sample handler '%v' not registered. Available: %v", *readSampleHandler, allHandlers())
 	}
 	defer golib.ProfileCpu()()
 	p.Init()
@@ -86,11 +101,11 @@ func resolvePipeline(analysisNames golib.StringSlice) []parameterizedAnalysis {
 			name = full[:index]
 			params = full[index+1:]
 		}
-		analysisFunc, ok := analysis_registry[name]
+		analysis, ok := analysis_registry[name]
 		if !ok {
-			log.Fatalf("Analysis pipeline '%v' not registered. Available: %v", name, allAnalyses())
+			log.Fatalf("Analysis '%v' not registered. Available analyses:%v", name, allAnalyses())
 		}
-		result[i] = parameterizedAnalysis{analysisFunc, params}
+		result[i] = parameterizedAnalysis{analysis.Func, params}
 	}
 	return result
 }
@@ -112,13 +127,29 @@ func printPipeline(p []sample.SampleProcessor) {
 	}
 }
 
-func allAnalyses() []string {
-	all := make([]string, 0, len(analysis_registry))
-	for name := range analysis_registry {
-		all = append(all, name)
+func allAnalyses() string {
+	all := make(SortedAnalyses, 0, len(analysis_registry))
+	for _, analysis := range analysis_registry {
+		all = append(all, analysis)
 	}
-	sort.Strings(all)
-	return all
+	sort.Sort(all)
+	var buf bytes.Buffer
+	for i, analysis := range all {
+		if analysis.Func == nil {
+			continue
+		}
+		if i > 0 {
+			buf.WriteString("\n")
+		}
+		buf.WriteString(" - ")
+		buf.WriteString(analysis.Name)
+		if analysis.Params != "" {
+			buf.WriteString(" (Params: ")
+			buf.WriteString(analysis.Params)
+			buf.WriteString(")")
+		}
+	}
+	return buf.String()
 }
 
 func allHandlers() []string {
@@ -130,6 +161,20 @@ func allHandlers() []string {
 	}
 	sort.Strings(all)
 	return all
+}
+
+type SortedAnalyses []registeredAnalysis
+
+func (slice SortedAnalyses) Len() int {
+	return len(slice)
+}
+
+func (slice SortedAnalyses) Less(i, j int) bool {
+	return slice[i].Name < slice[j].Name
+}
+
+func (slice SortedAnalyses) Swap(i, j int) {
+	slice[i], slice[j] = slice[j], slice[i]
 }
 
 type SamplePipeline struct {
