@@ -17,11 +17,11 @@ func init() {
 	RegisterAnalysis("regression", linear_regression)
 	RegisterAnalysis("regression_brute", linear_regression_bruteforce)
 }
-func linear_regression(p *SamplePipeline, _ string) {
+func linear_regression(p *SamplePipeline) {
 	p.Batch(&regression.LinearRegressionBatchProcessor{})
 }
 
-func linear_regression_bruteforce(p *SamplePipeline, _ string) {
+func linear_regression_bruteforce(p *SamplePipeline) {
 	p.Batch(&regression.LinearRegressionBruteForce{})
 }
 
@@ -38,7 +38,7 @@ func pca_analysis(pipe *SamplePipeline, params string) {
 	pipe.Batch(&PCABatchProcessing{ContainedVariance: variance})
 }
 
-func dbscan_rtree(pipe *SamplePipeline, _ string) {
+func dbscan_rtree(pipe *SamplePipeline) {
 	pipe.Batch(&dbscan.DbscanBatchClusterer{
 		Dbscan:          dbscan.Dbscan{Eps: 0.1, MinPts: 5},
 		TreeMinChildren: 25,
@@ -47,6 +47,6 @@ func dbscan_rtree(pipe *SamplePipeline, _ string) {
 	})
 }
 
-func dbscan_parallel(pipe *SamplePipeline, _ string) {
+func dbscan_parallel(pipe *SamplePipeline) {
 	pipe.Batch(&dbscan.ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5})
 }

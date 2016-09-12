@@ -19,21 +19,21 @@ func init() {
 	RegisterAnalysis("convert_filenames", convert_filenames)
 }
 
-func aggregate_data_10s(p *SamplePipeline, _ string) {
+func aggregate_data_10s(p *SamplePipeline) {
 	// TODO properly parameterize the aggregator, move to analysis_basic.go
 	p.Add((&FeatureAggregator{WindowDuration: 10 * time.Second}).AddAvg("_avg").AddSlope("_slope"))
 }
 
-func filter_basic(p *SamplePipeline, _ string) {
+func filter_basic(p *SamplePipeline) {
 	p.Add(NewMetricFilter().IncludeRegex("^cpu$|^mem/percent$|^net-io/bytes$|^disk-io/[s|v]da/ioTime$"))
 }
 
-func filter_hypervisor(p *SamplePipeline, _ string) {
+func filter_hypervisor(p *SamplePipeline) {
 	p.Add(NewMetricFilter().ExcludeRegex("^ovsdb/|^libvirt/"))
 }
 
-func merge_hosts(p *SamplePipeline, _ string) {
-	merge_headers(p, "")
+func merge_hosts(p *SamplePipeline) {
+	merge_headers(p)
 
 	suffix_regex := regexp.MustCompile("\\....$")  // Strip file ending
 	num_regex := regexp.MustCompile("(-[0-9]+)?$") // Strip optional appended numbering
@@ -47,7 +47,7 @@ func merge_hosts(p *SamplePipeline, _ string) {
 	}
 }
 
-func convert_filenames(p *SamplePipeline, _ string) {
+func convert_filenames(p *SamplePipeline) {
 	// Replace the src tag with the name of the parent-parent folder
 	if filesource, ok := p.Source.(*sample.FileSource); ok {
 		filesource.ConvertFilename = func(filename string) string {
