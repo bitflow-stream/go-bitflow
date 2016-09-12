@@ -45,11 +45,11 @@ func init() {
 	flag.Var(&metric_filter_exclude, "metrics_exclude", "Exclude regex used with '-e filter_metrics'")
 }
 
-func print_samples(p *SamplePipeline, _ string) {
+func print_samples(p *SamplePipeline) {
 	p.Add(new(SamplePrinter))
 }
 
-func shuffle_data(p *SamplePipeline, _ string) {
+func shuffle_data(p *SamplePipeline) {
 	p.Batch(new(SampleShuffler))
 }
 
@@ -61,15 +61,15 @@ func sort_data(p *SamplePipeline, params string) {
 	p.Batch(&SampleSorter{tags})
 }
 
-func merge_headers(p *SamplePipeline, _ string) {
+func merge_headers(p *SamplePipeline) {
 	p.Add(NewMultiHeaderMerger())
 }
 
-func normalize_min_max(p *SamplePipeline, _ string) {
+func normalize_min_max(p *SamplePipeline) {
 	p.Batch(new(MinMaxScaling))
 }
 
-func normalize_standardize(p *SamplePipeline, _ string) {
+func normalize_standardize(p *SamplePipeline) {
 	p.Batch(new(StandardizationScaling))
 }
 
@@ -92,7 +92,7 @@ func pick_x_percent(p *SamplePipeline, params string) {
 	})
 }
 
-func filter_metrics(p *SamplePipeline, _ string) {
+func filter_metrics(p *SamplePipeline) {
 	filter := NewMetricFilter()
 	for _, include := range metric_filter_include {
 		filter.IncludeRegex(include)

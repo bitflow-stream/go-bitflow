@@ -15,15 +15,16 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-type AnalysisFunc func(pipeline *SamplePipeline, params string)
+type AnalysisFunc func(pipeline *SamplePipeline)
+type ParameterizedAnalysisFunc func(pipeline *SamplePipeline, params string)
 
 type registeredAnalysis struct {
 	Name   string
-	Func   AnalysisFunc
+	Func   ParameterizedAnalysisFunc
 	Params string
 }
 
-// Can be filled from init() functions using RegisterAnalysis()
+// Can be filled from init() functions using RegisterAnalysis() and RegisterParameterizedAnalysis
 var analysis_registry = map[string]registeredAnalysis{
 	"": registeredAnalysis{"", nil, ""},
 }
@@ -39,10 +40,12 @@ func RegisterSampleHandler(name string, sampleHandler sample.ReadSampleHandler) 
 }
 
 func RegisterAnalysis(name string, setupPipeline AnalysisFunc) {
-	RegisterAnalysisParams(name, setupPipeline, "")
+	RegisterAnalysisParams(name, func(pipeline *SamplePipeline, _ string) {
+		setupPipeline(pipeline)
+	}, "")
 }
 
-func RegisterAnalysisParams(name string, setupPipeline AnalysisFunc, paramDescription string) {
+func RegisterAnalysisParams(name string, setupPipeline ParameterizedAnalysisFunc, paramDescription string) {
 	if _, ok := analysis_registry[name]; ok {
 		log.Fatalln("Analysis already registered:", name)
 	}
@@ -86,7 +89,7 @@ func do_main() int {
 }
 
 type parameterizedAnalysis struct {
-	setup  AnalysisFunc
+	setup  ParameterizedAnalysisFunc
 	params string
 }
 
