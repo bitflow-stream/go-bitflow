@@ -66,7 +66,10 @@ func do_main() int {
 		fmt.Printf("Available analyses:%v\n", allAnalyses())
 		return 0
 	}
-	analyses := resolvePipeline(analysisNames)
+	analyses, err := resolvePipeline(analysisNames)
+	if err != nil {
+		log.Fatalln(err)
+	}
 	handler, ok := handler_registry[*readSampleHandler]
 	if !ok {
 		log.Fatalf("Sample handler '%v' not registered. Available: %v", *readSampleHandler, allHandlers())
@@ -75,12 +78,10 @@ func do_main() int {
 	p.Init()
 
 	p.ReadSampleHandler = handler
-	for _, analysis := range analyses {
-		if setup := analysis.setup; setup != nil {
-			setup(&p, analysis.params)
-		}
+	p.setup(analyses)
+	for _, str := range p.print() {
+		log.Println(str)
 	}
-	printPipeline(p.Processors)
 	return p.StartAndWait()
 }
 
@@ -89,7 +90,7 @@ type parameterizedAnalysis struct {
 	params string
 }
 
-func resolvePipeline(analysisNames golib.StringSlice) []parameterizedAnalysis {
+func resolvePipeline(analysisNames golib.StringSlice) ([]parameterizedAnalysis, error) {
 	if len(analysisNames) == 0 {
 		analysisNames = append(analysisNames, "") // The default
 	}
@@ -103,28 +104,11 @@ func resolvePipeline(analysisNames golib.StringSlice) []parameterizedAnalysis {
 		}
 		analysis, ok := analysis_registry[name]
 		if !ok {
-			log.Fatalf("Analysis '%v' not registered. Available analyses:%v", name, allAnalyses())
+			return nil, fmt.Errorf("Analysis '%v' not registered. Available analyses:%v", name, allAnalyses())
 		}
 		result[i] = parameterizedAnalysis{analysis.Func, params}
 	}
-	return result
-}
-
-func printPipeline(p []sample.SampleProcessor) {
-	if len(p) == 0 {
-		log.Println("Empty analysis pipeline")
-	} else if len(p) == 1 {
-		log.Println("Analysis:", p[0])
-	} else {
-		log.Println("Analysis pipeline:")
-		for i, proc := range p {
-			indent := "├─"
-			if i == len(p)-1 {
-				indent = "└─"
-			}
-			log.Println(indent + proc.String())
-		}
-	}
+	return result, nil
 }
 
 func allAnalyses() string {
@@ -195,4 +179,32 @@ func (pipeline *SamplePipeline) Batch(proc analysis.BatchProcessingStep) *Sample
 	}
 	pipeline.batch.Add(proc)
 	return pipeline
+}
+
+func (pipeline *SamplePipeline) setup(analyses []parameterizedAnalysis) {
+	for _, analysis := range analyses {
+		if setup := analysis.setup; setup != nil {
+			setup(pipeline, analysis.params)
+		}
+	}
+}
+
+func (pipeline *SamplePipeline) print() []string {
+	p := pipeline.Processors
+	if len(p) == 0 {
+		return []string{"Empty analysis pipeline"}
+	} else if len(p) == 1 {
+		return []string{"Analysis: " + p[0].String()}
+	} else {
+		res := make([]string, 0, len(p)+1)
+		log.Println("Analysis pipeline:")
+		for i, proc := range p {
+			indent := "├─"
+			if i == len(p)-1 {
+				indent = "└─"
+			}
+			res = append(res, indent+proc.String())
+		}
+		return res
+	}
 }
