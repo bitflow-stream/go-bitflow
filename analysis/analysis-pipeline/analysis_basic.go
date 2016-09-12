@@ -36,9 +36,10 @@ func init() {
 
 	RegisterAnalysisParams("plot", plot, "[<color tag>,]<output filename>")
 	RegisterAnalysisParams("plot_separate", separate_plots, "same as plot")
-
 	RegisterAnalysisParams("stats", feature_stats, "output filename for metric statistics")
+
 	RegisterAnalysisParams("remap", remap_features, "comma-separated list of metrics")
+	RegisterAnalysisParams("filter_variance", filter_variance, "minimum weighted stddev of the population (stddev / mean)")
 
 	RegisterAnalysis("filter_metrics", filter_metrics)
 	flag.Var(&metric_filter_include, "metrics_include", "Include regex used with '-e filter_metrics'")
@@ -186,6 +187,14 @@ func remap_features(pipe *SamplePipeline, params string) {
 		metrics = strings.Split(params, ",")
 	}
 	pipe.Add(NewMetricMapper(metrics))
+}
+
+func filter_variance(pipe *SamplePipeline, params string) {
+	variance, err := strconv.ParseFloat(params, 64)
+	if err != nil {
+		log.Fatalln("Error parsing parameter for -e filter_variance:", err)
+	}
+	pipe.Batch(NewMetricVarianceFilter(variance))
 }
 
 type SampleTagger struct {
