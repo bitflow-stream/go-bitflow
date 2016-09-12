@@ -144,11 +144,14 @@ func separate_plots(pipe *SamplePipeline, params string) {
 }
 
 func do_plot(pipe *SamplePipeline, params string, separatePlots bool) {
+	if params == "" {
+		log.Fatalln("-e plot needs parameters (-e plot,[<tag>,]<filename>)")
+	}
 	index := strings.IndexRune(params, ',')
 	tag := ""
 	filename := params
 	if index == -1 {
-		log.Warnln("-e plot got no tag parameter, not coloring plot (-e plot,<tag>,<filename>)")
+		log.Warnln("-e plot got no tag parameter, not coloring plot (-e plot,[<tag>,]<filename>)")
 	} else {
 		tag = params[:index]
 		filename = params[index+1:]
