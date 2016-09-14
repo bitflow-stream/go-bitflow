@@ -25,6 +25,7 @@ func init() {
 	RegisterAnalysisParams("decouple", decouple_samples, "number of buffered samples")
 	RegisterAnalysis("merge_headers", merge_headers)
 	RegisterAnalysisParams("pick", pick_x_percent, "samples to keep 0..1")
+	RegisterAnalysisParams("head", pick_head, "number of first samples to keep")
 	RegisterAnalysis("print", print_samples)
 	RegisterAnalysisParams("filter_tag", filter_tag, "tag=value or tag!=value")
 
@@ -195,6 +196,36 @@ func filter_variance(pipe *SamplePipeline, params string) {
 		log.Fatalln("Error parsing parameter for -e filter_variance:", err)
 	}
 	pipe.Batch(NewMetricVarianceFilter(variance))
+}
+
+func pick_head(pipe *SamplePipeline, params string) {
+	num, err := strconv.Atoi(params)
+	if err != nil {
+		log.Fatalln("Error parsing parameter for -e head:", err)
+	}
+	pipe.Add(&PickHead{Num: num})
+}
+
+type PickHead struct {
+	AbstractProcessor
+	Num       int // parameter
+	processed int // internal variable
+}
+
+func (head *PickHead) Sample(sample sample.Sample, header sample.Header) error {
+	if err := head.Check(sample, header); err != nil {
+		return err
+	}
+	if head.Num > head.processed {
+		head.processed++
+		return head.OutgoingSink.Sample(sample, header)
+	} else {
+		return nil
+	}
+}
+
+func (head *PickHead) String() string {
+	return "Pick first " + strconv.Itoa(head.Num) + " samples"
 }
 
 type SampleTagger struct {

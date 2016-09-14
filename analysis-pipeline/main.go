@@ -77,10 +77,9 @@ func do_main() int {
 	if !ok {
 		log.Fatalf("Sample handler '%v' not registered. Available: %v", *readSampleHandler, allHandlers())
 	}
+	p.ReadSampleHandler = handler
 	defer golib.ProfileCpu()()
 	p.Init()
-
-	p.ReadSampleHandler = handler
 	p.setup(analyses)
 	for _, str := range p.print() {
 		log.Println(str)
