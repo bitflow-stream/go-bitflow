@@ -93,7 +93,7 @@ func (p *Plotter) plotSample(sample sample.Sample) {
 
 func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
 	if file, err := os.Create(p.OutputFile); err != nil {
-		// Check if file can be create to quickly fail
+		// Check if file can be created to quickly fail
 		return golib.TaskFinishedError(err)
 	} else {
 		_ = file.Close() // Drop error
@@ -104,6 +104,7 @@ func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
 func (p *Plotter) Close() {
 	var err error
 	if p.SeparatePlots {
+		_ = os.Remove(p.OutputFile) // Delete file created in Start(), drop error.
 		err = p.saveSeparatePlots()
 	} else {
 		err = p.savePlot(p.data, nil, p.OutputFile)
