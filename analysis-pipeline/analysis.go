@@ -33,7 +33,7 @@ func pca_analysis(pipe *SamplePipeline, params string) {
 			log.Fatalln("Failed to parse parameter for -e pca:", err)
 		}
 	} else {
-		log.Println("No parameter for -e pca, default contained variance:", variance)
+		log.Warnln("No parameter for -e pca, default contained variance:", variance)
 	}
 	pipe.Batch(&PCABatchProcessing{ContainedVariance: variance})
 }
