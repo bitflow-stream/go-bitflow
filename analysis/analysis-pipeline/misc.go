@@ -12,31 +12,79 @@ import (
 
 func init() {
 	RegisterAnalysisParams("print_tags", print_tags, "tag to print")
+	RegisterAnalysisParams("count_tags", count_tags, "tag to count")
 	RegisterAnalysis("print_timerange", print_timerange)
 }
 
 type UniqueTagPrinter struct {
-	Tag string
+	analysis.AbstractProcessor
+	Tag    string
+	Count  bool
+	values map[string]int
 }
 
-func (printer *UniqueTagPrinter) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
-	labels := make(map[string]bool)
-	for _, sample := range samples {
-		labels[sample.Tag(printer.Tag)] = true
+func NewUniqueTagPrinter(tag string) *UniqueTagPrinter {
+	return &UniqueTagPrinter{
+		Tag:    tag,
+		Count:  false,
+		values: make(map[string]int),
 	}
-	for label := range labels {
+}
+
+func NewUniqueTagCounter(tag string) *UniqueTagPrinter {
+	return &UniqueTagPrinter{
+		Tag:    tag,
+		Count:  true,
+		values: make(map[string]int),
+	}
+}
+
+func (printer *UniqueTagPrinter) Sample(sample sample.Sample, header sample.Header) error {
+	if err := printer.Check(sample, header); err != nil {
+		return err
+	}
+	val := sample.Tag(printer.Tag)
+	if printer.Count {
+		printer.values[val] = printer.values[val] + 1
+	} else {
+		printer.values[val] = 1
+	}
+	return printer.OutgoingSink.Sample(sample, header)
+}
+
+func (printer *UniqueTagPrinter) Close() {
+	total := 0
+	for label, count := range printer.values {
 		// Print to stdout instead of logger
-		fmt.Println(label)
+		if printer.Count {
+			fmt.Println(label, count)
+			total += count
+		} else {
+			fmt.Println(label)
+		}
 	}
-	return header, samples, nil
+	if printer.Count {
+		fmt.Println("Total", total)
+	}
+	printer.AbstractProcessor.Close()
 }
 
 func (printer *UniqueTagPrinter) String() string {
-	return "Print unique " + printer.Tag + " tags"
+	var res string
+	if printer.Count {
+		res = "Count"
+	} else {
+		res = "Print"
+	}
+	return res + " unique " + printer.Tag + " tags"
 }
 
 func print_tags(p *SamplePipeline, params string) {
-	p.Batch(&UniqueTagPrinter{params})
+	p.Add(NewUniqueTagPrinter(params))
+}
+
+func count_tags(p *SamplePipeline, params string) {
+	p.Add(NewUniqueTagCounter(params))
 }
 
 const TimrangePrinterFormat = "02.01.2006 15:04:05"
