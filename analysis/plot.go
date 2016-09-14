@@ -85,7 +85,7 @@ func (p *Plotter) Sample(sample sample.Sample, header sample.Header) error {
 
 func (p *Plotter) plotSample(sample sample.Sample) {
 	key := sample.Tag(p.ColorTag)
-	if key == "" {
+	if key == "" && p.ColorTag != "" {
 		key = "(none)"
 	}
 	p.data[key] = append(p.data[key], sample)
@@ -162,6 +162,7 @@ func (p *Plotter) fillPlot(plotData map[string]PlotData, copyBounds *plot.Plot) 
 	for name, data := range plotData {
 		parameters = append(parameters, name, data)
 	}
+
 	if err := plotutil.AddScatters(plot, parameters...); err != nil {
 		return nil, fmt.Errorf("Error creating plot: %v", err)
 	}
