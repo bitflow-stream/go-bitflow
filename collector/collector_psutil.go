@@ -811,7 +811,7 @@ func (col *PsutilProcessCollector) updatePids() error {
 			// Process does not exist anymore
 			errors++
 			if col.PrintErrors {
-				log.WithField("pid", pid).Errorln("Checking process failed:", err)
+				log.WithField("pid", pid).Warnln("Checking process failed:", err)
 			}
 			continue
 		}
@@ -820,7 +820,7 @@ func (col *PsutilProcessCollector) updatePids() error {
 			// Probably a permission error
 			errors++
 			if col.PrintErrors {
-				log.WithField("pid", pid).Errorln("Obtaining process cmdline failed:", err)
+				log.WithField("pid", pid).Warnln("Obtaining process cmdline failed:", err)
 			}
 			continue
 		}
@@ -857,7 +857,7 @@ func (col *PsutilProcessCollector) updateProcesses() {
 			// Process probably does not exist anymore
 			delete(col.pids, pid)
 			if col.PrintErrors {
-				log.WithField("pid", pid).Errorln("Process info update failed:", err)
+				log.WithField("pid", pid).Warnln("Process info update failed:", err)
 			}
 		}
 	}

@@ -199,7 +199,7 @@ func (pipeline *SamplePipeline) print() []string {
 		return []string{"Analysis: " + p[0].String()}
 	} else {
 		res := make([]string, 0, len(p)+1)
-		log.Println("Analysis pipeline:")
+		res = append(res, "Analysis pipeline:")
 		for i, proc := range p {
 			indent := "├─"
 			if i == len(p)-1 {

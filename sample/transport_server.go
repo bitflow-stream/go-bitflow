@@ -60,7 +60,7 @@ func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.
 	if !source.CountConnectionAccepted(conn) {
 		return
 	}
-	log.WithField("remote", conn.RemoteAddr()).Println("Accepted connection")
+	log.WithField("remote", conn.RemoteAddr()).Debugln("Accepted connection")
 	listenerConn := &TCPListenerConnection{
 		source: source,
 		stream: source.Reader.Open(conn, source.synchronizedSink),

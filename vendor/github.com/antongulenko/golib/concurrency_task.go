@@ -325,7 +325,7 @@ func (group *TaskGroup) PrintWaitAndStop() int {
 
 func (group *TaskGroup) TimeoutPrintWaitAndStop(timeout time.Duration, printWait bool) (numErrors int) {
 	reason, numErrors := group.WaitAndStop(timeout, printWait)
-	Log.Println("Stopped because of", reason)
+	Log.Debugln("Stopped because of", reason)
 	return
 }
 

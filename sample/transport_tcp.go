@@ -88,7 +88,7 @@ func (conn *TcpWriteConn) doClose(cause error) {
 	conn.closeOnce.Do(func() {
 		conn.printErr(cause)
 		if cause == nil {
-			conn.log.Println("Closing connection")
+			conn.log.Debugln("Closing connection")
 		}
 		if closeErr := conn.stream.Close(); closeErr != nil && cause == nil {
 			conn.log.Errorln("Error closing connection:", closeErr)
@@ -104,11 +104,11 @@ func (conn *TcpWriteConn) IsRunning() bool {
 func (conn *TcpWriteConn) printErr(err error) {
 	if operr, ok := err.(*net.OpError); ok {
 		if operr.Err == syscall.EPIPE {
-			conn.log.Println("Connection closed by remote")
+			conn.log.Debugln("Connection closed by remote")
 			return
 		} else {
 			if syscallerr, ok := operr.Err.(*os.SyscallError); ok && syscallerr.Err == syscall.EPIPE {
-				conn.log.Println("Connection closed by remote")
+				conn.log.Debugln("Connection closed by remote")
 				return
 			}
 		}

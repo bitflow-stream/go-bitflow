@@ -169,7 +169,7 @@ func decouple_samples(pipe *SamplePipeline, params string) {
 			log.Fatalln("Failed to parse parameter for -e decouple:", err)
 		}
 	} else {
-		log.Println("No parameter for -e decouple, default channel buffer:", buf)
+		log.Warnln("No parameter for -e decouple, default channel buffer:", buf)
 	}
 	pipe.Add(&DecouplingProcessor{ChannelBuffer: buf})
 }

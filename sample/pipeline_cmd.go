@@ -215,7 +215,7 @@ func (p *CmdSamplePipeline) Init() {
 // p.Tasks can be filled with additional Tasks before calling this
 func (p *CmdSamplePipeline) StartAndWait() int {
 	p.Construct(p.Tasks)
-	log.Println("Press Ctrl-C to interrupt")
+	log.Debugln("Press Ctrl-C to interrupt")
 	p.Tasks.Add(&golib.NoopTask{
 		Chan:        golib.ExternalInterrupt(),
 		Description: "external interrupt",

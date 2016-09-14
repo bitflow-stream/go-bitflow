@@ -89,29 +89,29 @@ func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error) {
 	var num_samples int
 	l := log.WithFields(log.Fields{"source": sourceName, "format": stream.Format()})
-	l.Println("Reading samples")
+	l.Debugln("Reading samples")
 	num_samples, err = stream.ReadSamples(sourceName)
-	l.Println("Read", num_samples, "samples")
+	l.Debugln("Read", num_samples, "samples")
 	return
 }
 
 func (stream *SampleInputStream) ReadTcpSamples(conn *net.TCPConn, checkClosed func() bool) {
 	remote := conn.RemoteAddr()
 	l := log.WithFields(log.Fields{"remote": remote, "format": stream.Format()})
-	l.Println("Receiving data")
+	l.Debugln("Receiving data")
 	var err error
 	var num_samples int
 	if num_samples, err = stream.ReadSamples(remote.String()); err == nil {
-		l.Println("Connection closed by remote")
+		l.Debugln("Connection closed by remote")
 	} else {
 		if checkClosed() {
-			l.Println("Connection closed")
+			l.Debugln("Connection closed")
 		} else {
 			l.Errorln("Error receiving samples:", err)
 		}
 		_ = conn.Close() // Ignore error
 	}
-	l.Println("Received", num_samples, "samples")
+	l.Debugln("Received", num_samples, "samples")
 }
 
 func (stream *SampleInputStream) Close() error {
