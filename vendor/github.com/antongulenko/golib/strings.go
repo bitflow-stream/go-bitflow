@@ -64,11 +64,11 @@ func Substring(str string, iFrom int, iTo int) string {
 	}
 
 	iLen := iTo - iFrom
-	possibleColor := true // TODO fix
+	possibleColor := false
 
 	// Find the end in the input string
 	to := 0
-	suffix := str[:]
+	suffix := []byte(str)
 	buf.Reset()
 	textWidth = 0
 	cleanedLen = 0
@@ -82,17 +82,26 @@ func Substring(str string, iFrom int, iTo int) string {
 			cleanedLen = len(cleaned)
 			textWidth += width
 		}
+		if len(cleaned) != buf.Len() {
+			// Contains invisible escape characters, possibly color codes
+			possibleColor = true
+		}
 		if textWidth > iLen {
+			if width == 2 {
+				// Splitting wide character in the end, pad with a space
+				suffix[to] = ' '
+				to++
+			}
 			break
 		}
 		str = rest
 		to += len(runeStr)
 	}
 
-	suffix = suffix[:to]
+	result := string(suffix[:to])
 	if possibleColor {
 		// Might contain color codes, make sure to disable colors at the end
-		suffix += "\033[0m"
+		result += "\033[0m"
 	}
-	return suffix
+	return result
 }
