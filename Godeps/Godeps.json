@@ -47,7 +47,7 @@
 		},
 		{
 			"ImportPath": "github.com/antongulenko/golib",
-			"Rev": "5a6d0f3b88f33cf4e35d0149c8f17bda2b2f6df6"
+			"Rev": "2d21a8a4046f769f5545f9ff7b00281c01e7a54e"
 		},
 		{
 			"ImportPath": "github.com/cenk/hub",
@@ -332,6 +332,10 @@
 		{
 			"ImportPath": "gopkg.in/xmlpath.v1",
 			"Rev": "a146725ea6e7e357ca683ef3e02e8a403742b9c0"
+		},
+		{
+			"ImportPath": "golang.org/x/text/width",
+			"Rev": "2910a502d2bf9e43193af9d68ca516529614eed3"
 		}
 	]
 }
