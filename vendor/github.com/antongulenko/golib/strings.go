@@ -64,7 +64,7 @@ func Substring(str string, iFrom int, iTo int) string {
 	}
 
 	iLen := iTo - iFrom
-	possibleColor := false
+	possibleColor := true // TODO fix
 
 	// Find the end in the input string
 	to := 0
