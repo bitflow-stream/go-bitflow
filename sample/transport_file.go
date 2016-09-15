@@ -289,7 +289,8 @@ func (sink *FileSink) openNextFile() (err error) {
 		}
 		sink.file_num++
 
-		file, err := os.Create(name)
+		var file *os.File
+		file, err = os.Create(name)
 		if err == nil {
 			sink.stream = sink.Writer.OpenBuffered(file, sink.Marshaller, sink.IoBuffer)
 			log.WithField("file", file.Name()).Println("Opened file")
