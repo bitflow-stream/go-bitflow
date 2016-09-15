@@ -3,21 +3,38 @@ package golib
 import (
 	"bytes"
 
+	"golang.org/x/text/width"
+
 	"github.com/lunixbochs/vtclean"
-	"golang.org/x/text/unicode/norm"
 )
 
 // Return the number of normalized utf8-runes within the cleaned string.
 // Clean means no terminal escape characters and no color codes.
 func StringLength(str string) (strlen int) {
 	str = vtclean.Clean(str, false)
-	var ia norm.Iter
-	ia.InitString(norm.NFKD, str)
-	for ; !ia.Done(); ia.Next() {
-		strlen += 1
+	for str != "" {
+		_, rest, width := ReadRune(str)
+		str = rest
+		strlen += width
 	}
 	// Alternative:
 	// strlen = utf8.RuneCountInString(str)
+	// Alternative:
+	// var ia norm.Iter
+	// ia.InitString(norm.NFKD, str)
+	return
+}
+
+func ReadRune(input string) (theRune string, rest string, runeWidth int) {
+	prop, size := width.LookupString(input)
+	rest = input[size:]
+	theRune = input[:size]
+	switch prop.Kind() {
+	case width.EastAsianFullwidth, width.EastAsianHalfwidth, width.EastAsianWide:
+		runeWidth = 2
+	default:
+		runeWidth = 1
+	}
 	return
 }
 
@@ -25,60 +42,57 @@ func StringLength(str string) (strlen int) {
 // Clean means no terminal escape characters and no color codes.
 // All runes and special codes will be preserved in the output string.
 func Substring(str string, iFrom int, iTo int) string {
-	var ia norm.Iter
 
 	// Find the start in the input string
-	from := 0
-	ia.InitString(norm.NFKD, str)
 	buf := bytes.NewBuffer(make([]byte, 0, len(str)))
-	numRunes := 0
+	textWidth := 0
 	cleanedLen := 0
-	for !ia.Done() {
-		from = ia.Pos()
+	for str != "" && textWidth < iFrom {
+		runeStr, rest, width := ReadRune(str)
+		buf.Write([]byte(runeStr))
+
 		cleaned := vtclean.Clean(buf.String(), false)
 		if len(cleaned) > cleanedLen {
+			// A visible rune was added
 			cleanedLen = len(cleaned)
-			numRunes++
+			textWidth += width
 		}
-		if numRunes >= iFrom {
+		if textWidth >= iFrom {
 			break
 		}
-		part := ia.Next()
-		buf.Write(part)
+		str = rest
 	}
 
 	iLen := iTo - iFrom
-	str = str[from:]
 	possibleColor := false
 
 	// Find the end in the input string
-	to := len(str)
-	ia.InitString(norm.NFKD, str)
+	to := 0
+	suffix := str[:]
 	buf.Reset()
-	numRunes = 0
+	textWidth = 0
 	cleanedLen = 0
-	for !ia.Done() {
-		part := ia.Next()
-		buf.Write(part)
-		to = ia.Pos()
-		bufStr := buf.String()
-		cleaned := vtclean.Clean(bufStr, false)
+	for str != "" && textWidth < iLen {
+		runeStr, rest, width := ReadRune(str)
+		buf.Write([]byte(runeStr))
+
+		cleaned := vtclean.Clean(buf.String(), false)
 		if len(cleaned) > cleanedLen {
+			// A visible rune was added
 			cleanedLen = len(cleaned)
-			numRunes++
+			textWidth += width
 		}
-		if len(cleaned) != len(bufStr) {
-			possibleColor = true
-		}
-		if numRunes >= iLen {
+		if textWidth > iLen {
 			break
 		}
+		str = rest
+		to += len(runeStr)
 	}
 
-	str = str[:to]
+	suffix = suffix[:to]
 	if possibleColor {
 		// Might contain color codes, make sure to disable colors at the end
-		str = str + "\033[0m"
+		suffix += "\033[0m"
 	}
-	return str
+	return suffix
 }
