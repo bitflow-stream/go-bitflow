@@ -114,7 +114,9 @@ func (printer *TimerangePrinter) Sample(sample sample.Sample, header sample.Head
 }
 
 func (printer *TimerangePrinter) Close() {
-	log.Printf("Time range of %v samples: %v - %v", printer.count, printer.from.Format(TimrangePrinterFormat), printer.to.Format(TimrangePrinterFormat))
+	duration := printer.to.Sub(printer.from) / time.Millisecond * time.Millisecond // Round
+	log.Printf("Time range of %v samples: %v - %v (%v)", printer.count,
+		printer.from.Format(TimrangePrinterFormat), printer.to.Format(TimrangePrinterFormat), duration)
 	printer.AbstractProcessor.Close()
 }
 
