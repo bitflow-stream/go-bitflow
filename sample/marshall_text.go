@@ -24,6 +24,8 @@ type TextMarshaller struct {
 	Columns      int // Will be inferred from TextWidth if <= 0
 	Spacing      int
 	AssumeStdout bool
+
+	terminal_size_warned bool
 }
 
 func (*TextMarshaller) String() string {
@@ -90,10 +92,16 @@ func (m *TextMarshaller) fixedColumnWidths(lines []string, columns int, spacing 
 func (m *TextMarshaller) defaultTextWidth(writer io.Writer) int {
 	if m.AssumeStdout || writer == os.Stdout {
 		if size, err := golib.GetTerminalSize(); err != nil {
-			log.Warnln("Failed to get terminal size:", err)
-			return 0
+			if !m.terminal_size_warned {
+				log.Warnln("Failed to get terminal size, using default:", text_marshaller_default_width, "-", err)
+				m.terminal_size_warned = true
+			}
+			return text_marshaller_default_width
 		} else if size.Col == 0 {
-			log.Warnln("Terminal size returned as 0, using default:", text_marshaller_default_width)
+			if !m.terminal_size_warned {
+				log.Warnln("Terminal size returned as 0, using default:", text_marshaller_default_width)
+				m.terminal_size_warned = true
+			}
 			return text_marshaller_default_width
 		} else {
 			return int(size.Col)
