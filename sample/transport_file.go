@@ -232,10 +232,13 @@ func ListMatchingFiles(dir string, regexStr string) ([]string, error) {
 }
 
 // ==================== File data sink ====================
+const max_output_file_errors = 5
+
 type FileSink struct {
 	AbstractMarshallingMetricSink
-	Filename string
-	IoBuffer int
+	Filename   string
+	IoBuffer   int
+	CleanFiles bool
 
 	group      FileGroup
 	lastHeader Header
@@ -252,8 +255,10 @@ func (sink *FileSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	log.WithFields(log.Fields{"file": sink.Filename, "format": sink.Marshaller}).Println("Writing samples")
 	sink.closed = golib.NewOneshotCondition()
 	sink.group = NewFileGroup(sink.Filename)
-	if err := sink.group.DeleteFiles(); err != nil {
-		return golib.TaskFinishedError(fmt.Errorf("Failed to clean result files: %v", err))
+	if sink.CleanFiles {
+		if err := sink.group.DeleteFiles(); err != nil {
+			return golib.TaskFinishedError(fmt.Errorf("Failed to clean result files: %v", err))
+		}
 	}
 	sink.file_num = 0
 	return nil
@@ -281,22 +286,46 @@ func (sink *FileSink) openNextFile() (err error) {
 		if err = sink.flush(); err != nil {
 			return
 		}
-		var name string
-		if sink.file_num == 0 {
-			name = sink.group.BuildFilenameStr("")
-		} else {
-			name = sink.group.BuildFilename(sink.file_num)
-		}
-		sink.file_num++
-
 		var file *os.File
-		file, err = os.Create(name)
+		file, err = sink.openNextNewFile()
 		if err == nil {
 			sink.stream = sink.Writer.OpenBuffered(file, sink.Marshaller, sink.IoBuffer)
 			log.WithField("file", file.Name()).Println("Opened file")
 		}
 	})
 	return
+}
+
+func (sink *FileSink) openNextNewFile() (file *os.File, err error) {
+	num_errors := 0
+	file_num := sink.file_num
+	for {
+		var name string
+		if file_num == 0 {
+			name = sink.group.BuildFilenameStr("")
+		} else {
+			name = sink.group.BuildFilename(file_num)
+		}
+		file_num++
+
+		if _, err = os.Stat(name); os.IsNotExist(err) {
+			// File does not exist, try to open and create it
+			file, err = os.Create(name)
+		} else if err == nil {
+			// File exists, try next one
+			continue
+		}
+
+		if err == nil {
+			sink.file_num = file_num
+			return
+		}
+		log.WithField("file", name).Warnln("Failed to open output file:", err)
+		num_errors++
+		if num_errors >= max_output_file_errors {
+			return
+		}
+	}
 }
 
 func (sink *FileSink) Header(header Header) error {
