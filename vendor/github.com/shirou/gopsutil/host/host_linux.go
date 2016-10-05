@@ -44,6 +44,10 @@ func Info() (*InfoStat, error) {
 		ret.PlatformFamily = family
 		ret.PlatformVersion = version
 	}
+	kernelVersion, err := KernelVersion()
+	if err == nil {
+		ret.KernelVersion = kernelVersion
+	}
 
 	system, role, err := Virtualization()
 	if err == nil {
@@ -59,6 +63,22 @@ func Info() (*InfoStat, error) {
 
 	if numProcs, err := common.NumProcs(); err == nil {
 		ret.Procs = numProcs
+	}
+
+	sysProductUUID := common.HostSys("class/dmi/id/product_uuid")
+	switch {
+	case common.PathExists(sysProductUUID):
+		lines, err := common.ReadLines(sysProductUUID)
+		if err == nil && len(lines) > 0 && lines[0] != "" {
+			ret.HostID = lines[0]
+			break
+		}
+		fallthrough
+	default:
+		values, err := common.DoSysctrl("kernel.random.boot_id")
+		if err == nil && len(values) == 1 && values[0] != "" {
+			ret.HostID = values[0]
+		}
 	}
 
 	return ret, nil
@@ -336,6 +356,22 @@ func PlatformInformation() (platform string, family string, version string, err 
 
 	return platform, family, version, nil
 
+}
+
+func KernelVersion() (version string, err error) {
+	filename := common.HostProc("sys/kernel/osrelease")
+	if common.PathExists(filename) {
+		contents, err := common.ReadLines(filename)
+		if err != nil {
+			return "", err
+		}
+
+		if len(contents) > 0 {
+			version = contents[0]
+		}
+	}
+
+	return version, nil
 }
 
 func getRedhatishVersion(contents []string) string {

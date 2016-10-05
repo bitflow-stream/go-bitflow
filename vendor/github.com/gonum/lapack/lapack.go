@@ -10,13 +10,7 @@ const None = 'N'
 
 type Job byte
 
-// CompSV determines if the singular values are to be computed in compact form.
-type CompSV byte
-
-const (
-	Compact  CompSV = 'P'
-	Explicit CompSV = 'I'
-)
+type Comp byte
 
 // Complex128 defines the public complex128 LAPACK API supported by gonum/lapack.
 type Complex128 interface{}
@@ -24,6 +18,7 @@ type Complex128 interface{}
 // Float64 defines the public float64 LAPACK API supported by gonum/lapack.
 type Float64 interface {
 	Dgecon(norm MatrixNorm, n int, a []float64, lda int, anorm float64, work []float64, iwork []int) float64
+	Dgeev(jobvl JobLeftEV, jobvr JobRightEV, n int, a []float64, lda int, wr, wi []float64, vl []float64, ldvl int, vr []float64, ldvr int, work []float64, lwork int) (first int)
 	Dgels(trans blas.Transpose, m, n, nrhs int, a []float64, lda int, b []float64, ldb int, work []float64, lwork int) bool
 	Dgelqf(m, n int, a []float64, lda int, tau, work []float64, lwork int)
 	Dgeqrf(m, n int, a []float64, lda int, tau, work []float64, lwork int)
@@ -108,9 +103,9 @@ type SVDJob byte
 
 const (
 	SVDAll       SVDJob = 'A' // Compute all singular vectors
-	SVDInPlace          = 'S' // Compute the first singular vectors and store them in provided storage.
-	SVDOverwrite        = 'O' // Compute the singular vectors and store them in input matrix
-	SVDNone             = 'N' // Do not compute singular vectors
+	SVDInPlace   SVDJob = 'S' // Compute the first singular vectors and store them in provided storage.
+	SVDOverwrite SVDJob = 'O' // Compute the singular vectors and store them in input matrix
+	SVDNone      SVDJob = 'N' // Do not compute singular vectors
 )
 
 // EigComp specifies the type of eigenvalue decomposition.
@@ -121,8 +116,56 @@ const (
 	EigValueOnly EigComp = 'N'
 	// EigDecomp specifies to compute the eigenvalues and eigenvectors of the
 	// full symmetric matrix.
-	EigDecomp = 'V'
+	EigDecomp EigComp = 'V'
 	// EigBoth specifies to compute both the eigenvalues and eigenvectors of the
 	// input tridiagonal matrix.
-	EigBoth = 'I'
+	EigBoth EigComp = 'I'
+)
+
+// Jobs for Dgebal.
+const (
+	Permute      Job = 'P'
+	Scale        Job = 'S'
+	PermuteScale Job = 'B'
+)
+
+// Jobs and Comps for Dhseqr.
+const (
+	EigenvaluesOnly     Job = 'E'
+	EigenvaluesAndSchur Job = 'S'
+
+	InitZ   Comp = 'I'
+	UpdateZ Comp = 'V'
+)
+
+// EigVecSide specifies what eigenvectors will be computed.
+type EigVecSide byte
+
+// EigVecSide constants for Dtrevc3.
+const (
+	RightEigVec     EigVecSide = 'R' // Compute right eigenvectors only.
+	LeftEigVec      EigVecSide = 'L' // Compute left eigenvectors only.
+	RightLeftEigVec EigVecSide = 'B' // Compute both right and left eigenvectors.
+)
+
+// HowMany specifies which eigenvectors will be computed.
+type HowMany byte
+
+// HowMany constants for Dhseqr.
+const (
+	AllEigVec      HowMany = 'A' // Compute all right and/or left eigenvectors.
+	AllEigVecMulQ  HowMany = 'B' // Compute all right and/or left eigenvectors multiplied by an input matrix.
+	SelectedEigVec HowMany = 'S' // Compute selected right and/or left eigenvectors.
+)
+
+// Job types for Dgeev.
+type (
+	JobLeftEV  byte
+	JobRightEV byte
+)
+
+// Job constants for Dgeev.
+const (
+	ComputeLeftEV  JobLeftEV  = 'V'
+	ComputeRightEV JobRightEV = 'V'
 )

@@ -510,6 +510,23 @@ func (err VirError) Error() string {
 		err.Code, err.Domain, err.Message)
 }
 
+var ErrNoError = VirError{
+	Code:    VIR_ERR_OK,
+	Domain:  VIR_FROM_NONE,
+	Message: "",
+	Level:   VIR_ERR_NONE,
+}
+
+func GetLastError() VirError {
+	err := C.virGetLastError()
+	if err == nil {
+		return ErrNoError
+	}
+	virErr := newError(err)
+	C.virResetError(err)
+	return virErr
+}
+
 // Callback handling for errors
 type ErrorCallback func(error VirError, opaque func())
 type errorContext struct {
@@ -556,14 +573,16 @@ func (c *VirConnection) SetErrorFunc(cb ErrorCallback, opaque func()) {
 	goCallbackId := registerCallbackId(context)
 	callbackPtr := unsafe.Pointer(C.errorConnCallback_cgo)
 	C.virConnSetErrorFunc_cgo(c.ptr, C.long(goCallbackId), C.virErrorFunc(callbackPtr))
-	c.errCallbackId = &goCallbackId
+	connData := getConnectionData(c)
+	connData.errCallbackId = &goCallbackId
 }
 
 func (c *VirConnection) UnsetErrorFunc() {
 	C.virConnSetErrorFunc(c.ptr, nil, nil)
-	if c.errCallbackId != nil {
-		freeCallbackId(*c.errCallbackId)
-		c.errCallbackId = nil
+	connData := getConnectionData(c)
+	if connData.errCallbackId != nil {
+		freeCallbackId(*connData.errCallbackId)
+		connData.errCallbackId = nil
 	}
 }
 

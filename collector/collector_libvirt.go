@@ -168,7 +168,7 @@ func (col *LibvirtCollector) connection() (*libvirt.VirConnection, error) {
 
 func (col *LibvirtCollector) Close() {
 	if col.conn != nil {
-		if err := col.conn.UnrefAndCloseConnection(); err != nil {
+		if _, err := col.conn.CloseConnection(); err != nil {
 			log.Errorln("Error closing libvirt connection:", err)
 		}
 		col.conn = nil
