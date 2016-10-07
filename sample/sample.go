@@ -62,6 +62,18 @@ func (sample *Sample) SetTag(name, value string) {
 	sample.tags[name] = value
 }
 
+func (sample *Sample) DeleteTag(name string) {
+	if _, ok := sample.tags[name]; ok {
+		l := len(sample.orderedTags)
+		index := sort.SearchStrings(sample.orderedTags, name)
+		if index < l && index >= 0 && sample.orderedTags[index] == name {
+			// Delete element at index
+			sample.orderedTags = append(sample.orderedTags[:index], sample.orderedTags[index+1:]...)
+		}
+		delete(sample.tags, name)
+	}
+}
+
 func (sample *Sample) Tag(name string) string {
 	return sample.tags[name]
 }
