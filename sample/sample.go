@@ -157,15 +157,24 @@ func (sample *Sample) Check(header Header) error {
 	return nil
 }
 
+// HACK global lock to avoid potential deadlock in CopyMetadataFrom() because of acquiring 2 locks.
+// TODO Find other solution
+var globalCopyMetadataLock sync.Mutex
+
 func (sample *Sample) CopyMetadataFrom(other Sample) {
+	globalCopyMetadataLock.Lock()
+	defer globalCopyMetadataLock.Unlock()
+
 	sample.lockWrite(func() {
-		sample.Time = other.Time
-		sample.tags = make(map[string]string, len(other.tags))
-		sample.orderedTags = make([]string, len(other.orderedTags))
-		copy(sample.orderedTags, other.orderedTags)
-		for key, val := range other.tags {
-			sample.tags[key] = val
-		}
+		other.lockRead(func() {
+			sample.Time = other.Time
+			sample.tags = make(map[string]string, len(other.tags))
+			sample.orderedTags = make([]string, len(other.orderedTags))
+			copy(sample.orderedTags, other.orderedTags)
+			for key, val := range other.tags {
+				sample.tags[key] = val
+			}
+		})
 	})
 }
 
