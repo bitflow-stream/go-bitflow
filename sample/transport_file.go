@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 
@@ -109,6 +110,8 @@ func (group *FileGroup) DeleteFiles() error {
 }
 
 // ==================== File data source ====================
+const ReadingDirWarnDuration = 2000 * time.Millisecond
+
 type FileSource struct {
 	AbstractMetricSource
 	Reader          SampleReader
@@ -218,6 +221,12 @@ func ListMatchingFiles(dir string, regexStr string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	finishedReading := false
+	time.AfterFunc(ReadingDirWarnDuration, func() {
+		if !finishedReading {
+			log.Warnf("Reading directory \"%v\"...", dir)
+		}
+	})
 	var result []string
 	walkErr := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -228,6 +237,7 @@ func ListMatchingFiles(dir string, regexStr string) ([]string, error) {
 		}
 		return nil
 	})
+	finishedReading = true
 	return result, walkErr
 }
 
