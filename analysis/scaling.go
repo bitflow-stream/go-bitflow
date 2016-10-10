@@ -41,7 +41,7 @@ func (s *MinMaxScaling) ProcessBatch(header *sample.Header, samples []*sample.Sa
 		}
 		var outSample sample.Sample
 		outSample.Values = values
-		outSample.CopyMetadataFrom(*inSample)
+		outSample.CopyMetadataFrom(inSample)
 		out[num] = &outSample
 	}
 	return header, out, nil
@@ -77,7 +77,7 @@ func (s *StandardizationScaling) ProcessBatch(header *sample.Header, samples []*
 		}
 		var outSample sample.Sample
 		outSample.Values = values
-		outSample.CopyMetadataFrom(*inSample)
+		outSample.CopyMetadataFrom(inSample)
 		out[num] = &outSample
 	}
 	return header, out, nil

@@ -32,11 +32,11 @@ func (*TextMarshaller) String() string {
 	return "text"
 }
 
-func (m *TextMarshaller) WriteHeader(header Header, writer io.Writer) error {
+func (m *TextMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	return nil
 }
 
-func (m *TextMarshaller) WriteSample(sample Sample, header Header, writer io.Writer) error {
+func (m *TextMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}

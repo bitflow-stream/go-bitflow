@@ -10,8 +10,8 @@ import (
 
 // ==================== Data Sink ====================
 type MetricSinkBase interface {
-	Header(header Header) error
-	Sample(sample Sample, header Header) error
+	Header(header *Header) error
+	Sample(sample *Sample, header *Header) error
 }
 
 type MetricSink interface {
@@ -131,7 +131,7 @@ func (agg AggregateSink) SetMarshaller(marshaller Marshaller) {
 	}
 }
 
-func (agg AggregateSink) Header(header Header) error {
+func (agg AggregateSink) Header(header *Header) error {
 	var errors golib.MultiError
 	for _, sink := range agg {
 		if err := sink.Header(header); err != nil {
@@ -141,7 +141,7 @@ func (agg AggregateSink) Header(header Header) error {
 	return errors.NilOrError()
 }
 
-func (agg AggregateSink) Sample(sample Sample, header Header) error {
+func (agg AggregateSink) Sample(sample *Sample, header *Header) error {
 	if len(agg) == 0 {
 		// Perform sanity check, since no child-sinks are there to perform it
 		return sample.Check(header)
@@ -175,7 +175,7 @@ func (state *ParallelSampleStream) HasError() bool {
 type BufferedSample struct {
 	stream   *ParallelSampleStream
 	data     []byte
-	sample   Sample
+	sample   *Sample
 	done     bool
 	doneCond *sync.Cond
 }
@@ -204,13 +204,13 @@ type SynchronizingMetricSink struct {
 	mutex        sync.Mutex
 }
 
-func (s *SynchronizingMetricSink) Header(header Header) error {
+func (s *SynchronizingMetricSink) Header(header *Header) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	return s.OutgoingSink.Header(header)
 }
 
-func (s *SynchronizingMetricSink) Sample(sample Sample, header Header) error {
+func (s *SynchronizingMetricSink) Sample(sample *Sample, header *Header) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	return s.OutgoingSink.Sample(sample, header)

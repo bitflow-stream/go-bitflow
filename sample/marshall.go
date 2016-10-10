@@ -43,19 +43,19 @@ func detectFormat(input *bufio.Reader) (Unmarshaller, error) {
 
 type Marshaller interface {
 	String() string
-	WriteHeader(header Header, output io.Writer) error
-	WriteSample(sample Sample, header Header, output io.Writer) error
+	WriteHeader(header *Header, output io.Writer) error
+	WriteSample(sample *Sample, header *Header, output io.Writer) error
 }
 
 type Unmarshaller interface {
 	String() string
 
 	// io.EOF is not valid
-	ReadHeader(input *bufio.Reader) (Header, error)
+	ReadHeader(input *bufio.Reader) (*Header, error)
 
 	// io.EOF indicates end of stream
-	ReadSampleData(header Header, input *bufio.Reader) ([]byte, error)
-	ParseSample(header Header, data []byte) (Sample, error)
+	ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error)
+	ParseSample(header *Header, data []byte) (*Sample, error)
 }
 
 // Helper type for more concise Write code by avoiding error checks on every

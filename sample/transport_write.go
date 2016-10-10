@@ -69,7 +69,7 @@ func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *Sampl
 	return stream
 }
 
-func (stream *SampleOutputStream) Header(header Header) error {
+func (stream *SampleOutputStream) Header(header *Header) error {
 	if stream == nil {
 		return nil
 	}
@@ -85,7 +85,7 @@ func (stream *SampleOutputStream) Header(header Header) error {
 		if err := stream.flushBuffered(); err != nil {
 			stream.err = err
 		}
-		stream.header = &header
+		stream.header = header
 	} else {
 		if !stream.HasError() && stream.header != nil {
 			return errors.New("A header has already been written to this stream")
@@ -101,7 +101,7 @@ func (stream *SampleOutputStream) flushBuffered() error {
 	return nil
 }
 
-func (stream *SampleOutputStream) Sample(sample Sample) error {
+func (stream *SampleOutputStream) Sample(sample *Sample) error {
 	if stream.HasError() {
 		return stream.err
 	}
@@ -152,7 +152,7 @@ func (stream *SampleOutputStream) marshallOne(sample *BufferedSample) {
 		return
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, stream.marshallBuffer))
-	stream.marshaller.WriteSample(sample.sample, *stream.header, buf)
+	stream.marshaller.WriteSample(sample.sample, stream.header, buf)
 	if l := buf.Len(); l > stream.marshallBuffer {
 		// Avoid buffer copies for future samples
 		// TODO could reuse allocated buffers

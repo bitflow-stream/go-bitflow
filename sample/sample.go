@@ -32,8 +32,8 @@ type Header struct {
 	HasTags bool
 }
 
-func (h *Header) Clone(newFields []string) Header {
-	return Header{
+func (h *Header) Clone(newFields []string) *Header {
+	return &Header{
 		HasTags: h.HasTags,
 		Fields:  newFields,
 	}
@@ -149,7 +149,7 @@ func (sample *Sample) ParseTagString(tags string) (err error) {
 }
 
 // This must be called in the Sample() method of every MetricSink implementation
-func (sample *Sample) Check(header Header) error {
+func (sample *Sample) Check(header *Header) error {
 	if len(sample.Values) != len(header.Fields) {
 		return fmt.Errorf("Unexpected number of values in sample: %v, expected %v",
 			len(sample.Values), len(header.Fields))
@@ -161,7 +161,7 @@ func (sample *Sample) Check(header Header) error {
 // TODO Find other solution
 var globalCopyMetadataLock sync.Mutex
 
-func (sample *Sample) CopyMetadataFrom(other Sample) {
+func (sample *Sample) CopyMetadataFrom(other *Sample) {
 	globalCopyMetadataLock.Lock()
 	defer globalCopyMetadataLock.Unlock()
 
@@ -179,9 +179,11 @@ func (sample *Sample) CopyMetadataFrom(other Sample) {
 }
 
 // All metadata is copied deeply, but values are referencing the old values
-func (sample *Sample) Clone() (result Sample) {
-	result.CopyMetadataFrom(*sample)
-	result.Values = sample.Values
+func (sample *Sample) Clone() (result *Sample) {
+	result = &Sample{
+		Values: sample.Values,
+	}
+	result.CopyMetadataFrom(sample)
 	return
 }
 
@@ -231,6 +233,11 @@ func (sample *Sample) Metadata() SampleMetadata {
 	}
 }
 
-func (meta *SampleMetadata) NewSample(values []Value) Sample {
-	return Sample{Values: values, Time: meta.Time, tags: meta.Tags, orderedTags: meta.orderedTags}
+func (meta *SampleMetadata) NewSample(values []Value) *Sample {
+	return &Sample{
+		Values:      values,
+		Time:        meta.Time,
+		tags:        meta.Tags,
+		orderedTags: meta.orderedTags,
+	}
 }

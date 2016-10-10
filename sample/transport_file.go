@@ -241,7 +241,7 @@ type FileSink struct {
 	CleanFiles bool
 
 	group      FileGroup
-	lastHeader Header
+	lastHeader *Header
 	file_num   int
 	stream     *SampleOutputStream
 	closed     *golib.OneshotCondition
@@ -328,8 +328,8 @@ func (sink *FileSink) openNextNewFile() (file *os.File, err error) {
 	}
 }
 
-func (sink *FileSink) Header(header Header) error {
-	if !header.Equals(&sink.lastHeader) {
+func (sink *FileSink) Header(header *Header) error {
+	if !header.Equals(sink.lastHeader) {
 		if err := sink.openNextFile(); err != nil {
 			return err
 		}
@@ -339,7 +339,7 @@ func (sink *FileSink) Header(header Header) error {
 	return nil
 }
 
-func (sink *FileSink) Sample(sample Sample, header Header) error {
+func (sink *FileSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}

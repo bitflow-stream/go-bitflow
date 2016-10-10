@@ -212,7 +212,7 @@ type PickHead struct {
 	processed int // internal variable
 }
 
-func (head *PickHead) Sample(sample sample.Sample, header sample.Header) error {
+func (head *PickHead) Sample(sample *sample.Sample, header *sample.Header) error {
 	if err := head.Check(sample, header); err != nil {
 		return err
 	}

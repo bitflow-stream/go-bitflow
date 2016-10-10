@@ -40,7 +40,7 @@ func (stats *FeatureStats) Push(values ...float64) {
 	}
 }
 
-func (stats *StoreStats) Sample(inSample sample.Sample, header sample.Header) error {
+func (stats *StoreStats) Sample(inSample *sample.Sample, header *sample.Header) error {
 	if err := stats.Check(inSample, header); err != nil {
 		return err
 	}

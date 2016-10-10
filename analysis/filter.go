@@ -8,11 +8,11 @@ type SampleFilter struct {
 	IncludeFilter func(inSample *sample.Sample) bool // Return true if sample should be INcluded
 }
 
-func (p *SampleFilter) Sample(inSample sample.Sample, header sample.Header) error {
+func (p *SampleFilter) Sample(inSample *sample.Sample, header *sample.Header) error {
 	if err := p.Check(inSample, header); err != nil {
 		return err
 	}
-	if filter := p.IncludeFilter; filter != nil && filter(&inSample) {
+	if filter := p.IncludeFilter; filter != nil && filter(inSample) {
 		return p.OutgoingSink.Sample(inSample, header)
 	} else {
 		return nil

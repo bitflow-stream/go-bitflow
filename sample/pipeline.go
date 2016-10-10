@@ -5,8 +5,8 @@ import "github.com/antongulenko/golib"
 // Combination of MetricSink and MetricSource
 type SampleProcessor interface {
 	golib.Task
-	Header(header Header) error
-	Sample(sample Sample, header Header) error
+	Header(header *Header) error
+	Sample(sample *Sample, header *Header) error
 	SetSink(sink MetricSink)
 	Close()
 }

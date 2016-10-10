@@ -37,23 +37,23 @@ func (p *BatchProcessor) checkHeader(header *sample.Header) error {
 	return nil
 }
 
-func (p *BatchProcessor) Header(header sample.Header) error {
+func (p *BatchProcessor) Header(header *sample.Header) error {
 	if p.header == nil {
-		p.header = &header
-	} else if err := p.checkHeader(&header); err != nil {
+		p.header = header
+	} else if err := p.checkHeader(header); err != nil {
 		return err
 	}
 	return p.CheckSink()
 }
 
-func (p *BatchProcessor) Sample(sample sample.Sample, header sample.Header) error {
+func (p *BatchProcessor) Sample(sample *sample.Sample, header *sample.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
-	if err := p.checkHeader(&header); err != nil {
+	if err := p.checkHeader(header); err != nil {
 		return err
 	}
-	p.samples = append(p.samples, &sample)
+	p.samples = append(p.samples, sample)
 	return nil
 }
 
@@ -67,12 +67,12 @@ func (p *BatchProcessor) Close() {
 		p.Error(err)
 	} else {
 		log.Println("Flushing", len(p.samples), "batched samples")
-		if err := p.OutgoingSink.Header(*p.header); err != nil {
+		if err := p.OutgoingSink.Header(p.header); err != nil {
 			p.Error(fmt.Errorf("Error flushing batch header: %v", err))
 			return
 		}
 		for _, sample := range p.samples {
-			if err := p.OutgoingSink.Sample(*sample, *p.header); err != nil {
+			if err := p.OutgoingSink.Sample(sample, p.header); err != nil {
 				p.Error(fmt.Errorf("Error flushing batch: %v", err))
 				return
 			}
@@ -194,11 +194,11 @@ func NewMultiHeaderMerger() *MultiHeaderMerger {
 	}
 }
 
-func (p *MultiHeaderMerger) Header(_ sample.Header) error {
+func (p *MultiHeaderMerger) Header(_ *sample.Header) error {
 	return p.CheckSink()
 }
 
-func (p *MultiHeaderMerger) Sample(sample sample.Sample, header sample.Header) error {
+func (p *MultiHeaderMerger) Sample(sample *sample.Sample, header *sample.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func (p *MultiHeaderMerger) Sample(sample sample.Sample, header sample.Header) e
 	return nil
 }
 
-func (p *MultiHeaderMerger) addSample(incomingSample sample.Sample, header sample.Header) {
+func (p *MultiHeaderMerger) addSample(incomingSample *sample.Sample, header *sample.Header) {
 	handledMetrics := make(map[string]bool, len(header.Fields))
 	for i, field := range header.Fields {
 		metrics, ok := p.metrics[field]
@@ -251,16 +251,16 @@ func (p *MultiHeaderMerger) Close() {
 	}
 }
 
-func (p *MultiHeaderMerger) reconstructHeader() sample.Header {
+func (p *MultiHeaderMerger) reconstructHeader() *sample.Header {
 	fields := make([]string, 0, len(p.metrics))
 	for field := range p.metrics {
 		fields = append(fields, field)
 	}
 	sort.Strings(fields)
-	return sample.Header{Fields: fields, HasTags: p.hasTags}
+	return &sample.Header{Fields: fields, HasTags: p.hasTags}
 }
 
-func (p *MultiHeaderMerger) reconstructSample(num int, header sample.Header) sample.Sample {
+func (p *MultiHeaderMerger) reconstructSample(num int, header *sample.Header) *sample.Sample {
 	values := make([]sample.Value, len(p.metrics))
 	for i, field := range header.Fields {
 		slice := p.metrics[field]

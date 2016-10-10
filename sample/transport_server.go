@@ -109,7 +109,7 @@ type TCPListenerSink struct {
 	TcpMetricSink
 	connections map[*TcpWriteConn]bool
 	task        *golib.TCPListenerTask
-	lastHeader  Header
+	lastHeader  *Header
 	headerLock  sync.Mutex
 }
 
@@ -152,7 +152,7 @@ func (sink *TCPListenerSink) handleConnection(_ *sync.WaitGroup, conn *net.TCPCo
 	}
 }
 
-func (sink *TCPListenerSink) openTcpOutputStream(conn *net.TCPConn) (*TcpWriteConn, Header) {
+func (sink *TCPListenerSink) openTcpOutputStream(conn *net.TCPConn) (*TcpWriteConn, *Header) {
 	sink.headerLock.Lock()
 	defer sink.headerLock.Unlock()
 	writeConn := sink.OpenWriteConn(conn)
@@ -160,7 +160,7 @@ func (sink *TCPListenerSink) openTcpOutputStream(conn *net.TCPConn) (*TcpWriteCo
 	return writeConn, sink.lastHeader
 }
 
-func (sink *TCPListenerSink) Header(header Header) error {
+func (sink *TCPListenerSink) Header(header *Header) error {
 	sink.headerLock.Lock()
 	defer sink.headerLock.Unlock()
 	sink.lastHeader = header
@@ -171,7 +171,7 @@ func (sink *TCPListenerSink) Header(header Header) error {
 	return nil
 }
 
-func (sink *TCPListenerSink) Sample(sample Sample, header Header) error {
+func (sink *TCPListenerSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}

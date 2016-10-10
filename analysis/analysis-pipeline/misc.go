@@ -39,7 +39,7 @@ func NewUniqueTagCounter(tag string) *UniqueTagPrinter {
 	}
 }
 
-func (printer *UniqueTagPrinter) Sample(sample sample.Sample, header sample.Header) error {
+func (printer *UniqueTagPrinter) Sample(sample *sample.Sample, header *sample.Header) error {
 	if err := printer.Check(sample, header); err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ type TimerangePrinter struct {
 	count int
 }
 
-func (printer *TimerangePrinter) Sample(sample sample.Sample, header sample.Header) error {
+func (printer *TimerangePrinter) Sample(sample *sample.Sample, header *sample.Header) error {
 	if err := printer.Check(sample, header); err != nil {
 		return err
 	}

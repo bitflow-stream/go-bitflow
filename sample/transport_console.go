@@ -30,13 +30,13 @@ func (sink *ConsoleSink) Close() {
 	}
 }
 
-func (sink *ConsoleSink) Header(header Header) error {
+func (sink *ConsoleSink) Header(header *Header) error {
 	sink.Stop()
 	sink.stream = sink.Writer.Open(nopWriteCloser{os.Stdout}, sink.Marshaller)
 	return sink.stream.Header(header)
 }
 
-func (sink *ConsoleSink) Sample(sample Sample, header Header) error {
+func (sink *ConsoleSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}

@@ -24,7 +24,7 @@ func (*BinaryMarshaller) String() string {
 	return "binary"
 }
 
-func (*BinaryMarshaller) WriteHeader(header Header, writer io.Writer) error {
+func (*BinaryMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
 	w.WriteStr(time_col)
 	w.WriteByte(binary_separator)
@@ -40,7 +40,7 @@ func (*BinaryMarshaller) WriteHeader(header Header, writer io.Writer) error {
 	return w.Err
 }
 
-func (*BinaryMarshaller) ReadHeader(reader *bufio.Reader) (header Header, err error) {
+func (*BinaryMarshaller) ReadHeader(reader *bufio.Reader) (header *Header, err error) {
 	name, err := reader.ReadBytes(binary_separator)
 	if err != nil {
 		return
@@ -49,6 +49,7 @@ func (*BinaryMarshaller) ReadHeader(reader *bufio.Reader) (header Header, err er
 		return
 	}
 
+	header = new(Header)
 	first := true
 	for {
 		var nameBytes []byte
@@ -69,7 +70,7 @@ func (*BinaryMarshaller) ReadHeader(reader *bufio.Reader) (header Header, err er
 	}
 }
 
-func (m *BinaryMarshaller) WriteSample(sample Sample, header Header, writer io.Writer) error {
+func (m *BinaryMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
 	// Time as big-endian uint64 nanoseconds since Unix epoch
 	tim := make([]byte, timeBytes)
 	binary.BigEndian.PutUint64(tim, uint64(sample.Time.UnixNano()))
@@ -100,7 +101,7 @@ func (m *BinaryMarshaller) WriteSample(sample Sample, header Header, writer io.W
 	return nil
 }
 
-func (*BinaryMarshaller) ReadSampleData(header Header, input *bufio.Reader) ([]byte, error) {
+func (*BinaryMarshaller) ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error) {
 	valuelen := valBytes * len(header.Fields)
 	minlen := timeBytes + valuelen
 	data := make([]byte, minlen)
@@ -141,7 +142,7 @@ func unexpectedEOF(err error) error {
 	return err
 }
 
-func (*BinaryMarshaller) ParseSample(header Header, data []byte) (sample Sample, err error) {
+func (*BinaryMarshaller) ParseSample(header *Header, data []byte) (sample *Sample, err error) {
 	// Required size
 	size := timeBytes + len(header.Fields)*valBytes
 	if len(data) < size {
@@ -152,6 +153,7 @@ func (*BinaryMarshaller) ParseSample(header Header, data []byte) (sample Sample,
 	// Time
 	timeVal := binary.BigEndian.Uint64(data[:timeBytes])
 	data = data[timeBytes:]
+	sample = new(Sample)
 	sample.Time = time.Unix(0, int64(timeVal))
 
 	// Tags

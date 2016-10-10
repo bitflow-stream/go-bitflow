@@ -193,7 +193,7 @@ func (source *CollectorSource) collectorFor(metric string) Collector {
 	return nil
 }
 
-func (source *CollectorSource) constructSample(metrics []string) (sample.Header, []sample.Value, map[Collector]bool) {
+func (source *CollectorSource) constructSample(metrics []string) (*sample.Header, []sample.Value, map[Collector]bool) {
 	set := make(map[Collector]bool)
 
 	fields := make([]string, len(metrics))
@@ -213,9 +213,9 @@ func (source *CollectorSource) constructSample(metrics []string) (sample.Header,
 		}
 		set[collector] = true
 	}
-	header := sample.Header{Fields: fields}
+	header := &sample.Header{Fields: fields}
 	if handler := CollectedSampleHandler; handler != nil {
-		handler.HandleHeader(&header, CollectorSampleSource)
+		handler.HandleHeader(header, CollectorSampleSource)
 	}
 	return header, values, set
 }
@@ -251,7 +251,7 @@ func (source *CollectorSource) watchFailedCollector(wg *sync.WaitGroup, collecto
 	}
 }
 
-func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header sample.Header, values []sample.Value, sink sample.MetricSink, stopper *golib.Stopper) {
+func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header *sample.Header, values []sample.Value, sink sample.MetricSink, stopper *golib.Stopper) {
 	defer wg.Done()
 	for {
 		if err := sink.Header(header); err != nil {
@@ -261,12 +261,12 @@ func (source *CollectorSource) sinkMetrics(wg *sync.WaitGroup, header sample.Hea
 				return
 			}
 			for {
-				sample := sample.Sample{
+				sample := &sample.Sample{
 					Time:   time.Now(),
 					Values: values,
 				}
 				if handler := CollectedSampleHandler; handler != nil {
-					handler.HandleSample(&sample, CollectorSampleSource)
+					handler.HandleSample(sample, CollectorSampleSource)
 				}
 				if err := sink.Sample(sample, header); err != nil {
 					// When a sample fails, try sending the header again

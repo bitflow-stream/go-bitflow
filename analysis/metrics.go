@@ -13,12 +13,12 @@ import (
 type MetricMapperHelper struct {
 	Description string
 
-	inHeader   sample.Header
-	outHeader  sample.Header
+	inHeader   *sample.Header
+	outHeader  *sample.Header
 	outIndices []int
 }
 
-func (helper *MetricMapperHelper) incomingHeader(header sample.Header, constructIndices func(inHeader sample.Header) ([]int, []string)) error {
+func (helper *MetricMapperHelper) incomingHeader(header *sample.Header, constructIndices func(inHeader *sample.Header) ([]int, []string)) error {
 	helper.inHeader = header
 	var outFields []string
 	helper.outIndices, outFields = constructIndices(header)
@@ -34,7 +34,7 @@ func (helper *MetricMapperHelper) incomingHeader(header sample.Header, construct
 	return nil
 }
 
-func (helper *MetricMapperHelper) convertSample(inSample sample.Sample) sample.Sample {
+func (helper *MetricMapperHelper) convertSample(inSample *sample.Sample) *sample.Sample {
 	outValues := make([]sample.Value, len(helper.outIndices))
 	for i, index := range helper.outIndices {
 		outValues[i] = inSample.Values[index]
@@ -47,16 +47,16 @@ func (helper *MetricMapperHelper) convertSample(inSample sample.Sample) sample.S
 type AbstractMetricMapper struct {
 	AbstractProcessor
 	Description      fmt.Stringer
-	ConstructIndices func(inHeader sample.Header) ([]int, []string)
+	ConstructIndices func(inHeader *sample.Header) ([]int, []string)
 
 	helper MetricMapperHelper
 }
 
-func (self *AbstractMetricMapper) Header(header sample.Header) error {
+func (self *AbstractMetricMapper) Header(header *sample.Header) error {
 	if err := self.CheckSink(); err != nil {
 		return err
 	}
-	if !header.Equals(&self.helper.inHeader) {
+	if !header.Equals(self.helper.inHeader) {
 		self.helper = MetricMapperHelper{
 			Description: self.String(),
 		}
@@ -67,7 +67,7 @@ func (self *AbstractMetricMapper) Header(header sample.Header) error {
 	return self.OutgoingSink.Header(self.helper.outHeader)
 }
 
-func (self *AbstractMetricMapper) Sample(inSample sample.Sample, _ sample.Header) error {
+func (self *AbstractMetricMapper) Sample(inSample *sample.Sample, _ *sample.Header) error {
 	if err := self.Check(inSample, self.helper.inHeader); err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ type AbstractMetricFilter struct {
 	IncludeFilter func(name string) bool // Return true if metric should be INcluded
 }
 
-func (self *AbstractMetricFilter) constructIndices(inHeader sample.Header) ([]int, []string) {
+func (self *AbstractMetricFilter) constructIndices(inHeader *sample.Header) ([]int, []string) {
 	outFields := make([]string, 0, len(inHeader.Fields))
 	outIndices := make([]int, 0, len(inHeader.Fields))
 	filter := self.IncludeFilter
@@ -180,7 +180,7 @@ func NewMetricMapper(metrics []string) *MetricMapper {
 	return mapper
 }
 
-func (mapper *MetricMapper) constructIndices(inHeader sample.Header) ([]int, []string) {
+func (mapper *MetricMapper) constructIndices(inHeader *sample.Header) ([]int, []string) {
 	fields := make([]int, 0, len(mapper.Metrics))
 	metrics := make([]string, 0, len(mapper.Metrics))
 	for _, metric := range mapper.Metrics {
@@ -218,18 +218,18 @@ func (mapper *BatchMetricMapper) ProcessBatch(header *sample.Header, samples []*
 	helper := &MetricMapperHelper{
 		Description: mapper.String(),
 	}
-	constructIndices := func(_ sample.Header) ([]int, []string) {
+	constructIndices := func(_ *sample.Header) ([]int, []string) {
 		return mapper.ConstructIndices(header, samples)
 	}
-	if err := helper.incomingHeader(*header, constructIndices); err != nil {
+	if err := helper.incomingHeader(header, constructIndices); err != nil {
 		return nil, nil, err
 	}
 	outSamples := make([]*sample.Sample, len(samples))
 	for i, inSample := range samples {
-		outSample := helper.convertSample(*inSample)
-		outSamples[i] = &outSample
+		outSample := helper.convertSample(inSample)
+		outSamples[i] = outSample
 	}
-	return &helper.outHeader, outSamples, nil
+	return helper.outHeader, outSamples, nil
 }
 
 func (mapper *BatchMetricMapper) String() string {

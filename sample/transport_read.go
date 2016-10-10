@@ -39,8 +39,8 @@ type SampleInputStream struct {
 	reader           *bufio.Reader
 	underlyingReader io.ReadCloser
 	num_samples      int
-	header           Header
-	outHeader        Header
+	header           *Header
+	outHeader        *Header
 	sink             MetricSinkBase
 }
 
@@ -157,13 +157,13 @@ func (stream *SampleInputStream) readHeader(source string) (err error) {
 		return
 	}
 	log.WithFields(log.Fields{"format": stream.um, "source": source}).Println("Reading", len(stream.header.Fields), "metrics")
-	stream.outHeader = Header{
+	stream.outHeader = &Header{
 		Fields:  make([]string, len(stream.header.Fields)),
 		HasTags: stream.header.HasTags,
 	}
 	copy(stream.outHeader.Fields, stream.header.Fields)
 	if handler := stream.sampleReader.Handler; handler != nil {
-		handler.HandleHeader(&stream.outHeader, source)
+		handler.HandleHeader(stream.outHeader, source)
 	}
 	if err = stream.sink.Header(stream.outHeader); err != nil {
 		return
@@ -220,7 +220,7 @@ func (stream *SampleInputStream) parseOne(source string, sample *BufferedIncomin
 		return
 	} else {
 		if handler := stream.sampleReader.Handler; handler != nil {
-			handler.HandleSample(&parsedSample, source)
+			handler.HandleSample(parsedSample, source)
 		}
 		sample.sample = parsedSample
 	}

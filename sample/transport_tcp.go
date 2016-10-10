@@ -65,14 +65,14 @@ func (sink *TcpMetricSink) OpenWriteConn(conn *net.TCPConn) *TcpWriteConn {
 	}
 }
 
-func (conn *TcpWriteConn) Header(header Header) {
+func (conn *TcpWriteConn) Header(header *Header) {
 	conn.log.Println("Serving", len(header.Fields), "metrics")
 	if err := conn.stream.Header(header); err != nil {
 		conn.doClose(err)
 	}
 }
 
-func (conn *TcpWriteConn) Sample(sample Sample) {
+func (conn *TcpWriteConn) Sample(sample *Sample) {
 	if err := conn.stream.Sample(sample); err != nil {
 		conn.doClose(err)
 	}
@@ -148,7 +148,7 @@ func (sink *TCPSink) Close() {
 	})
 }
 
-func (sink *TCPSink) Header(header Header) error {
+func (sink *TCPSink) Header(header *Header) error {
 	conn, err := sink.getOutputConnection(true)
 	if err != nil {
 		if !sink.PrintErrors {
@@ -160,7 +160,7 @@ func (sink *TCPSink) Header(header Header) error {
 	return sink.checkConnRunning(conn)
 }
 
-func (sink *TCPSink) Sample(sample Sample, header Header) error {
+func (sink *TCPSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
