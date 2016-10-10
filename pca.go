@@ -31,7 +31,7 @@ func SamplesToMatrix(samples []*sample.Sample) mat64.Matrix {
 	return mat64.NewDense(len(samples), cols, values)
 }
 
-func SampleToVector(sample sample.Sample) []float64 {
+func SampleToVector(sample *sample.Sample) []float64 {
 	input := sample.Values
 	values := make([]float64, len(input))
 	for i, val := range input {
@@ -128,9 +128,9 @@ func (model *PCAProjection) Vector(vec []float64) []float64 {
 	return matrix.RawRowView(0)
 }
 
-func (model *PCAProjection) Sample(sample sample.Sample) (result sample.Sample) {
+func (model *PCAProjection) Sample(sample *sample.Sample) (result *sample.Sample) {
 	values := model.Vector(SampleToVector(sample))
-	SetSampleValues(&result, values)
+	SetSampleValues(result, values)
 	result.CopyMetadataFrom(sample)
 	return
 }
@@ -159,8 +159,8 @@ func (p *PCABatchProcessing) ProcessBatch(header *sample.Header, samples []*samp
 	// TODO this could be done in one matrix
 	outputSamples := make([]*sample.Sample, len(samples))
 	for i, inputSample := range samples {
-		outputSample := proj.Sample(*inputSample)
-		outputSamples[i] = &outputSample
+		outputSample := proj.Sample(inputSample)
+		outputSamples[i] = outputSample
 	}
 
 	outFields := make([]string, comp)

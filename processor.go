@@ -19,7 +19,7 @@ type AbstractProcessor struct {
 	stopChan chan error
 }
 
-func (p *AbstractProcessor) Header(header sample.Header) error {
+func (p *AbstractProcessor) Header(header *sample.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	} else {
@@ -27,14 +27,14 @@ func (p *AbstractProcessor) Header(header sample.Header) error {
 	}
 }
 
-func (p *AbstractProcessor) Sample(sample sample.Sample, header sample.Header) error {
+func (p *AbstractProcessor) Sample(sample *sample.Sample, header *sample.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
 	return p.OutgoingSink.Sample(sample, header)
 }
 
-func (p *AbstractProcessor) Check(sample sample.Sample, header sample.Header) error {
+func (p *AbstractProcessor) Check(sample *sample.Sample, header *sample.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	}
@@ -90,20 +90,20 @@ type TaggedSample struct {
 	Header *sample.Header
 }
 
-func (p *DecouplingProcessor) Header(header sample.Header) error {
+func (p *DecouplingProcessor) Header(header *sample.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	} else {
-		p.samples <- TaggedSample{Header: &header}
+		p.samples <- TaggedSample{Header: header}
 		return nil
 	}
 }
 
-func (p *DecouplingProcessor) Sample(sample sample.Sample, header sample.Header) error {
+func (p *DecouplingProcessor) Sample(sample *sample.Sample, header *sample.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
-	p.samples <- TaggedSample{Sample: &sample, Header: &header}
+	p.samples <- TaggedSample{Sample: sample, Header: header}
 	return nil
 }
 
@@ -134,9 +134,9 @@ func (p *DecouplingProcessor) forward(sample TaggedSample) error {
 		return err
 	}
 	if sample.Sample == nil {
-		return p.OutgoingSink.Header(*sample.Header)
+		return p.OutgoingSink.Header(sample.Header)
 	} else {
-		return p.OutgoingSink.Sample(*sample.Sample, *sample.Header)
+		return p.OutgoingSink.Sample(sample.Sample, sample.Header)
 	}
 }
 
@@ -153,7 +153,7 @@ type SamplePrinter struct {
 	AbstractProcessor
 }
 
-func (p *SamplePrinter) Header(header sample.Header) error {
+func (p *SamplePrinter) Header(header *sample.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	} else {
@@ -162,7 +162,7 @@ func (p *SamplePrinter) Header(header sample.Header) error {
 	}
 }
 
-func (p *SamplePrinter) Sample(sample sample.Sample, header sample.Header) error {
+func (p *SamplePrinter) Sample(sample *sample.Sample, header *sample.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}

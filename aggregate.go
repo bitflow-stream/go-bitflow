@@ -22,8 +22,8 @@ type FeatureAggregator struct {
 	suffixes           []string
 	FeatureWindowStats map[string]*FeatureWindowStats
 
-	inHeader  sample.Header
-	outHeader sample.Header
+	inHeader  *sample.Header
+	outHeader *sample.Header
 }
 
 type FeatureAggregatorOperation func(stats *FeatureWindowStats) sample.Value
@@ -47,11 +47,11 @@ func (agg *FeatureAggregator) Start(wg *sync.WaitGroup) golib.StopChan {
 	return agg.AbstractProcessor.Start(wg)
 }
 
-func (agg *FeatureAggregator) Header(header sample.Header) error {
+func (agg *FeatureAggregator) Header(header *sample.Header) error {
 	if err := agg.CheckSink(); err != nil {
 		return err
 	} else {
-		if !agg.inHeader.Equals(&header) {
+		if !agg.inHeader.Equals(header) {
 			outFields := make([]string, 0, len(header.Fields)*(1+len(agg.suffixes)))
 			for _, field := range header.Fields {
 				outFields = append(outFields, field)
@@ -67,7 +67,7 @@ func (agg *FeatureAggregator) Header(header sample.Header) error {
 	}
 }
 
-func (agg *FeatureAggregator) Sample(inSample sample.Sample, _ sample.Header) error {
+func (agg *FeatureAggregator) Sample(inSample *sample.Sample, _ *sample.Header) error {
 	if err := agg.Check(inSample, agg.inHeader); err != nil {
 		return err
 	}
