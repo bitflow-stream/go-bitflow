@@ -49,6 +49,8 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 }
 
 func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
-	p.Processors = append(p.Processors, processor)
+	if processor != nil {
+		p.Processors = append(p.Processors, processor)
+	}
 	return p
 }
