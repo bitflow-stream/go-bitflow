@@ -1,7 +1,9 @@
 package analysis
 
 import (
+	"bytes"
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
@@ -245,16 +247,29 @@ func (d *MultiplexDistributor) String() string {
 	return fmt.Sprintf("multiplex (%v)", d.numSubpipelines)
 }
 
-type TagDistributor struct {
-	Tag string
+type TagsDistributor struct {
+	Tags        []string
+	Separator   string
+	Replacement string // For missing/empty tags
 }
 
-func (d *TagDistributor) Distribute(sample *sample.Sample, _ *sample.Header) []interface{} {
-	return []interface{}{sample.Tag(d.Tag)}
+func (d *TagsDistributor) Distribute(sample *sample.Sample, _ *sample.Header) []interface{} {
+	var key bytes.Buffer
+	for i, tag := range d.Tags {
+		if i > 0 {
+			key.WriteString(d.Separator)
+		}
+		value := sample.Tag(tag)
+		if value == "" {
+			value = d.Replacement
+		}
+		key.WriteString(value)
+	}
+	return []interface{}{key.String()}
 }
 
-func (d *TagDistributor) String() string {
-	return fmt.Sprintf("tags (%v)", d.Tag)
+func (d *TagsDistributor) String() string {
+	return fmt.Sprintf("tags %v, separated by %v", d.Tags, d.Separator)
 }
 
 type SimplePipelineBuilder struct {
@@ -336,13 +351,29 @@ func (b *MultiFilePipelineBuilder) getFileSink(sink sample.MetricSink) *sample.F
 	return nil
 }
 
-func SimpleMultiFileBuilder(buildPipeline func() []sample.SampleProcessor) *MultiFilePipelineBuilder {
+func MultiFileSuffixBuilder(buildPipeline func() []sample.SampleProcessor) *MultiFilePipelineBuilder {
 	builder := &MultiFilePipelineBuilder{
 		Description: "files suffixed with subpipeline key",
 		NewFile: func(oldFile string, key interface{}) string {
 			suffix := fmt.Sprintf("%v", key)
 			group := sample.NewFileGroup(oldFile)
 			return group.BuildFilenameStr(suffix)
+		},
+	}
+	builder.Build = buildPipeline
+	return builder
+}
+
+func MultiFileDirectoryBuilder(buildPipeline func() []sample.SampleProcessor) *MultiFilePipelineBuilder {
+	builder := &MultiFilePipelineBuilder{
+		Description: fmt.Sprintf("directory tree built from subpipeline key"),
+		NewFile: func(oldFile string, key interface{}) string {
+			path := fmt.Sprintf("%v", key)
+			if path == "" {
+				return oldFile
+			}
+			path += filepath.Ext(oldFile)
+			return filepath.Join(filepath.Dir(oldFile), path)
 		},
 	}
 	builder.Build = buildPipeline
