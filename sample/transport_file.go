@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -242,7 +243,10 @@ func ListMatchingFiles(dir string, regexStr string) ([]string, error) {
 }
 
 // ==================== File data sink ====================
-const max_output_file_errors = 5
+const (
+	max_output_file_errors = 5
+	mkdirs_permissions     = 0755
+)
 
 type FileSink struct {
 	AbstractMarshallingMetricSink
@@ -320,7 +324,15 @@ func (sink *FileSink) openNextNewFile() (file *os.File, err error) {
 
 		if _, err = os.Stat(name); os.IsNotExist(err) {
 			// File does not exist, try to open and create it
-			file, err = os.Create(name)
+
+			dir := path.Dir(name)
+			if _, err = os.Stat(dir); os.IsNotExist(err) {
+				// Directory does not exist, try to create entire path
+				err = os.MkdirAll(dir, mkdirs_permissions)
+			}
+			if err == nil {
+				file, err = os.Create(name)
+			}
 		} else if err == nil {
 			// File exists, try next one
 			continue
