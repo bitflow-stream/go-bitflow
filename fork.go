@@ -16,7 +16,7 @@ type ForkDistributor interface {
 }
 
 type PipelineBuilder interface {
-	BuildPipeline(key interface{}, output sample.MetricSink) *sample.SamplePipeline
+	BuildPipeline(key interface{}, output *AggregatingSink) *sample.SamplePipeline
 	String() string
 }
 
@@ -26,7 +26,7 @@ type MetricFork struct {
 	Distributor ForkDistributor
 	Builder     PipelineBuilder
 
-	pipelines        map[interface{}]sample.SampleProcessor
+	pipelines        map[interface{}]sample.MetricSink
 	lastHeaders      map[interface{}]*sample.Header
 	runningPipelines int
 	stopped          bool
@@ -39,7 +39,7 @@ func NewMetricFork(distributor ForkDistributor, builder PipelineBuilder) *Metric
 	fork := &MetricFork{
 		Builder:     builder,
 		Distributor: distributor,
-		pipelines:   make(map[interface{}]sample.SampleProcessor),
+		pipelines:   make(map[interface{}]sample.MetricSink),
 		lastHeaders: make(map[interface{}]*sample.Header),
 	}
 	fork.stoppedCond.L = new(sync.Mutex)
@@ -94,7 +94,9 @@ func (f *MetricFork) Close() {
 	defer f.stoppedCond.L.Unlock()
 	f.stopped = true
 	for _, pipeline := range f.pipelines {
-		pipeline.Close()
+		if pipeline != nil {
+			pipeline.Close()
+		}
 	}
 	f.stoppedCond.Broadcast()
 }
@@ -103,7 +105,7 @@ func (f *MetricFork) String() string {
 	return fmt.Sprintf("Fork. Distributor: %v, Builder: %v", f.Distributor, f.Builder)
 }
 
-func (f *MetricFork) newPipeline(key interface{}) sample.SampleProcessor {
+func (f *MetricFork) newPipeline(key interface{}) sample.MetricSink {
 	log.Debugf("[%v]: Starting forked subpipeline %v", f, key)
 	pipeline := f.Builder.BuildPipeline(key, &f.aggregatingSink)
 	group := golib.NewTaskGroup()
@@ -116,22 +118,29 @@ func (f *MetricFork) newPipeline(key interface{}) sample.SampleProcessor {
 	go func() {
 		defer f.subpipelineWg.Done()
 
-		_, err := golib.WaitForAny(channels)
+		idx, err := golib.WaitForAny(channels)
 		if err != nil {
 			log.Errorln(err)
 		}
-		group.ReverseStop(golib.DefaultPrintTaskStopWait)
+		group.ReverseStop(golib.DefaultPrintTaskStopWait) // The Stop() calls are actually ignored because group contains only MetricSinks
 		_ = golib.PrintErrors(channels, waitingTasks, golib.DefaultPrintTaskStopWait)
+
 		f.stoppedCond.L.Lock()
 		defer f.stoppedCond.L.Unlock()
-		log.Debugf("[%v]: Stopping forked subpipeline %v", f, key)
+		if idx == -1 {
+			// Inactive subpipeline can occur when all processors and the sink return nil from Start().
+			// This means that they simply react on Header()/Sample() and wait for the final Close() call.
+			log.Debugf("[%v]: Subpipeline inactive: %v", f, key)
+		} else {
+			log.Debugf("[%v]: Finished forked subpipeline %v", f, key)
+		}
 		f.runningPipelines--
 		f.stoppedCond.Broadcast()
 	}()
 
-	var first sample.SampleProcessor
+	var first sample.MetricSink
 	if len(pipeline.Processors) == 0 {
-		first = nil
+		first = pipeline.Sink
 	} else {
 		first = pipeline.Processors[0]
 	}
@@ -179,6 +188,10 @@ func (sink *AggregatingSink) Sample(sample *sample.Sample, header *sample.Header
 	return sink.fork.OutgoingSink.Sample(sample, header)
 }
 
+func (sink *AggregatingSink) GetOriginalSink() sample.MetricSink {
+	return sink.fork.OutgoingSink
+}
+
 type RoundRobinDistributor struct {
 	NumSubpipelines int
 	current         int
@@ -218,6 +231,18 @@ func (d *MultiplexDistributor) String() string {
 	return fmt.Sprintf("multiplex (%v)", d.numSubpipelines)
 }
 
+type TagDistributor struct {
+	Tag string
+}
+
+func (d *TagDistributor) Distribute(sample *sample.Sample, _ *sample.Header) []interface{} {
+	return []interface{}{sample.Tag(d.Tag)}
+}
+
+func (d *TagDistributor) String() string {
+	return fmt.Sprintf("tags (%v)", d.Tag)
+}
+
 type SimplePipelineBuilder struct {
 	Build           func() []sample.SampleProcessor
 	examplePipeline []sample.SampleProcessor
@@ -225,16 +250,87 @@ type SimplePipelineBuilder struct {
 
 func (b *SimplePipelineBuilder) String() string {
 	if b.examplePipeline == nil {
-		b.examplePipeline = b.Build()
+		if b.Build == nil {
+			b.examplePipeline = make([]sample.SampleProcessor, 0)
+		} else {
+			b.examplePipeline = b.Build()
+		}
 	}
 	return fmt.Sprintf("simple %v", b.examplePipeline)
 }
 
-func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output sample.MetricSink) *sample.SamplePipeline {
+func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *AggregatingSink) *sample.SamplePipeline {
 	var res sample.SamplePipeline
 	res.Sink = output
-	for _, processor := range b.Build() {
-		res.Add(processor)
+	if b.Build != nil {
+		for _, processor := range b.Build() {
+			res.Add(processor)
+		}
 	}
 	return &res
+}
+
+type MultiFilePipelineBuilder struct {
+	SimplePipelineBuilder
+	NewFile     func(originalFile string, key interface{}) string
+	Description string
+}
+
+func (b *MultiFilePipelineBuilder) String() string {
+	_ = b.SimplePipelineBuilder.String()
+	return fmt.Sprintf("MultiFiles %v %v", b.Description, b.examplePipeline)
+}
+
+func (b *MultiFilePipelineBuilder) BuildPipeline(key interface{}, output *AggregatingSink) *sample.SamplePipeline {
+	simple := b.SimplePipelineBuilder.BuildPipeline(key, output)
+	files := b.getFileSink(output.GetOriginalSink())
+	if files != nil {
+		newFilename := b.NewFile(files.Filename, key)
+		newFiles := &sample.FileSink{
+			AbstractMarshallingMetricSink: files.AbstractMarshallingMetricSink,
+			Filename:                      newFilename,
+			CleanFiles:                    files.CleanFiles,
+			IoBuffer:                      files.IoBuffer,
+		}
+		simple.Sink = newFiles
+	} else {
+		log.Warnf("[%v]: Cannot assign new files, did not find *sample.FileSink as my direct output", b)
+	}
+	return simple
+}
+
+func (b *MultiFilePipelineBuilder) getFileSink(sink sample.MetricSink) *sample.FileSink {
+	if files, ok := sink.(*sample.FileSink); ok {
+		return files
+	}
+	if agg, ok := sink.(sample.AggregateSink); ok {
+		var files *sample.FileSink
+		warned := false
+		for _, sink := range agg {
+			converted := b.getFileSink(sink)
+			if converted != nil {
+				if files == nil {
+					files = converted
+				} else if !warned {
+					log.Warnln("[%v]: Multiple file outputs, using %v", b, files)
+					warned = true
+				}
+			}
+		}
+		return files
+	}
+	return nil
+}
+
+func SimpleMultiFileBuilder(buildPipeline func() []sample.SampleProcessor) *MultiFilePipelineBuilder {
+	builder := &MultiFilePipelineBuilder{
+		Description: "files suffixed with subpipeline key",
+		NewFile: func(oldFile string, key interface{}) string {
+			suffix := fmt.Sprintf("%v", key)
+			group := sample.NewFileGroup(oldFile)
+			return group.BuildFilenameStr(suffix)
+		},
+	}
+	builder.Build = buildPipeline
+	return builder
 }
