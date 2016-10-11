@@ -69,15 +69,19 @@ func (sample *Sample) HasTag(name string) (ok bool) {
 
 func (sample *Sample) SetTag(name, value string) {
 	sample.lockWrite(func() {
-		if sample.tags == nil {
-			sample.tags = make(map[string]string)
-		}
-		if _, exists := sample.tags[name]; !exists {
-			sample.orderedTags = append(sample.orderedTags, name)
-			sort.Strings(sample.orderedTags)
-		}
-		sample.tags[name] = value
+		sample.setTag(name, value)
 	})
+}
+
+func (sample *Sample) setTag(name, value string) {
+	if sample.tags == nil {
+		sample.tags = make(map[string]string)
+	}
+	if _, exists := sample.tags[name]; !exists {
+		sample.orderedTags = append(sample.orderedTags, name)
+		sort.Strings(sample.orderedTags)
+	}
+	sample.tags[name] = value
 }
 
 func (sample *Sample) DeleteTag(name string) {
@@ -142,7 +146,7 @@ func (sample *Sample) ParseTagString(tags string) (err error) {
 			return
 		}
 		for i := 0; i < len(fields); i += 2 {
-			sample.SetTag(fields[i], fields[i+1])
+			sample.setTag(fields[i], fields[i+1])
 		}
 	})
 	return
