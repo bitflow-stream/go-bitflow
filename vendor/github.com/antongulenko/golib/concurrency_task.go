@@ -180,7 +180,7 @@ func WaitForAny(channels []StopChan) (int, error) {
 	}
 }
 
-func WaitForAnyTask(wg *sync.WaitGroup, tasks []Task) (Task, error, []Task, []StopChan) {
+func StartTasks(wg *sync.WaitGroup, tasks []Task) ([]Task, []StopChan) {
 	channels := make([]StopChan, 0, len(tasks))
 	waitingTasks := make([]Task, 0, len(tasks))
 	for _, task := range tasks {
@@ -189,6 +189,11 @@ func WaitForAnyTask(wg *sync.WaitGroup, tasks []Task) (Task, error, []Task, []St
 			waitingTasks = append(waitingTasks, task)
 		}
 	}
+	return waitingTasks, channels
+}
+
+func WaitForAnyTask(wg *sync.WaitGroup, tasks []Task) (Task, error, []Task, []StopChan) {
+	waitingTasks, channels := StartTasks(wg, tasks)
 	choice, err := WaitForAny(channels)
 	return waitingTasks[choice], err, waitingTasks, channels
 }
@@ -230,6 +235,10 @@ func NewTaskGroup(tasks ...Task) *TaskGroup {
 	return group
 }
 
+func (group *TaskGroup) AllTasks() []Task {
+	return group.all
+}
+
 func (group *TaskGroup) Add(tasks ...Task) {
 	group.AddNamed("default", tasks...)
 }
@@ -248,6 +257,10 @@ func (group *TaskGroup) AddNamed(name string, tasks ...Task) {
 		}
 	}
 	group.groups[name] = list
+}
+
+func (group *TaskGroup) StartTasks(wg *sync.WaitGroup) ([]Task, []StopChan) {
+	return StartTasks(wg, group.all)
 }
 
 func (group *TaskGroup) WaitForAny(wg *sync.WaitGroup) (Task, error, []Task, []StopChan) {
@@ -290,8 +303,9 @@ func PrintErrors(inputs []StopChan, tasks []Task, printWait bool) (numErrors int
 	return
 }
 
-func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (reason Task, numErrors int) {
+func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (Task, int) {
 	var wg sync.WaitGroup
+	numErrors := 0
 	reason, err, tasks, channels := group.WaitForAny(&wg)
 	if err != nil {
 		numErrors++
@@ -306,7 +320,7 @@ func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (reas
 	group.ReverseStop(printWait)
 	wg.Wait()
 	numErrors += PrintErrors(channels, tasks, printWait)
-	return
+	return reason, numErrors
 }
 
 var (
