@@ -20,7 +20,7 @@ type BatchProcessor struct {
 }
 
 type BatchProcessingStep interface {
-	// TODO Optimize implementors of BatchProcessingStep to reuse the sample-array instead of allocating a new one with the same size. Even the sample instances could be reused.
+	// TODO Optimize implementors of BatchProcessingStep to reuse the sample-array instead of allocating a new one with the same size.
 	ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error)
 	String() string
 }

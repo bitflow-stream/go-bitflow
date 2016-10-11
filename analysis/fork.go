@@ -23,8 +23,9 @@ type PipelineBuilder interface {
 type MetricFork struct {
 	AbstractProcessor
 
-	Distributor ForkDistributor
-	Builder     PipelineBuilder
+	Distributor   ForkDistributor
+	Builder       PipelineBuilder
+	ParallelClose bool
 
 	pipelines        map[interface{}]sample.MetricSink
 	lastHeaders      map[interface{}]*sample.Header
@@ -37,10 +38,11 @@ type MetricFork struct {
 
 func NewMetricFork(distributor ForkDistributor, builder PipelineBuilder) *MetricFork {
 	fork := &MetricFork{
-		Builder:     builder,
-		Distributor: distributor,
-		pipelines:   make(map[interface{}]sample.MetricSink),
-		lastHeaders: make(map[interface{}]*sample.Header),
+		Builder:       builder,
+		Distributor:   distributor,
+		pipelines:     make(map[interface{}]sample.MetricSink),
+		lastHeaders:   make(map[interface{}]*sample.Header),
+		ParallelClose: true,
 	}
 	fork.stoppedCond.L = new(sync.Mutex)
 	fork.aggregatingSink.fork = fork
@@ -93,15 +95,19 @@ func (f *MetricFork) Close() {
 	f.stoppedCond.L.Lock()
 	defer f.stoppedCond.L.Unlock()
 	f.stopped = true
+
 	var wg sync.WaitGroup
 	for i, pipeline := range f.pipelines {
 		f.pipelines[i] = nil // Enable GC
 		if pipeline != nil {
 			wg.Add(1)
-			go func() {
+			go func(pipeline sample.MetricSink) {
 				defer wg.Done()
 				pipeline.Close()
-			}()
+			}(pipeline)
+			if !f.ParallelClose {
+				wg.Wait()
+			}
 		}
 	}
 	wg.Wait()
@@ -132,8 +138,6 @@ func (f *MetricFork) newPipeline(key interface{}) sample.MetricSink {
 		group.ReverseStop(golib.DefaultPrintTaskStopWait) // The Stop() calls are actually ignored because group contains only MetricSinks
 		_ = golib.PrintErrors(channels, waitingTasks, golib.DefaultPrintTaskStopWait)
 
-		f.stoppedCond.L.Lock()
-		defer f.stoppedCond.L.Unlock()
 		if idx == -1 {
 			// Inactive subpipeline can occur when all processors and the sink return nil from Start().
 			// This means that they simply react on Header()/Sample() and wait for the final Close() call.
@@ -141,6 +145,9 @@ func (f *MetricFork) newPipeline(key interface{}) sample.MetricSink {
 		} else {
 			log.Debugf("[%v]: Finished forked subpipeline %v", f, key)
 		}
+
+		f.stoppedCond.L.Lock()
+		defer f.stoppedCond.L.Unlock()
 		f.runningPipelines--
 		f.stoppedCond.Broadcast()
 	}()
