@@ -13,6 +13,7 @@ import (
 func init() {
 	RegisterAnalysisParams("print_tags", print_tags, "tag to print")
 	RegisterAnalysisParams("count_tags", count_tags, "tag to count")
+	RegisterAnalysisParams("count_tags_fork", count_tags_rr, "tag to count (testing fork)")
 	RegisterAnalysis("print_timerange", print_timerange)
 }
 
@@ -57,6 +58,9 @@ func (printer *UniqueTagPrinter) Close() {
 	for label, count := range printer.values {
 		// Print to stdout instead of logger
 		if printer.Count {
+			if label == "" {
+				label = "(missing value)"
+			}
 			fmt.Println(label, count)
 			total += count
 		} else {
@@ -126,4 +130,15 @@ func (printer *TimerangePrinter) String() string {
 
 func print_timerange(p *SamplePipeline) {
 	p.Add(new(TimerangePrinter))
+}
+
+func count_tags_rr(p *SamplePipeline, params string) {
+	p.Add(analysis.NewMetricFork(
+		analysis.NewMultiplexDistributor(4),
+		&analysis.SimplePipelineBuilder{
+			Build: func() []sample.SampleProcessor {
+				proc := NewUniqueTagCounter(params)
+				return []sample.SampleProcessor{proc}
+			},
+		}))
 }
