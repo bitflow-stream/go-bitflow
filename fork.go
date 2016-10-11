@@ -93,11 +93,18 @@ func (f *MetricFork) Close() {
 	f.stoppedCond.L.Lock()
 	defer f.stoppedCond.L.Unlock()
 	f.stopped = true
-	for _, pipeline := range f.pipelines {
+	var wg sync.WaitGroup
+	for i, pipeline := range f.pipelines {
+		f.pipelines[i] = nil // Enable GC
 		if pipeline != nil {
-			pipeline.Close()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				pipeline.Close()
+			}()
 		}
 	}
+	wg.Wait()
 	f.stoppedCond.Broadcast()
 }
 
