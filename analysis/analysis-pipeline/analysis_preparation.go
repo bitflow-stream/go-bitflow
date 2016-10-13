@@ -25,6 +25,7 @@ func init() {
 
 	RegisterAnalysis("tag_injection_info", tag_injection_info)
 	RegisterAnalysis("split_distributed_experiments", split_distributed_experiments)
+	RegisterAnalysisParams("split_experiments", split_experiments, "number of seconds without sample before starting a new file")
 }
 
 func aggregate_data_10s(p *SamplePipeline) {
@@ -143,11 +144,39 @@ func split_distributed_experiments(p *SamplePipeline) {
 		Separator:   string(filepath.Separator),
 		Replacement: "_unknown_",
 	}
-	builder := MultiFileDirectoryBuilder(func() []sample.SampleProcessor {
+	builder := MultiFileDirectoryBuilder(false, func() []sample.SampleProcessor {
 		return []sample.SampleProcessor{
 			NewMultiHeaderMerger(),
 			new(BatchProcessor).Add(new(SampleSorter)),
 		}
 	})
 	p.Add(NewMetricFork(distributor, builder))
+}
+
+type TimeDistributor struct {
+	MinimumPause time.Duration
+
+	counter  int
+	lastTime time.Time
+}
+
+func (d *TimeDistributor) String() string {
+	return "split after pauses of " + d.MinimumPause.String()
+}
+
+func (d *TimeDistributor) Distribute(sample *sample.Sample, header *sample.Header) []interface{} {
+	last := d.lastTime
+	d.lastTime = sample.Time
+	if !last.IsZero() && sample.Time.Sub(last) >= d.MinimumPause {
+		d.counter++
+	}
+	return []interface{}{d.counter}
+}
+
+func split_experiments(p *SamplePipeline, params string) {
+	duration, err := time.ParseDuration(params)
+	if err != nil {
+		log.Fatalln("Error parsing duration parameter for -e split_experiments:", err)
+	}
+	p.Add(NewMetricFork(&TimeDistributor{MinimumPause: duration}, MultiFileSuffixBuilder(nil)))
 }

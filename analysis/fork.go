@@ -364,7 +364,7 @@ func MultiFileSuffixBuilder(buildPipeline func() []sample.SampleProcessor) *Mult
 	return builder
 }
 
-func MultiFileDirectoryBuilder(buildPipeline func() []sample.SampleProcessor) *MultiFilePipelineBuilder {
+func MultiFileDirectoryBuilder(replaceFilename bool, buildPipeline func() []sample.SampleProcessor) *MultiFilePipelineBuilder {
 	builder := &MultiFilePipelineBuilder{
 		Description: fmt.Sprintf("directory tree built from subpipeline key"),
 		NewFile: func(oldFile string, key interface{}) string {
@@ -372,7 +372,11 @@ func MultiFileDirectoryBuilder(buildPipeline func() []sample.SampleProcessor) *M
 			if path == "" {
 				return oldFile
 			}
-			path += filepath.Ext(oldFile)
+			if replaceFilename {
+				path += filepath.Ext(oldFile)
+			} else {
+				path = filepath.Join(path, filepath.Base(oldFile))
+			}
 			return filepath.Join(filepath.Dir(oldFile), path)
 		},
 	}
