@@ -25,13 +25,13 @@ func GetMinMax(header *sample.Header, samples []*sample.Sample) ([]float64, []fl
 	return min, max
 }
 
-func isValid(val float64) bool {
+func IsValidNumber(val float64) bool {
 	return !math.IsNaN(val) && !math.IsInf(val, 0)
 }
 
 func scaleMinMax(val, min, max float64) float64 {
 	res := (val - min) / (max - min)
-	if !isValid(res) {
+	if !IsValidNumber(res) {
 		res = 0.5 // Zero standard-deviation -> pick the middle between 0 and 1
 	}
 	return res
@@ -80,7 +80,7 @@ func (s *StandardizationScaling) ProcessBatch(header *sample.Header, samples []*
 			m := stats[i].Mean()
 			s := stats[i].Stddev()
 			res := (float64(val) - m) / s
-			if !isValid(res) {
+			if !IsValidNumber(res) {
 				// Special case for zero standard deviation: fallback to min-max scaling
 				min, max := stats[i].Min, stats[i].Max
 				res = scaleMinMax(float64(val), min, max)
