@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/antongulenko/data2go/sample"
-	"github.com/antongulenko/go-onlinestats"
 )
 
 type MinMaxScaling struct {
@@ -26,17 +25,25 @@ func GetMinMax(header *sample.Header, samples []*sample.Sample) ([]float64, []fl
 	return min, max
 }
 
+func isValid(val float64) bool {
+	return !math.IsNaN(val) && !math.IsInf(val, 0)
+}
+
+func scaleMinMax(val, min, max float64) float64 {
+	res := (val - min) / (max - min)
+	if !isValid(res) {
+		res = 0.5 // Zero standard-deviation -> pick the middle between 0 and 1
+	}
+	return res
+}
+
 func (s *MinMaxScaling) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
 	min, max := GetMinMax(header, samples)
 	out := make([]*sample.Sample, len(samples))
 	for num, inSample := range samples {
 		values := make([]sample.Value, len(inSample.Values))
 		for i, val := range inSample.Values {
-			total := max[i] - min[i]
-			res := (float64(val) - min[i]) / total
-			if math.IsNaN(res) || math.IsInf(res, 0) {
-				res = float64(val)
-			}
+			res := scaleMinMax(float64(val), min[i], max[i])
 			values[i] = sample.Value(res)
 		}
 		var outSample sample.Sample
@@ -54,8 +61,8 @@ func (s *MinMaxScaling) String() string {
 type StandardizationScaling struct {
 }
 
-func GetStats(header *sample.Header, samples []*sample.Sample) []onlinestats.Running {
-	res := make([]onlinestats.Running, len(header.Fields))
+func GetStats(header *sample.Header, samples []*sample.Sample) []FeatureStats {
+	res := make([]FeatureStats, len(header.Fields))
 	for _, sample := range samples {
 		for i, val := range sample.Values {
 			res[i].Push(float64(val))
@@ -73,6 +80,12 @@ func (s *StandardizationScaling) ProcessBatch(header *sample.Header, samples []*
 			m := stats[i].Mean()
 			s := stats[i].Stddev()
 			res := (float64(val) - m) / s
+			if !isValid(res) {
+				// Special case for zero standard deviation: fallback to min-max scaling
+				min, max := stats[i].Min, stats[i].Max
+				res = scaleMinMax(float64(val), min, max)
+				res = (res - 0.5) * 2 // Value range: -1..1
+			}
 			values[i] = sample.Value(res)
 		}
 		var outSample sample.Sample

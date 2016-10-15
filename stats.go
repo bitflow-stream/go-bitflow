@@ -27,16 +27,23 @@ func NewStoreStats(targetFile string) *StoreStats {
 }
 
 type FeatureStats struct {
-	stats onlinestats.Running
-	min   float64
-	max   float64
+	onlinestats.Running
+	Min float64
+	Max float64
+}
+
+func NewFeatureStats() *FeatureStats {
+	return &FeatureStats{
+		Min: math.MaxFloat64,
+		Max: -math.MaxFloat64,
+	}
 }
 
 func (stats *FeatureStats) Push(values ...float64) {
 	for _, value := range values {
-		stats.stats.Push(value)
-		stats.min = math.Min(stats.min, value)
-		stats.max = math.Max(stats.max, value)
+		stats.Running.Push(value)
+		stats.Min = math.Min(stats.Min, value)
+		stats.Max = math.Max(stats.Max, value)
 	}
 }
 
@@ -48,10 +55,7 @@ func (stats *StoreStats) Sample(inSample *sample.Sample, header *sample.Header) 
 		val := inSample.Values[index]
 		feature, ok := stats.stats[field]
 		if !ok {
-			feature = &FeatureStats{
-				min: math.MaxFloat64,
-				max: -math.MaxFloat64,
-			}
+			feature = NewFeatureStats()
 			stats.stats[field] = feature
 		}
 		feature.Push(float64(val))
@@ -76,11 +80,11 @@ func (stats *StoreStats) StoreStatistics() error {
 	for _, name := range stats.sortedFeatures() {
 		feature := stats.stats[name]
 		section := cfg.Section(name)
-		section.NewKey("avg", printFloat(feature.stats.Mean()))
-		section.NewKey("stddev", printFloat(feature.stats.Stddev()))
-		section.NewKey("count", strconv.FormatUint(uint64(feature.stats.Len()), 10))
-		section.NewKey("min", printFloat(feature.min))
-		section.NewKey("max", printFloat(feature.max))
+		section.NewKey("avg", printFloat(feature.Mean()))
+		section.NewKey("stddev", printFloat(feature.Stddev()))
+		section.NewKey("count", strconv.FormatUint(uint64(feature.Len()), 10))
+		section.NewKey("min", printFloat(feature.Min))
+		section.NewKey("max", printFloat(feature.Max))
 	}
 	return cfg.SaveTo(stats.TargetFile)
 }
