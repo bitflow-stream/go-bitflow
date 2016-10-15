@@ -19,6 +19,7 @@ func init() {
 	RegisterAnalysisParams("count_tags", count_tags, "tag to count")
 	RegisterAnalysis("print_timerange", print_timerange)
 	RegisterAnalysisParams("print_timeline", print_timeline, "number of buckets for the timeline-histogram") // Print a timeline showing a rudimentary histogram of the number of samples
+	RegisterAnalysis("count_invalid", count_invalid)
 }
 
 type UniqueTagPrinter struct {
@@ -209,4 +210,38 @@ func print_timeline(p *SamplePipeline, param string) {
 		buckets = 1
 	}
 	p.Batch(&TimelinePrinter{NumBuckets: buckets})
+}
+
+type InvalidCounter struct {
+	analysis.AbstractProcessor
+	invalidSamples int
+	totalSamples   int
+	invalidValues  int
+	totalValues    int
+}
+
+func (counter *InvalidCounter) Sample(sample *sample.Sample, header *sample.Header) error {
+	sampleValid := true
+	for _, val := range sample.Values {
+		counter.totalValues += 1
+		if !analysis.IsValidNumber(float64(val)) {
+			counter.invalidValues += 1
+			sampleValid = false
+		}
+	}
+	counter.totalSamples += 1
+	if !sampleValid {
+		counter.invalidSamples += 1
+	}
+	return nil
+}
+
+func (counter *InvalidCounter) Close() {
+	log.Printf("Invalid numbers: %v of %v, in %v of %v samples",
+		counter.invalidValues, counter.totalValues, counter.invalidSamples, counter.totalSamples)
+	counter.AbstractProcessor.Close()
+}
+
+func count_invalid(p *SamplePipeline) {
+	p.Add(new(InvalidCounter))
 }
