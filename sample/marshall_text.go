@@ -12,7 +12,7 @@ import (
 
 const (
 	// TextMarshallerDateFormat is the date format used by TextMarshaller to
-	// print he timestamp of each sample.
+	// print the timestamp of each sample.
 	TextMarshallerDateFormat = "2006-01-02 15:04:05.999"
 
 	// TextMarshallerDefaultSpacing is the default spacing between the columns

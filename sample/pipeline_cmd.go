@@ -17,37 +17,47 @@ const (
 	output_formats              = "(t=text, c=CSV, b=binary)"
 )
 
-func marshaller(format string) Marshaller {
-	switch format {
-	case "t":
-		return new(TextMarshaller)
-	case "c":
-		return new(CsvMarshaller)
-	case "b":
-		return new(BinaryMarshaller)
-	default:
-		log.WithField("format", format).Fatalln("Illegal data input fromat, must be one of", output_formats)
-		return nil
-	}
-}
-
-func unmarshaller(format string) Unmarshaller {
-	switch format {
-	case "a":
-		return nil
-	case "c":
-		return new(CsvMarshaller)
-	case "b":
-		return new(BinaryMarshaller)
-	default:
-		log.WithField("format", format).Fatalln("Illegal data input fromat, must be one of", input_formats)
-		return nil
-	}
-}
-
+// CmdSamplePipeline is an extension for SamplePipeline that defines many command line flags
+// and additional methods for controlling the pipeline. It is basically a helper type to be
+// reused in different main packages.
+//
+// The sequence of operations on a CmdSamplePipeline should follow the following example:
+//   // ... Define additional flags using the "flag" package (Optional)
+//   var p sample.CmdSamplePipeline
+//   p.ParseFlags()
+//   flag.Parse()
+//   defer golib.ProfileCpu()() // Optional
+//   p.SetSource(customSource) // Optional
+//   p.ReadSampleHandler = customHandler // Optional
+//   p.Init()
+//   p.Tasks.Add(customTask) // Optional
+//   os.Exit(p.StartAndWait())
+//
 type CmdSamplePipeline struct {
+	// SamplePipeline in the CmdSamplePipeline should not be accessed directly,
+	// except for the Add method. The Sink and Source fields should only be read,
+	// because they are set in the Init() method.
 	SamplePipeline
-	Tasks             *golib.TaskGroup
+
+	// Tasks will be initialized in Init() and should be accessed before
+	// calling StartAndWait(). It can be used to add additional golib.Task instances
+	// that should be started along with the pipeline in StartAndWait().
+	// The pipeline tasks will be added in StartAndWait(), so the additional tasks
+	// will be started before the pipeline.
+	Tasks *golib.TaskGroup
+
+	// ReadSampleHandler will be set to the Handler field in the SampleReader that is created in Init().
+	// It can be used to modify Samples and Headers directly after they are read
+	// by the SampleReader, e.g. directly after reading a Header from file, or directly
+	// after receiving a Sample over a TCP connection. The main purpose of this
+	// is that the ReadSampleHandler receives a string representation of the data
+	// source, which can be used as a tag in the Samples. By default, the data source is not
+	// stored in the Samples and this information will be lost one the Sample enters the pipeline.
+	//
+	// The data source string differs depending on the MetricSource used. The FileMetricSource will
+	// use the file name, while the TcpMetricSource will use the remote TCP endpoint.
+	//
+	// Must be set before calling Init().
 	ReadSampleHandler ReadSampleHandler
 
 	read_console           bool
@@ -68,11 +78,17 @@ type CmdSamplePipeline struct {
 	tcp_drop_active_errors bool
 	robust_files           bool
 	clean_files            bool
-	handler                parallelSampleHandler
+	handler                ParallelSampleHandler
 	io_buf                 int
 }
 
-// Must be called before flag.Parse()
+// ParseFlags registers all flags for the receiving CmdSamplePipeline with the
+// global CommandLine object. The flags configure many aspects of the pipeline,
+// including data source, data sink, performance parameters, debug parmeters and
+// other behavior parameters. See the help texts for more information on the available
+// parameters.
+//
+// Must be called before flag.Parse().
 func (p *CmdSamplePipeline) ParseFlags() {
 	flag.StringVar(&p.format_input, "i", "a", "Force data input format, default is auto-detect, one of "+input_formats)
 	flag.BoolVar(&p.read_console, "C", false, "Data source: read from stdin")
@@ -101,30 +117,12 @@ func (p *CmdSamplePipeline) ParseFlags() {
 	flag.StringVar(&p.format_listen, "lf", "b", "Data format for TCP server output, one of "+output_formats)
 }
 
-type fileRegexValue struct {
-	pipeline *CmdSamplePipeline
-}
-
-func (f *fileRegexValue) String() string {
-	return ""
-}
-
-func (f *fileRegexValue) Set(param string) error {
-	if len(f.pipeline.read_files) == 0 {
-		return errors.New("-FR flag must appear after -F")
-	}
-	dir := f.pipeline.read_files[0]
-	f.pipeline.read_files = f.pipeline.read_files[1:]
-	files, err := ListMatchingFiles(dir, param)
-	if err != nil {
-		log.Fatalln("Error applying -FR flag:", err)
-		return err
-	}
-	f.pipeline.read_files = append(f.pipeline.read_files, files...)
-	return nil
-}
-
-// Must be called before p.Init()
+// SetSource allows external main packages to set their own MetricSource instances
+// in the receiving CmdSamplePipeline. If this is used, none of the command line
+// flags that otherwise define the data source can be used, as only one data source
+// is allowed.
+//
+// Must be called before Init().
 func (p *CmdSamplePipeline) SetSource(source MetricSource) {
 	if p.Source != nil {
 		log.Fatalln("Please provide only one data source")
@@ -132,14 +130,24 @@ func (p *CmdSamplePipeline) SetSource(source MetricSource) {
 	p.Source = source
 }
 
-// Must be called before accessing p.Tasks and calling p.StartAndWait()
+// Init initialized the receiving CmdSamplePipeline by creating the Tasks field,
+// evaluating all command line flags and configurations, and setting the Source
+// and Sink fields in the contained SamplePipeline.
+//
+// The only things to do before calling Init() is to set the ReadSampleHandler field
+// and use the SetSource method, as both are evaluated in Init(). Both are optional.
+//
+// Init also calls ConfigureLogging() for convenience, because Init() should be one
+// of the first methods called in a main package using CmdSamplePipeline.
+//
+// Init must be called before accessing p.Tasks and before calling StartAndWait().
 func (p *CmdSamplePipeline) Init() {
 	ConfigureLogging()
 	p.Tasks = golib.NewTaskGroup()
 
 	// ====== Initialize source(s)
 	reader := SampleReader{
-		parallelSampleHandler: p.handler,
+		ParallelSampleHandler: p.handler,
 		Handler:               p.ReadSampleHandler,
 		Unmarshaller:          unmarshaller(p.format_input),
 	}
@@ -214,7 +222,17 @@ func (p *CmdSamplePipeline) Init() {
 	p.Sink = sinks
 }
 
-// p.Tasks can be filled with additional Tasks before calling this
+// StartAndWait constructs the pipeline and starts it. It blocks until the pipeline
+// is finished.
+//
+// An additional golib.Task is stared along with the pipeline, which listens
+// for the Ctrl-C user external interrupt and makes the pipeline stoppable cleanly
+// when the user wants to.
+//
+// p.Tasks can be filled with additional Tasks before calling this.
+//
+// StartAndWait returns the number of errors that occured in the pipeline or in
+// additional tasks added to the TaskGroup.
 func (p *CmdSamplePipeline) StartAndWait() int {
 	p.Construct(p.Tasks)
 	log.Debugln("Press Ctrl-C to interrupt")
@@ -223,4 +241,57 @@ func (p *CmdSamplePipeline) StartAndWait() int {
 		Description: "external interrupt",
 	})
 	return p.Tasks.PrintWaitAndStop()
+}
+
+// ============= Helper types and methods =============
+
+func marshaller(format string) Marshaller {
+	switch format {
+	case "t":
+		return new(TextMarshaller)
+	case "c":
+		return new(CsvMarshaller)
+	case "b":
+		return new(BinaryMarshaller)
+	default:
+		log.WithField("format", format).Fatalln("Illegal data input fromat, must be one of", output_formats)
+		return nil
+	}
+}
+
+func unmarshaller(format string) Unmarshaller {
+	switch format {
+	case "a":
+		return nil
+	case "c":
+		return new(CsvMarshaller)
+	case "b":
+		return new(BinaryMarshaller)
+	default:
+		log.WithField("format", format).Fatalln("Illegal data input fromat, must be one of", input_formats)
+		return nil
+	}
+}
+
+type fileRegexValue struct {
+	pipeline *CmdSamplePipeline
+}
+
+func (f *fileRegexValue) String() string {
+	return ""
+}
+
+func (f *fileRegexValue) Set(param string) error {
+	if len(f.pipeline.read_files) == 0 {
+		return errors.New("-FR flag must appear after -F")
+	}
+	dir := f.pipeline.read_files[0]
+	f.pipeline.read_files = f.pipeline.read_files[1:]
+	files, err := ListMatchingFiles(dir, param)
+	if err != nil {
+		log.Fatalln("Error applying -FR flag:", err)
+		return err
+	}
+	f.pipeline.read_files = append(f.pipeline.read_files, files...)
+	return nil
 }

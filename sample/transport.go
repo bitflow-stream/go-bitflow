@@ -40,11 +40,12 @@ type MarshallingMetricSink interface {
 }
 
 // AbstractMetricSink is a partial implementation of MetricSink. It simply provides
-// an empty implementation of Stop() to emphasize the Stop() should be ignored by
+// an empty implementation of Stop() to emphasize that Stop() should be ignored by
 // implementations of MetricSink.
 type AbstractMetricSink struct {
 }
 
+// Stop implements the golib.Task interface.
 func (*AbstractMetricSink) Stop() {
 	// Should stay empty (implement Close() instead)
 }
@@ -57,6 +58,7 @@ type AbstractMarshallingMetricSink struct {
 	Writer     SampleWriter
 }
 
+// SetMarshaller implements the MarshallingMetricSink interface.
 func (sink *AbstractMarshallingMetricSink) SetMarshaller(marshaller Marshaller) {
 	sink.Marshaller = marshaller
 }
@@ -84,10 +86,13 @@ type AbstractMetricSource struct {
 	OutgoingSink MetricSink
 }
 
+// SetSink implements the MetricSource interface.
 func (s *AbstractMetricSource) SetSink(sink MetricSink) {
 	s.OutgoingSink = sink
 }
 
+// CheckSink is a helper method that returns an error if the SetSink() has
+// not been called on the receiving AbstractMetricSource.
 func (s *AbstractMetricSource) CheckSink() error {
 	if s.OutgoingSink == nil {
 		return fmt.Errorf("No data sink set for %v", s)
@@ -95,8 +100,11 @@ func (s *AbstractMetricSource) CheckSink() error {
 	return nil
 }
 
+// CloseSink closes the outgoing MetricSink. It must be called when the
+// receiving AbstractMetricSource is stopped. If the wg parameter is not nil,
+// The outgoing MetricSink is closed in a concurrent goroutine, which is registered
+// in the WaitGroup.
 func (s *AbstractMetricSource) CloseSink(wg *sync.WaitGroup) {
-	// Must be called when this source is stopped
 	if s.OutgoingSink != nil {
 		if wg == nil {
 			s.OutgoingSink.Close()
@@ -205,12 +213,38 @@ func (s *SynchronizingMetricSink) Sample(sample *Sample, header *Header) error {
 	return s.OutgoingSink.Sample(sample, header)
 }
 
-// ==================== Internal types ====================
+// ==================== Configuration types ====================
 
-type parallelSampleHandler struct {
+// ParallelSampleHandler is a configuration type that is included in
+// SampleReader and SampleWriter. Both the reader and writer can marshall
+// and unmarshall Samples in parallel, and these routines are controlled
+// through the two parameters in ParallelSampleHandler.
+type ParallelSampleHandler struct {
+	// BufferedSamples is the number of Samples that are buffered between the
+	// marshall/unmarshall routines and the routine that writes/reads the input
+	// or output streams.
+	// The purpose of the buffer is, for example, to allow the routine reading a file
+	// to read the data for multiple Samples in one read operation, which then
+	// allows the parallel parsing routines to parse all the read Samples at the same time.
+	// Setting BufferedSamples is a tradeoff between memory consumption and
+	// parallelism, but most of the time a value of around 1000 or so should be enough.
+	// If this value is not set, no parallelism will be possible because
+	// the channel between the cooperating routines will block on each operation.
 	BufferedSamples int
+
+	// ParallelParsers can be set to the number of goroutines that will be
+	// used when marshalling or unmarshalling samples. These routines can
+	// parallelize the parsing and marshalling operations. The most benefit
+	// from the parallelism comes when reading samples from e.g. files, because
+	// reading the file into memory can be decoupled from parsing Samples,
+	// and multiple Samples can be parsed at the same time.
+	//
+	// This must be set to a value greater than zero, otherwise no goroutines
+	// will be started.
 	ParallelParsers int
 }
+
+// ==================== Internal types ====================
 
 type parallelSampleStream struct {
 	err    error

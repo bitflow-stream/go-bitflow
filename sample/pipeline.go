@@ -2,7 +2,15 @@ package sample
 
 import "github.com/antongulenko/golib"
 
-// Combination of MetricSink and MetricSource
+// SampleProcessor is the combination of MetricSink and MetricSource.
+// It receives Headers and Samples through the Header and Sample methods and
+// sends samples to the MetricSink configured over MetricSink. The forwarded Samples
+// can be the same as received, completely new generated samples, and also a different
+// number of Samples from the incoming ones. The Header can also be changed, but hten
+// the SampleProcessor implementation must take care to adjust the outgoing
+// Samples accordingly. All required goroutines must be started in Start()
+// and stopped when Close() is called. The Stop() method must be ignored,
+// see MetricSink.
 type SampleProcessor interface {
 	golib.Task
 	Header(header *Header) error
@@ -11,15 +19,23 @@ type SampleProcessor interface {
 	Close()
 }
 
-// A pipeline reads data from a source, pipes it through some processing steps
-// and outputs it into a final sink.
+// SamplePipeline reads data from a source, pipes it through zero or more SampleProcessor
+// instances and outputs the final Samples into a MetricSink.
+// The job of the SamplePipeline is to connect all the processing steps
+// in the Construct method. After calling Construct, the SamplePipeline should not
+// used any further.
 type SamplePipeline struct {
 	Source     MetricSource
 	Processors []SampleProcessor
 	Sink       MetricSink
 }
 
-// After this, tasks.WaitAndExit() or similar can be called to run the pipeline
+// Construct connects the MetricSource, all SampleProcessors and the MetricSink
+// inside the receiving SamplePipeline. It adds all these golib.Task instances
+// to the golib.TaskGroup parameter. Afterwards, tasks.WaitAndStop() cann be called
+// to start the entire pipeline. At least the Source and the Sink field
+// must be set in the pipeline. The Construct method will not fail without them,
+// but starting the resulting pipeline will not work.
 func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 	// First connect all sources with their sinks
 	source := p.Source
@@ -48,6 +64,11 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 	tasks.Add(p.Source)
 }
 
+// Add adds the SampleProcessor parameter to the list of SampleProcessors in the
+// receiving SamplePipeline. The Source and Sink fields must be accessed directly.
+// The Processors field can also be accessed directly, but the Add method allows
+// chaining multiple Add invokations like so:
+//   pipeline.Add(processor1).Add(processor2)
 func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 	if processor != nil {
 		p.Processors = append(p.Processors, processor)

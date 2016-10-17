@@ -10,10 +10,22 @@ import (
 	"github.com/antongulenko/golib"
 )
 
+// SampleWriter implements parallel writing of Headers and Samples to an instance of
+// io.WriteCloser. The WriteCloser can be anything like a file or a network connection.
+// The parallel writing must be configured before using the SampleWriter. See
+// ParallelSampleHandler for the configuration variables.
+//
+// SampleWriter instances are mainly used by implementations of MetricSink that write
+// to output streams, like FileSink or TcpMetricSink.
 type SampleWriter struct {
-	parallelSampleHandler
+	ParallelSampleHandler
 }
 
+// SampleOutputStream represents one open output stream that marshalls and writes
+// Headers and Samples in parallel. It is created by using SampleWriter.Open or
+// SampleWriter.OpenBuffered. The Header()s and Sample() methods can be used
+// to output data on this stream, and the Close() method must be called when no
+// more Samples are expected. No more data can be written after calling Close().
 type SampleOutputStream struct {
 	parallelSampleStream
 	incoming       chan *bufferedSample
@@ -26,14 +38,30 @@ type SampleOutputStream struct {
 	marshallBuffer int
 }
 
+// BufferedWriteCloser is a helper type that wraps a bufio.Writer around a
+// io.WriteCloser, while still implementing the io.WriteCloser interface and
+// forwarding all method calls to the correct receiver. The Writer field should
+// not be accessed directly.
 type BufferedWriteCloser struct {
 	*bufio.Writer
-	Closer io.Closer
+	closer io.Closer
 }
 
+// NewBufferedWriteCloser creates a BufferedWriteCloser instance wrapping the
+// writer parameter. It creates a bufio.Writer with a buffer size of the io_buffer
+// parameter.
+func NewBufferedWriteCloser(writer io.WriteCloser, io_buffer int) *BufferedWriteCloser {
+	return &BufferedWriteCloser{
+		Writer: bufio.NewWriterSize(writer, io_buffer),
+		closer: writer,
+	}
+}
+
+// Close implements the Close method in io.WriteCloser by flusing its bufio.Writer and
+// forwarding the Close call to the io.WriteCloser used to create it.
 func (writer *BufferedWriteCloser) Close() (err error) {
 	err = writer.Writer.Flush()
-	if closeErr := writer.Closer.Close(); err == nil {
+	if closeErr := writer.closer.Close(); err == nil {
 		err = closeErr
 	}
 	return
@@ -43,10 +71,7 @@ func (w *SampleWriter) OpenBuffered(writer io.WriteCloser, marshaller Marshaller
 	if io_buffer <= 0 {
 		return w.Open(writer, marshaller)
 	}
-	buf := &BufferedWriteCloser{
-		Writer: bufio.NewWriterSize(writer, io_buffer),
-		Closer: writer,
-	}
+	buf := NewBufferedWriteCloser(writer, io_buffer)
 	return w.Open(buf, marshaller)
 }
 

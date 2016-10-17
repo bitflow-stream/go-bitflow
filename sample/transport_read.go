@@ -15,7 +15,7 @@ const input_io_buffer = 16 // Needed for auto-detecting stream format
 
 // Unmarshalls samples from an io.Reader, parallelizing the parsing
 type SampleReader struct {
-	parallelSampleHandler
+	ParallelSampleHandler
 	Handler      ReadSampleHandler // Optional, for modifying incoming headers/samples based on their source
 	Unmarshaller Unmarshaller
 }

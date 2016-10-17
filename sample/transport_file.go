@@ -111,6 +111,7 @@ func (group *FileGroup) DeleteFiles() error {
 }
 
 // ==================== File data source ====================
+
 const ReadingDirWarnDuration = 2000 * time.Millisecond
 
 type FileSource struct {
