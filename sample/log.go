@@ -30,7 +30,9 @@ func init() {
 	flag.StringVar(&logFile, "log", "", "Redirect logs to a given file in addition to the console.")
 }
 
-// This is called in CmdSamplePipeline.Init()
+// ConfigureLogging configures the logger based on the command-line flags defined above.
+// This function should be called early in every main() routine, preferably
+// before any prior logging output.
 func ConfigureLogging() {
 	level := log.InfoLevel
 	if logVerbose {

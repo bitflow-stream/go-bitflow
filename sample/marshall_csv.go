@@ -11,11 +11,33 @@ import (
 )
 
 const (
-	csv_separator   = ','
-	csv_newline     = "\n"
-	csv_date_format = "2006-01-02 15:04:05.999999999"
+	// CsvSeparator is the character separating fields in the marshalled output
+	// of CsvMarshaller.
+	CsvSeparator = ','
+
+	// CsvNewline is used by CsvMarshaller after outputting the header line and
+	// each sample.
+	CsvNewline = "\n"
+
+	// CsvDateFormat is the format used by CsvMarshaller to marshall the timestamp
+	// of samples.
+	CsvDateFormat = "2006-01-02 15:04:05.999999999"
 )
 
+// CsvMarshaller marshalls Headers and Samples to a CSV format.
+//
+// Every header is marshalled as a comma-separated CSV header line.
+// The first field is 'time', the second field is 'tags' (if the following samples
+// contain tags). After that the header contains a list of all metrics.
+//
+// Every sample is marshalled to a comma-separated line starting with a textual
+// representation of the timestamp (see CsvDateFormat), then a space-separated
+// key-value list for the tags (only if the 'tags' field was included in the header),
+// and then all the metric values in the same order as on the preceding header line.
+// To follow the semantics of a correct CSV file, every changing header should start
+// a new CSV file.
+//
+// There are no configuration options for CsvMarshaller.
 type CsvMarshaller struct {
 }
 
@@ -27,23 +49,23 @@ func (*CsvMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
 	w.WriteStr(time_col)
 	if header.HasTags {
-		w.WriteByte(csv_separator)
+		w.WriteByte(CsvSeparator)
 		w.WriteStr(tags_col)
 	}
 	for _, name := range header.Fields {
-		w.WriteByte(csv_separator)
+		w.WriteByte(CsvSeparator)
 		w.WriteStr(name)
 	}
-	w.WriteStr(csv_newline)
+	w.WriteStr(CsvNewline)
 	return w.Err
 }
 
 func splitCsvLine(line []byte) []string {
-	return strings.Split(string(line), string(csv_separator))
+	return strings.Split(string(line), string(CsvSeparator))
 }
 
 func (*CsvMarshaller) ReadHeader(reader *bufio.Reader) (header *Header, err error) {
-	line, err := reader.ReadBytes(csv_newline[0])
+	line, err := reader.ReadBytes(CsvNewline[0])
 	if err == io.EOF {
 		err = nil
 	} else if err != nil {
@@ -71,22 +93,22 @@ func (*CsvMarshaller) ReadHeader(reader *bufio.Reader) (header *Header, err erro
 
 func (*CsvMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
-	w.WriteStr(sample.Time.Format(csv_date_format))
+	w.WriteStr(sample.Time.Format(CsvDateFormat))
 	if header.HasTags {
 		tags := sample.TagString()
-		w.WriteByte(csv_separator)
+		w.WriteByte(CsvSeparator)
 		w.WriteStr(tags)
 	}
 	for _, value := range sample.Values {
-		w.WriteByte(csv_separator)
+		w.WriteByte(CsvSeparator)
 		w.WriteStr(fmt.Sprintf("%v", value))
 	}
-	w.WriteStr(csv_newline)
+	w.WriteStr(CsvNewline)
 	return w.Err
 }
 
 func (*CsvMarshaller) ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error) {
-	data, err := input.ReadBytes(csv_newline[0])
+	data, err := input.ReadBytes(CsvNewline[0])
 	if err == io.EOF {
 		if len(data) > 0 {
 			err = nil
@@ -100,7 +122,7 @@ func (*CsvMarshaller) ReadSampleData(header *Header, input *bufio.Reader) ([]byt
 func (*CsvMarshaller) ParseSample(header *Header, data []byte) (sample *Sample, err error) {
 	fields := splitCsvLine(data)
 	sample = new(Sample)
-	sample.Time, err = time.Parse(csv_date_format, fields[0])
+	sample.Time, err = time.Parse(CsvDateFormat, fields[0])
 	if err != nil {
 		return
 	}

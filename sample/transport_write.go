@@ -11,13 +11,13 @@ import (
 )
 
 type SampleWriter struct {
-	ParallelSampleHandler
+	parallelSampleHandler
 }
 
 type SampleOutputStream struct {
-	ParallelSampleStream
-	incoming       chan *BufferedSample
-	outgoing       chan *BufferedSample
+	parallelSampleStream
+	incoming       chan *bufferedSample
+	outgoing       chan *bufferedSample
 	closed         *golib.OneshotCondition
 	headerLock     sync.Mutex
 	header         *Header
@@ -55,8 +55,8 @@ func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *Sampl
 		writer:     writer,
 		marshaller: marshaller,
 		closed:     golib.NewOneshotCondition(),
-		incoming:   make(chan *BufferedSample, w.BufferedSamples),
-		outgoing:   make(chan *BufferedSample, w.BufferedSamples),
+		incoming:   make(chan *bufferedSample, w.BufferedSamples),
+		outgoing:   make(chan *bufferedSample, w.BufferedSamples),
 	}
 
 	for i := 0; i < w.ParallelParsers || i < 1; i++ {
@@ -105,8 +105,8 @@ func (stream *SampleOutputStream) Sample(sample *Sample) error {
 	if stream.HasError() {
 		return stream.err
 	}
-	bufferedSample := &BufferedSample{
-		stream:   &stream.ParallelSampleStream,
+	bufferedSample := &bufferedSample{
+		stream:   &stream.parallelSampleStream,
 		sample:   sample,
 		doneCond: sync.NewCond(new(sync.Mutex)),
 	}
@@ -140,7 +140,7 @@ func (stream *SampleOutputStream) marshall() {
 	}
 }
 
-func (stream *SampleOutputStream) marshallOne(sample *BufferedSample) {
+func (stream *SampleOutputStream) marshallOne(sample *bufferedSample) {
 	defer sample.NotifyDone()
 	if stream.HasError() {
 		return

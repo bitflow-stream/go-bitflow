@@ -68,7 +68,7 @@ type CmdSamplePipeline struct {
 	tcp_drop_active_errors bool
 	robust_files           bool
 	clean_files            bool
-	handler                ParallelSampleHandler
+	handler                parallelSampleHandler
 	io_buf                 int
 }
 
@@ -139,7 +139,7 @@ func (p *CmdSamplePipeline) Init() {
 
 	// ====== Initialize source(s)
 	reader := SampleReader{
-		ParallelSampleHandler: p.handler,
+		parallelSampleHandler: p.handler,
 		Handler:               p.ReadSampleHandler,
 		Unmarshaller:          unmarshaller(p.format_input),
 	}

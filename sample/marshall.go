@@ -12,6 +12,34 @@ const (
 	tags_col = "tags"
 )
 
+// Marshaller is an interface for converting Samples and Headers into byte streams.
+// The byte streams can be anything including files, network connections, console output,
+// or in-memory byte buffers.
+type Marshaller interface {
+	String() string
+	WriteHeader(header *Header, output io.Writer) error
+	WriteSample(sample *Sample, header *Header, output io.Writer) error
+}
+
+// Unmarshaller is an interface for reading Samples and Headers from byte streams.
+// The byte streams can be anything including files, network connections, console output,
+// or in-memory byte buffers.
+// Reading is split into three parts: reading the header, receiving the bytes for a sample,
+// and parsing those bytes into the actual sample. This separation is done for optimization
+// purpose, to enable parallel parsing of samples by separating the data reading part
+// from the parsing part. One goroutine can continuously call ReadSampleData(), while multiple
+// other routines execute ParseSample() in parallel.
+type Unmarshaller interface {
+	String() string
+
+	// io.EOF is not valid
+	ReadHeader(input *bufio.Reader) (*Header, error)
+
+	// io.EOF indicates end of stream
+	ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error)
+	ParseSample(header *Header, data []byte) (*Sample, error)
+}
+
 func checkFirstCol(col string) error {
 	if col != time_col {
 		if len(col) >= 20 {
@@ -32,7 +60,7 @@ func detectFormat(input *bufio.Reader) (Unmarshaller, error) {
 		return nil, err
 	}
 	switch peeked[peekNum-1] {
-	case csv_separator:
+	case CsvSeparator:
 		return new(CsvMarshaller), nil
 	case binary_separator:
 		return new(BinaryMarshaller), nil
@@ -41,26 +69,10 @@ func detectFormat(input *bufio.Reader) (Unmarshaller, error) {
 	}
 }
 
-type Marshaller interface {
-	String() string
-	WriteHeader(header *Header, output io.Writer) error
-	WriteSample(sample *Sample, header *Header, output io.Writer) error
-}
-
-type Unmarshaller interface {
-	String() string
-
-	// io.EOF is not valid
-	ReadHeader(input *bufio.Reader) (*Header, error)
-
-	// io.EOF indicates end of stream
-	ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error)
-	ParseSample(header *Header, data []byte) (*Sample, error)
-}
-
-// Helper type for more concise Write code by avoiding error checks on every
-// Write() invokation. Overhead: additional no-op Write()/WriteStr() calls
-// after an error has occurred (which is the exception).
+// WriteCascade is a helper type for more concise Write code by avoiding error
+// checks on every Write() invokation. Multiple Write calls can be cascaded
+// without intermediate checks for errors. The tradeoff/overhead are additional
+// no-op Write()/WriteStr() calls after an error has occurred (which is the exception).
 type WriteCascade struct {
 	Writer io.Writer
 	Err    error

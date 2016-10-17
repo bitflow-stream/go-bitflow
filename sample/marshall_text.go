@@ -11,18 +11,51 @@ import (
 )
 
 const (
-	text_date_format = "2006-01-02 15:04:05.999"
+	// TextMarshallerDateFormat is the date format used by TextMarshaller to
+	// print he timestamp of each sample.
+	TextMarshallerDateFormat = "2006-01-02 15:04:05.999"
 
-	// Defaults will be applied if value is <= 0
-	text_marshaller_default_spacing = 3
-	text_marshaller_default_width   = 200 // Automatic for stdin.
-	text_marshaller_header_char     = '='
+	// TextMarshallerDefaultSpacing is the default spacing between the columns
+	// printed by TextMarshaller.
+	TextMarshallerDefaultSpacing = 3
+
+	// TextMarshallerDefaultWidth is used as the line width for TextMarshaller
+	// if no TextWidth is configured explicitely, and if the width cannot be
+	// determined automatically from the operating system.
+	TextMarshallerDefaultWidth = 200
+
+	// TextMarshallerHeaderChar is used as fill-character in the header line
+	// preceding each sample marshalled by TextMarshaller.
+	TextMarshallerHeaderChar = '='
 )
 
+// TextMarshaller marshalls Headers and Samples to a human readable test format.
+// It is mainly intended for easily readable output on the console. Headers are
+// not printed separately. Every Sample is preceded by a header line containing
+// the timestamp and tags. Afterwards, all values are printed in a aligned table
+// in a key = value format. The width of the header line, the number of columns
+// in the table, and the spacing between the columns in the table can be configured.
 type TextMarshaller struct {
-	TextWidth    int // Ignored if Columns is > 0
-	Columns      int // Will be inferred from TextWidth if <= 0
-	Spacing      int
+
+	// TextWidths sets the width of the header line and value table.
+	// If Columns > 0, this value is ignored as the width is determined by the
+	// number of columns. If this is 0, the width will be determined automatically:
+	// If the output is a TTY (or if AssumeStdout is true), the width of the terminal
+	// will be used. If it cannot be obtained, the default value
+	// TextMarshallerDefaultWidth will be used.
+	TextWidth int
+
+	// Columns can be set to > 0 to override TextWidth and set a fixed number of
+	// columns in the table. Otherwise it will be computed automatically based
+	// on TextWidth.
+	Columns int
+
+	// Set additional spacing between the columns of the output table. If <= 0, the
+	// default value TextMarshallerDefaultSpacing will be used.
+	Spacing int
+
+	// If true, assume the output is a TTY and try to obtain the TextWidth from
+	// the operating system.
 	AssumeStdout bool
 
 	terminal_size_warned bool
@@ -40,7 +73,7 @@ func (m *TextMarshaller) WriteSample(sample *Sample, header *Header, writer io.W
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	headerStr := sample.Time.Format(text_date_format)
+	headerStr := sample.Time.Format(TextMarshallerDateFormat)
 	if header.HasTags {
 		headerStr = fmt.Sprintf("%s (%s)", headerStr, sample.TagString())
 	}
@@ -59,7 +92,7 @@ func (m *TextMarshaller) WriteSample(sample *Sample, header *Header, writer io.W
 func (m *TextMarshaller) calculateWidths(lines []string, writer io.Writer) (textWidth int, columnWidths []int) {
 	spacing := m.Spacing
 	if spacing <= 0 {
-		spacing = text_marshaller_default_spacing
+		spacing = TextMarshallerDefaultSpacing
 	}
 	if m.Columns > 0 {
 		columnWidths = m.fixedColumnWidths(lines, m.Columns, spacing)
@@ -93,21 +126,21 @@ func (m *TextMarshaller) defaultTextWidth(writer io.Writer) int {
 	if m.AssumeStdout || writer == os.Stdout {
 		if size, err := golib.GetTerminalSize(); err != nil {
 			if !m.terminal_size_warned {
-				log.Warnln("Failed to get terminal size, using default:", text_marshaller_default_width, "-", err)
+				log.Warnln("Failed to get terminal size, using default:", TextMarshallerDefaultWidth, "-", err)
 				m.terminal_size_warned = true
 			}
-			return text_marshaller_default_width
+			return TextMarshallerDefaultWidth
 		} else if size.Col == 0 {
 			if !m.terminal_size_warned {
-				log.Warnln("Terminal size returned as 0, using default:", text_marshaller_default_width)
+				log.Warnln("Terminal size returned as 0, using default:", TextMarshallerDefaultWidth)
 				m.terminal_size_warned = true
 			}
-			return text_marshaller_default_width
+			return TextMarshallerDefaultWidth
 		} else {
 			return int(size.Col)
 		}
 	} else {
-		return text_marshaller_default_width
+		return TextMarshallerDefaultWidth
 	}
 }
 
@@ -144,7 +177,7 @@ func (m *TextMarshaller) writeHeader(header string, textWidth int, writer io.Wri
 		lineChars := (extraSpace - 2) / 2
 		line := make([]byte, lineChars)
 		for i := 0; i < lineChars; i++ {
-			line[i] = text_marshaller_header_char
+			line[i] = TextMarshallerHeaderChar
 		}
 		lineStr := string(line)
 		fmt.Fprintln(writer, lineStr, header, lineStr)

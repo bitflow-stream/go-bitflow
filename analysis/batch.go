@@ -185,7 +185,7 @@ type MultiHeaderMerger struct {
 
 	hasTags bool
 	metrics map[string][]sample.Value
-	samples []sample.SampleMetadata
+	samples []*sample.SampleMetadata
 }
 
 func NewMultiHeaderMerger() *MultiHeaderMerger {

@@ -17,6 +17,25 @@ const (
 	binary_separator = '\n'
 )
 
+// BinaryMarshaller marshalled every sample to a dense binary format.
+//
+// The header is marshalled to a newline-separated list of strings. The first
+// field is 'time', the second field is 'tags' if the following samples include tags.
+// The following fields are the names of the metrics in the header.
+// An empty lne denotes the end of the header.
+//
+// After the header, every sample is marshalled as folows.
+// First the timestamp is marshalled as a big-endian unsigned int64 value containing the
+// nanoseconds since the Unix epoch (8 bytes).
+// Then the tags are marshalled as a newline-delimited string containing a space-separated
+// list of key-values pairs for the tags. If the 'tags' field was missing in the header
+// fields, this tags string is missing, including the newline delimiter.
+// After the optional tags string the values for the sample are marshalled as an array
+// of big-endian double-precision values, 8 bytes each. Since the number of metrics
+// is known from the header, the number of bytes for one sample is given as
+// 8 * number of metrics.
+//
+// There are no configuration options in BinaryMarshaller.
 type BinaryMarshaller struct {
 }
 

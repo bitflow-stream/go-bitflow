@@ -15,7 +15,7 @@ const input_io_buffer = 16 // Needed for auto-detecting stream format
 
 // Unmarshalls samples from an io.Reader, parallelizing the parsing
 type SampleReader struct {
-	ParallelSampleHandler
+	parallelSampleHandler
 	Handler      ReadSampleHandler // Optional, for modifying incoming headers/samples based on their source
 	Unmarshaller Unmarshaller
 }
@@ -26,12 +26,12 @@ type ReadSampleHandler interface {
 }
 
 type BufferedIncomingSample struct {
-	BufferedSample
+	bufferedSample
 	ParserError bool
 }
 
 type SampleInputStream struct {
-	ParallelSampleStream
+	parallelSampleStream
 	incoming         chan *BufferedIncomingSample
 	outgoing         chan *BufferedIncomingSample
 	um               Unmarshaller
@@ -57,7 +57,7 @@ func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink MetricSinkBase, bu
 		sink:             sink,
 		incoming:         make(chan *BufferedIncomingSample, r.BufferedSamples),
 		outgoing:         make(chan *BufferedIncomingSample, r.BufferedSamples),
-		ParallelSampleStream: ParallelSampleStream{
+		parallelSampleStream: parallelSampleStream{
 			closed: golib.NewOneshotCondition(),
 		},
 	}
@@ -187,8 +187,8 @@ func (stream *SampleInputStream) readData() {
 			return
 		} else {
 			s := &BufferedIncomingSample{
-				BufferedSample: BufferedSample{
-					stream:   &stream.ParallelSampleStream,
+				bufferedSample: bufferedSample{
+					stream:   &stream.parallelSampleStream,
 					data:     data,
 					doneCond: sync.NewCond(new(sync.Mutex)),
 				},
