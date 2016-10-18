@@ -16,7 +16,7 @@ import (
 // ParallelSampleHandler for the configuration variables.
 //
 // SampleWriter instances are mainly used by implementations of MetricSink that write
-// to output streams, like FileSink or TcpMetricSink.
+// to output streams, like FileSink or TCPSink.
 type SampleWriter struct {
 	ParallelSampleHandler
 }
@@ -67,6 +67,9 @@ func (writer *BufferedWriteCloser) Close() (err error) {
 	return
 }
 
+// OpenBufferd returns a buffered output stream with a buffer of the size io_buffer.
+// Samples coming into that stream are marshalled using marshaller and finally written
+// the given writer.
 func (w *SampleWriter) OpenBuffered(writer io.WriteCloser, marshaller Marshaller, io_buffer int) *SampleOutputStream {
 	if io_buffer <= 0 {
 		return w.Open(writer, marshaller)
@@ -75,6 +78,9 @@ func (w *SampleWriter) OpenBuffered(writer io.WriteCloser, marshaller Marshaller
 	return w.Open(buf, marshaller)
 }
 
+// Open returns an output stream that sends the marshalled samples directly to the given writer.
+// Marshalling and writing is done in separate routines, as configured in the SampleWriter
+// configuration parameters.
 func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *SampleOutputStream {
 	stream := &SampleOutputStream{
 		writer:     writer,
@@ -94,6 +100,9 @@ func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *Sampl
 	return stream
 }
 
+// Header marshalls the given header and writes the resulting byte buffer into
+// the writer behind the stream receiver. If a non-nil error is returned here,
+// the stream should not be used any further, but still must be closed externally.
 func (stream *SampleOutputStream) Header(header *Header) error {
 	if stream == nil {
 		return nil
@@ -126,6 +135,9 @@ func (stream *SampleOutputStream) flushBuffered() error {
 	return nil
 }
 
+// Sample marshalles the given Sample and writes the resulting byte buffer into the
+// writer behind the stream receiver. If a non-nil error is returned here,
+// the stream should not be used any further, but still must be closed externally.
 func (stream *SampleOutputStream) Sample(sample *Sample) error {
 	if stream.HasError() {
 		return stream.err
@@ -140,6 +152,9 @@ func (stream *SampleOutputStream) Sample(sample *Sample) error {
 	return nil
 }
 
+// Close closes the receiving SampleOutputStream. After calling this, neither
+// Sample nor Header can be called anymore! The returned error is the first error
+// that ever ocurred in any of the Sample/Header/Close calls on this stream.
 func (stream *SampleOutputStream) Close() error {
 	if stream == nil {
 		return nil

@@ -32,11 +32,21 @@ type Marshaller interface {
 type Unmarshaller interface {
 	String() string
 
-	// io.EOF is not valid
+	// ReadHeader should read and parse an entire reader from the input.
+	// The io.EOF error is not a valid return value and treated as an erro.
 	ReadHeader(input *bufio.Reader) (*Header, error)
 
-	// io.EOF indicates end of stream
+	// ReadSampleData reads data from the stream, until a full Sample has been
+	// read. The data is not parsed, the only task if this is to read exactly
+	// the right amount of data. The size of the Sample should be known from the header.
+	// The io.EOF error is a valid return value and indicates the end of the stream.
+	// If io.EOF occurs too early the stream, it should be converted to io.ErrUnexpectedEOF
+	// to avoid confusion.
 	ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error)
+
+	// ParseSample uses a header and a byte buffer to parse it to a newly
+	// allocated Sample instance. The returned error indicates that the
+	// data was in the wrong format.
 	ParseSample(header *Header, data []byte) (*Sample, error)
 }
 
@@ -74,10 +84,15 @@ func detectFormat(input *bufio.Reader) (Unmarshaller, error) {
 // without intermediate checks for errors. The tradeoff/overhead are additional
 // no-op Write()/WriteStr() calls after an error has occurred (which is the exception).
 type WriteCascade struct {
+	// Writer must be set before calling Write. It will receive the Write calls.
 	Writer io.Writer
-	Err    error
+
+	// Err stores the error that occrred in one of the write calls.
+	Err error
 }
 
+// Write forwards the call to the contained Writer, but only of no error
+// has been encountered yet. If an error occurs, it is stored in the Error field.
 func (w *WriteCascade) Write(bytes []byte) error {
 	if w.Err == nil {
 		_, w.Err = w.Writer.Write(bytes)
@@ -85,10 +100,12 @@ func (w *WriteCascade) Write(bytes []byte) error {
 	return nil
 }
 
+// WriteStr calls Write with a []byte representation of the string parameter.
 func (w *WriteCascade) WriteStr(str string) error {
 	return w.Write([]byte(str))
 }
 
+// WriteByte calls Write with the single parameter byte.
 func (w *WriteCascade) WriteByte(b byte) error {
 	return w.Write([]byte{b})
 }

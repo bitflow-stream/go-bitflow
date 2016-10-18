@@ -11,29 +11,59 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-const input_io_buffer = 16 // Needed for auto-detecting stream format
+const MinimumInputIoBuffer = 16 // Needed for auto-detecting stream format
 
-// Unmarshalls samples from an io.Reader, parallelizing the parsing
+// SampleReader is used to read Headers and Samples from an io.Reader,
+// parallelizing the reading and parsing procedures. The parallelization
+// must be configured through the ParallelSampleHandler parameters before starting
+// this SampleReader.
 type SampleReader struct {
 	ParallelSampleHandler
-	Handler      ReadSampleHandler // Optional, for modifying incoming headers/samples based on their source
+
+	// Handler is an optional hook for modifying Headers and Samples that were
+	// read by this SampleReader. The hook methods receive a string-representation of
+	// the data source and can use it to modify tags in the Samples. If this is done,
+	// the HasTags flag should also be set to true in incoming Headers.
+	Handler ReadSampleHandler
+
+	// Unmarshaller will be used when reading and parsing Headers and Samples.
+	// If this field is nil when creating an input stream, the SampleInputStream will try
+	// to automatically determine the format of the incoming data and create
+	// a fitting Unmarshaller instance accordingly.
 	Unmarshaller Unmarshaller
 }
 
+// ReadSampleHandler defines two hooks for modifying Headers and Samples.
+//
 type ReadSampleHandler interface {
-	HandleHeader(header *Header, source string) // Allows modifying fields on incoming headers
-	HandleSample(sample *Sample, source string) // Allows modifying tags/values on read samples
+	// HandleHeader allows modifying received Headers. The main purpose is to set
+	// or unset the HasTags flags. The source string is not really useful here,
+	// as it is more useful in the HandleSample method. In special cases
+	// it might be usedfull to change the Header fields here, but that should rather
+	// be done in a later processing step.
+	HandleHeader(header *Header, source string)
+
+	// HandleSample allows modifying received Samples. It can be used to modify
+	// the tags of the Sample based on the source string. The source string depends on the
+	// MetricSource that is using the SampleReader that contains this ReadSampleHandler.
+	// In general it represents the data source of the sample. For FileSource this will be
+	// the file name, for TCPSource it will be the remote TCP endpoint sending the data.
+	// It might also be useful to change the values or the timestamp of the Sample here,
+	// but that should rather be done in a later processing step.
+	HandleSample(sample *Sample, source string)
 }
 
-type BufferedIncomingSample struct {
-	bufferedSample
-	ParserError bool
-}
-
+// SampleInputStream represents one input stream of Headers and Samples that reads
+// and parses data from one io.ReadCloser instance. A SampleInputStream can be created
+// using SampleReader.Open or .OpenBuffered. The stream then has to be started using
+// one of the Read* methods. The Read* method will block until the stream is finished.
+// Reading and parsing the Samples will be done in parallel goroutines. The Read* methods behave
+// differently in terms of printing errors. The stream can be closed forcefully using the
+// Close method.
 type SampleInputStream struct {
 	parallelSampleStream
-	incoming         chan *BufferedIncomingSample
-	outgoing         chan *BufferedIncomingSample
+	incoming         chan *bufferedIncomingSample
+	outgoing         chan *bufferedIncomingSample
 	um               Unmarshaller
 	sampleReader     *SampleReader
 	reader           *bufio.Reader
@@ -44,10 +74,18 @@ type SampleInputStream struct {
 	sink             MetricSinkBase
 }
 
+// Open creates an input stream reading from the given io.ReadCloser and writing
+// the received Headers and Samples to the given MetricSinkBase. Although no buffer size
+// is given, the stream will actually have a small input buffer to enable automatically
+// detecting the format of incoming data, if no Unmarshaller was configured in the receiving
+// SampleReader.
 func (r *SampleReader) Open(input io.ReadCloser, sink MetricSinkBase) *SampleInputStream {
-	return r.OpenBuffered(input, sink, input_io_buffer)
+	return r.OpenBuffered(input, sink, MinimumInputIoBuffer)
 }
 
+// OpenBuffered creates an input stream with a given buffer size. The buffer size should be at least
+// MinimumInputIoBuffer bytes to support automatically discovering the input stream format. See Open() for
+// more details.
 func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink MetricSinkBase, bufSize int) *SampleInputStream {
 	return &SampleInputStream{
 		um:               r.Unmarshaller,
@@ -55,14 +93,20 @@ func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink MetricSinkBase, bu
 		sampleReader:     r,
 		underlyingReader: input,
 		sink:             sink,
-		incoming:         make(chan *BufferedIncomingSample, r.BufferedSamples),
-		outgoing:         make(chan *BufferedIncomingSample, r.BufferedSamples),
+		incoming:         make(chan *bufferedIncomingSample, r.BufferedSamples),
+		outgoing:         make(chan *bufferedIncomingSample, r.BufferedSamples),
 		parallelSampleStream: parallelSampleStream{
 			closed: golib.NewOneshotCondition(),
 		},
 	}
 }
 
+// ReadSamples starts the receiving input stream and blocks until the stream is finished
+// or closed by Close(). It returns the number of successfully received samples and a
+// non-nil error, if any occurred while reading or parsing. The source string parameter
+// will be forwarded to the ReadSampleHandler, if one is set in the SampleReader that
+// created this SampleInputStream. The source string will be used for both the HandleHeader() and
+// HandleSample() methods.
 func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 	if err := stream.readHeader(source); err != nil {
 		return 0, err
@@ -86,6 +130,9 @@ func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 	return stream.num_samples, stream.err
 }
 
+// ReadNamedSamples calls ReadSamples with the given source string, and prints
+// some additional logging information. It is a convenience function for different
+// implementations of MetricSource.
 func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error) {
 	var num_samples int
 	l := log.WithFields(log.Fields{"source": sourceName, "format": stream.Format()})
@@ -95,6 +142,12 @@ func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error)
 	return
 }
 
+// ReadTcpSamples reads Samples from the given net.TCPConn and blocks until the connection
+// is closed by the remote host, or Close() is called on the input stream. Any error is logged
+// instead of being returned. The checkClosed() function parameter is used when a read error occurrs:
+// if it returns true, ReadTcpSamples assumes that the connection was closed by the local host,
+// because of a call to Close() or some other external reason. If checkClosed() returnes false,
+// it is assumed that a network error or timeout caused the connection to be closed.
 func (stream *SampleInputStream) ReadTcpSamples(conn *net.TCPConn, checkClosed func() bool) {
 	remote := conn.RemoteAddr()
 	l := log.WithFields(log.Fields{"remote": remote, "format": stream.Format()})
@@ -114,6 +167,9 @@ func (stream *SampleInputStream) ReadTcpSamples(conn *net.TCPConn, checkClosed f
 	l.Debugln("Received", num_samples, "samples")
 }
 
+// Close clses the receiving SampleInputStream. Close should be called even if the
+// Read* method, that started the stream, returns an error. Close() might return the
+// same error as the Read* method.
 func (stream *SampleInputStream) Close() error {
 	if stream != nil {
 		stream.closeUnderlyingReader()
@@ -131,6 +187,8 @@ func (stream *SampleInputStream) closeUnderlyingReader() {
 	})
 }
 
+// Format returns a string description of the unmarshalling format used by the receiving
+// SampleReader. It returns "auto-detected", if no Unmarshaller is configured.
 func (reader *SampleReader) Format() string {
 	if reader.Unmarshaller == nil {
 		return "auto-detected"
@@ -139,6 +197,10 @@ func (reader *SampleReader) Format() string {
 	}
 }
 
+// Format returns a string description of the unmarshalling format used by the receiving
+// SampleInputStream. It returns "auto-detected", if no Unmarshaller is configured, and if
+// the unmarshalling format was not yet detected automatically. After the unmarshalling format
+// is detected, Format will return the correct format description.
 func (stream *SampleInputStream) Format() string {
 	if stream.um == nil {
 		return "auto-detected"
@@ -186,7 +248,7 @@ func (stream *SampleInputStream) readData() {
 			stream.err = err
 			return
 		} else {
-			s := &BufferedIncomingSample{
+			s := &bufferedIncomingSample{
 				bufferedSample: bufferedSample{
 					stream:   &stream.parallelSampleStream,
 					data:     data,
@@ -210,7 +272,7 @@ func (stream *SampleInputStream) parseSamples(source string) {
 	}
 }
 
-func (stream *SampleInputStream) parseOne(source string, sample *BufferedIncomingSample) {
+func (stream *SampleInputStream) parseOne(source string, sample *bufferedIncomingSample) {
 	defer sample.NotifyDone()
 	if parsedSample, err := stream.um.ParseSample(stream.header, sample.data); err != nil {
 		if !stream.HasError() {
@@ -240,4 +302,11 @@ func (stream *SampleInputStream) sinkSamples() {
 		}
 		stream.num_samples++
 	}
+}
+
+// ============= Helper types =============
+
+type bufferedIncomingSample struct {
+	bufferedSample
+	ParserError bool
 }

@@ -39,10 +39,13 @@ const (
 type BinaryMarshaller struct {
 }
 
+// String implements the Marshaller interface.
 func (*BinaryMarshaller) String() string {
 	return "binary"
 }
 
+// WriteHeader implements the Marshaller interface by writing a newline-separated
+// list of header field strings and an additional empty line.
 func (*BinaryMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
 	w.WriteStr(time_col)
@@ -59,6 +62,8 @@ func (*BinaryMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	return w.Err
 }
 
+// ReadHeader implements the Unmarshaller interface by reading until an empty line
+// and splitting the read data on newline characters.
 func (*BinaryMarshaller) ReadHeader(reader *bufio.Reader) (header *Header, err error) {
 	name, err := reader.ReadBytes(binary_separator)
 	if err != nil {
@@ -89,6 +94,8 @@ func (*BinaryMarshaller) ReadHeader(reader *bufio.Reader) (header *Header, err e
 	}
 }
 
+// WriteSample implements the Marshaller interface by writing the Sample out in a
+// dense binary format. See the BinaryMarshaller godoc for information on the format.
 func (m *BinaryMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
 	// Time as big-endian uint64 nanoseconds since Unix epoch
 	tim := make([]byte, timeBytes)
@@ -120,6 +127,8 @@ func (m *BinaryMarshaller) WriteSample(sample *Sample, header *Header, writer io
 	return nil
 }
 
+// ReadSampleData implements the Unmarshaller interface by reading data for a single
+// Sample into a buffer. The size of the Sample is derived from the Header.
 func (*BinaryMarshaller) ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error) {
 	valuelen := valBytes * len(header.Fields)
 	minlen := timeBytes + valuelen
@@ -161,6 +170,8 @@ func unexpectedEOF(err error) error {
 	return err
 }
 
+// ParseSample implements the Unmarshaller interface by parsing the byte buffer
+// to a new Sample instance. See the godoc for BinaryMarshaller for details on the format.
 func (*BinaryMarshaller) ParseSample(header *Header, data []byte) (sample *Sample, err error) {
 	// Required size
 	size := timeBytes + len(header.Fields)*valBytes

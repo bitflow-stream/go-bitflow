@@ -54,8 +54,8 @@ type CmdSamplePipeline struct {
 	// source, which can be used as a tag in the Samples. By default, the data source is not
 	// stored in the Samples and this information will be lost one the Sample enters the pipeline.
 	//
-	// The data source string differs depending on the MetricSource used. The FileMetricSource will
-	// use the file name, while the TcpMetricSource will use the remote TCP endpoint.
+	// The data source string differs depending on the MetricSource used. The FileSource will
+	// use the file name, while the TCPSource will use the remote TCP endpoint.
 	//
 	// Must be set before calling Init().
 	ReadSampleHandler ReadSampleHandler

@@ -54,8 +54,14 @@ func (*AbstractMetricSink) Stop() {
 // with a simple implementation of SetMarshaller().
 type AbstractMarshallingMetricSink struct {
 	AbstractMetricSink
+
+	// Marshaller will be used when converting Samples to byte buffers before
+	// writing them to the given output stream.
 	Marshaller Marshaller
-	Writer     SampleWriter
+
+	// Writer contains variables that controll the marshalling and writing process.
+	// They must be configured before calling Start() on this AbstractMarshallingMetricSink.
+	Writer SampleWriter
 }
 
 // SetMarshaller implements the MarshallingMetricSink interface.
@@ -125,15 +131,18 @@ type EmptyMetricSource struct {
 	wg *sync.WaitGroup
 }
 
+// Start implements the golib.Task interface.
 func (s *EmptyMetricSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	s.wg = wg
 	return nil
 }
 
+// Stop implements the golib.Task interface.
 func (s *EmptyMetricSource) Stop() {
 	s.CloseSink(s.wg)
 }
 
+// String implements the golib.Task interface.
 func (s *EmptyMetricSource) String() string {
 	return "empty metric source"
 }
@@ -147,21 +156,31 @@ func (agg AggregateSink) String() string {
 	return fmt.Sprintf("AggregateSink(len %v)", len(agg))
 }
 
-// The golib.Task interface cannot really be supported here
+// Start implements the golib.Task interface.
+// The full golib.Task interface cannot really be supported here, so this panics
+// if it's called. AggregateSink should not be added to a golib.TaskGroup
+// directly, instead all the MetricSinks in it should be added separately.
 func (agg AggregateSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	panic("Start should not be called on AggregateSink")
 }
 
+// Stop implements the golib.Task interface, but panics when called.
+// See Start.
 func (agg AggregateSink) Stop() {
 	panic("Stop should not be called on AggregateSink")
 }
 
+// Close implements the MetricSink interface by forwarding the call to all
+// MetricSinks in the receiver.
 func (agg AggregateSink) Close() {
 	for _, sink := range agg {
 		sink.Close()
 	}
 }
 
+// SetMarshaller implements the MarshallingMetricSink interface by forwarding the call
+// to all MarshallingMetricSinks in the receiver. It preforms type checks
+// on all MetricSinks.
 func (agg AggregateSink) SetMarshaller(marshaller Marshaller) {
 	for _, sink := range agg {
 		if um, ok := sink.(MarshallingMetricSink); ok {
@@ -170,6 +189,9 @@ func (agg AggregateSink) SetMarshaller(marshaller Marshaller) {
 	}
 }
 
+// Header implements MetricSink by forwarding the call to all MetricSinks in
+// the receiver. This is not done in parallel. All errors are combined and
+// returned as one error.
 func (agg AggregateSink) Header(header *Header) error {
 	var errors golib.MultiError
 	for _, sink := range agg {
@@ -180,6 +202,10 @@ func (agg AggregateSink) Header(header *Header) error {
 	return errors.NilOrError()
 }
 
+// Sample implements MetricSink by forwarding the call to all MetricSinks in
+// the receiver. This is not done in parallel. All errors are combined and
+// returned as one error. A sanity check makes sure that the Sample and the
+// Header fit each other.
 func (agg AggregateSink) Sample(sample *Sample, header *Header) error {
 	if len(agg) == 0 {
 		// Perform sanity check, since no child-sinks are there to perform it
@@ -201,12 +227,14 @@ type SynchronizingMetricSink struct {
 	mutex        sync.Mutex
 }
 
+// Header implements the MetricSinkBase interface.
 func (s *SynchronizingMetricSink) Header(header *Header) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	return s.OutgoingSink.Header(header)
 }
 
+// Sample implements the MetricSinkBase interface.
 func (s *SynchronizingMetricSink) Sample(sample *Sample, header *Header) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()

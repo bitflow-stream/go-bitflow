@@ -61,14 +61,19 @@ type TextMarshaller struct {
 	terminal_size_warned bool
 }
 
+// String implements the Marshaller interface.
 func (*TextMarshaller) String() string {
 	return "text"
 }
 
+// WriteHeader implements the Marshaller interface. It is empty, because
+// TextMarshaller prints a separate header for each Sample.
 func (m *TextMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	return nil
 }
 
+// WriteSample implements the Marshaller interface. See the TextMarshaller godoc
+// for information about the format.
 func (m *TextMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
 	if err := sample.Check(header); err != nil {
 		return err

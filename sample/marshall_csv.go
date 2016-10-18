@@ -41,10 +41,12 @@ const (
 type CsvMarshaller struct {
 }
 
+// String implements the Marshaller interface.
 func (*CsvMarshaller) String() string {
 	return "CSV"
 }
 
+// WriteHeader implements the Marshaller interface by printing a CSV header line.
 func (*CsvMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
 	w.WriteStr(time_col)
@@ -64,6 +66,7 @@ func splitCsvLine(line []byte) []string {
 	return strings.Split(string(line), string(CsvSeparator))
 }
 
+// ReadHeader implements the Unmarshaller interface by reading and parsing a CSV header line.
 func (*CsvMarshaller) ReadHeader(reader *bufio.Reader) (header *Header, err error) {
 	line, err := reader.ReadBytes(CsvNewline[0])
 	if err == io.EOF {
@@ -91,6 +94,7 @@ func (*CsvMarshaller) ReadHeader(reader *bufio.Reader) (header *Header, err erro
 	return
 }
 
+// WriteSample implements the Marshaller interface by writing a CSV line.
 func (*CsvMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
 	w.WriteStr(sample.Time.Format(CsvDateFormat))
@@ -107,6 +111,8 @@ func (*CsvMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writ
 	return w.Err
 }
 
+// ReadSampleData implements the Unmarshaller interface by reading data until
+// the next newline character.
 func (*CsvMarshaller) ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error) {
 	data, err := input.ReadBytes(CsvNewline[0])
 	if err == io.EOF {
@@ -119,6 +125,7 @@ func (*CsvMarshaller) ReadSampleData(header *Header, input *bufio.Reader) ([]byt
 	return data, err
 }
 
+// ParseSample implements the Unmarshaller interface by parsing a CSV line.
 func (*CsvMarshaller) ParseSample(header *Header, data []byte) (sample *Sample, err error) {
 	fields := splitCsvLine(data)
 	sample = new(Sample)
