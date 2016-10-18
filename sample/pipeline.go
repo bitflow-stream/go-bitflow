@@ -4,7 +4,7 @@ import "github.com/antongulenko/golib"
 
 // SampleProcessor is the combination of MetricSink and MetricSource.
 // It receives Headers and Samples through the Header and Sample methods and
-// sends samples to the MetricSink configured over MetricSink. The forwarded Samples
+// sends samples to the MetricSink configured over SetSink. The forwarded Samples
 // can be the same as received, completely new generated samples, and also a different
 // number of Samples from the incoming ones. The Header can also be changed, but hten
 // the SampleProcessor implementation must take care to adjust the outgoing

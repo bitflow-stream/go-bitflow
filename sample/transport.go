@@ -152,6 +152,7 @@ func (s *EmptyMetricSource) String() string {
 // to a file and a TCP connection.
 type AggregateSink []MetricSink
 
+// String implements the golib.Task interface.
 func (agg AggregateSink) String() string {
 	return fmt.Sprintf("AggregateSink(len %v)", len(agg))
 }
@@ -280,7 +281,7 @@ type parallelSampleStream struct {
 	closed *golib.OneshotCondition
 }
 
-func (state *parallelSampleStream) HasError() bool {
+func (state *parallelSampleStream) hasError() bool {
 	return state.err != nil && state.err != io.EOF
 }
 
@@ -292,7 +293,7 @@ type bufferedSample struct {
 	doneCond *sync.Cond
 }
 
-func (sample *bufferedSample) WaitDone() {
+func (sample *bufferedSample) waitDone() {
 	sample.doneCond.L.Lock()
 	defer sample.doneCond.L.Unlock()
 	for !sample.done {
@@ -300,7 +301,7 @@ func (sample *bufferedSample) WaitDone() {
 	}
 }
 
-func (sample *bufferedSample) NotifyDone() {
+func (sample *bufferedSample) notifyDone() {
 	sample.doneCond.L.Lock()
 	defer sample.doneCond.L.Unlock()
 	sample.done = true

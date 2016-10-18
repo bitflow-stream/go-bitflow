@@ -109,7 +109,7 @@ func (stream *SampleOutputStream) Header(header *Header) error {
 	}
 	stream.headerLock.Lock()
 	defer stream.headerLock.Unlock()
-	if stream.HasError() {
+	if stream.hasError() {
 		return stream.err
 	}
 	if stream.header == nil {
@@ -121,7 +121,7 @@ func (stream *SampleOutputStream) Header(header *Header) error {
 		}
 		stream.header = header
 	} else {
-		if !stream.HasError() && stream.header != nil {
+		if !stream.hasError() && stream.header != nil {
 			return errors.New("A header has already been written to this stream")
 		}
 	}
@@ -139,7 +139,7 @@ func (stream *SampleOutputStream) flushBuffered() error {
 // writer behind the stream receiver. If a non-nil error is returned here,
 // the stream should not be used any further, but still must be closed externally.
 func (stream *SampleOutputStream) Sample(sample *Sample) error {
-	if stream.HasError() {
+	if stream.hasError() {
 		return stream.err
 	}
 	bufferedSample := &bufferedSample{
@@ -163,10 +163,10 @@ func (stream *SampleOutputStream) Close() error {
 		close(stream.incoming)
 		close(stream.outgoing)
 		stream.wg.Wait()
-		if err := stream.flushBuffered(); !stream.HasError() {
+		if err := stream.flushBuffered(); !stream.hasError() {
 			stream.err = err
 		}
-		if err := stream.writer.Close(); !stream.HasError() {
+		if err := stream.writer.Close(); !stream.hasError() {
 			stream.err = err
 		}
 	})
@@ -181,12 +181,12 @@ func (stream *SampleOutputStream) marshall() {
 }
 
 func (stream *SampleOutputStream) marshallOne(sample *bufferedSample) {
-	defer sample.NotifyDone()
-	if stream.HasError() {
+	defer sample.notifyDone()
+	if stream.hasError() {
 		return
 	}
 	if stream.header == nil {
-		if !stream.HasError() {
+		if !stream.hasError() {
 			stream.err = errors.New("Cannot write Sample before a Header")
 		}
 		return
@@ -204,8 +204,8 @@ func (stream *SampleOutputStream) marshallOne(sample *bufferedSample) {
 func (stream *SampleOutputStream) flush() {
 	defer stream.wg.Done()
 	for sample := range stream.outgoing {
-		sample.WaitDone()
-		if stream.HasError() {
+		sample.waitDone()
+		if stream.hasError() {
 			return
 		}
 		if _, err := stream.writer.Write(sample.data); err != nil {

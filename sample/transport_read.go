@@ -181,7 +181,7 @@ func (stream *SampleInputStream) Close() error {
 func (stream *SampleInputStream) closeUnderlyingReader() {
 	stream.closed.Enable(func() {
 		err := stream.underlyingReader.Close()
-		if !stream.HasError() {
+		if !stream.hasError() {
 			stream.err = err
 		}
 	})
@@ -241,7 +241,7 @@ func (stream *SampleInputStream) readData() {
 	}()
 	closedChan := stream.closed.Start(nil)
 	for {
-		if stream.HasError() {
+		if stream.hasError() {
 			return
 		}
 		if data, err := stream.um.ReadSampleData(stream.header, stream.reader); err != nil {
@@ -273,9 +273,9 @@ func (stream *SampleInputStream) parseSamples(source string) {
 }
 
 func (stream *SampleInputStream) parseOne(source string, sample *bufferedIncomingSample) {
-	defer sample.NotifyDone()
+	defer sample.notifyDone()
 	if parsedSample, err := stream.um.ParseSample(stream.header, sample.data); err != nil {
-		if !stream.HasError() {
+		if !stream.hasError() {
 			stream.err = err
 		}
 		sample.ParserError = true
@@ -291,7 +291,7 @@ func (stream *SampleInputStream) parseOne(source string, sample *bufferedIncomin
 func (stream *SampleInputStream) sinkSamples() {
 	defer stream.wg.Done()
 	for sample := range stream.outgoing {
-		sample.WaitDone()
+		sample.waitDone()
 		if sample.ParserError {
 			// The first parser error makes the input stream stop.
 			return
