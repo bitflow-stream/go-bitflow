@@ -8,8 +8,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	. "github.com/antongulenko/data2go/analysis"
-	"github.com/antongulenko/data2go/sample"
+	. "github.com/antongulenko/analysis-pipeline/analysis"
+	"github.com/antongulenko/data2go"
 )
 
 func init() {
@@ -108,18 +108,18 @@ func (p *InjectionInfoTagger) Sample(sample *data2go.Sample, header *data2go.Hea
 	injected := ""
 	anomaly := ""
 
-	if data2go.HasTag("host") {
-		measured = data2go.Tag("host")
+	if sample.HasTag("host") {
+		measured = sample.Tag("host")
 	} else {
-		measured = data2go.Tag(SourceTag)
+		measured = sample.Tag(SourceTag)
 	}
-	if data2go.HasTag(ClassTag) {
+	if sample.HasTag(ClassTag) {
 		// A local injection
 		injected = measured
-		anomaly = data2go.Tag(ClassTag)
-	} else if data2go.HasTag(remoteInjectionTag) {
+		anomaly = sample.Tag(ClassTag)
+	} else if sample.HasTag(remoteInjectionTag) {
 		// A remote injection
-		remote := data2go.Tag(remoteInjectionTag) // Ignore remote-target0 etc.
+		remote := sample.Tag(remoteInjectionTag) // Ignore remote-target0 etc.
 		parts := strings.Split(remote, remoteInjectionSeparator)
 		if len(parts) != 2 {
 			log.Warnln("Tag", remoteInjectionTag, "has invalid value:", remote)
@@ -166,8 +166,8 @@ func (d *TimeDistributor) String() string {
 
 func (d *TimeDistributor) Distribute(sample *data2go.Sample, header *data2go.Header) []interface{} {
 	last := d.lastTime
-	d.lastTime = data2go.Time
-	if !last.IsZero() && data2go.Time.Sub(last) >= d.MinimumPause {
+	d.lastTime = sample.Time
+	if !last.IsZero() && sample.Time.Sub(last) >= d.MinimumPause {
 		d.counter++
 	}
 	return []interface{}{d.counter}

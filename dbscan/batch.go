@@ -5,7 +5,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/data2go"
 	"github.com/antongulenko/go-onlinestats"
 )
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/data2go"
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/antongulenko/golearn/base"
 	"github.com/antongulenko/golearn/linear_models"

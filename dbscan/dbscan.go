@@ -3,7 +3,7 @@ package dbscan
 import (
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go/analysis"
+	"github.com/antongulenko/analysis-pipeline/analysis"
 )
 
 type Point interface {

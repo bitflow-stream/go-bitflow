@@ -10,8 +10,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go/analysis"
-	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/analysis-pipeline/analysis"
+	"github.com/antongulenko/data2go"
 	"github.com/antongulenko/golib"
 )
 
@@ -164,7 +164,7 @@ func (slice SortedAnalyses) Swap(i, j int) {
 }
 
 type SamplePipeline struct {
-	sample.CmdSamplePipeline
+	data2go.CmdSamplePipeline
 	batch *analysis.BatchProcessor
 }
 

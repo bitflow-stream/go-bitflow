@@ -6,8 +6,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go/analysis"
-	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/analysis-pipeline/analysis"
+	"github.com/antongulenko/data2go"
 	parallel_dbscan "github.com/antongulenko/go-DBSCAN"
 	"github.com/antongulenko/go-onlinestats"
 )

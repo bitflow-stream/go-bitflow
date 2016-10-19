@@ -8,8 +8,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	. "github.com/antongulenko/data2go/analysis"
-	"github.com/antongulenko/data2go/sample"
+	. "github.com/antongulenko/analysis-pipeline/analysis"
+	"github.com/antongulenko/data2go"
 	"github.com/antongulenko/golib"
 )
 
@@ -242,7 +242,7 @@ func (h *SampleTagger) HandleSample(sample *data2go.Sample, source string) {
 		if h.DontOverwrite {
 			base := tag
 			tag = base
-			for i := 0; data2go.HasTag(tag); i++ {
+			for i := 0; sample.HasTag(tag); i++ {
 				tag = base + strconv.Itoa(i)
 			}
 		}

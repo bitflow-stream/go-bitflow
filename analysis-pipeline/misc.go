@@ -10,8 +10,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go/analysis"
-	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/analysis-pipeline/analysis"
+	"github.com/antongulenko/data2go"
 )
 
 func init() {
@@ -49,7 +49,7 @@ func (printer *UniqueTagPrinter) Sample(sample *data2go.Sample, header *data2go.
 	if err := printer.Check(sample, header); err != nil {
 		return err
 	}
-	val := data2go.Tag(printer.Tag)
+	val := sample.Tag(printer.Tag)
 	if printer.Count {
 		printer.values[val] = printer.values[val] + 1
 	} else {
@@ -110,7 +110,7 @@ func (printer *TimerangePrinter) Sample(sample *data2go.Sample, header *data2go.
 		return err
 	}
 	printer.count++
-	t := data2go.Time
+	t := sample.Time
 	if printer.from.IsZero() || printer.to.IsZero() {
 		printer.from = t
 		printer.to = t
@@ -149,7 +149,7 @@ func (p *TimelinePrinter) ProcessBatch(header *data2go.Header, samples []*data2g
 	var from time.Time
 	var to time.Time
 	for _, sample := range samples {
-		t := data2go.Time
+		t := sample.Time
 		if from.IsZero() || to.IsZero() {
 			from = t
 			to = t
@@ -172,7 +172,7 @@ func (p *TimelinePrinter) ProcessBatch(header *data2go.Header, samples []*data2g
 			return !sample.Time.After(bucketEnds[n])
 		})
 		if index == len(buckets) {
-			log.Fatalln("WRONG:", data2go.Time, "FIRST:", bucketEnds[0], "LAST:", bucketEnds[len(bucketEnds)-1], "START:", from, "END:", to)
+			log.Fatalln("WRONG:", sample.Time, "FIRST:", bucketEnds[0], "LAST:", bucketEnds[len(bucketEnds)-1], "START:", from, "END:", to)
 		}
 		buckets[index]++
 	}
@@ -222,7 +222,7 @@ type InvalidCounter struct {
 
 func (counter *InvalidCounter) Sample(sample *data2go.Sample, header *data2go.Header) error {
 	sampleValid := true
-	for _, val := range data2go.Values {
+	for _, val := range sample.Values {
 		counter.totalValues += 1
 		if !analysis.IsValidNumber(float64(val)) {
 			counter.invalidValues += 1

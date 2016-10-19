@@ -3,12 +3,12 @@ package regression
 import (
 	"fmt"
 
-	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/data2go"
 	"github.com/antongulenko/golearn/base"
 )
 
 type SubHeader struct {
-	sample.Header
+	data2go.Header
 	Vars []int
 }
 
@@ -40,7 +40,7 @@ func (header SubHeader) FillInstances(samples []data2go.Sample, instances *base.
 
 	for i, sample := range samples {
 		for j, fieldNum := range header.Vars {
-			val := data2go.Values[fieldNum]
+			val := sample.Values[fieldNum]
 			valBytes := base.PackFloatToBytes(float64(val))
 			instances.Set(attributes[j], start+i, valBytes)
 		}
