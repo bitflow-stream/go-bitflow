@@ -23,7 +23,7 @@ func NewRtreeSetOfPoints(dim, minChildren, maxChildren int, pointWidth float64) 
 	}
 }
 
-func (tree *RtreeSetOfPoints) Add(s *sample.Sample) {
+func (tree *RtreeSetOfPoints) Add(s *data2go.Sample) {
 	point := NewRtreePoint(s, tree.PointWidth)
 	tree.tree.Insert(point)
 	tree.allPoints = append(tree.allPoints, point)
@@ -61,8 +61,8 @@ func (tree *RtreeSetOfPoints) AllPoints() []Point {
 	return tree.allPoints
 }
 
-func (tree *RtreeSetOfPoints) Cluster(d *Dbscan) map[string][]*sample.Sample {
-	result := make(map[string][]*sample.Sample, len(tree.allPoints))
+func (tree *RtreeSetOfPoints) Cluster(d *Dbscan) map[string][]*data2go.Sample {
+	result := make(map[string][]*data2go.Sample, len(tree.allPoints))
 	d.Cluster(tree)
 	for _, point := range tree.allPoints {
 		rtreePoint, ok := point.(*RtreePoint)
@@ -79,7 +79,7 @@ func (tree *RtreeSetOfPoints) Cluster(d *Dbscan) map[string][]*sample.Sample {
 var regionQueryNr = 0
 
 type RtreePoint struct {
-	sample  *sample.Sample
+	sample  *data2go.Sample
 	point   rtreego.Point
 	rect    *rtreego.Rect
 	cluster int
@@ -87,7 +87,7 @@ type RtreePoint struct {
 	regionQueried int
 }
 
-func NewRtreePoint(s *sample.Sample, width float64) *RtreePoint {
+func NewRtreePoint(s *data2go.Sample, width float64) *RtreePoint {
 	point := make(rtreego.Point, len(s.Values))
 	for i, val := range s.Values {
 		point[i] = float64(val)

@@ -46,7 +46,7 @@ func merge_hosts(p *SamplePipeline) {
 
 	suffix_regex := regexp.MustCompile("\\....$")  // Strip file ending
 	num_regex := regexp.MustCompile("(-[0-9]+)?$") // Strip optional appended numbering
-	if filesource, ok := p.Source.(*sample.FileSource); ok {
+	if filesource, ok := p.Source.(*data2go.FileSource); ok {
 		filesource.ConvertFilename = func(filename string) string {
 			name := filepath.Base(filename)
 			name = suffix_regex.ReplaceAllString(name, "")
@@ -58,7 +58,7 @@ func merge_hosts(p *SamplePipeline) {
 
 func convert_filenames(p *SamplePipeline) {
 	// Replace the src tag with the name of the parent folder
-	if filesource, ok := p.Source.(*sample.FileSource); ok {
+	if filesource, ok := p.Source.(*data2go.FileSource); ok {
 		filesource.ConvertFilename = func(filename string) string {
 			return filepath.Base(filepath.Dir(filename))
 		}
@@ -67,7 +67,7 @@ func convert_filenames(p *SamplePipeline) {
 
 func convert_filenames2(p *SamplePipeline) {
 	// Replace the src tag with the name of the parent-parent folder
-	if filesource, ok := p.Source.(*sample.FileSource); ok {
+	if filesource, ok := p.Source.(*data2go.FileSource); ok {
 		filesource.ConvertFilename = func(filename string) string {
 			return filepath.Base(filepath.Dir(filepath.Dir(filename)))
 		}
@@ -100,7 +100,7 @@ func (*InjectionInfoTagger) String() string {
 	return "injection info tagger (tags " + ClassTag + " and " + remoteInjectionTag + ")"
 }
 
-func (p *InjectionInfoTagger) Sample(sample *sample.Sample, header *sample.Header) error {
+func (p *InjectionInfoTagger) Sample(sample *data2go.Sample, header *data2go.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
@@ -108,18 +108,18 @@ func (p *InjectionInfoTagger) Sample(sample *sample.Sample, header *sample.Heade
 	injected := ""
 	anomaly := ""
 
-	if sample.HasTag("host") {
-		measured = sample.Tag("host")
+	if data2go.HasTag("host") {
+		measured = data2go.Tag("host")
 	} else {
-		measured = sample.Tag(SourceTag)
+		measured = data2go.Tag(SourceTag)
 	}
-	if sample.HasTag(ClassTag) {
+	if data2go.HasTag(ClassTag) {
 		// A local injection
 		injected = measured
-		anomaly = sample.Tag(ClassTag)
-	} else if sample.HasTag(remoteInjectionTag) {
+		anomaly = data2go.Tag(ClassTag)
+	} else if data2go.HasTag(remoteInjectionTag) {
 		// A remote injection
-		remote := sample.Tag(remoteInjectionTag) // Ignore remote-target0 etc.
+		remote := data2go.Tag(remoteInjectionTag) // Ignore remote-target0 etc.
 		parts := strings.Split(remote, remoteInjectionSeparator)
 		if len(parts) != 2 {
 			log.Warnln("Tag", remoteInjectionTag, "has invalid value:", remote)
@@ -144,8 +144,8 @@ func split_distributed_experiments(p *SamplePipeline) {
 		Separator:   string(filepath.Separator),
 		Replacement: "_unknown_",
 	}
-	builder := MultiFileDirectoryBuilder(false, func() []sample.SampleProcessor {
-		return []sample.SampleProcessor{
+	builder := MultiFileDirectoryBuilder(false, func() []data2go.SampleProcessor {
+		return []data2go.SampleProcessor{
 			NewMultiHeaderMerger(),
 			new(BatchProcessor).Add(new(SampleSorter)),
 		}
@@ -164,10 +164,10 @@ func (d *TimeDistributor) String() string {
 	return "split after pauses of " + d.MinimumPause.String()
 }
 
-func (d *TimeDistributor) Distribute(sample *sample.Sample, header *sample.Header) []interface{} {
+func (d *TimeDistributor) Distribute(sample *data2go.Sample, header *data2go.Header) []interface{} {
 	last := d.lastTime
-	d.lastTime = sample.Time
-	if !last.IsZero() && sample.Time.Sub(last) >= d.MinimumPause {
+	d.lastTime = data2go.Time
+	if !last.IsZero() && data2go.Time.Sub(last) >= d.MinimumPause {
 		d.counter++
 	}
 	return []interface{}{d.counter}

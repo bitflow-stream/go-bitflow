@@ -6,7 +6,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/data2go"
 	"github.com/antongulenko/golib"
 )
 
@@ -14,12 +14,12 @@ import (
 // This type defines standard implementations for all methods in
 // SampleProcessor. Parts can be shadowed by embedding the type.
 type AbstractProcessor struct {
-	sample.AbstractMetricSource
-	sample.AbstractMetricSink
+	data2go.AbstractMetricSource
+	data2go.AbstractMetricSink
 	stopChan chan error
 }
 
-func (p *AbstractProcessor) Header(header *sample.Header) error {
+func (p *AbstractProcessor) Header(header *data2go.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	} else {
@@ -27,14 +27,14 @@ func (p *AbstractProcessor) Header(header *sample.Header) error {
 	}
 }
 
-func (p *AbstractProcessor) Sample(sample *sample.Sample, header *sample.Header) error {
+func (p *AbstractProcessor) Sample(sample *data2go.Sample, header *data2go.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
 	return p.OutgoingSink.Sample(sample, header)
 }
 
-func (p *AbstractProcessor) Check(sample *sample.Sample, header *sample.Header) error {
+func (p *AbstractProcessor) Check(sample *data2go.Sample, header *data2go.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	}
@@ -86,11 +86,11 @@ type DecouplingProcessor struct {
 }
 
 type TaggedSample struct {
-	Sample *sample.Sample
-	Header *sample.Header
+	Sample *data2go.Sample
+	Header *data2go.Header
 }
 
-func (p *DecouplingProcessor) Header(header *sample.Header) error {
+func (p *DecouplingProcessor) Header(header *data2go.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	} else {
@@ -99,7 +99,7 @@ func (p *DecouplingProcessor) Header(header *sample.Header) error {
 	}
 }
 
-func (p *DecouplingProcessor) Sample(sample *sample.Sample, header *sample.Header) error {
+func (p *DecouplingProcessor) Sample(sample *data2go.Sample, header *data2go.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ type SamplePrinter struct {
 	AbstractProcessor
 }
 
-func (p *SamplePrinter) Header(header *sample.Header) error {
+func (p *SamplePrinter) Header(header *data2go.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	} else {
@@ -162,7 +162,7 @@ func (p *SamplePrinter) Header(header *sample.Header) error {
 	}
 }
 
-func (p *SamplePrinter) Sample(sample *sample.Sample, header *sample.Header) error {
+func (p *SamplePrinter) Sample(sample *data2go.Sample, header *data2go.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}

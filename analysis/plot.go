@@ -7,7 +7,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/data2go"
 	"github.com/antongulenko/golib"
 	"github.com/gonum/plot"
 	"github.com/gonum/plot/plotutil"
@@ -38,11 +38,11 @@ type Plotter struct {
 	OutputFile     string
 	ColorTag       string
 	SeparatePlots  bool // If true, every ColorTag value will create a new plot
-	incomingHeader *sample.Header
+	incomingHeader *data2go.Header
 	data           map[string]PlotData
 }
 
-type PlotData []*sample.Sample
+type PlotData []*data2go.Sample
 
 func (data PlotData) Len() int {
 	return len(data)
@@ -60,7 +60,7 @@ func (data PlotData) XY(i int) (x, y float64) {
 	}
 }
 
-func (p *Plotter) Header(header *sample.Header) error {
+func (p *Plotter) Header(header *data2go.Header) error {
 	if err := p.CheckSink(); err != nil {
 		return err
 	} else {
@@ -75,7 +75,7 @@ func (p *Plotter) Header(header *sample.Header) error {
 	}
 }
 
-func (p *Plotter) Sample(sample *sample.Sample, header *sample.Header) error {
+func (p *Plotter) Sample(sample *data2go.Sample, header *data2go.Header) error {
 	if err := p.Check(sample, p.incomingHeader); err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (p *Plotter) Sample(sample *sample.Sample, header *sample.Header) error {
 	return p.OutgoingSink.Sample(sample, header)
 }
 
-func (p *Plotter) plotSample(sample *sample.Sample) {
+func (p *Plotter) plotSample(sample *data2go.Sample) {
 	key := sample.Tag(p.ColorTag)
 	if key == "" && p.ColorTag != "" {
 		key = "(none)"
@@ -120,7 +120,7 @@ func (p *Plotter) saveSeparatePlots() error {
 	if err != nil {
 		return err
 	}
-	group := sample.NewFileGroup(p.OutputFile)
+	group := data2go.NewFileGroup(p.OutputFile)
 	for name, data := range p.data {
 		plotData := map[string]PlotData{name: data}
 		plotFile := group.BuildFilenameStr(name)

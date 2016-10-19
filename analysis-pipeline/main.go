@@ -28,11 +28,11 @@ type registeredAnalysis struct {
 var analysis_registry = map[string]registeredAnalysis{
 	"": registeredAnalysis{"", nil, ""},
 }
-var handler_registry = map[string]sample.ReadSampleHandler{
+var handler_registry = map[string]data2go.ReadSampleHandler{
 	"": nil,
 }
 
-func RegisterSampleHandler(name string, sampleHandler sample.ReadSampleHandler) {
+func RegisterSampleHandler(name string, sampleHandler data2go.ReadSampleHandler) {
 	if _, ok := handler_registry[name]; ok {
 		log.Fatalln("Sample handler already registered:", name)
 	}
@@ -168,7 +168,7 @@ type SamplePipeline struct {
 	batch *analysis.BatchProcessor
 }
 
-func (pipeline *SamplePipeline) Add(step sample.SampleProcessor) *SamplePipeline {
+func (pipeline *SamplePipeline) Add(step data2go.SampleProcessor) *SamplePipeline {
 	pipeline.batch = nil
 	pipeline.CmdSamplePipeline.Add(step)
 	return pipeline

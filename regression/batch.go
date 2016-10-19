@@ -14,12 +14,12 @@ import (
 type LinearRegressionBatchProcessor struct {
 }
 
-func (reg *LinearRegressionBatchProcessor) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
+func (reg *LinearRegressionBatchProcessor) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
 	regression, err := NewLinearRegression(header, header.Fields)
 	if err != nil {
 		return nil, nil, err
 	}
-	allSamples := make([]sample.Sample, len(samples))
+	allSamples := make([]data2go.Sample, len(samples))
 	for i, sample := range samples {
 		allSamples[i] = *sample
 	}
@@ -54,8 +54,8 @@ func (brute *LinearRegressionBruteForce) String() string {
 	return "Linear Regression Brute Force"
 }
 
-func (brute *LinearRegressionBruteForce) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
-	allSamples := make([]sample.Sample, len(samples))
+func (brute *LinearRegressionBruteForce) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
+	allSamples := make([]data2go.Sample, len(samples))
 	for i, sample := range samples {
 		allSamples[i] = *sample
 	}
@@ -84,7 +84,7 @@ func (brute *LinearRegressionBruteForce) ProcessBatch(header *sample.Header, sam
 	return header, samples, nil
 }
 
-func (brute *LinearRegressionBruteForce) generateVarCombinations(wg *sync.WaitGroup, header *sample.Header, varCombinations chan<- []int) {
+func (brute *LinearRegressionBruteForce) generateVarCombinations(wg *sync.WaitGroup, header *data2go.Header, varCombinations chan<- []int) {
 	defer wg.Done()
 	// Generate unique pairs of header fields
 	// TODO try other approaches
@@ -97,7 +97,7 @@ func (brute *LinearRegressionBruteForce) generateVarCombinations(wg *sync.WaitGr
 	close(varCombinations)
 }
 
-func (brute *LinearRegressionBruteForce) computeRegressions(wg *sync.WaitGroup, varChan <-chan []int, header *sample.Header, samples []sample.Sample) {
+func (brute *LinearRegressionBruteForce) computeRegressions(wg *sync.WaitGroup, varChan <-chan []int, header *data2go.Header, samples []data2go.Sample) {
 	defer wg.Done()
 	for vars := range varChan {
 		var reg LinearRegression

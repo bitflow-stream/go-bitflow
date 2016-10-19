@@ -28,7 +28,7 @@ func (header SubHeader) BuildInstances(classAttribute int) (*base.DenseInstances
 	return data, nil
 }
 
-func (header SubHeader) FillInstances(samples []sample.Sample, instances *base.DenseInstances) {
+func (header SubHeader) FillInstances(samples []data2go.Sample, instances *base.DenseInstances) {
 	start, capacity := instances.Size()
 	if capacity-start < len(samples) {
 		instances.Extend(len(samples) - (capacity - start))
@@ -40,14 +40,14 @@ func (header SubHeader) FillInstances(samples []sample.Sample, instances *base.D
 
 	for i, sample := range samples {
 		for j, fieldNum := range header.Vars {
-			val := sample.Values[fieldNum]
+			val := data2go.Values[fieldNum]
 			valBytes := base.PackFloatToBytes(float64(val))
 			instances.Set(attributes[j], start+i, valBytes)
 		}
 	}
 }
 
-func (header SubHeader) BuildFilledInstances(samples []sample.Sample, classAttribute int) (*base.DenseInstances, error) {
+func (header SubHeader) BuildFilledInstances(samples []data2go.Sample, classAttribute int) (*base.DenseInstances, error) {
 	data, err := header.BuildInstances(classAttribute)
 	if err != nil {
 		return nil, err

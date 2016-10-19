@@ -18,7 +18,7 @@ import (
 
 // Implements parallel_dbscan.ClusterablePoint
 type ParallelDbscanPoint struct {
-	sample  *sample.Sample
+	sample  *data2go.Sample
 	convert sync.Once
 	point   []float64
 }
@@ -55,14 +55,14 @@ func (c *ParallelDbscanBatchClusterer) printSummary(clusters [][]parallel_dbscan
 	log.Printf("%v clusters, avg size %v, size stddev %v", len(clusters), stats.Mean(), stats.Stddev())
 }
 
-func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
+func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
 	points := make([]parallel_dbscan.ClusterablePoint, len(samples))
 	for i, sample := range samples {
 		points[i] = &ParallelDbscanPoint{sample: sample}
 	}
 	clusters := c.cluster(points)
 	c.printSummary(clusters)
-	outSamples := make([]*sample.Sample, 0, len(samples))
+	outSamples := make([]*data2go.Sample, 0, len(samples))
 	for i, clust := range clusters {
 		clusterName := analysis.ClusterName(i)
 		for _, p := range clust {

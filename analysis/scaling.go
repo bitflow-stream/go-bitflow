@@ -3,13 +3,13 @@ package analysis
 import (
 	"math"
 
-	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/data2go"
 )
 
 type MinMaxScaling struct {
 }
 
-func GetMinMax(header *sample.Header, samples []*sample.Sample) ([]float64, []float64) {
+func GetMinMax(header *data2go.Header, samples []*data2go.Sample) ([]float64, []float64) {
 	min := make([]float64, len(header.Fields))
 	max := make([]float64, len(header.Fields))
 	for num := range header.Fields {
@@ -37,16 +37,16 @@ func scaleMinMax(val, min, max float64) float64 {
 	return res
 }
 
-func (s *MinMaxScaling) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
+func (s *MinMaxScaling) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
 	min, max := GetMinMax(header, samples)
-	out := make([]*sample.Sample, len(samples))
+	out := make([]*data2go.Sample, len(samples))
 	for num, inSample := range samples {
-		values := make([]sample.Value, len(inSample.Values))
+		values := make([]data2go.Value, len(inSample.Values))
 		for i, val := range inSample.Values {
 			res := scaleMinMax(float64(val), min[i], max[i])
-			values[i] = sample.Value(res)
+			values[i] = data2go.Value(res)
 		}
-		var outSample sample.Sample
+		var outSample data2go.Sample
 		outSample.Values = values
 		outSample.CopyMetadataFrom(inSample)
 		out[num] = &outSample
@@ -61,7 +61,7 @@ func (s *MinMaxScaling) String() string {
 type StandardizationScaling struct {
 }
 
-func GetStats(header *sample.Header, samples []*sample.Sample) []FeatureStats {
+func GetStats(header *data2go.Header, samples []*data2go.Sample) []FeatureStats {
 	res := make([]FeatureStats, len(header.Fields))
 	for _, sample := range samples {
 		for i, val := range sample.Values {
@@ -71,11 +71,11 @@ func GetStats(header *sample.Header, samples []*sample.Sample) []FeatureStats {
 	return res
 }
 
-func (s *StandardizationScaling) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
+func (s *StandardizationScaling) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
 	stats := GetStats(header, samples)
-	out := make([]*sample.Sample, len(samples))
+	out := make([]*data2go.Sample, len(samples))
 	for num, inSample := range samples {
-		values := make([]sample.Value, len(inSample.Values))
+		values := make([]data2go.Value, len(inSample.Values))
 		for i, val := range inSample.Values {
 			m := stats[i].Mean()
 			s := stats[i].Stddev()
@@ -86,9 +86,9 @@ func (s *StandardizationScaling) ProcessBatch(header *sample.Header, samples []*
 				res = scaleMinMax(float64(val), min, max)
 				res = (res - 0.5) * 2 // Value range: -1..1
 			}
-			values[i] = sample.Value(res)
+			values[i] = data2go.Value(res)
 		}
-		var outSample sample.Sample
+		var outSample data2go.Sample
 		outSample.Values = values
 		outSample.CopyMetadataFrom(inSample)
 		out[num] = &outSample

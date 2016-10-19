@@ -6,19 +6,19 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go/sample"
+	"github.com/antongulenko/data2go"
 	"github.com/antongulenko/go-onlinestats"
 )
 
 type MetricMapperHelper struct {
 	Description string
 
-	inHeader   *sample.Header
-	outHeader  *sample.Header
+	inHeader   *data2go.Header
+	outHeader  *data2go.Header
 	outIndices []int
 }
 
-func (helper *MetricMapperHelper) incomingHeader(header *sample.Header, constructIndices func(inHeader *sample.Header) ([]int, []string)) error {
+func (helper *MetricMapperHelper) incomingHeader(header *data2go.Header, constructIndices func(inHeader *data2go.Header) ([]int, []string)) error {
 	helper.inHeader = header
 	var outFields []string
 	helper.outIndices, outFields = constructIndices(header)
@@ -34,8 +34,8 @@ func (helper *MetricMapperHelper) incomingHeader(header *sample.Header, construc
 	return nil
 }
 
-func (helper *MetricMapperHelper) convertSample(inSample *sample.Sample) *sample.Sample {
-	outValues := make([]sample.Value, len(helper.outIndices))
+func (helper *MetricMapperHelper) convertSample(inSample *data2go.Sample) *data2go.Sample {
+	outValues := make([]data2go.Value, len(helper.outIndices))
 	for i, index := range helper.outIndices {
 		outValues[i] = inSample.Values[index]
 	}
@@ -47,12 +47,12 @@ func (helper *MetricMapperHelper) convertSample(inSample *sample.Sample) *sample
 type AbstractMetricMapper struct {
 	AbstractProcessor
 	Description      fmt.Stringer
-	ConstructIndices func(inHeader *sample.Header) ([]int, []string)
+	ConstructIndices func(inHeader *data2go.Header) ([]int, []string)
 
 	helper MetricMapperHelper
 }
 
-func (self *AbstractMetricMapper) Header(header *sample.Header) error {
+func (self *AbstractMetricMapper) Header(header *data2go.Header) error {
 	if err := self.CheckSink(); err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (self *AbstractMetricMapper) Header(header *sample.Header) error {
 	return self.OutgoingSink.Header(self.helper.outHeader)
 }
 
-func (self *AbstractMetricMapper) Sample(inSample *sample.Sample, _ *sample.Header) error {
+func (self *AbstractMetricMapper) Sample(inSample *data2go.Sample, _ *data2go.Header) error {
 	if err := self.Check(inSample, self.helper.inHeader); err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ type AbstractMetricFilter struct {
 	IncludeFilter func(name string) bool // Return true if metric should be INcluded
 }
 
-func (self *AbstractMetricFilter) constructIndices(inHeader *sample.Header) ([]int, []string) {
+func (self *AbstractMetricFilter) constructIndices(inHeader *data2go.Header) ([]int, []string) {
 	outFields := make([]string, 0, len(inHeader.Fields))
 	outIndices := make([]int, 0, len(inHeader.Fields))
 	filter := self.IncludeFilter
@@ -180,7 +180,7 @@ func NewMetricMapper(metrics []string) *MetricMapper {
 	return mapper
 }
 
-func (mapper *MetricMapper) constructIndices(inHeader *sample.Header) ([]int, []string) {
+func (mapper *MetricMapper) constructIndices(inHeader *data2go.Header) ([]int, []string) {
 	fields := make([]int, 0, len(mapper.Metrics))
 	metrics := make([]string, 0, len(mapper.Metrics))
 	for _, metric := range mapper.Metrics {
@@ -211,20 +211,20 @@ func (mapper *MetricMapper) String() string {
 
 type BatchMetricMapper struct {
 	Description      string
-	ConstructIndices func(header *sample.Header, samples []*sample.Sample) ([]int, []string)
+	ConstructIndices func(header *data2go.Header, samples []*data2go.Sample) ([]int, []string)
 }
 
-func (mapper *BatchMetricMapper) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
+func (mapper *BatchMetricMapper) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
 	helper := &MetricMapperHelper{
 		Description: mapper.String(),
 	}
-	constructIndices := func(_ *sample.Header) ([]int, []string) {
+	constructIndices := func(_ *data2go.Header) ([]int, []string) {
 		return mapper.ConstructIndices(header, samples)
 	}
 	if err := helper.incomingHeader(header, constructIndices); err != nil {
 		return nil, nil, err
 	}
-	outSamples := make([]*sample.Sample, len(samples))
+	outSamples := make([]*data2go.Sample, len(samples))
 	for i, inSample := range samples {
 		outSample := helper.convertSample(inSample)
 		outSamples[i] = outSample
@@ -254,7 +254,7 @@ func NewMetricVarianceFilter(minimumWeightedStddev float64) *MetricVarianceFilte
 	return filter
 }
 
-func (filter *MetricVarianceFilter) constructIndices(header *sample.Header, samples []*sample.Sample) ([]int, []string) {
+func (filter *MetricVarianceFilter) constructIndices(header *data2go.Header, samples []*data2go.Sample) ([]int, []string) {
 	numFields := len(header.Fields)
 	variances := make([]onlinestats.Running, numFields)
 	for _, sample := range samples {

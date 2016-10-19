@@ -17,7 +17,7 @@ type DbscanBatchClusterer struct {
 	TreePointWidth  float64 // 0.0001
 }
 
-func (c *DbscanBatchClusterer) printSummary(clusters map[string][]*sample.Sample) {
+func (c *DbscanBatchClusterer) printSummary(clusters map[string][]*data2go.Sample) {
 	var stats onlinestats.Running
 	for _, cluster := range clusters {
 		stats.Push(float64(len(cluster)))
@@ -25,7 +25,7 @@ func (c *DbscanBatchClusterer) printSummary(clusters map[string][]*sample.Sample
 	log.Printf("%v clusters, avg size %v, size stddev %v", len(clusters), stats.Mean(), stats.Stddev())
 }
 
-func (c *DbscanBatchClusterer) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
+func (c *DbscanBatchClusterer) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
 	log.Println("Building RTree...")
 
 	tree := NewRtreeSetOfPoints(len(header.Fields), c.TreeMinChildren, c.TreeMaxChildren, c.TreePointWidth)

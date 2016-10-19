@@ -1,14 +1,14 @@
 package analysis
 
-import "github.com/antongulenko/data2go/sample"
+import "github.com/antongulenko/data2go"
 
 type SampleFilter struct {
 	AbstractProcessor
 	Description   string
-	IncludeFilter func(inSample *sample.Sample) bool // Return true if sample should be INcluded
+	IncludeFilter func(inSample *data2go.Sample) bool // Return true if sample should be INcluded
 }
 
-func (p *SampleFilter) Sample(inSample *sample.Sample, header *sample.Header) error {
+func (p *SampleFilter) Sample(inSample *data2go.Sample, header *data2go.Header) error {
 	if err := p.Check(inSample, header); err != nil {
 		return err
 	}

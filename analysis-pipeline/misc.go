@@ -45,11 +45,11 @@ func NewUniqueTagCounter(tag string) *UniqueTagPrinter {
 	}
 }
 
-func (printer *UniqueTagPrinter) Sample(sample *sample.Sample, header *sample.Header) error {
+func (printer *UniqueTagPrinter) Sample(sample *data2go.Sample, header *data2go.Header) error {
 	if err := printer.Check(sample, header); err != nil {
 		return err
 	}
-	val := sample.Tag(printer.Tag)
+	val := data2go.Tag(printer.Tag)
 	if printer.Count {
 		printer.values[val] = printer.values[val] + 1
 	} else {
@@ -105,12 +105,12 @@ type TimerangePrinter struct {
 	count int
 }
 
-func (printer *TimerangePrinter) Sample(sample *sample.Sample, header *sample.Header) error {
+func (printer *TimerangePrinter) Sample(sample *data2go.Sample, header *data2go.Header) error {
 	if err := printer.Check(sample, header); err != nil {
 		return err
 	}
 	printer.count++
-	t := sample.Time
+	t := data2go.Time
 	if printer.from.IsZero() || printer.to.IsZero() {
 		printer.from = t
 		printer.to = t
@@ -145,11 +145,11 @@ func (p *TimelinePrinter) String() string {
 	return fmt.Sprintf("Print timeline (len %v)", p.NumBuckets)
 }
 
-func (p *TimelinePrinter) ProcessBatch(header *sample.Header, samples []*sample.Sample) (*sample.Header, []*sample.Sample, error) {
+func (p *TimelinePrinter) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
 	var from time.Time
 	var to time.Time
 	for _, sample := range samples {
-		t := sample.Time
+		t := data2go.Time
 		if from.IsZero() || to.IsZero() {
 			from = t
 			to = t
@@ -172,7 +172,7 @@ func (p *TimelinePrinter) ProcessBatch(header *sample.Header, samples []*sample.
 			return !sample.Time.After(bucketEnds[n])
 		})
 		if index == len(buckets) {
-			log.Fatalln("WRONG:", sample.Time, "FIRST:", bucketEnds[0], "LAST:", bucketEnds[len(bucketEnds)-1], "START:", from, "END:", to)
+			log.Fatalln("WRONG:", data2go.Time, "FIRST:", bucketEnds[0], "LAST:", bucketEnds[len(bucketEnds)-1], "START:", from, "END:", to)
 		}
 		buckets[index]++
 	}
@@ -220,9 +220,9 @@ type InvalidCounter struct {
 	totalValues    int
 }
 
-func (counter *InvalidCounter) Sample(sample *sample.Sample, header *sample.Header) error {
+func (counter *InvalidCounter) Sample(sample *data2go.Sample, header *data2go.Header) error {
 	sampleValid := true
-	for _, val := range sample.Values {
+	for _, val := range data2go.Values {
 		counter.totalValues += 1
 		if !analysis.IsValidNumber(float64(val)) {
 			counter.invalidValues += 1
