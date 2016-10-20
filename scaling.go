@@ -1,4 +1,4 @@
-package analysis
+package pipeline
 
 import (
 	"math"
