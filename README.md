@@ -8,11 +8,10 @@ A `SamplePipeline` can be used to pipe a stream of Samples through a chain of tr
 ## Installation:
 * Install git and go (at least version **1.6**).
 * Make sure `$GOPATH` is set to some existing directory.
-* Execute the following commands to make `go get` work with Gitlab:
+* Execute the following command to make `go get` work with Gitlab:
 
 ```shell
 git config --global "url.git@gitlab.tubit.tu-berlin.de:CIT-Huawei/data2go.git.insteadOf" "https://github.com/antongulenko/data2go"
-git config --global "url.git@gitlab.tubit.tu-berlin.de:.insteadOf" "https://gitlab.tubit.tu-berlin.de/"
 ```
 * Get and install this repository:
  * `go get github.com/antongulenko/data2go`
