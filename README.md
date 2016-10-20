@@ -13,9 +13,8 @@ A `SamplePipeline` can be used to pipe a stream of Samples through a chain of tr
 ```shell
 git config --global "url.git@gitlab.tubit.tu-berlin.de:CIT-Huawei/data2go.git.insteadOf" "https://github.com/antongulenko/data2go"
 ```
-* Get and install this repository:
+* Get and install this library:
 
 ```shell
 go get github.com/antongulenko/data2go
 ```
-
