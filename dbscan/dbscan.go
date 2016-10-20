@@ -2,8 +2,7 @@ package dbscan
 
 import (
 	log "github.com/Sirupsen/logrus"
-
-	"github.com/antongulenko/analysis-pipeline/analysis"
+	"github.com/antongulenko/go-bitflow-pipeline"
 )
 
 type Point interface {
@@ -27,7 +26,7 @@ func (d *Dbscan) Cluster(points SetOfPoints) {
 
 		log.Println("Checking point", i)
 
-		if point.GetCluster() == analysis.ClusterUnclassified {
+		if point.GetCluster() == pipeline.ClusterUnclassified {
 			if d.expandCluster(points, point, clusterId) {
 				clusterId++
 			}
@@ -38,7 +37,7 @@ func (d *Dbscan) Cluster(points SetOfPoints) {
 func (d *Dbscan) expandCluster(points SetOfPoints, point Point, clusterId int) bool {
 	seeds := points.RegionQuery(point, d.Eps)
 	if len(seeds) < d.MinPts {
-		point.SetCluster(analysis.ClusterNoise)
+		point.SetCluster(pipeline.ClusterNoise)
 		return false
 	} else {
 		d.setClusterIds(seeds, clusterId)
@@ -49,8 +48,8 @@ func (d *Dbscan) expandCluster(points SetOfPoints, point Point, clusterId int) b
 			if len(result) >= d.MinPts {
 				for resultP := range result {
 					resultPCluster := resultP.GetCluster()
-					if resultPCluster == analysis.ClusterUnclassified || resultPCluster == analysis.ClusterNoise {
-						if resultPCluster == analysis.ClusterUnclassified {
+					if resultPCluster == pipeline.ClusterUnclassified || resultPCluster == pipeline.ClusterNoise {
+						if resultPCluster == pipeline.ClusterUnclassified {
 							seeds[resultP] = true
 						}
 						resultP.SetCluster(clusterId)

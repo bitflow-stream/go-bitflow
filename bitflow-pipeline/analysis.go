@@ -5,9 +5,9 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	. "github.com/antongulenko/analysis-pipeline/analysis"
-	"github.com/antongulenko/analysis-pipeline/dbscan"
-	"github.com/antongulenko/analysis-pipeline/regression"
+	. "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/dbscan"
+	"github.com/antongulenko/go-bitflow-pipeline/regression"
 )
 
 func init() {

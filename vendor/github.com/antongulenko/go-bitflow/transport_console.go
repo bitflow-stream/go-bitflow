@@ -1,4 +1,4 @@
-package data2go
+package bitflow
 
 import (
 	"io"

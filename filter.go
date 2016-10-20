@@ -1,14 +1,14 @@
 package pipeline
 
-import "github.com/antongulenko/data2go"
+import "github.com/antongulenko/go-bitflow"
 
 type SampleFilter struct {
 	AbstractProcessor
 	Description   string
-	IncludeFilter func(inSample *data2go.Sample) bool // Return true if sample should be INcluded
+	IncludeFilter func(inSample *bitflow.Sample) bool // Return true if sample should be INcluded
 }
 
-func (p *SampleFilter) Sample(inSample *data2go.Sample, header *data2go.Header) error {
+func (p *SampleFilter) Sample(inSample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(inSample, header); err != nil {
 		return err
 	}

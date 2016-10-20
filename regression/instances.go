@@ -3,12 +3,12 @@ package regression
 import (
 	"fmt"
 
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golearn/base"
 )
 
 type SubHeader struct {
-	data2go.Header
+	bitflow.Header
 	Vars []int
 }
 
@@ -28,7 +28,7 @@ func (header SubHeader) BuildInstances(classAttribute int) (*base.DenseInstances
 	return data, nil
 }
 
-func (header SubHeader) FillInstances(samples []data2go.Sample, instances *base.DenseInstances) {
+func (header SubHeader) FillInstances(samples []bitflow.Sample, instances *base.DenseInstances) {
 	start, capacity := instances.Size()
 	if capacity-start < len(samples) {
 		instances.Extend(len(samples) - (capacity - start))
@@ -47,7 +47,7 @@ func (header SubHeader) FillInstances(samples []data2go.Sample, instances *base.
 	}
 }
 
-func (header SubHeader) BuildFilledInstances(samples []data2go.Sample, classAttribute int) (*base.DenseInstances, error) {
+func (header SubHeader) BuildFilledInstances(samples []bitflow.Sample, classAttribute int) (*base.DenseInstances, error) {
 	data, err := header.BuildInstances(classAttribute)
 	if err != nil {
 		return nil, err

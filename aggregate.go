@@ -8,7 +8,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
 )
 
@@ -22,11 +22,11 @@ type FeatureAggregator struct {
 	suffixes           []string
 	FeatureWindowStats map[string]*FeatureWindowStats
 
-	inHeader  *data2go.Header
-	outHeader *data2go.Header
+	inHeader  *bitflow.Header
+	outHeader *bitflow.Header
 }
 
-type FeatureAggregatorOperation func(stats *FeatureWindowStats) data2go.Value
+type FeatureAggregatorOperation func(stats *FeatureWindowStats) bitflow.Value
 
 func (agg *FeatureAggregator) Add(suffix string, operation FeatureAggregatorOperation) *FeatureAggregator {
 	agg.aggregators = append(agg.aggregators, operation)
@@ -47,7 +47,7 @@ func (agg *FeatureAggregator) Start(wg *sync.WaitGroup) golib.StopChan {
 	return agg.AbstractProcessor.Start(wg)
 }
 
-func (agg *FeatureAggregator) Header(header *data2go.Header) error {
+func (agg *FeatureAggregator) Header(header *bitflow.Header) error {
 	if err := agg.CheckSink(); err != nil {
 		return err
 	} else {
@@ -67,12 +67,12 @@ func (agg *FeatureAggregator) Header(header *data2go.Header) error {
 	}
 }
 
-func (agg *FeatureAggregator) Sample(inSample *data2go.Sample, _ *data2go.Header) error {
+func (agg *FeatureAggregator) Sample(inSample *bitflow.Sample, _ *bitflow.Header) error {
 	if err := agg.Check(inSample, agg.inHeader); err != nil {
 		return err
 	}
 
-	outValues := make([]data2go.Value, 0, len(agg.outHeader.Fields))
+	outValues := make([]bitflow.Value, 0, len(agg.outHeader.Fields))
 	for i, field := range agg.inHeader.Fields {
 		stats := agg.getFeatureWindowStats(field)
 		inValue := inSample.Values[i]
@@ -130,13 +130,13 @@ func (agg *FeatureAggregator) String() string {
 }
 
 type FeatureWindowStats struct {
-	sum        data2go.Value
+	sum        bitflow.Value
 	num        int
 	values     list.List
 	timestamps list.List
 }
 
-func (stats *FeatureWindowStats) Push(val data2go.Value, timestamp time.Time) {
+func (stats *FeatureWindowStats) Push(val bitflow.Value, timestamp time.Time) {
 	stats.sum += val
 	stats.num++
 	stats.values.PushBack(val)
@@ -144,12 +144,12 @@ func (stats *FeatureWindowStats) Push(val data2go.Value, timestamp time.Time) {
 }
 
 func (stats *FeatureWindowStats) Flush(num int) {
-	flushedSum := data2go.Value(0)
+	flushedSum := bitflow.Value(0)
 	i := 0
 	link := stats.values.Front()
 	for link != nil && i < num {
 		stats.timestamps.Remove(stats.timestamps.Front())
-		val := stats.values.Remove(link).(data2go.Value)
+		val := stats.values.Remove(link).(bitflow.Value)
 		flushedSum += val
 		i++
 		link = stats.values.Front()
@@ -158,21 +158,21 @@ func (stats *FeatureWindowStats) Flush(num int) {
 	stats.num = stats.num - i
 }
 
-func FeatureWindowAverage(stats *FeatureWindowStats) data2go.Value {
+func FeatureWindowAverage(stats *FeatureWindowStats) bitflow.Value {
 	if stats.num == 0 {
 		return 0
 	}
-	return stats.sum / data2go.Value(stats.num)
+	return stats.sum / bitflow.Value(stats.num)
 }
 
-func FeatureWindowSlope(stats *FeatureWindowStats) data2go.Value {
+func FeatureWindowSlope(stats *FeatureWindowStats) bitflow.Value {
 	if stats.num == 0 {
 		return 0
 	}
-	front := stats.values.Front().Value.(data2go.Value)
+	front := stats.values.Front().Value.(bitflow.Value)
 	if stats.num == 1 {
 		return front
 	}
-	back := stats.values.Back().Value.(data2go.Value)
+	back := stats.values.Back().Value.(bitflow.Value)
 	return back - front
 }

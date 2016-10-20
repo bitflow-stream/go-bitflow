@@ -7,20 +7,20 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
 )
 
 type BatchProcessor struct {
 	AbstractProcessor
-	header  *data2go.Header
-	samples []*data2go.Sample
+	header  *bitflow.Header
+	samples []*bitflow.Sample
 
 	Steps []BatchProcessingStep
 }
 
 type BatchProcessingStep interface {
 	// TODO Optimize implementors of BatchProcessingStep to reuse the sample-array instead of allocating a new one with the same size.
-	ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error)
+	ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error)
 	String() string
 }
 
@@ -29,14 +29,14 @@ func (p *BatchProcessor) Add(step BatchProcessingStep) *BatchProcessor {
 	return p
 }
 
-func (p *BatchProcessor) checkHeader(header *data2go.Header) error {
+func (p *BatchProcessor) checkHeader(header *bitflow.Header) error {
 	if !p.header.Equals(header) {
 		return fmt.Errorf("%v does not allow changing headers", p)
 	}
 	return nil
 }
 
-func (p *BatchProcessor) Header(header *data2go.Header) error {
+func (p *BatchProcessor) Header(header *bitflow.Header) error {
 	if p.header == nil {
 		p.header = header
 	} else if err := p.checkHeader(header); err != nil {
@@ -45,7 +45,7 @@ func (p *BatchProcessor) Header(header *data2go.Header) error {
 	return p.CheckSink()
 }
 
-func (p *BatchProcessor) Sample(sample *data2go.Sample, header *data2go.Header) error {
+func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ type SampleSorter struct {
 }
 
 type SampleSlice struct {
-	samples []*data2go.Sample
+	samples []*bitflow.Sample
 	sorter  *SampleSorter
 }
 
@@ -146,7 +146,7 @@ func (s SampleSlice) Swap(i, j int) {
 	s.samples[i], s.samples[j] = s.samples[j], s.samples[i]
 }
 
-func (sorter *SampleSorter) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
+func (sorter *SampleSorter) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	log.Println("Sorting", len(samples), "samples")
 	sort.Sort(SampleSlice{samples, sorter})
 	return header, samples, nil
@@ -163,7 +163,7 @@ func (sorter *SampleSorter) String() string {
 type SampleShuffler struct {
 }
 
-func (*SampleShuffler) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
+func (*SampleShuffler) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	log.Println("Shuffling", len(samples), "samples")
 	for i := range samples {
 		j := rand.Intn(i + 1)
@@ -180,24 +180,24 @@ func (*SampleShuffler) String() string {
 // Can tolerate multiple headers, fills missing data up with default values.
 type MultiHeaderMerger struct {
 	AbstractProcessor
-	header *data2go.Header
+	header *bitflow.Header
 
 	hasTags bool
-	metrics map[string][]data2go.Value
-	samples []*data2go.SampleMetadata
+	metrics map[string][]bitflow.Value
+	samples []*bitflow.SampleMetadata
 }
 
 func NewMultiHeaderMerger() *MultiHeaderMerger {
 	return &MultiHeaderMerger{
-		metrics: make(map[string][]data2go.Value),
+		metrics: make(map[string][]bitflow.Value),
 	}
 }
 
-func (p *MultiHeaderMerger) Header(_ *data2go.Header) error {
+func (p *MultiHeaderMerger) Header(_ *bitflow.Header) error {
 	return p.CheckSink()
 }
 
-func (p *MultiHeaderMerger) Sample(sample *data2go.Sample, header *data2go.Header) error {
+func (p *MultiHeaderMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
@@ -205,12 +205,12 @@ func (p *MultiHeaderMerger) Sample(sample *data2go.Sample, header *data2go.Heade
 	return nil
 }
 
-func (p *MultiHeaderMerger) addSample(incomingSample *data2go.Sample, header *data2go.Header) {
+func (p *MultiHeaderMerger) addSample(incomingSample *bitflow.Sample, header *bitflow.Header) {
 	handledMetrics := make(map[string]bool, len(header.Fields))
 	for i, field := range header.Fields {
 		metrics, ok := p.metrics[field]
 		if !ok {
-			metrics = make([]data2go.Value, len(p.samples)) // Filled up with zeroes
+			metrics = make([]bitflow.Value, len(p.samples)) // Filled up with zeroes
 		}
 		p.metrics[field] = append(metrics, incomingSample.Values[i])
 		handledMetrics[field] = true
@@ -250,17 +250,17 @@ func (p *MultiHeaderMerger) Close() {
 	}
 }
 
-func (p *MultiHeaderMerger) reconstructHeader() *data2go.Header {
+func (p *MultiHeaderMerger) reconstructHeader() *bitflow.Header {
 	fields := make([]string, 0, len(p.metrics))
 	for field := range p.metrics {
 		fields = append(fields, field)
 	}
 	sort.Strings(fields)
-	return &data2go.Header{Fields: fields, HasTags: p.hasTags}
+	return &bitflow.Header{Fields: fields, HasTags: p.hasTags}
 }
 
-func (p *MultiHeaderMerger) reconstructSample(num int, header *data2go.Header) *data2go.Sample {
-	values := make([]data2go.Value, len(p.metrics))
+func (p *MultiHeaderMerger) reconstructSample(num int, header *bitflow.Header) *bitflow.Sample {
+	values := make([]bitflow.Value, len(p.metrics))
 	for i, field := range header.Fields {
 		slice := p.metrics[field]
 		if len(slice) != len(p.samples) {

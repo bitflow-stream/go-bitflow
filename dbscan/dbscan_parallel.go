@@ -6,9 +6,9 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/analysis-pipeline/analysis"
-	"github.com/antongulenko/data2go"
 	parallel_dbscan "github.com/antongulenko/go-DBSCAN"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-onlinestats"
 )
 
@@ -18,7 +18,7 @@ import (
 
 // Implements parallel_dbscan.ClusterablePoint
 type ParallelDbscanPoint struct {
-	sample  *data2go.Sample
+	sample  *bitflow.Sample
 	convert sync.Once
 	point   []float64
 }
@@ -55,23 +55,23 @@ func (c *ParallelDbscanBatchClusterer) printSummary(clusters [][]parallel_dbscan
 	log.Printf("%v clusters, avg size %v, size stddev %v", len(clusters), stats.Mean(), stats.Stddev())
 }
 
-func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
+func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	points := make([]parallel_dbscan.ClusterablePoint, len(samples))
 	for i, sample := range samples {
 		points[i] = &ParallelDbscanPoint{sample: sample}
 	}
 	clusters := c.cluster(points)
 	c.printSummary(clusters)
-	outSamples := make([]*data2go.Sample, 0, len(samples))
+	outSamples := make([]*bitflow.Sample, 0, len(samples))
 	for i, clust := range clusters {
-		clusterName := analysis.ClusterName(i)
+		clusterName := pipeline.ClusterName(i)
 		for _, p := range clust {
 			point, ok := p.(*ParallelDbscanPoint)
 			if !ok {
 				panic(fmt.Sprintf("Wrong parallel_dbscan.ClusterablePoint implementation (%T): %v", p, p))
 			}
 			outSample := point.sample
-			outSample.SetTag(analysis.ClusterTag, clusterName)
+			outSample.SetTag(pipeline.ClusterTag, clusterName)
 			outSamples = append(outSamples, outSample)
 		}
 	}

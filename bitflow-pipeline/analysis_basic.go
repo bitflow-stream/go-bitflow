@@ -8,8 +8,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	. "github.com/antongulenko/analysis-pipeline/analysis"
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
+	. "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/golib"
 )
 
@@ -83,7 +83,7 @@ func pick_x_percent(p *SamplePipeline, params string) {
 	counter := float64(0)
 	p.Add(&SampleFilter{
 		Description: fmt.Sprintf("Pick %.2f%%", pick_percentage*100),
-		IncludeFilter: func(inSample *data2go.Sample) bool {
+		IncludeFilter: func(inSample *bitflow.Sample) bool {
 			counter += pick_percentage
 			if counter > 1.0 {
 				counter -= 1.0
@@ -127,7 +127,7 @@ func filter_tag(p *SamplePipeline, params string) {
 	}
 	p.Add(&SampleFilter{
 		Description: fmt.Sprintf("Filter tag %v %s %v", tag, sign, val),
-		IncludeFilter: func(inSample *data2go.Sample) bool {
+		IncludeFilter: func(inSample *bitflow.Sample) bool {
 			if equals {
 				return inSample.Tag(tag) == val
 			} else {
@@ -212,7 +212,7 @@ type PickHead struct {
 	processed int // internal variable
 }
 
-func (head *PickHead) Sample(sample *data2go.Sample, header *data2go.Header) error {
+func (head *PickHead) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := head.Check(sample, header); err != nil {
 		return err
 	}
@@ -233,11 +233,11 @@ type SampleTagger struct {
 	DontOverwrite bool
 }
 
-func (h *SampleTagger) HandleHeader(header *data2go.Header, source string) {
+func (h *SampleTagger) HandleHeader(header *bitflow.Header, source string) {
 	header.HasTags = true
 }
 
-func (h *SampleTagger) HandleSample(sample *data2go.Sample, source string) {
+func (h *SampleTagger) HandleSample(sample *bitflow.Sample, source string) {
 	for _, tag := range h.SourceTags {
 		if h.DontOverwrite {
 			base := tag

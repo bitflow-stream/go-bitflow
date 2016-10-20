@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/antongulenko/analysis-pipeline",
+	"ImportPath": "github.com/antongulenko/go-bitflow-pipeline",
 	"GoVersion": "go1.6",
 	"GodepVersion": "v67",
 	"Packages": [
@@ -26,12 +26,12 @@
 			"Rev": "672fe547df4e49efc6db67a74391368bcb149b37"
 		},
 		{
-			"ImportPath": "github.com/antongulenko/data2go",
-			"Rev": "3772698000085468cbdc5822840230038eab93ff"
-		},
-		{
 			"ImportPath": "github.com/antongulenko/go-DBSCAN",
 			"Rev": "447f78b667437a268d4ab68dca78cca1f92e8ca1"
+		},
+		{
+			"ImportPath": "github.com/antongulenko/go-bitflow",
+			"Rev": "4d14dfd9d719e95ddc4997553c31e650a3a2bb33"
 		},
 		{
 			"ImportPath": "github.com/antongulenko/go-onlinestats",

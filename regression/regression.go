@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/antongulenko/golearn/base"
 	"github.com/antongulenko/golearn/linear_models"
@@ -21,7 +21,7 @@ type LinearRegression struct {
 	TrainData *base.DenseInstances
 }
 
-func NewLinearRegression(header *data2go.Header, fieldNames []string) (LinearRegression, error) {
+func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearRegression, error) {
 	fieldNums := make([]int, len(fieldNames))
 	var reg LinearRegression
 	for i, searching := range fieldNames {
@@ -51,7 +51,7 @@ func (reg *LinearRegression) FormulaString() string {
 	return buf.String()
 }
 
-func (reg *LinearRegression) Fit(samples []data2go.Sample) error {
+func (reg *LinearRegression) Fit(samples []bitflow.Sample) error {
 	if len(reg.Vars) < 2 {
 		return fmt.Errorf("Need at least 2 variables for a linear regression, got %v", reg.Vars)
 	}

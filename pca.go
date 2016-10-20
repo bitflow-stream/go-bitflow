@@ -8,14 +8,14 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/gonum/matrix/mat64"
 	"github.com/gonum/stat"
 )
 
 const DefaultContainedVariance = 0.99
 
-func SamplesToMatrix(samples []*data2go.Sample) mat64.Matrix {
+func SamplesToMatrix(samples []*bitflow.Sample) mat64.Matrix {
 	if len(samples) < 1 {
 		return mat64.NewDense(0, 0, nil)
 	}
@@ -31,7 +31,7 @@ func SamplesToMatrix(samples []*data2go.Sample) mat64.Matrix {
 	return mat64.NewDense(len(samples), cols, values)
 }
 
-func SampleToVector(sample *data2go.Sample) []float64 {
+func SampleToVector(sample *bitflow.Sample) []float64 {
 	input := sample.Values
 	values := make([]float64, len(input))
 	for i, val := range input {
@@ -40,14 +40,14 @@ func SampleToVector(sample *data2go.Sample) []float64 {
 	return values
 }
 
-func SetSampleValues(s *data2go.Sample, values []float64) {
+func SetSampleValues(s *bitflow.Sample, values []float64) {
 	if len(s.Values) >= len(values) {
 		s.Values = s.Values[:len(values)]
 	} else {
-		s.Values = make([]data2go.Value, len(values))
+		s.Values = make([]bitflow.Value, len(values))
 	}
 	for i, val := range values {
-		s.Values[i] = data2go.Value(val)
+		s.Values[i] = bitflow.Value(val)
 	}
 }
 
@@ -57,7 +57,7 @@ type PCAModel struct {
 	ContainedVariances []float64
 }
 
-func (model *PCAModel) ComputeModel(samples []*data2go.Sample) error {
+func (model *PCAModel) ComputeModel(samples []*bitflow.Sample) error {
 	matrix := SamplesToMatrix(samples)
 	var ok bool
 	model.Vectors, model.RawVariances, ok = stat.PrincipalComponents(matrix, nil)
@@ -128,7 +128,7 @@ func (model *PCAProjection) Vector(vec []float64) []float64 {
 	return matrix.RawRowView(0)
 }
 
-func (model *PCAProjection) Sample(sample *data2go.Sample) (result *data2go.Sample) {
+func (model *PCAProjection) Sample(sample *bitflow.Sample) (result *bitflow.Sample) {
 	values := model.Vector(SampleToVector(sample))
 	SetSampleValues(result, values)
 	result.CopyMetadataFrom(sample)
@@ -139,7 +139,7 @@ type PCABatchProcessing struct {
 	ContainedVariance float64
 }
 
-func (p *PCABatchProcessing) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
+func (p *PCABatchProcessing) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	variance := p.ContainedVariance
 	if variance <= 0 {
 		variance = DefaultContainedVariance
@@ -157,7 +157,7 @@ func (p *PCABatchProcessing) ProcessBatch(header *data2go.Header, samples []*dat
 	proj := model.Project(comp)
 
 	// TODO this could be done in one matrix
-	outputSamples := make([]*data2go.Sample, len(samples))
+	outputSamples := make([]*bitflow.Sample, len(samples))
 	for i, inputSample := range samples {
 		outputSample := proj.Sample(inputSample)
 		outputSamples[i] = outputSample
@@ -167,7 +167,7 @@ func (p *PCABatchProcessing) ProcessBatch(header *data2go.Header, samples []*dat
 	for i := 0; i < comp; i++ {
 		outFields[i] = "component" + strconv.Itoa(i)
 	}
-	outHeader := &data2go.Header{
+	outHeader := &bitflow.Header{
 		HasTags: header.HasTags,
 		Fields:  outFields,
 	}

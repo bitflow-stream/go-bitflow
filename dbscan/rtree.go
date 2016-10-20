@@ -5,8 +5,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/analysis-pipeline/analysis"
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/dhconnelly/rtreego"
 )
 
@@ -23,7 +23,7 @@ func NewRtreeSetOfPoints(dim, minChildren, maxChildren int, pointWidth float64) 
 	}
 }
 
-func (tree *RtreeSetOfPoints) Add(s *data2go.Sample) {
+func (tree *RtreeSetOfPoints) Add(s *bitflow.Sample) {
 	point := NewRtreePoint(s, tree.PointWidth)
 	tree.tree.Insert(point)
 	tree.allPoints = append(tree.allPoints, point)
@@ -61,16 +61,16 @@ func (tree *RtreeSetOfPoints) AllPoints() []Point {
 	return tree.allPoints
 }
 
-func (tree *RtreeSetOfPoints) Cluster(d *Dbscan) map[string][]*data2go.Sample {
-	result := make(map[string][]*data2go.Sample, len(tree.allPoints))
+func (tree *RtreeSetOfPoints) Cluster(d *Dbscan) map[string][]*bitflow.Sample {
+	result := make(map[string][]*bitflow.Sample, len(tree.allPoints))
 	d.Cluster(tree)
 	for _, point := range tree.allPoints {
 		rtreePoint, ok := point.(*RtreePoint)
 		if !ok {
 			panic(fmt.Sprintf("Unexpected Point implementation %T: %v", point, point))
 		}
-		clusterName := analysis.ClusterName(rtreePoint.cluster)
-		rtreePoint.sample.SetTag(analysis.ClusterTag, clusterName)
+		clusterName := pipeline.ClusterName(rtreePoint.cluster)
+		rtreePoint.sample.SetTag(pipeline.ClusterTag, clusterName)
 		result[clusterName] = append(result[clusterName], rtreePoint.sample)
 	}
 	return result
@@ -79,7 +79,7 @@ func (tree *RtreeSetOfPoints) Cluster(d *Dbscan) map[string][]*data2go.Sample {
 var regionQueryNr = 0
 
 type RtreePoint struct {
-	sample  *data2go.Sample
+	sample  *bitflow.Sample
 	point   rtreego.Point
 	rect    *rtreego.Rect
 	cluster int
@@ -87,14 +87,14 @@ type RtreePoint struct {
 	regionQueried int
 }
 
-func NewRtreePoint(s *data2go.Sample, width float64) *RtreePoint {
+func NewRtreePoint(s *bitflow.Sample, width float64) *RtreePoint {
 	point := make(rtreego.Point, len(s.Values))
 	for i, val := range s.Values {
 		point[i] = float64(val)
 	}
 	return &RtreePoint{
 		sample:  s,
-		cluster: analysis.ClusterUnclassified,
+		cluster: pipeline.ClusterUnclassified,
 		point:   point,
 		rect:    point.ToRect(width),
 	}

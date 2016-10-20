@@ -8,8 +8,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	. "github.com/antongulenko/analysis-pipeline/analysis"
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
+	. "github.com/antongulenko/go-bitflow-pipeline"
 )
 
 func init() {
@@ -46,7 +46,7 @@ func merge_hosts(p *SamplePipeline) {
 
 	suffix_regex := regexp.MustCompile("\\....$")  // Strip file ending
 	num_regex := regexp.MustCompile("(-[0-9]+)?$") // Strip optional appended numbering
-	if filesource, ok := p.Source.(*data2go.FileSource); ok {
+	if filesource, ok := p.Source.(*bitflow.FileSource); ok {
 		filesource.ConvertFilename = func(filename string) string {
 			name := filepath.Base(filename)
 			name = suffix_regex.ReplaceAllString(name, "")
@@ -58,7 +58,7 @@ func merge_hosts(p *SamplePipeline) {
 
 func convert_filenames(p *SamplePipeline) {
 	// Replace the src tag with the name of the parent folder
-	if filesource, ok := p.Source.(*data2go.FileSource); ok {
+	if filesource, ok := p.Source.(*bitflow.FileSource); ok {
 		filesource.ConvertFilename = func(filename string) string {
 			return filepath.Base(filepath.Dir(filename))
 		}
@@ -67,7 +67,7 @@ func convert_filenames(p *SamplePipeline) {
 
 func convert_filenames2(p *SamplePipeline) {
 	// Replace the src tag with the name of the parent-parent folder
-	if filesource, ok := p.Source.(*data2go.FileSource); ok {
+	if filesource, ok := p.Source.(*bitflow.FileSource); ok {
 		filesource.ConvertFilename = func(filename string) string {
 			return filepath.Base(filepath.Dir(filepath.Dir(filename)))
 		}
@@ -100,7 +100,7 @@ func (*InjectionInfoTagger) String() string {
 	return "injection info tagger (tags " + ClassTag + " and " + remoteInjectionTag + ")"
 }
 
-func (p *InjectionInfoTagger) Sample(sample *data2go.Sample, header *data2go.Header) error {
+func (p *InjectionInfoTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
@@ -144,8 +144,8 @@ func split_distributed_experiments(p *SamplePipeline) {
 		Separator:   string(filepath.Separator),
 		Replacement: "_unknown_",
 	}
-	builder := MultiFileDirectoryBuilder(false, func() []data2go.SampleProcessor {
-		return []data2go.SampleProcessor{
+	builder := MultiFileDirectoryBuilder(false, func() []bitflow.SampleProcessor {
+		return []bitflow.SampleProcessor{
 			NewMultiHeaderMerger(),
 			new(BatchProcessor).Add(new(SampleSorter)),
 		}
@@ -164,7 +164,7 @@ func (d *TimeDistributor) String() string {
 	return "split after pauses of " + d.MinimumPause.String()
 }
 
-func (d *TimeDistributor) Distribute(sample *data2go.Sample, header *data2go.Header) []interface{} {
+func (d *TimeDistributor) Distribute(sample *bitflow.Sample, header *bitflow.Header) []interface{} {
 	last := d.lastTime
 	d.lastTime = sample.Time
 	if !last.IsZero() && sample.Time.Sub(last) >= d.MinimumPause {

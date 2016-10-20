@@ -10,8 +10,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/analysis-pipeline/analysis"
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 )
 
 func init() {
@@ -23,7 +23,7 @@ func init() {
 }
 
 type UniqueTagPrinter struct {
-	analysis.AbstractProcessor
+	pipeline.AbstractProcessor
 	Tag    string
 	Count  bool
 	values map[string]int
@@ -45,7 +45,7 @@ func NewUniqueTagCounter(tag string) *UniqueTagPrinter {
 	}
 }
 
-func (printer *UniqueTagPrinter) Sample(sample *data2go.Sample, header *data2go.Header) error {
+func (printer *UniqueTagPrinter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := printer.Check(sample, header); err != nil {
 		return err
 	}
@@ -99,13 +99,13 @@ func count_tags(p *SamplePipeline, params string) {
 const TimrangePrinterFormat = "02.01.2006 15:04:05"
 
 type TimerangePrinter struct {
-	analysis.AbstractProcessor
+	pipeline.AbstractProcessor
 	from  time.Time
 	to    time.Time
 	count int
 }
 
-func (printer *TimerangePrinter) Sample(sample *data2go.Sample, header *data2go.Header) error {
+func (printer *TimerangePrinter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := printer.Check(sample, header); err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func (p *TimelinePrinter) String() string {
 	return fmt.Sprintf("Print timeline (len %v)", p.NumBuckets)
 }
 
-func (p *TimelinePrinter) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
+func (p *TimelinePrinter) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	var from time.Time
 	var to time.Time
 	for _, sample := range samples {
@@ -213,18 +213,18 @@ func print_timeline(p *SamplePipeline, param string) {
 }
 
 type InvalidCounter struct {
-	analysis.AbstractProcessor
+	pipeline.AbstractProcessor
 	invalidSamples int
 	totalSamples   int
 	invalidValues  int
 	totalValues    int
 }
 
-func (counter *InvalidCounter) Sample(sample *data2go.Sample, header *data2go.Header) error {
+func (counter *InvalidCounter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	sampleValid := true
 	for _, val := range sample.Values {
 		counter.totalValues += 1
-		if !analysis.IsValidNumber(float64(val)) {
+		if !pipeline.IsValidNumber(float64(val)) {
 			counter.invalidValues += 1
 			sampleValid = false
 		}

@@ -10,8 +10,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/analysis-pipeline/analysis"
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/golib"
 )
 
@@ -28,11 +28,11 @@ type registeredAnalysis struct {
 var analysis_registry = map[string]registeredAnalysis{
 	"": registeredAnalysis{"", nil, ""},
 }
-var handler_registry = map[string]data2go.ReadSampleHandler{
+var handler_registry = map[string]bitflow.ReadSampleHandler{
 	"": nil,
 }
 
-func RegisterSampleHandler(name string, sampleHandler data2go.ReadSampleHandler) {
+func RegisterSampleHandler(name string, sampleHandler bitflow.ReadSampleHandler) {
 	if _, ok := handler_registry[name]; ok {
 		log.Fatalln("Sample handler already registered:", name)
 	}
@@ -164,45 +164,45 @@ func (slice SortedAnalyses) Swap(i, j int) {
 }
 
 type SamplePipeline struct {
-	data2go.CmdSamplePipeline
-	batch *analysis.BatchProcessor
+	bitflow.CmdSamplePipeline
+	batch *pipeline.BatchProcessor
 }
 
-func (pipeline *SamplePipeline) Add(step data2go.SampleProcessor) *SamplePipeline {
-	pipeline.batch = nil
-	pipeline.CmdSamplePipeline.Add(step)
-	return pipeline
+func (p *SamplePipeline) Add(step bitflow.SampleProcessor) *SamplePipeline {
+	p.batch = nil
+	p.CmdSamplePipeline.Add(step)
+	return p
 }
 
-func (pipeline *SamplePipeline) Batch(proc analysis.BatchProcessingStep) *SamplePipeline {
-	if pipeline.batch == nil {
-		pipeline.batch = new(analysis.BatchProcessor)
-		pipeline.CmdSamplePipeline.Add(pipeline.batch)
+func (p *SamplePipeline) Batch(proc pipeline.BatchProcessingStep) *SamplePipeline {
+	if p.batch == nil {
+		p.batch = new(pipeline.BatchProcessor)
+		p.CmdSamplePipeline.Add(p.batch)
 	}
-	pipeline.batch.Add(proc)
-	return pipeline
+	p.batch.Add(proc)
+	return p
 }
 
-func (pipeline *SamplePipeline) setup(analyses []parameterizedAnalysis) {
+func (p *SamplePipeline) setup(analyses []parameterizedAnalysis) {
 	for _, analysis := range analyses {
 		if setup := analysis.setup; setup != nil {
-			setup(pipeline, analysis.params)
+			setup(p, analysis.params)
 		}
 	}
 }
 
-func (pipeline *SamplePipeline) print() []string {
-	p := pipeline.Processors
-	if len(p) == 0 {
+func (p *SamplePipeline) print() []string {
+	processors := p.Processors
+	if len(processors) == 0 {
 		return []string{"Empty analysis pipeline"}
-	} else if len(p) == 1 {
-		return []string{"Analysis: " + p[0].String()}
+	} else if len(processors) == 1 {
+		return []string{"Analysis: " + processors[0].String()}
 	} else {
-		res := make([]string, 0, len(p)+1)
+		res := make([]string, 0, len(processors)+1)
 		res = append(res, "Analysis pipeline:")
-		for i, proc := range p {
+		for i, proc := range processors {
 			indent := "├─"
-			if i == len(p)-1 {
+			if i == len(processors)-1 {
 				indent = "└─"
 			}
 			res = append(res, indent+proc.String())

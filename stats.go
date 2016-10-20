@@ -7,7 +7,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/go-ini/ini"
 )
@@ -47,7 +47,7 @@ func (stats *FeatureStats) Push(values ...float64) {
 	}
 }
 
-func (stats *StoreStats) Sample(inSample *data2go.Sample, header *data2go.Header) error {
+func (stats *StoreStats) Sample(inSample *bitflow.Sample, header *bitflow.Header) error {
 	if err := stats.Check(inSample, header); err != nil {
 		return err
 	}

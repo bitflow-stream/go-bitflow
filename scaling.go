@@ -3,13 +3,13 @@ package pipeline
 import (
 	"math"
 
-	"github.com/antongulenko/data2go"
+	"github.com/antongulenko/go-bitflow"
 )
 
 type MinMaxScaling struct {
 }
 
-func GetMinMax(header *data2go.Header, samples []*data2go.Sample) ([]float64, []float64) {
+func GetMinMax(header *bitflow.Header, samples []*bitflow.Sample) ([]float64, []float64) {
 	min := make([]float64, len(header.Fields))
 	max := make([]float64, len(header.Fields))
 	for num := range header.Fields {
@@ -37,16 +37,16 @@ func scaleMinMax(val, min, max float64) float64 {
 	return res
 }
 
-func (s *MinMaxScaling) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
+func (s *MinMaxScaling) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	min, max := GetMinMax(header, samples)
-	out := make([]*data2go.Sample, len(samples))
+	out := make([]*bitflow.Sample, len(samples))
 	for num, inSample := range samples {
-		values := make([]data2go.Value, len(inSample.Values))
+		values := make([]bitflow.Value, len(inSample.Values))
 		for i, val := range inSample.Values {
 			res := scaleMinMax(float64(val), min[i], max[i])
-			values[i] = data2go.Value(res)
+			values[i] = bitflow.Value(res)
 		}
-		var outSample data2go.Sample
+		var outSample bitflow.Sample
 		outSample.Values = values
 		outSample.CopyMetadataFrom(inSample)
 		out[num] = &outSample
@@ -61,7 +61,7 @@ func (s *MinMaxScaling) String() string {
 type StandardizationScaling struct {
 }
 
-func GetStats(header *data2go.Header, samples []*data2go.Sample) []FeatureStats {
+func GetStats(header *bitflow.Header, samples []*bitflow.Sample) []FeatureStats {
 	res := make([]FeatureStats, len(header.Fields))
 	for _, sample := range samples {
 		for i, val := range sample.Values {
@@ -71,11 +71,11 @@ func GetStats(header *data2go.Header, samples []*data2go.Sample) []FeatureStats 
 	return res
 }
 
-func (s *StandardizationScaling) ProcessBatch(header *data2go.Header, samples []*data2go.Sample) (*data2go.Header, []*data2go.Sample, error) {
+func (s *StandardizationScaling) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	stats := GetStats(header, samples)
-	out := make([]*data2go.Sample, len(samples))
+	out := make([]*bitflow.Sample, len(samples))
 	for num, inSample := range samples {
-		values := make([]data2go.Value, len(inSample.Values))
+		values := make([]bitflow.Value, len(inSample.Values))
 		for i, val := range inSample.Values {
 			m := stats[i].Mean()
 			s := stats[i].Stddev()
@@ -86,9 +86,9 @@ func (s *StandardizationScaling) ProcessBatch(header *data2go.Header, samples []
 				res = scaleMinMax(float64(val), min, max)
 				res = (res - 0.5) * 2 // Value range: -1..1
 			}
-			values[i] = data2go.Value(res)
+			values[i] = bitflow.Value(res)
 		}
-		var outSample data2go.Sample
+		var outSample bitflow.Sample
 		outSample.Values = values
 		outSample.CopyMetadataFrom(inSample)
 		out[num] = &outSample
