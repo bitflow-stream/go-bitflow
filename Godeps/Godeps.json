@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/antongulenko/data2go",
+	"ImportPath": "github.com/antongulenko/go-bitflow",
 	"GoVersion": "go1.6",
 	"GodepVersion": "v67",
 	"Packages": [
