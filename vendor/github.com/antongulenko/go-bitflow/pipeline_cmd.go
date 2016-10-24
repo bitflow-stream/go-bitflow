@@ -19,7 +19,9 @@ const (
 
 // CmdSamplePipeline is an extension for SamplePipeline that defines many command line flags
 // and additional methods for controlling the pipeline. It is basically a helper type to be
-// reused in different main packages.
+// reused in different main packages. All fields named Flag* are set by the according command
+// line flags and evaluated in Init(). After flag.Parse(), those fields can be modified
+// to override the command line flags defined by the user.
 //
 // The sequence of operations on a CmdSamplePipeline should follow the following example:
 //   // ... Define additional flags using the "flag" package (Optional)
@@ -29,6 +31,7 @@ const (
 //   defer golib.ProfileCpu()() // Optional
 //   p.SetSource(customSource) // Optional
 //   p.ReadSampleHandler = customHandler // Optional
+//   // ... Modify p.Flag* values // Optional
 //   p.Init()
 //   p.Tasks.Add(customTask) // Optional
 //   os.Exit(p.StartAndWait())
@@ -60,31 +63,45 @@ type CmdSamplePipeline struct {
 	// Must be set before calling Init().
 	ReadSampleHandler ReadSampleHandler
 
-	read_console           bool
-	read_tcp_listen        string
-	read_tcp_download      golib.StringSlice
-	read_files             golib.StringSlice
-	sink_console           bool
-	sink_connect           golib.StringSlice
-	sink_listen            golib.StringSlice
-	sink_file              string
-	format_input           string
-	format_console         string
-	format_connect         string
-	format_listen          string
-	format_file            string
-	tcp_conn_limit         uint
-	tcp_listen_limit       uint
-	tcp_drop_active_errors bool
-	robust_files           bool
-	clean_files            bool
-	handler                ParallelSampleHandler
-	io_buf                 int
+	// Input flags
+
+	FlagInputFormat    string
+	FlagInputConsole   bool
+	FlagInputFiles     golib.StringSlice
+	FlagInputTcpListen string
+	FlagInputTcp       golib.StringSlice
+
+	// File input/output flags
+
+	FlagInputFilesRobust bool
+	FlagOutputFilesClean bool
+
+	// TCP input/output flags
+
+	FlagTcpConnectionLimit  uint
+	FlagInputTcpAcceptLimit uint
+	FlagTcpDropErrors       bool
+
+	// Parallel marshalling/unmarshalling flags
+
+	FlagParallelHandler ParallelSampleHandler
+	FlagIoBuffer        int
+
+	// Output flags
+
+	FlagOutputConsole         bool
+	FlagOutputTcp             golib.StringSlice
+	FlagOutputTcpListen       golib.StringSlice
+	FlagOutputFile            string
+	FlagOutputConsoleFormat   string
+	FlagOutputTcpFormat       string
+	FlagOutputTcpListenFormat string
+	FlagOutputFileFormat      string
 }
 
 // ParseAllFlags calls ParseFlags without suppressing any available flags.
-func (p *CmdSamplePipeline) ParseAllFlags() {
-	p.ParseFlags(nil)
+func (p *CmdSamplePipeline) RegisterAllFlags() {
+	p.RegisterFlags(nil)
 }
 
 // ParseFlags registers command-line flags for the receiving CmdSamplePipeline with the
@@ -97,40 +114,55 @@ func (p *CmdSamplePipeline) ParseAllFlags() {
 // This allows individual main-packages to refine the available flags.
 //
 // Must be called before flag.Parse().
-func (p *CmdSamplePipeline) ParseFlags(suppressFlags map[string]bool) {
+func (p *CmdSamplePipeline) RegisterFlags(suppressFlags map[string]bool) {
 	var f flag.FlagSet
 
-	f.StringVar(&p.format_input, "i", "a", "Force data input format, default is auto-detect, one of "+input_formats)
-	f.BoolVar(&p.read_console, "C", false, "Data source: read from stdin")
-	f.Var(&p.read_files, "F", "Data source: read from file(s)")
-	f.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
-	f.Var(&p.read_tcp_download, "D", "Data source: receive samples by connecting to remote endpoint(s)")
+	// Input
+	f.StringVar(&p.FlagInputFormat, "i", "a", "Force data input format, default is auto-detect, one of "+input_formats)
+	f.BoolVar(&p.FlagInputConsole, "C", false, "Data source: read from stdin")
+	f.Var(&p.FlagInputFiles, "F", "Data source: read from file(s)")
+	f.StringVar(&p.FlagInputTcpListen, "L", "", "Data source: receive samples by accepting a TCP connection")
+	f.Var(&p.FlagInputTcp, "D", "Data source: receive samples by connecting to remote endpoint(s)")
 
+	// File input
 	f.Var(&fileRegexValue{p}, "FR", "File Regex: Input files matching regex, previous -F parameter is used as start directory")
-	f.UintVar(&p.tcp_listen_limit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
-	f.UintVar(&p.tcp_conn_limit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
-	f.BoolVar(&p.tcp_drop_active_errors, "tcp_drop_err", false, "Don't print errors when establishing actie TCP connection (for sink/source) fails")
-	f.BoolVar(&p.robust_files, "robust", false, "Only print warnings for errors when reading files")
-	f.BoolVar(&p.clean_files, "clean", false, "Delete all potential output files before writing")
+	f.BoolVar(&p.FlagInputFilesRobust, "robust", false, "Only print warnings for errors when reading files")
 
-	f.IntVar(&p.handler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
-	f.IntVar(&p.handler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling.")
-	f.IntVar(&p.io_buf, "io_buf", 4096, "Size (byte) of buffered IO when writing files.")
+	// File output
+	f.BoolVar(&p.FlagOutputFilesClean, "clean", false, "Delete all potential output files before writing")
 
-	f.BoolVar(&p.sink_console, "p", false, "Data sink: print to stdout")
-	f.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+output_formats)
-	f.StringVar(&p.sink_file, "f", "", "Data sink: write data to file")
-	f.StringVar(&p.format_file, "ff", "b", "Data format for file output, one of "+output_formats)
-	f.Var(&p.sink_connect, "s", "Data sink: send data to specified TCP endpoint")
-	f.StringVar(&p.format_connect, "sf", "b", "Data format for TCP output, one of "+output_formats)
-	f.Var(&p.sink_listen, "l", "Data sink: accept TCP connections for sending out data")
-	f.StringVar(&p.format_listen, "lf", "b", "Data format for TCP server output, one of "+output_formats)
+	// TCP input/output
+	f.UintVar(&p.FlagInputTcpAcceptLimit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
+	f.UintVar(&p.FlagTcpConnectionLimit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
+	f.BoolVar(&p.FlagTcpDropErrors, "tcp_drop_err", false, "Don't print errors when establishing actie TCP connection (for sink/source) fails")
+
+	// Parallel marshalling/unmarshalling
+	f.IntVar(&p.FlagParallelHandler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
+	f.IntVar(&p.FlagParallelHandler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling.")
+	f.IntVar(&p.FlagIoBuffer, "io_buf", 4096, "Size (byte) of buffered IO when writing files.")
+
+	// Output
+	f.BoolVar(&p.FlagOutputConsole, "p", false, "Data sink: print to stdout")
+	f.StringVar(&p.FlagOutputConsoleFormat, "pf", "t", "Data format for console output, one of "+output_formats)
+	f.StringVar(&p.FlagOutputFile, "f", "", "Data sink: write data to file")
+	f.StringVar(&p.FlagOutputFileFormat, "ff", "b", "Data format for file output, one of "+output_formats)
+	f.Var(&p.FlagOutputTcp, "s", "Data sink: send data to specified TCP endpoint")
+	f.StringVar(&p.FlagOutputTcpFormat, "sf", "b", "Data format for TCP output, one of "+output_formats)
+	f.Var(&p.FlagOutputTcpListen, "l", "Data sink: accept TCP connections for sending out data")
+	f.StringVar(&p.FlagOutputTcpListenFormat, "lf", "b", "Data format for TCP server output, one of "+output_formats)
 
 	f.VisitAll(func(f *flag.Flag) {
 		if !suppressFlags[f.Name] {
 			flag.Var(f.Value, f.Name, f.Usage)
 		}
 	})
+}
+
+// HasOutputFlag returns true, if at least one data output flag is defined in the
+// receiving CmdSamplePipeline. If false is returned, calling Init() will print
+// a warning since the data will not be output anywhere.
+func (p *CmdSamplePipeline) HasOutputFlag() bool {
+	return p.FlagOutputConsole || p.FlagOutputFile != "" || len(p.FlagOutputTcp) > 0 || len(p.FlagOutputTcpListen) > 0
 }
 
 // SetSource allows external main packages to set their own MetricSource instances
@@ -159,35 +191,35 @@ func (p *CmdSamplePipeline) Init() {
 
 	// ====== Initialize source(s)
 	reader := SampleReader{
-		ParallelSampleHandler: p.handler,
+		ParallelSampleHandler: p.FlagParallelHandler,
 		Handler:               p.ReadSampleHandler,
-		Unmarshaller:          unmarshaller(p.format_input),
+		Unmarshaller:          unmarshaller(p.FlagInputFormat),
 	}
-	if p.read_console {
+	if p.FlagInputConsole {
 		p.SetSource(&ConsoleSource{Reader: reader})
 	}
-	if p.read_tcp_listen != "" {
-		source := NewTcpListenerSource(p.read_tcp_listen, reader)
-		source.SimultaneousConnections = p.tcp_listen_limit
-		source.TcpConnLimit = p.tcp_conn_limit
+	if p.FlagInputTcpListen != "" {
+		source := NewTcpListenerSource(p.FlagInputTcpListen, reader)
+		source.SimultaneousConnections = p.FlagInputTcpAcceptLimit
+		source.TcpConnLimit = p.FlagTcpConnectionLimit
 		p.SetSource(source)
 	}
-	if len(p.read_tcp_download) > 0 {
+	if len(p.FlagInputTcp) > 0 {
 		source := &TCPSource{
-			RemoteAddrs:   p.read_tcp_download,
+			RemoteAddrs:   p.FlagInputTcp,
 			RetryInterval: tcp_download_retry_interval,
 			Reader:        reader,
-			PrintErrors:   !p.tcp_drop_active_errors,
+			PrintErrors:   !p.FlagTcpDropErrors,
 		}
-		source.TcpConnLimit = p.tcp_conn_limit
+		source.TcpConnLimit = p.FlagTcpConnectionLimit
 		p.SetSource(source)
 	}
-	if len(p.read_files) > 0 {
+	if len(p.FlagInputFiles) > 0 {
 		p.SetSource(&FileSource{
-			Filenames: p.read_files,
+			Filenames: p.FlagInputFiles,
 			Reader:    reader,
-			IoBuffer:  p.io_buf,
-			Robust:    p.robust_files,
+			IoBuffer:  p.FlagIoBuffer,
+			Robust:    p.FlagInputFilesRobust,
 		})
 	}
 	noSource := p.Source == nil
@@ -198,10 +230,10 @@ func (p *CmdSamplePipeline) Init() {
 
 	// ====== Initialize sink(s) and tasks
 	var sinks AggregateSink
-	writer := SampleWriter{p.handler}
-	if p.sink_console {
+	writer := SampleWriter{p.FlagParallelHandler}
+	if p.FlagOutputConsole {
 		sink := new(ConsoleSink)
-		m := marshaller(p.format_console)
+		m := marshaller(p.FlagOutputConsoleFormat)
 		if txt, ok := m.(*TextMarshaller); ok {
 			txt.AssumeStdout = true
 		}
@@ -209,23 +241,23 @@ func (p *CmdSamplePipeline) Init() {
 		sink.Writer = writer
 		sinks = append(sinks, sink)
 	}
-	for _, endpoint := range p.sink_connect {
-		sink := &TCPSink{Endpoint: endpoint, PrintErrors: !p.tcp_drop_active_errors}
-		sink.SetMarshaller(marshaller(p.format_connect))
+	for _, endpoint := range p.FlagOutputTcp {
+		sink := &TCPSink{Endpoint: endpoint, PrintErrors: !p.FlagTcpDropErrors}
+		sink.SetMarshaller(marshaller(p.FlagOutputTcpFormat))
 		sink.Writer = writer
-		sink.TcpConnLimit = p.tcp_conn_limit
+		sink.TcpConnLimit = p.FlagTcpConnectionLimit
 		sinks = append(sinks, sink)
 	}
-	for _, endpoint := range p.sink_listen {
+	for _, endpoint := range p.FlagOutputTcpListen {
 		sink := NewTcpListenerSink(endpoint)
-		sink.SetMarshaller(marshaller(p.format_listen))
+		sink.SetMarshaller(marshaller(p.FlagOutputTcpListenFormat))
 		sink.Writer = writer
-		sink.TcpConnLimit = p.tcp_conn_limit
+		sink.TcpConnLimit = p.FlagTcpConnectionLimit
 		sinks = append(sinks, sink)
 	}
-	if p.sink_file != "" {
-		sink := &FileSink{Filename: p.sink_file, IoBuffer: p.io_buf, CleanFiles: p.clean_files}
-		sink.SetMarshaller(marshaller(p.format_file))
+	if p.FlagOutputFile != "" {
+		sink := &FileSink{Filename: p.FlagOutputFile, IoBuffer: p.FlagIoBuffer, CleanFiles: p.FlagOutputFilesClean}
+		sink.SetMarshaller(marshaller(p.FlagOutputFileFormat))
 		sink.Writer = writer
 		sinks = append(sinks, sink)
 	}
@@ -298,16 +330,16 @@ func (f *fileRegexValue) String() string {
 }
 
 func (f *fileRegexValue) Set(param string) error {
-	if len(f.pipeline.read_files) == 0 {
+	if len(f.pipeline.FlagInputFiles) == 0 {
 		return errors.New("-FR flag must appear after -F")
 	}
-	dir := f.pipeline.read_files[0]
-	f.pipeline.read_files = f.pipeline.read_files[1:]
+	dir := f.pipeline.FlagInputFiles[0]
+	f.pipeline.FlagInputFiles = f.pipeline.FlagInputFiles[1:]
 	files, err := ListMatchingFiles(dir, param)
 	if err != nil {
 		log.Fatalln("Error applying -FR flag:", err)
 		return err
 	}
-	f.pipeline.read_files = append(f.pipeline.read_files, files...)
+	f.pipeline.FlagInputFiles = append(f.pipeline.FlagInputFiles, files...)
 	return nil
 }
