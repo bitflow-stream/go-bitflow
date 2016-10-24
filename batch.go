@@ -58,6 +58,10 @@ func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) 
 
 func (p *BatchProcessor) Close() {
 	defer p.CloseSink(nil)
+	defer func() {
+		// Allow garbage collection
+		p.samples = nil
+	}()
 	if p.header == nil {
 		log.Warnln(p.String(), "has no samples stored")
 		return
@@ -227,6 +231,11 @@ func (p *MultiHeaderMerger) addSample(incomingSample *bitflow.Sample, header *bi
 
 func (p *MultiHeaderMerger) Close() {
 	defer p.CloseSink(nil)
+	defer func() {
+		// Allow garbage collection
+		p.metrics = nil
+		p.samples = nil
+	}()
 	if len(p.samples) == 0 {
 		log.Warnln(p.String(), "has no samples stored")
 		return
