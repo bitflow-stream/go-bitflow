@@ -63,7 +63,7 @@ func do_main() int {
 	printAnalyses := flag.Bool("analyses", false, "Print a list of available analyses and exit.")
 
 	var p SamplePipeline
-	p.ParseFlags()
+	p.ParseAllFlags()
 	flag.Parse()
 	if *printAnalyses {
 		fmt.Printf("Available analyses:%v\n", allAnalyses())
