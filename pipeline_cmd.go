@@ -190,7 +190,8 @@ func (p *CmdSamplePipeline) Init() {
 			Robust:    p.robust_files,
 		})
 	}
-	if p.Source == nil {
+	noSource := p.Source == nil
+	if noSource {
 		log.Warnln("No data source provided, no data will be received or generated.")
 		p.Source = new(EmptyMetricSource)
 	}
@@ -230,6 +231,9 @@ func (p *CmdSamplePipeline) Init() {
 	}
 	if len(sinks) == 0 {
 		log.Warnln("No data sinks selected, data will not be output anywhere.")
+		if noSource && len(p.Processors) == 0 {
+			log.Fatalln("No tasks defined")
+		}
 	}
 	p.Sink = sinks
 }
@@ -237,7 +241,7 @@ func (p *CmdSamplePipeline) Init() {
 // StartAndWait constructs the pipeline and starts it. It blocks until the pipeline
 // is finished.
 //
-// An additional golib.Task is stared along with the pipeline, which listens
+// An additional golib.Task is started along with the pipeline, which listens
 // for the Ctrl-C user external interrupt and makes the pipeline stoppable cleanly
 // when the user wants to.
 //
