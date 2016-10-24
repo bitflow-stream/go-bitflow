@@ -82,39 +82,55 @@ type CmdSamplePipeline struct {
 	io_buf                 int
 }
 
-// ParseFlags registers all flags for the receiving CmdSamplePipeline with the
+// ParseAllFlags calls ParseFlags without suppressing any available flags.
+func (p *CmdSamplePipeline) ParseAllFlags() {
+	p.ParseFlags(nil)
+}
+
+// ParseFlags registers command-line flags for the receiving CmdSamplePipeline with the
 // global CommandLine object. The flags configure many aspects of the pipeline,
 // including data source, data sink, performance parameters, debug parmeters and
 // other behavior parameters. See the help texts for more information on the available
 // parameters.
 //
+// The suppressFlags parameter can be filled with flags, that should not be parsed.
+// This allows individual main-packages to refine the available flags.
+//
 // Must be called before flag.Parse().
-func (p *CmdSamplePipeline) ParseFlags() {
-	flag.StringVar(&p.format_input, "i", "a", "Force data input format, default is auto-detect, one of "+input_formats)
-	flag.BoolVar(&p.read_console, "C", false, "Data source: read from stdin")
-	flag.Var(&p.read_files, "F", "Data source: read from file(s)")
-	flag.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
-	flag.Var(&p.read_tcp_download, "D", "Data source: receive samples by connecting to remote endpoint(s)")
+func (p *CmdSamplePipeline) ParseFlags(suppressFlags map[string]bool) {
+	var f flag.FlagSet
 
-	flag.Var(&fileRegexValue{p}, "FR", "File Regex: Input files matching regex, previous -F parameter is used as start directory")
-	flag.UintVar(&p.tcp_listen_limit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
-	flag.UintVar(&p.tcp_conn_limit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
-	flag.BoolVar(&p.tcp_drop_active_errors, "tcp_drop_err", false, "Don't print errors when establishing actie TCP connection (for sink/source) fails")
-	flag.BoolVar(&p.robust_files, "robust", false, "Only print warnings for errors when reading files")
-	flag.BoolVar(&p.clean_files, "clean", false, "Delete all potential output files before writing")
+	f.StringVar(&p.format_input, "i", "a", "Force data input format, default is auto-detect, one of "+input_formats)
+	f.BoolVar(&p.read_console, "C", false, "Data source: read from stdin")
+	f.Var(&p.read_files, "F", "Data source: read from file(s)")
+	f.StringVar(&p.read_tcp_listen, "L", "", "Data source: receive samples by accepting a TCP connection")
+	f.Var(&p.read_tcp_download, "D", "Data source: receive samples by connecting to remote endpoint(s)")
 
-	flag.IntVar(&p.handler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
-	flag.IntVar(&p.handler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling.")
-	flag.IntVar(&p.io_buf, "io_buf", 4096, "Size (byte) of buffered IO when writing files.")
+	f.Var(&fileRegexValue{p}, "FR", "File Regex: Input files matching regex, previous -F parameter is used as start directory")
+	f.UintVar(&p.tcp_listen_limit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
+	f.UintVar(&p.tcp_conn_limit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
+	f.BoolVar(&p.tcp_drop_active_errors, "tcp_drop_err", false, "Don't print errors when establishing actie TCP connection (for sink/source) fails")
+	f.BoolVar(&p.robust_files, "robust", false, "Only print warnings for errors when reading files")
+	f.BoolVar(&p.clean_files, "clean", false, "Delete all potential output files before writing")
 
-	flag.BoolVar(&p.sink_console, "p", false, "Data sink: print to stdout")
-	flag.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+output_formats)
-	flag.StringVar(&p.sink_file, "f", "", "Data sink: write data to file")
-	flag.StringVar(&p.format_file, "ff", "b", "Data format for file output, one of "+output_formats)
-	flag.Var(&p.sink_connect, "s", "Data sink: send data to specified TCP endpoint")
-	flag.StringVar(&p.format_connect, "sf", "b", "Data format for TCP output, one of "+output_formats)
-	flag.Var(&p.sink_listen, "l", "Data sink: accept TCP connections for sending out data")
-	flag.StringVar(&p.format_listen, "lf", "b", "Data format for TCP server output, one of "+output_formats)
+	f.IntVar(&p.handler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
+	f.IntVar(&p.handler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling.")
+	f.IntVar(&p.io_buf, "io_buf", 4096, "Size (byte) of buffered IO when writing files.")
+
+	f.BoolVar(&p.sink_console, "p", false, "Data sink: print to stdout")
+	f.StringVar(&p.format_console, "pf", "t", "Data format for console output, one of "+output_formats)
+	f.StringVar(&p.sink_file, "f", "", "Data sink: write data to file")
+	f.StringVar(&p.format_file, "ff", "b", "Data format for file output, one of "+output_formats)
+	f.Var(&p.sink_connect, "s", "Data sink: send data to specified TCP endpoint")
+	f.StringVar(&p.format_connect, "sf", "b", "Data format for TCP output, one of "+output_formats)
+	f.Var(&p.sink_listen, "l", "Data sink: accept TCP connections for sending out data")
+	f.StringVar(&p.format_listen, "lf", "b", "Data format for TCP server output, one of "+output_formats)
+
+	f.VisitAll(func(f *flag.Flag) {
+		if !suppressFlags[f.Name] {
+			flag.Var(f.Value, f.Name, f.Usage)
+		}
+	})
 }
 
 // SetSource allows external main packages to set their own MetricSource instances
