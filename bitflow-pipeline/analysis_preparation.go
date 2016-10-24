@@ -25,6 +25,7 @@ func init() {
 
 	RegisterAnalysis("tag_injection_info", tag_injection_info)
 	RegisterAnalysis("split_distributed_experiments", split_distributed_experiments)
+	RegisterAnalysis("split_distributed_experiments_only", split_distributed_experiments_only)
 	RegisterAnalysisParams("split_experiments", split_experiments, "number of seconds without sample before starting a new file")
 }
 
@@ -150,6 +151,16 @@ func split_distributed_experiments(p *SamplePipeline) {
 			new(BatchProcessor).Add(new(SampleSorter)),
 		}
 	})
+	p.Add(NewMetricFork(distributor, builder))
+}
+
+func split_distributed_experiments_only(p *SamplePipeline) {
+	distributor := &TagsDistributor{
+		Tags:        []string{injectedTag, anomalyTag, measuredTag},
+		Separator:   string(filepath.Separator),
+		Replacement: "_unknown_",
+	}
+	builder := MultiFileDirectoryBuilder(false, nil)
 	p.Add(NewMetricFork(distributor, builder))
 }
 
