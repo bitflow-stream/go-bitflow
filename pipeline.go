@@ -1,6 +1,10 @@
 package bitflow
 
-import "github.com/antongulenko/golib"
+import (
+	"sync"
+
+	"github.com/antongulenko/golib"
+)
 
 // SampleProcessor is the combination of MetricSink and MetricSource.
 // It receives Headers and Samples through the Header and Sample methods and
@@ -74,4 +78,94 @@ func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 		p.Processors = append(p.Processors, processor)
 	}
 	return p
+}
+
+// AbstractProcessor is an empty implementation of SampleProcessor. It can be
+// directly added to a SamplePipeline and will behave as a no-op processing step.
+// Other implementations of SampleProcessor can embed this and override parts of
+// the methods as required. No initialization is needed for this type, but an
+// instance can only be used once, in one pipeline.
+type AbstractProcessor struct {
+	AbstractMetricSource
+	AbstractMetricSink
+	stopChan chan error
+}
+
+// Header implements the SampleProcessor interface. It checks if a sink has been
+// defined for this processor and then forwards the header to that sink.
+func (p *AbstractProcessor) Header(header *Header) error {
+	if err := p.CheckSink(); err != nil {
+		return err
+	} else {
+		return p.OutgoingSink.Header(header)
+	}
+}
+
+// Sample implements the SampleProcessor interface. It performs a sanity check
+// by calling p.Check() and then forwards the sample to the configured sink.
+func (p *AbstractProcessor) Sample(sample *Sample, header *Header) error {
+	if err := p.Check(sample, header); err != nil {
+		return err
+	}
+	return p.OutgoingSink.Sample(sample, header)
+}
+
+// Check is a utility method that asserts that the receiving AbstractProcessor has
+// a sink configured and that the given sample matches the given header. This should
+// be done early in every Sample() implementation.
+func (p *AbstractProcessor) Check(sample *Sample, header *Header) error {
+	if err := p.CheckSink(); err != nil {
+		return err
+	}
+	if err := sample.Check(header); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Start implements the SampleProcessor interface. It creates an error-channel
+// with a small channel buffer. Calling CloseSink() or Error() writes a value
+// to that channel to signalize that this AbstractProcessor is finished.
+func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
+	// Chan buffer of 2 makes sure the Processor can report an error and then
+	// call AbstractProcessor.CloseSink() without worrying if the error has
+	// been reported previously or not.
+	p.stopChan = make(chan error, 2)
+	return p.stopChan
+}
+
+// CloseSink reports that this AbstractProcessor is finished processing.
+// All goroutines must be stopped, and all Headers and Samples must be already
+// forwarded to the outgoing sink, when this is called. CloseSink forwards
+// the Close() invokation to the outgoing sink.
+func (p *AbstractProcessor) CloseSink(wg *sync.WaitGroup) {
+	if c := p.stopChan; c != nil {
+		// If there was no error, make sure the channel still returns something to signal that this task is done.
+		c <- nil
+		p.stopChan = nil
+	}
+	p.AbstractMetricSource.CloseSink(wg)
+}
+
+// Error reports that AbstractProcessor has encountered an error and has stopped
+// operation. After calling this, no more Headers and Samples can be forwarded
+// to the outgoing sink. Ultimately, p.Close() will be called for cleaning up.
+func (p *AbstractProcessor) Error(err error) {
+	if c := p.stopChan; c != nil {
+		c <- err
+	}
+}
+
+// Close implements the SampleProcessor interface by simply closing the outgoing
+// sink. Other types that embed AbstractProcessor can override this to perform
+// specific actions when closing.
+func (p *AbstractProcessor) Close() {
+	// Propagate the Close() invocation
+	p.CloseSink(nil)
+}
+
+// String implements the SampleProcessor interface. This should be overridden
+// by types that are embedding AbstractProcessor.
+func (p *AbstractProcessor) String() string {
+	return "AbstractProcessor"
 }
