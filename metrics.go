@@ -45,7 +45,7 @@ func (helper *MetricMapperHelper) convertSample(inSample *bitflow.Sample) *bitfl
 }
 
 type AbstractMetricMapper struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 	Description      fmt.Stringer
 	ConstructIndices func(inHeader *bitflow.Header) ([]int, []string)
 

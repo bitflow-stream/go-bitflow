@@ -3,7 +3,7 @@ package pipeline
 import "github.com/antongulenko/go-bitflow"
 
 type SampleFilter struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 	Description   string
 	IncludeFilter func(inSample *bitflow.Sample) bool // Return true if sample should be INcluded
 }

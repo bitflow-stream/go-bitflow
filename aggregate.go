@@ -13,7 +13,7 @@ import (
 )
 
 type FeatureAggregator struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 	WindowSize     int           // Applied if >0
 	WindowDuration time.Duration // Applied if >0
 	UseCurrentTime bool          // If true, use time.Now() as reference for WindowTime. Otherwise, use the timestamp of the latest Sample.

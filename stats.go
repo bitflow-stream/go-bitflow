@@ -13,7 +13,7 @@ import (
 )
 
 type StoreStats struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 	TargetFile string
 
 	stats map[string]*FeatureStats

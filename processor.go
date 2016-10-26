@@ -10,76 +10,11 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-// ==================== Abstract Processor ====================
-// This type defines standard implementations for all methods in
-// SampleProcessor. Parts can be shadowed by embedding the type.
-type AbstractProcessor struct {
-	bitflow.AbstractMetricSource
-	bitflow.AbstractMetricSink
-	stopChan chan error
-}
-
-func (p *AbstractProcessor) Header(header *bitflow.Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	} else {
-		return p.OutgoingSink.Header(header)
-	}
-}
-
-func (p *AbstractProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
-	return p.OutgoingSink.Sample(sample, header)
-}
-
-func (p *AbstractProcessor) Check(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	}
-	if err := sample.Check(header); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
-	// Chan buffer of 2 makes sure the Processor can report an error and then
-	// call AbstractProcessor.CloseSink() without worrying if the error has been reported previously or not.
-	p.stopChan = make(chan error, 2)
-	return p.stopChan
-}
-
-func (p *AbstractProcessor) CloseSink(wg *sync.WaitGroup) {
-	if c := p.stopChan; c != nil {
-		// If there was no error, make sure the channel still returns something to signal that this task is done.
-		c <- nil
-		p.stopChan = nil
-	}
-	p.AbstractMetricSource.CloseSink(wg)
-}
-
-func (p *AbstractProcessor) Error(err error) {
-	if c := p.stopChan; c != nil {
-		c <- err
-	}
-}
-
-func (p *AbstractProcessor) Close() {
-	// Propagate the Close() invocation
-	p.CloseSink(nil)
-}
-
-func (p *AbstractProcessor) String() string {
-	return "AbstractProcessor"
-}
-
 // ==================== DecouplingProcessor ====================
 // Decouple the incoming samples from the MetricSink through a
 // looping goroutine and a channel. Creates potential parallelism in the pipeline.
 type DecouplingProcessor struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 	samples       chan TaggedSample
 	loopTask      *golib.LoopTask
 	ChannelBuffer int // Must be set before calling Start()
@@ -150,7 +85,7 @@ func (p *DecouplingProcessor) String() string {
 
 // ==================== SamplePrinter (example) ====================
 type SamplePrinter struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 }
 
 func (p *SamplePrinter) Header(header *bitflow.Header) error {
