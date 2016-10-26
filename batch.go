@@ -11,7 +11,7 @@ import (
 )
 
 type BatchProcessor struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 	header  *bitflow.Header
 	samples []*bitflow.Sample
 
@@ -183,7 +183,7 @@ func (*SampleShuffler) String() string {
 // ==================== Multi-header merger ====================
 // Can tolerate multiple headers, fills missing data up with default values.
 type MultiHeaderMerger struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 	header *bitflow.Header
 
 	hasTags bool

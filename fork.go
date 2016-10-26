@@ -23,7 +23,7 @@ type PipelineBuilder interface {
 }
 
 type MetricFork struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 
 	Distributor   ForkDistributor
 	Builder       PipelineBuilder

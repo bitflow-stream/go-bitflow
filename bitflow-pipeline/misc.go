@@ -23,7 +23,7 @@ func init() {
 }
 
 type UniqueTagPrinter struct {
-	pipeline.AbstractProcessor
+	bitflow.AbstractProcessor
 	Tag    string
 	Count  bool
 	values map[string]int
@@ -99,7 +99,7 @@ func count_tags(p *SamplePipeline, params string) {
 const TimrangePrinterFormat = "02.01.2006 15:04:05"
 
 type TimerangePrinter struct {
-	pipeline.AbstractProcessor
+	bitflow.AbstractProcessor
 	from  time.Time
 	to    time.Time
 	count int
@@ -213,7 +213,7 @@ func print_timeline(p *SamplePipeline, param string) {
 }
 
 type InvalidCounter struct {
-	pipeline.AbstractProcessor
+	bitflow.AbstractProcessor
 	invalidSamples int
 	totalSamples   int
 	invalidValues  int

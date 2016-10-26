@@ -94,7 +94,7 @@ const (
 )
 
 type InjectionInfoTagger struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 }
 
 func (*InjectionInfoTagger) String() string {

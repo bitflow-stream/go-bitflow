@@ -34,7 +34,7 @@ func init() {
 }
 
 type Plotter struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 	OutputFile     string
 	ColorTag       string
 	SeparatePlots  bool // If true, every ColorTag value will create a new plot

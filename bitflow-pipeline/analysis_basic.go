@@ -207,7 +207,7 @@ func pick_head(pipe *SamplePipeline, params string) {
 }
 
 type PickHead struct {
-	AbstractProcessor
+	bitflow.AbstractProcessor
 	Num       int // parameter
 	processed int // internal variable
 }
