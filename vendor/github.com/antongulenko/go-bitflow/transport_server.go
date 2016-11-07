@@ -203,6 +203,11 @@ func (sink *TCPListenerSink) openTcpOutputStream(conn *net.TCPConn) (*TcpWriteCo
 	defer sink.headerLock.Unlock()
 	writeConn := sink.OpenWriteConn(conn)
 	sink.connections[writeConn] = true
+	if sink.lastHeader == nil {
+		// A connection was established before we received the first header.
+		// Send an empty header, the connection will be closed when the first header arrives.
+		sink.lastHeader = new(Header)
+	}
 	return writeConn, sink.lastHeader
 }
 
