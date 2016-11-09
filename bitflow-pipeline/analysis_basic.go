@@ -42,6 +42,8 @@ func init() {
 	RegisterAnalysisParams("remap", remap_features, "comma-separated list of metrics")
 	RegisterAnalysisParams("filter_variance", filter_variance, "minimum weighted stddev of the population (stddev / mean)")
 
+	RegisterAnalysisParams("tags", set_tags, "comma-separated list of key-value tags")
+
 	RegisterAnalysis("filter_metrics", filter_metrics)
 	flag.Var(&metric_filter_include, "metrics_include", "Include regex used with '-e filter_metrics'")
 	flag.Var(&metric_filter_exclude, "metrics_exclude", "Exclude regex used with '-e filter_metrics'")
@@ -248,4 +250,38 @@ func (h *SampleTagger) HandleSample(sample *bitflow.Sample, source string) {
 		}
 		sample.SetTag(tag, source)
 	}
+}
+
+func set_tags(pipe *SamplePipeline, params string) {
+	pairs := strings.Split(params, ",")
+	keys := make([]string, len(pairs))
+	values := make([]string, len(pairs))
+	for i, pair := range pairs {
+		parts := strings.SplitN(pair, "=", 2)
+		if len(parts) != 2 {
+			log.Fatalln("Parameter for -e tags must be comma-separated key-value pairs: -e tags,KEY=VAL,KEY2=VAL2")
+		}
+		keys[i] = parts[0]
+		values[i] = parts[1]
+	}
+	pipe.Add(&SampleTagProcessor{
+		Keys:   keys,
+		Values: values,
+	})
+}
+
+type SampleTagProcessor struct {
+	bitflow.AbstractProcessor
+	Keys   []string
+	Values []string
+}
+
+func (p *SampleTagProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+	if err := p.Check(sample, header); err != nil {
+		return err
+	}
+	for i, key := range p.Keys {
+		sample.SetTag(key, p.Values[i])
+	}
+	return p.OutgoingSink.Sample(sample, header)
 }
