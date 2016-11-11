@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -44,6 +45,7 @@ func init() {
 
 	RegisterAnalysisParams("tags", set_tags, "comma-separated list of key-value tags")
 	RegisterAnalysisParams("split_files", split_files, "tag to use for separating the data")
+	RegisterAnalysisParams("rename", rename_metrics, "comma-separated list of regex=replace pairs")
 
 	RegisterAnalysis("filter_metrics", filter_metrics)
 	flag.Var(&metric_filter_include, "metrics_include", "Include regex used with '-e filter_metrics'")
@@ -294,4 +296,50 @@ func split_files(p *SamplePipeline, params string) {
 		Replacement: "_unknown_",
 	}
 	p.Add(NewMetricFork(distributor, MultiFileSuffixBuilder(nil)))
+}
+
+type metricRenamer struct {
+	bitflow.AbstractProcessor
+	Regexes map[*regexp.Regexp]string
+}
+
+func (r *metricRenamer) String() string {
+	return fmt.Sprintf("Metric renamer (%v regexes)", len(r.Regexes))
+}
+
+func (r *metricRenamer) Header(header *bitflow.Header) error {
+	if err := r.CheckSink(); err != nil {
+		return err
+	} else {
+		for i, field := range header.Fields {
+			for regex, replace := range r.Regexes {
+				field = regex.ReplaceAllString(field, replace)
+				header.Fields[i] = field
+			}
+		}
+		return r.OutgoingSink.Header(header)
+	}
+}
+
+func rename_metrics(p *SamplePipeline, params string) {
+	regexes := make(map[*regexp.Regexp]string)
+	for i, part := range strings.Split(params, ",") {
+		keyVal := strings.SplitN(part, "=", 2)
+		if len(keyVal) != 2 {
+			log.Fatalf("Parmameter %v for -e rename is not regex=replace: %v", i, part)
+		}
+		regexCode := keyVal[0]
+		replace := keyVal[1]
+		r, err := regexp.Compile(regexCode)
+		if err != nil {
+			log.Fatalf("Error compiling regex %v: %v", regexCode, err)
+		}
+		regexes[r] = replace
+	}
+	if len(regexes) == 0 {
+		log.Fatalln("-e rename needs at least one regex=replace parameter (comma-separated)")
+	}
+	p.Add(&metricRenamer{
+		Regexes: regexes,
+	})
 }
