@@ -20,6 +20,7 @@ func init() {
 	RegisterAnalysis("print_timerange", print_timerange)
 	RegisterAnalysisParams("print_timeline", print_timeline, "number of buckets for the timeline-histogram") // Print a timeline showing a rudimentary histogram of the number of samples
 	RegisterAnalysis("count_invalid", count_invalid)
+	RegisterAnalysis("print_common_metrics", print_common_metrics)
 }
 
 type UniqueTagPrinter struct {
@@ -244,4 +245,53 @@ func (counter *InvalidCounter) Close() {
 
 func count_invalid(p *SamplePipeline) {
 	p.Add(new(InvalidCounter))
+}
+
+type commonMetricsPrinter struct {
+	bitflow.AbstractProcessor
+	common map[string]bool
+	num    int
+}
+
+func (*commonMetricsPrinter) String() string {
+	return fmt.Sprintf("Common metrics printer")
+}
+
+func (p *commonMetricsPrinter) Header(header *bitflow.Header) error {
+	if err := p.CheckSink(); err != nil {
+		return err
+	} else {
+		p.num++
+		if p.common == nil {
+			p.common = make(map[string]bool)
+			for _, field := range header.Fields {
+				p.common[field] = true
+			}
+		} else {
+			incoming := make(map[string]bool)
+			for _, field := range header.Fields {
+				incoming[field] = true
+			}
+			for field := range p.common {
+				if !incoming[field] {
+					delete(p.common, field)
+				}
+			}
+		}
+		return p.OutgoingSink.Header(header)
+	}
+}
+
+func (p *commonMetricsPrinter) Close() {
+	fields := make([]string, 0, len(p.common))
+	for field := range p.common {
+		fields = append(fields, field)
+	}
+	sort.Strings(fields)
+	log.Printf("Common metrics in %v headers: %v", p.num, fields)
+	p.AbstractProcessor.Close()
+}
+
+func print_common_metrics(p *SamplePipeline) {
+	p.Add(new(commonMetricsPrinter))
 }
