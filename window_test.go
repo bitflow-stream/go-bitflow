@@ -115,3 +115,18 @@ func TestWindow(t *testing.T) {
 	w.Pop()
 	c.do()
 }
+
+func TestEmptyWindow(t *testing.T) {
+	w := NewMetricWindow(0) // Should behave like window size 1
+	c := &compare{t: t, win: w}
+	c.do()
+
+	w.Push(1)
+	c.do(1)
+	w.Push(2)
+	w.Push(2)
+	c.do(2)
+	w.Pop()
+	w.Pop()
+	c.do()
+}

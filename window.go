@@ -10,6 +10,9 @@ type MetricWindow struct {
 }
 
 func NewMetricWindow(size int) *MetricWindow {
+	if size == 0 { // Empty window is not valid
+		size = 1
+	}
 	return &MetricWindow{
 		data: make([]bitflow.Value, size),
 	}
