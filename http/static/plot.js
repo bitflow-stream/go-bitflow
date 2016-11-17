@@ -54,8 +54,8 @@ function get_target_div(name) {
 	id = "__data__" + hash
 	sel = "#" + id
 	if ($(sel).length == 0) {
-		code = '<div id="' + id + '"></div>'
-		$('.data').append(code);
+		code = '<div id="' + id + '" class="data_plot"></div>'
+		$('.data_container').append(code);
 	}
 	return sel
 }

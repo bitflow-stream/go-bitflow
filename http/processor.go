@@ -1,24 +1,51 @@
 package plotHttp
 
 import (
+	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/golib"
 )
 
-var HttpPlotter = &httpProcessor{
-	data:  make(map[string][]float64),
-	names: make([]string, 0, 10),
+func NewHttpPlotter(endpoint string, windowSize int) *HttpPlotter {
+	return &HttpPlotter{
+		data:       make(map[string]*pipeline.MetricWindow),
+		Endpoint:   endpoint,
+		WindowSize: windowSize,
+	}
 }
 
-type httpProcessor struct {
+type HttpPlotter struct {
 	bitflow.AbstractProcessor
 
-	data  map[string][]float64
+	Endpoint   string
+	WindowSize int
+
+	data  map[string]*pipeline.MetricWindow
 	names []string
 }
 
-func (p *httpProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (p *HttpPlotter) Start(wg *sync.WaitGroup) golib.StopChan {
+	go func() {
+		if err := p.serve(); err != nil {
+			p.Error(err)
+		}
+	}()
+	return p.AbstractProcessor.Start(wg)
+}
+
+func (p *HttpPlotter) String() string {
+	endpoint := p.Endpoint
+	if endpoint == "" {
+		endpoint = "0.0.0.0:80"
+	}
+	return fmt.Sprintf("HTTP plotter on %v (window size %v)", endpoint, p.WindowSize)
+}
+
+func (p *HttpPlotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
@@ -26,27 +53,25 @@ func (p *httpProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 	return p.OutgoingSink.Sample(sample, header)
 }
 
-func (p *httpProcessor) logSample(sample *bitflow.Sample, header *bitflow.Header) {
+func (p *HttpPlotter) logSample(sample *bitflow.Sample, header *bitflow.Header) {
 	for i, field := range header.Fields {
-		val := float64(sample.Values[i])
-
 		if _, ok := p.data[field]; !ok {
+			p.data[field] = pipeline.NewMetricWindow(p.WindowSize)
 			p.names = append(p.names, field)
 			sort.Strings(p.names)
 		}
-
-		p.data[field] = append(p.data[field], val)
+		p.data[field].Push(sample.Values[i])
 	}
 }
 
-func (p *httpProcessor) metricNames() []string {
+func (p *HttpPlotter) metricNames() []string {
 	return p.names
 }
 
-func (p *httpProcessor) metricData(metric string) []float64 {
+func (p *HttpPlotter) metricData(metric string) []bitflow.Value {
 	if data, ok := p.data[metric]; ok {
-		return data
+		return data.Data()
 	} else {
-		return []float64{}
+		return []bitflow.Value{}
 	}
 }

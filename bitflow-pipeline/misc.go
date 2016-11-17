@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -300,6 +301,15 @@ func print_common_metrics(p *SamplePipeline) {
 }
 
 func print_http(p *SamplePipeline, params string) {
-	plotHttp.GoServe(params)
-	p.Add(plotHttp.HttpPlotter)
+	parts := strings.Split(params, ",")
+	endpoint := parts[0]
+	windowSize := 100
+	if len(parts) >= 2 {
+		var err error
+		windowSize, err = strconv.Atoi(parts[1])
+		if err != nil {
+			log.Fatalln("Failed to parse second parmeter for -e http (must be integer):", err)
+		}
+	}
+	p.Add(plotHttp.NewHttpPlotter(endpoint, windowSize))
 }

@@ -12,55 +12,50 @@ import (
 )
 
 var useLocalStatic = false
+var ginLogHandler = ginrus.Ginrus(log.StandardLogger(), log.DefaultTimestampFormat, false)
 
 func init() {
-	flag.BoolVar(&useLocalStatic, "local", useLocalStatic, "Use local static files, instead of the ones embedded in the binary")
-}
+	flag.BoolVar(&useLocalStatic, "http-local-static", useLocalStatic,
+		"For -e http: serve local static files, instead of the ones embedded in the binary")
 
-func GoServe(endpoint string) {
-	go func() {
-		if err := Serve(endpoint); err != nil {
-			log.Fatalln(err)
-		}
-	}()
-}
-
-func Serve(endpoint string) error {
 	gin.SetMode(gin.ReleaseMode)
+}
+
+func (p *HttpPlotter) serve() error {
 	engine := gin.New()
-	logHandler := ginrus.Ginrus(log.StandardLogger(), log.DefaultTimestampFormat, false)
-	engine.Use(logHandler, gin_recover)
+	engine.Use(ginLogHandler, ginRecover)
 
 	index := template.New("index")
 	index.Parse(FSMustString(useLocalStatic, "/index.html"))
 	engine.SetHTMLTemplate(index)
 
-	engine.GET("/", serveMain)
-	engine.GET("/metrics", serveListData)
-	engine.GET("/data", serveData)
+	engine.GET("/", p.serveMain)
+	engine.GET("/metrics", p.serveListData)
+	engine.GET("/data", p.serveData)
 	engine.StaticFS("/static", FS(useLocalStatic))
-	return engine.Run(endpoint)
+
+	return engine.Run(p.Endpoint)
 }
 
-func serveMain(c *gin.Context) {
+func (p *HttpPlotter) serveMain(c *gin.Context) {
 	c.HTML(200, "index", nil)
 }
 
-func serveListData(c *gin.Context) {
-	c.JSON(200, HttpPlotter.metricNames())
+func (p *HttpPlotter) serveListData(c *gin.Context) {
+	c.JSON(200, p.metricNames())
 }
 
-func serveData(c *gin.Context) {
+func (p *HttpPlotter) serveData(c *gin.Context) {
 	name := c.Request.FormValue("metric")
 	if len(name) == 0 {
 		c.Writer.WriteString("Need 'metrics' parameter")
 		c.Writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	c.JSON(200, HttpPlotter.metricData(name))
+	c.JSON(200, p.metricData(name))
 }
 
-func gin_recover(c *gin.Context) {
+func ginRecover(c *gin.Context) {
 	defer func() {
 		if err := recover(); err != nil {
 			stack := stack(3)
