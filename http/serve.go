@@ -3,7 +3,6 @@ package plotHttp
 import (
 	"flag"
 	"html/template"
-	"net/http"
 	"net/http/httputil"
 
 	log "github.com/Sirupsen/logrus"
@@ -48,11 +47,10 @@ func (p *HttpPlotter) serveListData(c *gin.Context) {
 func (p *HttpPlotter) serveData(c *gin.Context) {
 	name := c.Request.FormValue("metric")
 	if len(name) == 0 {
-		c.Writer.WriteString("Need 'metrics' parameter")
-		c.Writer.WriteHeader(http.StatusBadRequest)
-		return
+		c.JSON(200, p.allMetricData())
+	} else {
+		c.JSON(200, p.metricData(name))
 	}
-	c.JSON(200, p.metricData(name))
 }
 
 func ginRecover(c *gin.Context) {

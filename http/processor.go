@@ -75,3 +75,11 @@ func (p *HttpPlotter) metricData(metric string) []bitflow.Value {
 		return []bitflow.Value{}
 	}
 }
+
+func (p *HttpPlotter) allMetricData() map[string][]bitflow.Value {
+	result := make(map[string][]bitflow.Value)
+	for name, values := range p.data {
+		result[name] = values.Data()
+	}
+	return result
+}
