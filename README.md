@@ -12,7 +12,7 @@ Run `bitflow-pipeline --help` for a list of command line flags.
 * Execute the following command to make `go get` work with Gitlab:
 
 ```shell
-git config --global "url.git@gitlab.tubit.tu-berlin.de:CIT-Huawei/go-bitflow-pipeline.git.insteadOf" "https://github.com/antongulenko/go-bitflow-pipeline"
+git config --global "url.git@gitlab.tubit.tu-berlin.de:anton.gulenko/go-bitflow-pipeline.git.insteadOf" "https://github.com/antongulenko/go-bitflow-pipeline"
 ```
 * Get and install this tool:
 
@@ -21,4 +21,3 @@ go get github.com/antongulenko/go-bitflow-pipeline/bitflow-pipeline
 ```
 * The binary executable `bitflow-pipeline` will be compiled to `$GOPATH/bin`.
  * Add that directory to your `$PATH`, or copy the executable to a different location.
-
