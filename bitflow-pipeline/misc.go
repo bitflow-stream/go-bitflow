@@ -300,8 +300,6 @@ func print_common_metrics(p *SamplePipeline) {
 }
 
 func print_http(p *SamplePipeline, params string) {
-	if err := plotHttp.Serve(params); err != nil {
-		log.Fatalln(err)
-	}
-	p.Add(plotHttp.NewHttpPlotter())
+	plotHttp.GoServe(params)
+	p.Add(plotHttp.HttpPlotter)
 }
