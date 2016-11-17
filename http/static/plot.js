@@ -1,6 +1,7 @@
 
 PLOT_WIDTH = 800
 PLOT_HEIGHT = 300
+PAUSED = false
 
 function update_all_metrics_individually() {
 	d3.json("/metrics", function(metrics){
@@ -56,32 +57,34 @@ function stringHash(s) {
 	return hash;
 }
 
-LAST_CREATED = ""
-
 function get_target_div(name) {
 	hash = stringHash(name)
 	id = "__data__" + hash
 	sel = "#" + id
 	if ($(sel).length == 0) {
-		LAST_CREATED = sel
-
 		code = '<div id="' + id + '" class="data_plot"></div>'
 		$('.data_container').append(code);
 
-		$(sel).resizable({
+		$(sel)
+		.resizable({
 			alsoResize: ".data_plot",
 			grid: 100,
 			resize: function(event, ui) {
 				PLOT_HEIGHT = ui.size.height
 				PLOT_WIDTH = ui.size.width
-			}
-		});
+			},
+		})
+		.click(toggle_pause);
 	}
 	return sel
 }
 
+function toggle_pause() {
+	PAUSED = !PAUSED
+}
+
 function loop_update_metrics() {
-	update_all_metrics()
+	if (!PAUSED) update_all_metrics()
 	setTimeout(loop_update_metrics, 1000)
 }
 
