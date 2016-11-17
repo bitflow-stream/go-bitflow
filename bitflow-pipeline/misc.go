@@ -6,12 +6,14 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/http"
 )
 
 func init() {
@@ -21,6 +23,8 @@ func init() {
 	RegisterAnalysisParams("print_timeline", print_timeline, "number of buckets for the timeline-histogram") // Print a timeline showing a rudimentary histogram of the number of samples
 	RegisterAnalysis("count_invalid", count_invalid)
 	RegisterAnalysis("print_common_metrics", print_common_metrics)
+
+	RegisterAnalysisParams("http", print_http, "HTTP endpoint to listen for requests")
 }
 
 type UniqueTagPrinter struct {
@@ -294,4 +298,18 @@ func (p *commonMetricsPrinter) Close() {
 
 func print_common_metrics(p *SamplePipeline) {
 	p.Add(new(commonMetricsPrinter))
+}
+
+func print_http(p *SamplePipeline, params string) {
+	parts := strings.Split(params, ",")
+	endpoint := parts[0]
+	windowSize := 100
+	if len(parts) >= 2 {
+		var err error
+		windowSize, err = strconv.Atoi(parts[1])
+		if err != nil {
+			log.Fatalln("Failed to parse second parmeter for -e http (must be integer):", err)
+		}
+	}
+	p.Add(plotHttp.NewHttpPlotter(endpoint, windowSize))
 }

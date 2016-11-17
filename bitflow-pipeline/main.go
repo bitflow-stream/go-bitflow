@@ -81,8 +81,8 @@ func do_main() int {
 	}
 	p.ReadSampleHandler = handler
 	defer golib.ProfileCpu()()
-	p.Init()
 	p.setup(analyses)
+	p.Init()
 	for _, str := range p.print() {
 		log.Println(str)
 	}
