@@ -31,7 +31,7 @@
 		},
 		{
 			"ImportPath": "github.com/antongulenko/go-bitflow",
-			"Rev": "ad83e597c8fa2c2c1cd015714395e5969dcf3cd0"
+			"Rev": "0ee6ed8dc4a8a48929d920ac0fd92949fb6cc37e"
 		},
 		{
 			"ImportPath": "github.com/antongulenko/go-onlinestats",
@@ -47,7 +47,15 @@
 		},
 		{
 			"ImportPath": "github.com/antongulenko/golib",
-			"Rev": "cbfea268a96854854c10e3c205279d1f60583f37"
+			"Rev": "decc316d6d72b0308214f75b89266ef7a370abe8"
+		},
+		{
+			"ImportPath": "github.com/antongulenko/golib/gotermBox",
+			"Rev": "decc316d6d72b0308214f75b89266ef7a370abe8"
+		},
+		{
+			"ImportPath": "github.com/antongulenko/goterm",
+			"Rev": "6dedc0441b0c033f939856fb035f5abd433c6751"
 		},
 		{
 			"ImportPath": "github.com/chris-garrett/lfshook",
