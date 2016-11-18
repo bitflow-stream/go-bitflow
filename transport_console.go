@@ -40,7 +40,6 @@ func (sink *ConsoleSink) Close() {
 // Header implements the MetricSink interface by using a SampleStream to
 // write the given Header to the standard output.
 func (sink *ConsoleSink) Header(header *Header) error {
-	sink.Stop()
 	sink.stream = sink.Writer.Open(nopWriteCloser{os.Stdout}, sink.Marshaller)
 	return sink.stream.Header(header)
 }

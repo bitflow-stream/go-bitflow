@@ -9,6 +9,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/golib"
+	"github.com/antongulenko/golib/gotermBox"
 )
 
 const (
@@ -90,6 +91,7 @@ type CmdSamplePipeline struct {
 	// Output flags
 
 	FlagOutputConsole         bool
+	FlagOutputBox             bool
 	FlagOutputTcp             golib.StringSlice
 	FlagOutputTcpListen       golib.StringSlice
 	FlagOutputFile            string
@@ -142,8 +144,9 @@ func (p *CmdSamplePipeline) RegisterFlags(suppressFlags map[string]bool) {
 	f.IntVar(&p.FlagIoBuffer, "io_buf", 4096, "Size (byte) of buffered IO when writing files.")
 
 	// Output
-	f.BoolVar(&p.FlagOutputConsole, "p", false, "Data sink: print to stdout")
-	f.StringVar(&p.FlagOutputConsoleFormat, "pf", "t", "Data format for console output, one of "+output_formats)
+	f.BoolVar(&p.FlagOutputBox, "p", false, "Data sink: print to box on stdout. Not possible with -c.")
+	f.BoolVar(&p.FlagOutputConsole, "c", false, "Data sink: print to stdout")
+	f.StringVar(&p.FlagOutputConsoleFormat, "cf", "t", "Data format for console output, one of "+output_formats)
 	f.StringVar(&p.FlagOutputFile, "f", "", "Data sink: write data to file")
 	f.StringVar(&p.FlagOutputFileFormat, "ff", "b", "Data format for file output, one of "+output_formats)
 	f.Var(&p.FlagOutputTcp, "s", "Data sink: send data to specified TCP endpoint")
@@ -162,7 +165,7 @@ func (p *CmdSamplePipeline) RegisterFlags(suppressFlags map[string]bool) {
 // receiving CmdSamplePipeline. If false is returned, calling Init() will print
 // a warning since the data will not be output anywhere.
 func (p *CmdSamplePipeline) HasOutputFlag() bool {
-	return p.FlagOutputConsole || p.FlagOutputFile != "" || len(p.FlagOutputTcp) > 0 || len(p.FlagOutputTcpListen) > 0
+	return p.FlagOutputBox || p.FlagOutputConsole || p.FlagOutputFile != "" || len(p.FlagOutputTcp) > 0 || len(p.FlagOutputTcpListen) > 0
 }
 
 // SetSource allows external main packages to set their own MetricSource instances
@@ -188,6 +191,59 @@ func (p *CmdSamplePipeline) SetSource(source MetricSource) {
 // Init must be called before accessing p.Tasks and before calling StartAndWait().
 func (p *CmdSamplePipeline) Init() {
 	p.Tasks = golib.NewTaskGroup()
+
+	// ====== Initialize sink(s) and tasks
+	var sinks AggregateSink
+	writer := SampleWriter{p.FlagParallelHandler}
+	if p.FlagOutputBox {
+		if p.FlagOutputConsole {
+			log.Fatalln("Cannot specify both -c and -p")
+		}
+		sink := &ConsoleBoxSink{
+			CliLogBox: gotermBox.CliLogBox{
+				NoUtf8:        false,
+				LogLines:      10,
+				MessageBuffer: 500,
+			},
+			UpdateInterval: 500 * time.Millisecond,
+		}
+		sink.Init()
+		sinks = append(sinks, sink)
+	}
+	if p.FlagOutputConsole {
+		sink := new(ConsoleSink)
+		m := marshaller(p.FlagOutputConsoleFormat)
+		if txt, ok := m.(*TextMarshaller); ok {
+			txt.AssumeStdout = true
+		}
+		sink.SetMarshaller(m)
+		sink.Writer = writer
+		sinks = append(sinks, sink)
+	}
+	for _, endpoint := range p.FlagOutputTcp {
+		sink := &TCPSink{Endpoint: endpoint, PrintErrors: !p.FlagTcpDropErrors}
+		sink.SetMarshaller(marshaller(p.FlagOutputTcpFormat))
+		sink.Writer = writer
+		sink.TcpConnLimit = p.FlagTcpConnectionLimit
+		sinks = append(sinks, sink)
+	}
+	for _, endpoint := range p.FlagOutputTcpListen {
+		sink := NewTcpListenerSink(endpoint)
+		sink.SetMarshaller(marshaller(p.FlagOutputTcpListenFormat))
+		sink.Writer = writer
+		sink.TcpConnLimit = p.FlagTcpConnectionLimit
+		sinks = append(sinks, sink)
+	}
+	if p.FlagOutputFile != "" {
+		sink := &FileSink{Filename: p.FlagOutputFile, IoBuffer: p.FlagIoBuffer, CleanFiles: p.FlagOutputFilesClean}
+		sink.SetMarshaller(marshaller(p.FlagOutputFileFormat))
+		sink.Writer = writer
+		sinks = append(sinks, sink)
+	}
+	if len(sinks) == 0 {
+		log.Warnln("No data sinks selected, data will not be output anywhere.")
+	}
+	p.Sink = sinks
 
 	// ====== Initialize source(s)
 	reader := SampleReader{
@@ -222,52 +278,13 @@ func (p *CmdSamplePipeline) Init() {
 			Robust:    p.FlagInputFilesRobust,
 		})
 	}
-	noSource := p.Source == nil
-	if noSource {
+	if p.Source == nil {
 		log.Warnln("No data source provided, no data will be received or generated.")
-		p.Source = new(EmptyMetricSource)
-	}
-
-	// ====== Initialize sink(s) and tasks
-	var sinks AggregateSink
-	writer := SampleWriter{p.FlagParallelHandler}
-	if p.FlagOutputConsole {
-		sink := new(ConsoleSink)
-		m := marshaller(p.FlagOutputConsoleFormat)
-		if txt, ok := m.(*TextMarshaller); ok {
-			txt.AssumeStdout = true
-		}
-		sink.SetMarshaller(m)
-		sink.Writer = writer
-		sinks = append(sinks, sink)
-	}
-	for _, endpoint := range p.FlagOutputTcp {
-		sink := &TCPSink{Endpoint: endpoint, PrintErrors: !p.FlagTcpDropErrors}
-		sink.SetMarshaller(marshaller(p.FlagOutputTcpFormat))
-		sink.Writer = writer
-		sink.TcpConnLimit = p.FlagTcpConnectionLimit
-		sinks = append(sinks, sink)
-	}
-	for _, endpoint := range p.FlagOutputTcpListen {
-		sink := NewTcpListenerSink(endpoint)
-		sink.SetMarshaller(marshaller(p.FlagOutputTcpListenFormat))
-		sink.Writer = writer
-		sink.TcpConnLimit = p.FlagTcpConnectionLimit
-		sinks = append(sinks, sink)
-	}
-	if p.FlagOutputFile != "" {
-		sink := &FileSink{Filename: p.FlagOutputFile, IoBuffer: p.FlagIoBuffer, CleanFiles: p.FlagOutputFilesClean}
-		sink.SetMarshaller(marshaller(p.FlagOutputFileFormat))
-		sink.Writer = writer
-		sinks = append(sinks, sink)
-	}
-	if len(sinks) == 0 {
-		log.Warnln("No data sinks selected, data will not be output anywhere.")
-		if noSource && len(p.Processors) == 0 {
+		if len(sinks) == 0 && len(p.Processors) == 0 {
 			log.Fatalln("No tasks defined")
 		}
+		p.Source = new(EmptyMetricSource)
 	}
-	p.Sink = sinks
 }
 
 // StartAndWait constructs the pipeline and starts it. It blocks until the pipeline
