@@ -276,3 +276,26 @@ func (filter *MetricVarianceFilter) constructIndices(header *bitflow.Header, sam
 	}
 	return indices, fields
 }
+
+type MetricRenamer struct {
+	bitflow.AbstractProcessor
+	Regexes map[*regexp.Regexp]string
+}
+
+func (r *MetricRenamer) String() string {
+	return fmt.Sprintf("Metric renamer (%v regexes)", len(r.Regexes))
+}
+
+func (r *MetricRenamer) Header(header *bitflow.Header) error {
+	if err := r.CheckSink(); err != nil {
+		return err
+	} else {
+		for i, field := range header.Fields {
+			for regex, replace := range r.Regexes {
+				field = regex.ReplaceAllString(field, replace)
+			}
+			header.Fields[i] = field
+		}
+		return r.OutgoingSink.Header(header)
+	}
+}
