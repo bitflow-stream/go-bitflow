@@ -31,7 +31,7 @@
 		},
 		{
 			"ImportPath": "github.com/antongulenko/go-bitflow",
-			"Rev": "0ee6ed8dc4a8a48929d920ac0fd92949fb6cc37e"
+			"Rev": "c5abb4f8997490c50794e7e54e544ec2e4747354"
 		},
 		{
 			"ImportPath": "github.com/antongulenko/go-onlinestats",

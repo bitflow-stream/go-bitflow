@@ -57,13 +57,10 @@ func (group *FileGroup) BuildFilename(num int) string {
 // as suffix. The suffix is added before the file extension, separated with a hyphen, like so:
 //   dir1/dir2/filePrefix-<suffix>.ext
 func (group *FileGroup) BuildFilenameStr(suffix string) string {
-	var filename string
-	if suffix == "" {
-		filename = group.prefix + group.suffix
-	} else {
-		filename = fmt.Sprintf("%s-%s%s", group.prefix, suffix, group.suffix)
+	if suffix != "" && group.prefix != "" {
+		suffix = "-" + suffix
 	}
-	return filepath.Join(group.dir, filename)
+	return filepath.Join(group.dir, group.prefix+suffix+group.suffix)
 }
 
 // FileRegex returns a regular expresion that matches filenames belonging to the receiving group.
