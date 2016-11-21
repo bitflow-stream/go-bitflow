@@ -298,29 +298,6 @@ func split_files(p *SamplePipeline, params string) {
 	p.Add(NewMetricFork(distributor, MultiFileSuffixBuilder(nil)))
 }
 
-type metricRenamer struct {
-	bitflow.AbstractProcessor
-	Regexes map[*regexp.Regexp]string
-}
-
-func (r *metricRenamer) String() string {
-	return fmt.Sprintf("Metric renamer (%v regexes)", len(r.Regexes))
-}
-
-func (r *metricRenamer) Header(header *bitflow.Header) error {
-	if err := r.CheckSink(); err != nil {
-		return err
-	} else {
-		for i, field := range header.Fields {
-			for regex, replace := range r.Regexes {
-				field = regex.ReplaceAllString(field, replace)
-				header.Fields[i] = field
-			}
-		}
-		return r.OutgoingSink.Header(header)
-	}
-}
-
 func rename_metrics(p *SamplePipeline, params string) {
 	regexes := make(map[*regexp.Regexp]string)
 	for i, part := range strings.Split(params, ",") {
@@ -339,7 +316,7 @@ func rename_metrics(p *SamplePipeline, params string) {
 	if len(regexes) == 0 {
 		log.Fatalln("-e rename needs at least one regex=replace parameter (comma-separated)")
 	}
-	p.Add(&metricRenamer{
+	p.Add(&MetricRenamer{
 		Regexes: regexes,
 	})
 }
