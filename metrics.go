@@ -279,7 +279,8 @@ func (filter *MetricVarianceFilter) constructIndices(header *bitflow.Header, sam
 
 type MetricRenamer struct {
 	bitflow.AbstractProcessor
-	Regexes map[*regexp.Regexp]string
+	Regexes      []*regexp.Regexp
+	Replacements []string
 }
 
 func (r *MetricRenamer) String() string {
@@ -287,11 +288,15 @@ func (r *MetricRenamer) String() string {
 }
 
 func (r *MetricRenamer) Header(header *bitflow.Header) error {
+	if len(r.Regexes) != len(r.Replacements) {
+		return fmt.Errorf("Metric renamer: number of regexes does not match number of replacements (%v != %v)", r.Regexes, r.Replacements)
+	}
 	if err := r.CheckSink(); err != nil {
 		return err
 	} else {
 		for i, field := range header.Fields {
-			for regex, replace := range r.Regexes {
+			for i, regex := range r.Regexes {
+				replace := r.Replacements[i]
 				field = regex.ReplaceAllString(field, replace)
 			}
 			header.Fields[i] = field
