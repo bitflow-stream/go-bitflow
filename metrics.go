@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"regexp"
+	"sort"
 
 	log "github.com/Sirupsen/logrus"
 
@@ -278,29 +279,57 @@ func (filter *MetricVarianceFilter) constructIndices(header *bitflow.Header, sam
 }
 
 type MetricRenamer struct {
-	bitflow.AbstractProcessor
-	Regexes      []*regexp.Regexp
-	Replacements []string
+	AbstractMetricMapper
+	renamings map[*regexp.Regexp]string
+}
+
+func NewMetricRenamer(renamings map[*regexp.Regexp]string) *MetricRenamer {
+	renamer := &MetricRenamer{
+		renamings: renamings,
+	}
+	renamer.Description = renamer
+	renamer.ConstructIndices = renamer.constructIndices
+	return renamer
 }
 
 func (r *MetricRenamer) String() string {
-	return fmt.Sprintf("Metric renamer (%v regexes)", len(r.Regexes))
+	return fmt.Sprintf("Metric renamer (%v regexes)", len(r.renamings))
 }
 
-func (r *MetricRenamer) Header(header *bitflow.Header) error {
-	if len(r.Regexes) != len(r.Replacements) {
-		return fmt.Errorf("Metric renamer: number of regexes does not match number of replacements (%v != %v)", r.Regexes, r.Replacements)
-	}
-	if err := r.CheckSink(); err != nil {
-		return err
-	} else {
-		for i, field := range header.Fields {
-			for i, regex := range r.Regexes {
-				replace := r.Replacements[i]
-				field = regex.ReplaceAllString(field, replace)
-			}
-			header.Fields[i] = field
+func (r *MetricRenamer) constructIndices(inHeader *bitflow.Header) ([]int, []string) {
+	fields := make(indexedFields, len(inHeader.Fields))
+	for i, field := range inHeader.Fields {
+		for regex, replace := range r.renamings {
+			field = regex.ReplaceAllString(field, replace)
 		}
-		return r.OutgoingSink.Header(header)
+		fields[i] = struct {
+			index int
+			field string
+		}{i, field}
 	}
+	sort.Sort(fields)
+	indices := make([]int, len(fields))
+	outFields := make([]string, len(fields))
+	for i, field := range fields {
+		indices[i] = field.index
+		outFields[i] = field.field
+	}
+	return indices, outFields
+}
+
+type indexedFields []struct {
+	index int
+	field string
+}
+
+func (f indexedFields) Len() int {
+	return len(f)
+}
+
+func (f indexedFields) Less(i, j int) bool {
+	return f[i].field < f[j].field
+}
+
+func (f indexedFields) Swap(i, j int) {
+	f[i], f[j] = f[j], f[i]
 }
