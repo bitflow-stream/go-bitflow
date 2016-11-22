@@ -299,7 +299,8 @@ func split_files(p *SamplePipeline, params string) {
 }
 
 func rename_metrics(p *SamplePipeline, params string) {
-	replacements := make(map[*regexp.Regexp]string)
+	var regexes []*regexp.Regexp
+	var replacements []string
 	for i, part := range strings.Split(params, ",") {
 		keyVal := strings.SplitN(part, "=", 2)
 		if len(keyVal) != 2 {
@@ -311,10 +312,11 @@ func rename_metrics(p *SamplePipeline, params string) {
 		if err != nil {
 			log.Fatalf("Error compiling regex %v: %v", regexCode, err)
 		}
-		replacements[r] = replace
+		regexes = append(regexes, r)
+		replacements = append(replacements, replace)
 	}
-	if len(replacements) == 0 {
+	if len(regexes) == 0 {
 		log.Fatalln("-e rename needs at least one regex=replace parameter (comma-separated)")
 	}
-	p.Add(NewMetricRenamer(replacements))
+	p.Add(NewMetricRenamer(regexes, replacements))
 }

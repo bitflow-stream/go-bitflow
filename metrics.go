@@ -280,12 +280,17 @@ func (filter *MetricVarianceFilter) constructIndices(header *bitflow.Header, sam
 
 type MetricRenamer struct {
 	AbstractMetricMapper
-	renamings map[*regexp.Regexp]string
+	regexes      []*regexp.Regexp
+	replacements []string
 }
 
-func NewMetricRenamer(renamings map[*regexp.Regexp]string) *MetricRenamer {
+func NewMetricRenamer(regexes []*regexp.Regexp, replacements []string) *MetricRenamer {
+	if len(regexes) != len(replacements) {
+		panic(fmt.Sprintf("MetricRenamer: number of regexes does not match number of replacements (%v != %v)", len(regexes), len(replacements)))
+	}
 	renamer := &MetricRenamer{
-		renamings: renamings,
+		regexes:      regexes,
+		replacements: replacements,
 	}
 	renamer.Description = renamer
 	renamer.ConstructIndices = renamer.constructIndices
@@ -293,19 +298,18 @@ func NewMetricRenamer(renamings map[*regexp.Regexp]string) *MetricRenamer {
 }
 
 func (r *MetricRenamer) String() string {
-	return fmt.Sprintf("Metric renamer (%v regexes)", len(r.renamings))
+	return fmt.Sprintf("Metric renamer (%v regexes)", len(r.regexes))
 }
 
 func (r *MetricRenamer) constructIndices(inHeader *bitflow.Header) ([]int, []string) {
 	fields := make(indexedFields, len(inHeader.Fields))
 	for i, field := range inHeader.Fields {
-		for regex, replace := range r.renamings {
+		for i, regex := range r.regexes {
+			replace := r.replacements[i]
 			field = regex.ReplaceAllString(field, replace)
 		}
-		fields[i] = struct {
-			index int
-			field string
-		}{i, field}
+		fields[i].index = i
+		fields[i].field = field
 	}
 	sort.Sort(fields)
 	indices := make([]int, len(fields))
