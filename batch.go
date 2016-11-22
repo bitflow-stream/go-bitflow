@@ -274,7 +274,7 @@ func (p *MultiHeaderMerger) reconstructSample(num int, header *bitflow.Header) *
 		slice := p.metrics[field]
 		if len(slice) != len(p.samples) {
 			// Should never happen
-			panic(fmt.Sprintf("Only %v values for field %v, should be %v", len(slice), field, len(p.samples)))
+			panic(fmt.Sprintf("Have %v values for field %v, should be %v", len(slice), field, len(p.samples)))
 		}
 		values[i] = slice[num]
 	}
