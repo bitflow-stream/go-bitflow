@@ -292,7 +292,7 @@ func (p *commonMetricsPrinter) Close() {
 		fields = append(fields, field)
 	}
 	sort.Strings(fields)
-	log.Printf("Common metrics in %v headers: %v", p.num, fields)
+	log.Printf("%v common metrics in %v headers: %v", len(fields), p.num, fields)
 	p.AbstractProcessor.Close()
 }
 
