@@ -50,6 +50,8 @@ func init() {
 	RegisterAnalysis("filter_metrics", filter_metrics)
 	flag.Var(&metric_filter_include, "metrics_include", "Include regex used with '-e filter_metrics'")
 	flag.Var(&metric_filter_exclude, "metrics_exclude", "Exclude regex used with '-e filter_metrics'")
+
+	RegisterAnalysis("strip", strip_metrics)
 }
 
 func print_samples(p *SamplePipeline) {
@@ -319,4 +321,8 @@ func rename_metrics(p *SamplePipeline, params string) {
 		log.Fatalln("-e rename needs at least one regex=replace parameter (comma-separated)")
 	}
 	p.Add(NewMetricRenamer(regexes, replacements))
+}
+
+func strip_metrics(p *SamplePipeline) {
+	p.Add(NewMetricStripper())
 }
