@@ -23,11 +23,10 @@ type ConsoleBoxSink struct {
 	lastHeader *Header
 }
 
-// Should be called as early as possible
+// Should be called as early as possible to intercept all log messages
 func (sink *ConsoleBoxSink) Init() {
 	sink.CliLogBox.Init()
 	sink.RegisterMessageHook()
-	sink.InterceptLogger()
 }
 
 func (sink *ConsoleBoxSink) String() string {
@@ -35,6 +34,7 @@ func (sink *ConsoleBoxSink) String() string {
 }
 
 func (sink *ConsoleBoxSink) Start(wg *sync.WaitGroup) golib.StopChan {
+	sink.InterceptLogger()
 	log.Println("Printing samples to table")
 	sink.updateTask = golib.NewErrLoopTask("", func(stop golib.StopChan) error {
 		if err := sink.updateBox(); err != nil {
@@ -46,6 +46,10 @@ func (sink *ConsoleBoxSink) Start(wg *sync.WaitGroup) golib.StopChan {
 		}
 		return nil
 	})
+	sink.updateTask.StopHook = func() {
+		sink.updateBox()
+		sink.RestoreLogger()
+	}
 	return sink.updateTask.Start(wg)
 }
 
@@ -66,7 +70,6 @@ func (sink *ConsoleBoxSink) updateBox() (err error) {
 }
 
 func (sink *ConsoleBoxSink) Close() {
-	sink.updateTask.StopHook = sink.RestoreLogger
 	sink.updateTask.Stop()
 }
 
