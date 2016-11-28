@@ -10,6 +10,11 @@ import (
 	"github.com/antongulenko/golib"
 )
 
+type MergableProcessor interface {
+	bitflow.SampleProcessor
+	MergeProcessor(other bitflow.SampleProcessor) bool
+}
+
 // ==================== DecouplingProcessor ====================
 // Decouple the incoming samples from the MetricSink through a
 // looping goroutine and a channel. Creates potential parallelism in the pipeline.

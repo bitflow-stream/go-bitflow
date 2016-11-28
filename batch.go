@@ -117,6 +117,15 @@ func (p *BatchProcessor) String() string {
 	return fmt.Sprintf("BatchProcessor %v step%s%v", len(p.Steps), extra, strings.Join(steps, ", "))
 }
 
+func (p *BatchProcessor) MergeProcessor(other bitflow.SampleProcessor) bool {
+	if otherBatch, ok := other.(*BatchProcessor); !ok {
+		return false
+	} else {
+		p.Steps = append(p.Steps, otherBatch.Steps...)
+		return true
+	}
+}
+
 // ==================== Tag & Timestamp sort ====================
 // Sort based on given Tags, use Timestamp as last sort criterion
 type SampleSorter struct {

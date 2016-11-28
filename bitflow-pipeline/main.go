@@ -167,22 +167,29 @@ func (slice SortedAnalyses) Swap(i, j int) {
 
 type SamplePipeline struct {
 	bitflow.CmdSamplePipeline
-	batch *pipeline.BatchProcessor
+	lastProcessor bitflow.SampleProcessor
 }
 
 func (p *SamplePipeline) Add(step bitflow.SampleProcessor) *SamplePipeline {
-	p.batch = nil
+	if p.lastProcessor != nil {
+		if merger, ok := p.lastProcessor.(pipeline.MergableProcessor); ok {
+			if merger.MergeProcessor(step) {
+				// Merge successful: drop the incoming step
+				return p
+			}
+		}
+	}
+	p.lastProcessor = step
 	p.CmdSamplePipeline.Add(step)
 	return p
 }
 
-func (p *SamplePipeline) Batch(proc pipeline.BatchProcessingStep) *SamplePipeline {
-	if p.batch == nil {
-		p.batch = new(pipeline.BatchProcessor)
-		p.CmdSamplePipeline.Add(p.batch)
+func (p *SamplePipeline) Batch(steps ...pipeline.BatchProcessingStep) *SamplePipeline {
+	batch := new(pipeline.BatchProcessor)
+	for _, step := range steps {
+		batch.Add(step)
 	}
-	p.batch.Add(proc)
-	return p
+	return p.Add(batch)
 }
 
 func (p *SamplePipeline) setup(analyses []parameterizedAnalysis) {
