@@ -163,6 +163,16 @@ func (filter *MetricFilter) filter(name string) bool {
 	return !excluded
 }
 
+func (filter *MetricFilter) MergeProcessor(other bitflow.SampleProcessor) bool {
+	if otherFilter, ok := other.(*MetricFilter); !ok {
+		return false
+	} else {
+		filter.exclude = append(filter.exclude, otherFilter.exclude...)
+		filter.include = append(filter.include, otherFilter.include...)
+		return true
+	}
+}
+
 func (p *MetricFilter) String() string {
 	return fmt.Sprintf("MetricFilter(%v exclude filters, %v include filters)", len(p.exclude), len(p.include))
 }
@@ -319,6 +329,16 @@ func (r *MetricRenamer) constructIndices(inHeader *bitflow.Header) ([]int, []str
 		outFields[i] = field.field
 	}
 	return indices, outFields
+}
+
+func (r *MetricRenamer) MergeProcessor(other bitflow.SampleProcessor) bool {
+	if otherFilter, ok := other.(*MetricRenamer); !ok {
+		return false
+	} else {
+		r.regexes = append(r.regexes, otherFilter.regexes...)
+		r.replacements = append(r.replacements, otherFilter.replacements...)
+		return true
+	}
 }
 
 type indexedFields []struct {

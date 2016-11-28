@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -11,12 +10,6 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/golib"
-)
-
-var (
-	metric_filter_include golib.StringSlice
-	metric_filter_exclude golib.StringSlice
 )
 
 func init() {
@@ -47,9 +40,8 @@ func init() {
 	RegisterAnalysisParams("split_files", split_files, "tag to use for separating the data")
 	RegisterAnalysisParams("rename", rename_metrics, "comma-separated list of regex=replace pairs")
 
-	RegisterAnalysis("filter_metrics", filter_metrics)
-	flag.Var(&metric_filter_include, "metrics_include", "Include regex used with '-e filter_metrics'")
-	flag.Var(&metric_filter_exclude, "metrics_exclude", "Exclude regex used with '-e filter_metrics'")
+	RegisterAnalysisParams("include", filter_metrics_include, "Regex to match metrics to be included")
+	RegisterAnalysisParams("exclude", filter_metrics_exclude, "Regex to match metrics to be excluded")
 
 	RegisterAnalysis("strip", strip_metrics)
 }
@@ -101,15 +93,12 @@ func pick_x_percent(p *SamplePipeline, params string) {
 	})
 }
 
-func filter_metrics(p *SamplePipeline) {
-	filter := NewMetricFilter()
-	for _, include := range metric_filter_include {
-		filter.IncludeRegex(include)
-	}
-	for _, exclude := range metric_filter_exclude {
-		filter.ExcludeRegex(exclude)
-	}
-	p.Add(filter)
+func filter_metrics_include(p *SamplePipeline, param string) {
+	p.Add(NewMetricFilter().IncludeRegex(param))
+}
+
+func filter_metrics_exclude(p *SamplePipeline, param string) {
+	p.Add(NewMetricFilter().ExcludeRegex(param))
 }
 
 func filter_tag(p *SamplePipeline, params string) {
@@ -128,20 +117,13 @@ func filter_tag(p *SamplePipeline, params string) {
 		}
 	}
 	tag := params[:index]
-	sign := "!="
+	filter := new(SampleTagFilter)
 	if equals {
-		sign = "=="
+		filter.Equal(tag, val)
+	} else {
+		filter.Unequal(tag, val)
 	}
-	p.Add(&SampleFilter{
-		Description: fmt.Sprintf("Filter tag %v %s %v", tag, sign, val),
-		IncludeFilter: func(inSample *bitflow.Sample) bool {
-			if equals {
-				return inSample.Tag(tag) == val
-			} else {
-				return inSample.Tag(tag) != val
-			}
-		},
-	})
+	p.Add(filter)
 }
 
 func plot(pipe *SamplePipeline, params string) {
