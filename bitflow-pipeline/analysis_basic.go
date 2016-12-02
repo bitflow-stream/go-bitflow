@@ -46,6 +46,7 @@ func init() {
 
 	RegisterAnalysis("strip", strip_metrics)
 	RegisterAnalysis("sleep", sleep_samples)
+	RegisterAnalysis("set_time", set_time_processor)
 }
 
 func print_samples(p *SamplePipeline) {
@@ -312,7 +313,7 @@ func strip_metrics(p *SamplePipeline) {
 }
 
 func sleep_samples(p *SamplePipeline) {
-
+	p.Add(new(SleepProcessor))
 }
 
 type SleepProcessor struct {
@@ -332,5 +333,21 @@ func (p *SleepProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) 
 		}
 	}
 	p.lastTimestamp = sample.Time
+	return p.OutgoingSink.Sample(sample, header)
+}
+
+func set_time_processor(p *SamplePipeline) {
+	p.Add(new(ResetTimeProcessor))
+}
+
+type ResetTimeProcessor struct {
+	bitflow.AbstractProcessor
+}
+
+func (p *ResetTimeProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+	if err := p.Check(sample, header); err != nil {
+		return err
+	}
+	sample.Time = time.Now()
 	return p.OutgoingSink.Sample(sample, header)
 }
