@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 
@@ -44,6 +45,7 @@ func init() {
 	RegisterAnalysisParams("exclude", filter_metrics_exclude, "Regex to match metrics to be excluded")
 
 	RegisterAnalysis("strip", strip_metrics)
+	RegisterAnalysis("sleep", sleep_samples)
 }
 
 func print_samples(p *SamplePipeline) {
@@ -307,4 +309,28 @@ func rename_metrics(p *SamplePipeline, params string) {
 
 func strip_metrics(p *SamplePipeline) {
 	p.Add(NewMetricStripper())
+}
+
+func sleep_samples(p *SamplePipeline) {
+
+}
+
+type SleepProcessor struct {
+	bitflow.AbstractProcessor
+	lastTimestamp time.Time
+}
+
+func (p *SleepProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+	if err := p.Check(sample, header); err != nil {
+		return err
+	}
+	last := p.lastTimestamp
+	if !last.IsZero() {
+		diff := sample.Time.Sub(last)
+		if diff > 0 {
+			time.Sleep(diff)
+		}
+	}
+	p.lastTimestamp = sample.Time
+	return p.OutgoingSink.Sample(sample, header)
 }
