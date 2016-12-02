@@ -31,7 +31,7 @@
 		},
 		{
 			"ImportPath": "github.com/antongulenko/go-bitflow",
-			"Rev": "940c9f87b2326aa2ef793fb1a421be8e22ef0189"
+			"Rev": "38966b2067f6e245ae9c23bf244ee00168aec2a4"
 		},
 		{
 			"ImportPath": "github.com/antongulenko/go-onlinestats",
@@ -47,11 +47,11 @@
 		},
 		{
 			"ImportPath": "github.com/antongulenko/golib",
-			"Rev": "decc316d6d72b0308214f75b89266ef7a370abe8"
+			"Rev": "8a0b91f5dab22cf6b26fc35c4233c456a438a9a9"
 		},
 		{
 			"ImportPath": "github.com/antongulenko/golib/gotermBox",
-			"Rev": "decc316d6d72b0308214f75b89266ef7a370abe8"
+			"Rev": "8a0b91f5dab22cf6b26fc35c4233c456a438a9a9"
 		},
 		{
 			"ImportPath": "github.com/antongulenko/goterm",
