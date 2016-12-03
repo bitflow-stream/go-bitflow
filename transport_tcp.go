@@ -64,8 +64,9 @@ type AbstractTcpSink struct {
 // TcpWriteConn is a helper type for TCP-base MetricSink implementations.
 // It can send Headers and Samples over an opened TCP connection.
 // It is created from AbstractTcpSink.OpenWriteConn() and can be used until
-// Header() or Sample() return an error or Close() is called explicitely.
+// Sample() returns an error or Close() is called explicitely.
 type TcpWriteConn struct {
+	checker   HeaderChecker
 	stream    *SampleOutputStream
 	closeOnce sync.Once
 	log       *log.Entry
@@ -80,19 +81,13 @@ func (sink *AbstractTcpSink) OpenWriteConn(conn *net.TCPConn) *TcpWriteConn {
 	}
 }
 
-// Header writes the given header into the receiving TcpWriteConn and closes
-// the underlying TCP connection if there is an error.
-func (conn *TcpWriteConn) Header(header *Header) {
-	conn.log.Println("Serving", len(header.Fields), "metrics")
-	if err := conn.stream.Header(header); err != nil {
-		conn.doClose(err)
-	}
-}
-
 // Sample writes the given sample into the receiving TcpWriteConn and closes
 // the underlying TCP connection if there is an error.
-func (conn *TcpWriteConn) Sample(sample *Sample) {
-	if err := conn.stream.Sample(sample); err != nil {
+func (conn *TcpWriteConn) Sample(sample *Sample, header *Header) {
+	if conn.checker.HeaderChanged(header) {
+		conn.log.Println("Serving", len(header.Fields), "metrics")
+	}
+	if err := conn.stream.Sample(sample, header); err != nil {
 		conn.doClose(err)
 	}
 }
@@ -189,24 +184,6 @@ func (sink *TCPSink) Close() {
 	})
 }
 
-// Header implements the MetricSink interface. If a TCP connection is already
-// established, the header parameter is compared with the last header that
-// has been sent over the connection. If the headers differ, the current connection
-// is closed, and a new connection is opened for sending the new header.
-// If no connection was established, a new connection is set up and the header is
-// sent through it.
-func (sink *TCPSink) Header(header *Header) error {
-	conn, err := sink.getOutputConnection(true)
-	if err != nil {
-		if !sink.PrintErrors {
-			err = nil
-		}
-		return err
-	}
-	conn.Header(header)
-	return sink.checkConnRunning(conn)
-}
-
 // Sample implements the MetricSink interface. If a connection is already established,
 // the Sample is directly sent throgh it. Otherwise, a new connection is established,
 // using the last Header that was was sent into the receiving TCPSink. An error is returned,
@@ -215,14 +192,14 @@ func (sink *TCPSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	conn, err := sink.getOutputConnection(false)
+	conn, err := sink.getOutputConnection()
 	if err != nil {
 		if !sink.PrintErrors {
 			err = nil
 		}
 		return err
 	}
-	conn.Sample(sample)
+	conn.Sample(sample, header)
 	return sink.checkConnRunning(conn)
 }
 
@@ -233,12 +210,12 @@ func (sink *TCPSink) checkConnRunning(conn *TcpWriteConn) error {
 	return nil
 }
 
-func (sink *TCPSink) getOutputConnection(renewConnection bool) (conn *TcpWriteConn, err error) {
+func (sink *TCPSink) getOutputConnection() (conn *TcpWriteConn, err error) {
 	closeSink := false
 	sink.stopped.IfElseEnabled(func() {
 		err = fmt.Errorf("TCP sink to %v already closed", sink.Endpoint)
 	}, func() {
-		if !sink.conn.IsRunning() || renewConnection {
+		if !sink.conn.IsRunning() {
 			// Cleanup errored connection or stop existing connection to negotiate new header
 			if sink.conn != nil {
 				if !sink.countConnectionClosed() {

@@ -73,11 +73,6 @@ func (sink *ConsoleBoxSink) Close() {
 	sink.updateTask.Stop()
 }
 
-func (sink *ConsoleBoxSink) Header(header *Header) error {
-	// Ignore headers, only print samples
-	return nil
-}
-
 func (sink *ConsoleBoxSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err

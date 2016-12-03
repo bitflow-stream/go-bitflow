@@ -7,17 +7,16 @@ import (
 )
 
 // SampleProcessor is the combination of MetricSink and MetricSource.
-// It receives Headers and Samples through the Header and Sample methods and
+// It receives Samples through the Sample method and
 // sends samples to the MetricSink configured over SetSink. The forwarded Samples
 // can be the same as received, completely new generated samples, and also a different
-// number of Samples from the incoming ones. The Header can also be changed, but hten
+// number of Samples from the incoming ones. The Header can also be changed, but then
 // the SampleProcessor implementation must take care to adjust the outgoing
 // Samples accordingly. All required goroutines must be started in Start()
 // and stopped when Close() is called. The Stop() method must be ignored,
 // see MetricSink.
 type SampleProcessor interface {
 	golib.Task
-	Header(header *Header) error
 	Sample(sample *Sample, header *Header) error
 	SetSink(sink MetricSink)
 	Close()
@@ -89,16 +88,6 @@ type AbstractProcessor struct {
 	AbstractMetricSource
 	AbstractMetricSink
 	stopChan chan error
-}
-
-// Header implements the SampleProcessor interface. It checks if a sink has been
-// defined for this processor and then forwards the header to that sink.
-func (p *AbstractProcessor) Header(header *Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	} else {
-		return p.OutgoingSink.Header(header)
-	}
 }
 
 // Sample implements the SampleProcessor interface. It performs a sanity check

@@ -26,6 +26,7 @@ func (sink *ConsoleSink) String() string {
 // spawned, only a log message is printed.
 func (sink *ConsoleSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	log.WithField("format", sink.Marshaller).Println("Printing samples")
+	sink.stream = sink.Writer.Open(nopWriteCloser{os.Stdout}, sink.Marshaller)
 	return nil
 }
 
@@ -38,19 +39,12 @@ func (sink *ConsoleSink) Close() {
 }
 
 // Header implements the MetricSink interface by using a SampleStream to
-// write the given Header to the standard output.
-func (sink *ConsoleSink) Header(header *Header) error {
-	sink.stream = sink.Writer.Open(nopWriteCloser{os.Stdout}, sink.Marshaller)
-	return sink.stream.Header(header)
-}
-
-// Header implements the MetricSink interface by using a SampleStream to
 // write the given Sample to the standard output.
 func (sink *ConsoleSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	return sink.stream.Sample(sample)
+	return sink.stream.Sample(sample, header)
 }
 
 // ConsoleSource implements the MetricSource interface by reading Headers and

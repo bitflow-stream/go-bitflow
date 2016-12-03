@@ -355,11 +355,11 @@ type FileSink struct {
 	// When deleting these files fails, the FileSink stops and reports an error.
 	CleanFiles bool
 
-	group      FileGroup
-	lastHeader *Header
-	file_num   int
-	stream     *SampleOutputStream
-	closed     *golib.OneshotCondition
+	checker  HeaderChecker
+	group    FileGroup
+	file_num int
+	stream   *SampleOutputStream
+	closed   *golib.OneshotCondition
 }
 
 // String implements the MetricSink interface.
@@ -457,24 +457,15 @@ func (sink *FileSink) openNextNewFile() (file *os.File, err error) {
 	}
 }
 
-// Header starts a new output file if it is called the first time, or if the
-// header parameter is different from the last received header parameter.
-// When opening a new file, the header is written to the file.
-func (sink *FileSink) Header(header *Header) error {
-	if !header.Equals(sink.lastHeader) {
-		if err := sink.openNextFile(); err != nil {
-			return err
-		}
-		sink.lastHeader = header
-		return sink.stream.Header(header)
-	}
-	return nil
-}
-
 // Sample writes a Sample to the current open file.
 func (sink *FileSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	return sink.stream.Sample(sample)
+	if sink.checker.HeaderChanged(header) {
+		if err := sink.openNextFile(); err != nil {
+			return err
+		}
+	}
+	return sink.stream.Sample(sample, header)
 }

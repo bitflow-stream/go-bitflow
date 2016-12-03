@@ -135,10 +135,6 @@ func (conn *tcpListenerConnection) closeStream() {
 // all incoming Headers and Samples to those connections. If a new header should
 // be sent into a TCP connection, the old connection is instead closed and
 // the TCPListenerSink waits for a new connection to be created.
-//
-// TODO this should optionally support to block for in Header()/Sample() when no
-// connection is established. Samples could be stored in a queue for buffering
-// until one or more connections are available
 type TCPListenerSink struct {
 	// AbstractTcpSink defines parameters for controlling TCP and marshalling
 	// aspects of the TCPListenerSink. See AbstractTcpSink for details.
@@ -146,8 +142,6 @@ type TCPListenerSink struct {
 
 	connections map[*TcpWriteConn]bool
 	task        *golib.TCPListenerTask
-	lastHeader  *Header
-	headerLock  sync.Mutex
 }
 
 // NewTcpListenerSink creates a new TCPListener sink listening on the given local
@@ -192,44 +186,13 @@ func (sink *TCPListenerSink) handleConnection(_ *sync.WaitGroup, conn *net.TCPCo
 	if !sink.countConnectionAccepted(conn) {
 		return
 	}
-	writeConn, header := sink.openTcpOutputStream(conn)
-	if writeConn != nil {
-		writeConn.Header(header)
-	}
-}
-
-func (sink *TCPListenerSink) openTcpOutputStream(conn *net.TCPConn) (*TcpWriteConn, *Header) {
-	sink.headerLock.Lock()
-	defer sink.headerLock.Unlock()
 	writeConn := sink.OpenWriteConn(conn)
 	sink.connections[writeConn] = true
-	if sink.lastHeader == nil {
-		// A connection was established before we received the first header.
-		// Send an empty header, the connection will be closed when the first header arrives.
-		sink.lastHeader = new(Header)
-	}
-	return writeConn, sink.lastHeader
-}
-
-// Header implements the MetricSink interface. If currently one or more connections
-// are established with remote hosts, they are all closed and the header is stored
-// to wait for new connections to be established. Any connection established after a
-// call to Header will immediately received the last stored header.
-func (sink *TCPListenerSink) Header(header *Header) error {
-	sink.headerLock.Lock()
-	defer sink.headerLock.Unlock()
-	sink.lastHeader = header
-	// Close all running connections, since we have to negotiate a new header.
-	for conn := range sink.connections {
-		sink.cleanupConnection(conn)
-	}
-	return nil
 }
 
 // Samples implements the MetricSink interface by sending the Sample on all currently
 // established TCP connections. If no connection is currently established, the sample
 // is simply dropped.
-// TODO this should support blocking to wait for an established connection, see TCPListenerSink.
 func (sink *TCPListenerSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
@@ -240,7 +203,7 @@ func (sink *TCPListenerSink) Sample(sample *Sample, header *Header) error {
 			sink.cleanupConnection(conn)
 			continue
 		}
-		conn.Sample(sample)
+		conn.Sample(sample, header)
 	}
 	return nil
 }
@@ -251,4 +214,51 @@ func (sink *TCPListenerSink) cleanupConnection(conn *TcpWriteConn) {
 	if !sink.countConnectionClosed() {
 		sink.Close()
 	}
+}
+
+// ======================================= output sample buffer =======================================
+
+// TODO finish implementation: add optional buffer that is delivered to every
+// new connection
+
+type outputSampleBuffer struct {
+	capacity int
+	size     int
+	first    *sampleListLink
+	last     *sampleListLink
+	cond     sync.Cond
+}
+
+type sampleListLink struct {
+	sample *Sample
+	next   *sampleListLink
+}
+
+func (l *outputSampleBuffer) add(sample *Sample) {
+	link := &sampleListLink{
+		sample: sample,
+	}
+	if l.first == nil {
+		l.first = link
+	} else {
+		l.last.next = link
+	}
+	l.last = link
+	if l.size >= l.capacity {
+		l.first = l.first.next
+	} else {
+		l.size++
+	}
+}
+
+func (b *outputSampleBuffer) next(l *sampleListLink) *sampleListLink {
+	if l.next != nil {
+		return l.next
+	}
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+	for l.next == nil {
+		b.cond.Wait()
+	}
+	return l.next
 }

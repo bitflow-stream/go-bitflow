@@ -30,27 +30,51 @@ type Marshaller interface {
 // from the parsing part. One goroutine can continuously call ReadSampleData(), while multiple
 // other routines execute ParseSample() in parallel.
 type Unmarshaller interface {
+
+	// String returns a short description of the Unmarshaller.
 	String() string
 
-	// ReadHeader should read and parse an entire reader from the input.
-	// The io.EOF error is not a valid return value and treated as an erro.
-	ReadHeader(input *bufio.Reader) (*Header, error)
-
-	// ReadSampleData reads data from the stream, until a full Sample has been
-	// read. The data is not parsed, the only task if this is to read exactly
-	// the right amount of data. The size of the Sample should be known from the header.
-	// The io.EOF error is a valid return value and indicates the end of the stream.
+	// Read must inspect the data in the stream and perform exactly one of two tasks:
+	// read a header, or read a sample.
+	// The Unmarshaller must be able to distinguish between a header and a sample based
+	// on the first bytes received from the stream. If the previousHeader parameter is nil,
+	// the Unmarshaller must attempt to receive a header, regardless of the stream contents.
+	//
+	// If a header is read, it is also parsed and a Header instance is allocated.
+	// A pointer to the new header is returned, the sampleData byte-slice must be returned as nil.
+	//
+	// If sample data is read, Read must read data from the stream, until a full Sample has been read.
+	// The sample data is not parsed, the ParseSample() method will be invoked separately.
+	// The size of the Sample should be known based on the previousHeader parameter.
+	// If sample data is read, is must be returned as the sampleData return value, and the Header pointer
+	// must be returned as nil.
+	//
+	// Error handling:
+	// The io.EOF error indicates that the read operation was successfull, and the stream was closed
+	// immediately after receiving the data.
 	// If io.EOF occurs too early the stream, it should be converted to io.ErrUnexpectedEOF
-	// to avoid confusion.
-	ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error)
+	// to indicate an actual error condition.
+	Read(input *bufio.Reader, previousHeader *Header) (newHeader *Header, sampleData []byte, err error)
 
 	// ParseSample uses a header and a byte buffer to parse it to a newly
-	// allocated Sample instance. The returned error indicates that the
+	// allocated Sample instance. A non-nil error indicates that the
 	// data was in the wrong format.
 	ParseSample(header *Header, data []byte) (*Sample, error)
 }
 
-func checkFirstCol(col string) error {
+// BidiMarshaller is a bidirectional marshaller that combines the
+// Marshaller and Unmarshaller interfaces.
+type BidiMarshaller interface {
+	Read(input *bufio.Reader, previousHeader *Header) (newHeader *Header, sampleData []byte, err error)
+	ParseSample(header *Header, data []byte) (*Sample, error)
+	WriteHeader(header *Header, output io.Writer) error
+	WriteSample(sample *Sample, header *Header, output io.Writer) error
+}
+
+func checkFirstCol(col string, readErr error) error {
+	if unexpected := unexpectedEOF(readErr); unexpected != nil {
+		return unexpected
+	}
 	if col != time_col {
 		if len(col) >= 20 {
 			col = col[:20] + "..."
@@ -58,6 +82,13 @@ func checkFirstCol(col string) error {
 		return fmt.Errorf("First column should be %v, but found: %q", time_col, col)
 	}
 	return nil
+}
+
+func unexpectedEOF(err error) error {
+	if err == io.EOF {
+		return io.ErrUnexpectedEOF
+	}
+	return err
 }
 
 func detectFormat(input *bufio.Reader) (Unmarshaller, error) {

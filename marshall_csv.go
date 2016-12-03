@@ -2,6 +2,7 @@ package bitflow
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +18,7 @@ const (
 
 	// CsvNewline is used by CsvMarshaller after outputting the header line and
 	// each sample.
-	CsvNewline = "\n"
+	CsvNewline = '\n'
 
 	// CsvDateFormat is the format used by CsvMarshaller to marshall the timestamp
 	// of samples.
@@ -31,11 +32,15 @@ const (
 // contain tags). After that the header contains a list of all metrics.
 //
 // Every sample is marshalled to a comma-separated line starting with a textual
-// representation of the timestamp (see CsvDateFormat), then a space-separated
+// representation of the timestamp (see CsvDateFormat, UTC timezone), then a space-separated
 // key-value list for the tags (only if the 'tags' field was included in the header),
 // and then all the metric values in the same order as on the preceding header line.
-// To follow the semantics of a correct CSV file, every changing header should start
+// To follow the semantics of a correct CSV file, every changed header should start
 // a new CSV file.
+//
+// CsvMarshaller can deal with multiple header declarations in the same file or
+// data stream. A line that begins with the string "time" is assumed to start a new header,
+// since samples usually start with a timestamp, which cannot be formatted as "time".
 //
 // There are no configuration options for CsvMarshaller.
 type CsvMarshaller struct {
@@ -58,46 +63,14 @@ func (*CsvMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 		w.WriteByte(CsvSeparator)
 		w.WriteStr(name)
 	}
-	w.WriteStr(CsvNewline)
+	w.WriteStr(string(CsvNewline))
 	return w.Err
-}
-
-func splitCsvLine(line []byte) []string {
-	return strings.Split(string(line), string(CsvSeparator))
-}
-
-// ReadHeader implements the Unmarshaller interface by reading and parsing a CSV header line.
-func (*CsvMarshaller) ReadHeader(reader *bufio.Reader) (header *Header, err error) {
-	line, err := reader.ReadBytes(CsvNewline[0])
-	if err == io.EOF {
-		err = nil
-	} else if err != nil {
-		return
-	} else if len(line) > 0 {
-		line = line[:len(line)-1] // Strip newline char
-	}
-	if len(line) == 0 {
-		err = errors.New("Empty header")
-		return
-	}
-	fields := splitCsvLine(line)
-	if err = checkFirstCol(fields[0]); err != nil {
-		return
-	}
-	header = new(Header)
-	header.HasTags = len(fields) >= 2 && fields[1] == tags_col
-	start := 1
-	if header.HasTags {
-		start++
-	}
-	header.Fields = fields[start:]
-	return
 }
 
 // WriteSample implements the Marshaller interface by writing a CSV line.
 func (*CsvMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
-	w.WriteStr(sample.Time.Format(CsvDateFormat))
+	w.WriteStr(sample.Time.UTC().Format(CsvDateFormat))
 	if header.HasTags {
 		tags := sample.TagString()
 		w.WriteByte(CsvSeparator)
@@ -107,22 +80,62 @@ func (*CsvMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writ
 		w.WriteByte(CsvSeparator)
 		w.WriteStr(fmt.Sprintf("%v", value))
 	}
-	w.WriteStr(CsvNewline)
+	w.WriteStr(string(CsvNewline))
 	return w.Err
 }
 
-// ReadSampleData implements the Unmarshaller interface by reading data until
-// the next newline character.
-func (*CsvMarshaller) ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error) {
-	data, err := input.ReadBytes(CsvNewline[0])
+func splitCsvLine(line []byte) []string {
+	return strings.Split(string(line), string(CsvSeparator))
+}
+
+func (c *CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Header, []byte, error) {
+	line, err := reader.ReadBytes(CsvNewline)
 	if err == io.EOF {
-		if len(data) > 0 {
-			err = nil
-		}
-	} else if len(data) > 0 {
-		data = data[:len(data)-1] // Strip newline char
+		// Ignore here
+	} else if err != nil {
+		return nil, nil, err
+	} else if len(line) == 1 {
+		return nil, nil, errors.New("Empty CSV line")
+	} else if len(line) > 0 {
+		line = line[:len(line)-1] // Strip newline char
 	}
-	return data, err
+	index := bytes.Index(line, []byte{CsvSeparator})
+	var firstField string
+	if index < 0 {
+		firstField = string(line) // Only one field
+	} else {
+		firstField = string(line[:index])
+	}
+
+	switch {
+	case previousHeader == nil:
+		if checkErr := checkFirstCol(firstField, err); checkErr != nil {
+			return nil, nil, checkErr
+		}
+		return c.parseHeader(line), nil, nil
+	case firstField == time_col:
+		if checkErr := unexpectedEOF(err); checkErr != nil {
+			return nil, nil, checkErr
+		}
+		return c.parseHeader(line), nil, nil
+	default:
+		return nil, line, nil
+	}
+}
+
+func (*CsvMarshaller) parseHeader(line []byte) *Header {
+	fields := splitCsvLine(line)
+	hasTags := len(fields) >= 2 && fields[1] == tags_col
+	header := &Header{HasTags: hasTags}
+	start := 1
+	if hasTags {
+		start++
+	}
+	header.Fields = fields[start:]
+	if len(header.Fields) == 0 {
+		header.Fields = nil
+	}
+	return header
 }
 
 // ParseSample implements the Unmarshaller interface by parsing a CSV line.

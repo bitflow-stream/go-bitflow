@@ -11,21 +11,31 @@ import (
 	"time"
 )
 
+var sampleStart = []byte("X") // Arbitrary, but should not collide with time_col ("time"). Human-readable for convenience.
+
 const (
 	timeBytes        = 8
 	valBytes         = 8
 	binary_separator = '\n'
 )
 
+func init() {
+	if bytes.HasPrefix([]byte(time_col), sampleStart) {
+		panic("bitflow.sampleStart collides with bitflow.time_col")
+	}
+}
+
 // BinaryMarshaller marshalled every sample to a dense binary format.
 //
 // The header is marshalled to a newline-separated list of strings. The first
 // field is 'time', the second field is 'tags' if the following samples include tags.
 // The following fields are the names of the metrics in the header.
-// An empty lne denotes the end of the header.
+// An empty line denotes the end of the header.
 //
-// After the header, every sample is marshalled as folows.
-// First the timestamp is marshalled as a big-endian unsigned int64 value containing the
+// After the header, every sample is marshalled as follows.
+// A special byte sequence signals the start of a samples. This is used to distinguish between
+// sample data and a new header. Headers always start with the string "time".
+// Then, the timestamp is marshalled as a big-endian unsigned int64 value containing the
 // nanoseconds since the Unix epoch (8 bytes).
 // Then the tags are marshalled as a newline-delimited string containing a space-separated
 // list of key-values pairs for the tags. If the 'tags' field was missing in the header
@@ -62,41 +72,14 @@ func (*BinaryMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	return w.Err
 }
 
-// ReadHeader implements the Unmarshaller interface by reading until an empty line
-// and splitting the read data on newline characters.
-func (*BinaryMarshaller) ReadHeader(reader *bufio.Reader) (header *Header, err error) {
-	name, err := reader.ReadBytes(binary_separator)
-	if err != nil {
-		return
-	}
-	if err = checkFirstCol(string(name[:len(name)-1])); err != nil {
-		return
-	}
-
-	header = new(Header)
-	first := true
-	for {
-		var nameBytes []byte
-		nameBytes, err = reader.ReadBytes(binary_separator)
-		if err != nil {
-			return
-		}
-		if len(nameBytes) <= 1 {
-			return
-		}
-		name := string(nameBytes[:len(nameBytes)-1])
-		if first && name == tags_col {
-			header.HasTags = true
-		} else {
-			header.Fields = append(header.Fields, name)
-		}
-		first = false
-	}
-}
-
 // WriteSample implements the Marshaller interface by writing the Sample out in a
 // dense binary format. See the BinaryMarshaller godoc for information on the format.
 func (m *BinaryMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
+	// Special bytes preceding each sample
+	if _, err := writer.Write(sampleStart); err != nil {
+		return err
+	}
+
 	// Time as big-endian uint64 nanoseconds since Unix epoch
 	tim := make([]byte, timeBytes)
 	binary.BigEndian.PutUint64(tim, uint64(sample.Time.UnixNano()))
@@ -127,9 +110,69 @@ func (m *BinaryMarshaller) WriteSample(sample *Sample, header *Header, writer io
 	return nil
 }
 
+// ReadHeader implements the Unmarshaller interface by reading until an empty line
+// and splitting the read data on newline characters.
+//
 // ReadSampleData implements the Unmarshaller interface by reading data for a single
 // Sample into a buffer. The size of the Sample is derived from the Header.
-func (*BinaryMarshaller) ReadSampleData(header *Header, input *bufio.Reader) ([]byte, error) {
+func (b *BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Header, []byte, error) {
+	start, err := reader.Peek(len(sampleStart))
+	if err == bufio.ErrBufferFull {
+		return nil, nil, errors.New("Buffer too small to distinguish binary sample and header")
+	} else if err == io.EOF {
+		// Ignore here
+	} else if err != nil {
+		return nil, nil, err
+	}
+
+	switch {
+	case previousHeader == nil || bytes.HasPrefix([]byte(time_col), start):
+		if unexpected := unexpectedEOF(err); unexpected != nil {
+			return nil, nil, unexpected
+		}
+		header, err := b.readHeader(reader)
+		return header, nil, err
+	case bytes.Equal(start, sampleStart):
+		reader.Discard(len(start)) // No error
+		data, err := b.readSampleData(previousHeader, reader)
+		return nil, data, err
+	default:
+		return nil, nil, fmt.Errorf("Bitflow binary protocol error, unexpected: %s. Expected %s or %s.",
+			start, sampleStart, time_col[:len(sampleStart)])
+	}
+}
+
+func (*BinaryMarshaller) readHeader(reader *bufio.Reader) (header *Header, err error) {
+	name, err := reader.ReadBytes(binary_separator)
+	if err != nil {
+		return
+	}
+	if err = checkFirstCol(string(name[:len(name)-1]), err); err != nil {
+		return
+	}
+
+	header = new(Header)
+	first := true
+	for {
+		var nameBytes []byte
+		nameBytes, err = reader.ReadBytes(binary_separator)
+		if err != nil {
+			return
+		}
+		if len(nameBytes) <= 1 {
+			return
+		}
+		name := string(nameBytes[:len(nameBytes)-1])
+		if first && name == tags_col {
+			header.HasTags = true
+		} else {
+			header.Fields = append(header.Fields, name)
+		}
+		first = false
+	}
+}
+
+func (*BinaryMarshaller) readSampleData(header *Header, input *bufio.Reader) ([]byte, error) {
 	valuelen := valBytes * len(header.Fields)
 	minlen := timeBytes + valuelen
 	data := make([]byte, minlen)
@@ -161,13 +204,6 @@ func (*BinaryMarshaller) ReadSampleData(header *Header, input *bufio.Reader) ([]
 			return result, nil
 		}
 	}
-}
-
-func unexpectedEOF(err error) error {
-	if err == io.EOF {
-		return io.ErrUnexpectedEOF
-	}
-	return err
 }
 
 // ParseSample implements the Unmarshaller interface by parsing the byte buffer

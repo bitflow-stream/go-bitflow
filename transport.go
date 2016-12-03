@@ -12,8 +12,22 @@ import (
 // The main interface for this task is MetricSink, but a few types implement only
 // MetricSinkBase, without the additional methods from golib.Task and Close().
 type MetricSinkBase interface {
-	Header(header *Header) error
 	Sample(sample *Sample, header *Header) error
+}
+
+// HeaderChecker is a helper type for implementations of MetricSinkBase
+// to find out, when the incoming header changes.
+type HeaderChecker struct {
+	LastHeader *Header
+}
+
+// HeaderChanged returns true, if the newHeader parameter represents a different header
+// from the last time HeaderChanged was called. The result will also be true for
+// the first time this method is called.
+func (h *HeaderChecker) HeaderChanged(newHeader *Header) bool {
+	changed := !newHeader.Equals(h.LastHeader)
+	h.LastHeader = newHeader
+	return changed
 }
 
 // A MetricSink receives samples and headers to do arbitrary operations on them.
@@ -190,19 +204,6 @@ func (agg AggregateSink) SetMarshaller(marshaller Marshaller) {
 	}
 }
 
-// Header implements MetricSink by forwarding the call to all MetricSinks in
-// the receiver. This is not done in parallel. All errors are combined and
-// returned as one error.
-func (agg AggregateSink) Header(header *Header) error {
-	var errors golib.MultiError
-	for _, sink := range agg {
-		if err := sink.Header(header); err != nil {
-			errors.Add(err)
-		}
-	}
-	return errors.NilOrError()
-}
-
 // Sample implements MetricSink by forwarding the call to all MetricSinks in
 // the receiver. This is not done in parallel. All errors are combined and
 // returned as one error. A sanity check makes sure that the Sample and the
@@ -226,13 +227,6 @@ func (agg AggregateSink) Sample(sample *Sample, header *Header) error {
 type SynchronizingMetricSink struct {
 	OutgoingSink MetricSink
 	mutex        sync.Mutex
-}
-
-// Header implements the MetricSinkBase interface.
-func (s *SynchronizingMetricSink) Header(header *Header) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	return s.OutgoingSink.Header(header)
 }
 
 // Sample implements the MetricSinkBase interface.
@@ -288,6 +282,7 @@ func (state *parallelSampleStream) hasError() bool {
 type bufferedSample struct {
 	stream   *parallelSampleStream
 	data     []byte
+	header   *Header // Used for marshalling and unmarshalling/parsing
 	sample   *Sample
 	done     bool
 	doneCond *sync.Cond

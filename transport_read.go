@@ -69,8 +69,8 @@ type SampleInputStream struct {
 	reader           *bufio.Reader
 	underlyingReader io.ReadCloser
 	num_samples      int
-	header           *Header
-	outHeader        *Header
+	header           *Header // Header received from the input stream
+	outHeader        *Header // Header after modified by the ReadSampleHandler
 	sink             MetricSinkBase
 }
 
@@ -108,8 +108,12 @@ func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink MetricSinkBase, bu
 // created this SampleInputStream. The source string will be used for both the HandleHeader() and
 // HandleSample() methods.
 func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
-	if err := stream.readHeader(source); err != nil {
-		return 0, err
+	if stream.um == nil {
+		if um, err := detectFormat(stream.reader); err != nil {
+			return 0, err
+		} else {
+			stream.um = um
+		}
 	}
 
 	// Parse samples
@@ -122,7 +126,7 @@ func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 	stream.wg.Add(1)
 	go stream.sinkSamples()
 
-	stream.readData()
+	stream.readData(source)
 	stream.wg.Wait()
 	if stream.err == io.EOF {
 		stream.err = nil // io.EOF is expected
@@ -209,31 +213,7 @@ func (stream *SampleInputStream) Format() string {
 	}
 }
 
-func (stream *SampleInputStream) readHeader(source string) (err error) {
-	if stream.um == nil {
-		if stream.um, err = detectFormat(stream.reader); err != nil {
-			return
-		}
-	}
-	if stream.header, err = stream.um.ReadHeader(stream.reader); err != nil {
-		return
-	}
-	log.WithFields(log.Fields{"format": stream.um, "source": source}).Println("Reading", len(stream.header.Fields), "metrics")
-	stream.outHeader = &Header{
-		Fields:  make([]string, len(stream.header.Fields)),
-		HasTags: stream.header.HasTags,
-	}
-	copy(stream.outHeader.Fields, stream.header.Fields)
-	if handler := stream.sampleReader.Handler; handler != nil {
-		handler.HandleHeader(stream.outHeader, source)
-	}
-	if err = stream.sink.Header(stream.outHeader); err != nil {
-		return
-	}
-	return
-}
-
-func (stream *SampleInputStream) readData() {
+func (stream *SampleInputStream) readData(source string) {
 	defer func() {
 		stream.closeUnderlyingReader()
 		close(stream.incoming)
@@ -244,25 +224,50 @@ func (stream *SampleInputStream) readData() {
 		if stream.hasError() {
 			return
 		}
-		if data, err := stream.um.ReadSampleData(stream.header, stream.reader); err != nil {
+
+		if header, data, err := stream.um.Read(stream.reader, stream.header); err != nil {
 			stream.err = err
 			return
 		} else {
-			s := &bufferedIncomingSample{
-				bufferedSample: bufferedSample{
-					stream:   &stream.parallelSampleStream,
-					data:     data,
-					doneCond: sync.NewCond(new(sync.Mutex)),
-				},
+			if header != nil {
+				stream.updateHeader(header, source)
+			} else {
+				s := &bufferedIncomingSample{
+					outHeader: stream.outHeader,
+					bufferedSample: bufferedSample{
+						header:   stream.header,
+						stream:   &stream.parallelSampleStream,
+						data:     data,
+						doneCond: sync.NewCond(new(sync.Mutex)),
+					},
+				}
+				select {
+				case stream.outgoing <- s:
+				case <-closedChan:
+					return
+				}
+				stream.incoming <- s
 			}
-			select {
-			case stream.outgoing <- s:
-			case <-closedChan:
-				return
-			}
-			stream.incoming <- s
 		}
 	}
+}
+
+func (stream *SampleInputStream) updateHeader(header *Header, source string) (err error) {
+	if stream.header == nil {
+		log.WithFields(log.Fields{"format": stream.um, "source": source}).Println("Reading", len(header.Fields), "metrics")
+	} else {
+		log.WithFields(log.Fields{"format": stream.um, "source": source}).Println("Updated header to", len(header.Fields), "metrics")
+	}
+	stream.header = header
+	stream.outHeader = &Header{
+		Fields:  make([]string, len(header.Fields)),
+		HasTags: header.HasTags,
+	}
+	copy(stream.outHeader.Fields, header.Fields)
+	if handler := stream.sampleReader.Handler; handler != nil {
+		handler.HandleHeader(stream.outHeader, source)
+	}
+	return
 }
 
 func (stream *SampleInputStream) parseSamples(source string) {
@@ -274,7 +279,7 @@ func (stream *SampleInputStream) parseSamples(source string) {
 
 func (stream *SampleInputStream) parseOne(source string, sample *bufferedIncomingSample) {
 	defer sample.notifyDone()
-	if parsedSample, err := stream.um.ParseSample(stream.header, sample.data); err != nil {
+	if parsedSample, err := stream.um.ParseSample(sample.header, sample.data); err != nil {
 		if !stream.hasError() {
 			stream.err = err
 		}
@@ -296,7 +301,7 @@ func (stream *SampleInputStream) sinkSamples() {
 			// The first parser error makes the input stream stop.
 			return
 		}
-		if err := stream.sink.Sample(sample.sample, stream.outHeader); err != nil {
+		if err := stream.sink.Sample(sample.sample, sample.outHeader); err != nil {
 			stream.err = err
 			return
 		}
@@ -309,4 +314,5 @@ func (stream *SampleInputStream) sinkSamples() {
 type bufferedIncomingSample struct {
 	bufferedSample
 	ParserError bool
+	outHeader   *Header
 }

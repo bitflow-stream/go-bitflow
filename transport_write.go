@@ -3,7 +3,6 @@ package bitflow
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"io"
 	"sync"
 
@@ -23,7 +22,7 @@ type SampleWriter struct {
 
 // SampleOutputStream represents one open output stream that marshalls and writes
 // Headers and Samples in parallel. It is created by using SampleWriter.Open or
-// SampleWriter.OpenBuffered. The Header()s and Sample() methods can be used
+// SampleWriter.OpenBuffered. The Sample() method can be used
 // to output data on this stream, and the Close() method must be called when no
 // more Samples are expected. No more data can be written after calling Close().
 type SampleOutputStream struct {
@@ -31,8 +30,6 @@ type SampleOutputStream struct {
 	incoming       chan *bufferedSample
 	outgoing       chan *bufferedSample
 	closed         *golib.OneshotCondition
-	headerLock     sync.Mutex
-	header         *Header
 	writer         io.WriteCloser
 	marshaller     Marshaller
 	marshallBuffer int
@@ -100,34 +97,6 @@ func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *Sampl
 	return stream
 }
 
-// Header marshalls the given header and writes the resulting byte buffer into
-// the writer behind the stream receiver. If a non-nil error is returned here,
-// the stream should not be used any further, but still must be closed externally.
-func (stream *SampleOutputStream) Header(header *Header) error {
-	if stream == nil {
-		return nil
-	}
-	stream.headerLock.Lock()
-	defer stream.headerLock.Unlock()
-	if stream.hasError() {
-		return stream.err
-	}
-	if stream.header == nil {
-		if err := stream.marshaller.WriteHeader(header, stream.writer); err != nil {
-			stream.err = err
-		}
-		if err := stream.flushBuffered(); err != nil {
-			stream.err = err
-		}
-		stream.header = header
-	} else {
-		if !stream.hasError() && stream.header != nil {
-			return errors.New("A header has already been written to this stream")
-		}
-	}
-	return stream.err
-}
-
 func (stream *SampleOutputStream) flushBuffered() error {
 	if buf, ok := stream.writer.(*BufferedWriteCloser); ok {
 		return buf.Flush()
@@ -138,12 +107,13 @@ func (stream *SampleOutputStream) flushBuffered() error {
 // Sample marshalles the given Sample and writes the resulting byte buffer into the
 // writer behind the stream receiver. If a non-nil error is returned here,
 // the stream should not be used any further, but still must be closed externally.
-func (stream *SampleOutputStream) Sample(sample *Sample) error {
+func (stream *SampleOutputStream) Sample(sample *Sample, header *Header) error {
 	if stream.hasError() {
 		return stream.err
 	}
 	bufferedSample := &bufferedSample{
 		stream:   &stream.parallelSampleStream,
+		header:   header,
 		sample:   sample,
 		doneCond: sync.NewCond(new(sync.Mutex)),
 	}
@@ -185,14 +155,8 @@ func (stream *SampleOutputStream) marshallOne(sample *bufferedSample) {
 	if stream.hasError() {
 		return
 	}
-	if stream.header == nil {
-		if !stream.hasError() {
-			stream.err = errors.New("Cannot write Sample before a Header")
-		}
-		return
-	}
 	buf := bytes.NewBuffer(make([]byte, 0, stream.marshallBuffer))
-	stream.marshaller.WriteSample(sample.sample, stream.header, buf)
+	stream.marshaller.WriteSample(sample.sample, sample.header, buf)
 	if l := buf.Len(); l > stream.marshallBuffer {
 		// Avoid buffer copies for future samples
 		// TODO could reuse allocated buffers
@@ -203,10 +167,21 @@ func (stream *SampleOutputStream) marshallOne(sample *bufferedSample) {
 
 func (stream *SampleOutputStream) flush() {
 	defer stream.wg.Done()
+	var checker HeaderChecker
 	for sample := range stream.outgoing {
 		sample.waitDone()
 		if stream.hasError() {
 			return
+		}
+		if checker.HeaderChanged(sample.header) {
+			if err := stream.marshaller.WriteHeader(sample.header, stream.writer); err != nil {
+				stream.err = err
+				return
+			}
+			if err := stream.flushBuffered(); err != nil {
+				stream.err = err
+				return
+			}
 		}
 		if _, err := stream.writer.Write(sample.data); err != nil {
 			stream.err = err
