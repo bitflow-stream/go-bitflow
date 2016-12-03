@@ -50,9 +50,10 @@ type Unmarshaller interface {
 	// must be returned as nil.
 	//
 	// Error handling:
-	// The io.EOF error indicates that the read operation was successfull, and the stream was closed
-	// immediately after receiving the data.
-	// If io.EOF occurs too early the stream, it should be converted to io.ErrUnexpectedEOF
+	// The io.EOF error can be returned in two cases: 1) the read operation was successful and complete,
+	// but the stream ended immediately afterwards, or 2) the stream was already empty. In the second
+	// case, both other return values must be nil.
+	// If io.EOF occurs in the middle of reading the stream, it must be converted to io.ErrUnexpectedEOF
 	// to indicate an actual error condition.
 	Read(input *bufio.Reader, previousHeader *Header) (newHeader *Header, sampleData []byte, err error)
 
@@ -69,19 +70,19 @@ type BidiMarshaller interface {
 	ParseSample(header *Header, data []byte) (*Sample, error)
 	WriteHeader(header *Header, output io.Writer) error
 	WriteSample(sample *Sample, header *Header, output io.Writer) error
+	String() string
 }
 
-func checkFirstCol(col string, readErr error) error {
-	if unexpected := unexpectedEOF(readErr); unexpected != nil {
-		return unexpected
-	}
-	if col != time_col {
-		if len(col) >= 20 {
-			col = col[:20] + "..."
+func readUntil(reader *bufio.Reader, delim byte) (data []byte, err error) {
+	data, err = reader.ReadBytes(delim)
+	if err == io.EOF {
+		if len(data) > 0 && data[len(data)-1] != delim {
+			err = io.ErrUnexpectedEOF
 		}
-		return fmt.Errorf("First column should be %v, but found: %q", time_col, col)
+	} else if len(data) == 0 && err != nil {
+		err = errors.New("Bitflow: empty read")
 	}
-	return nil
+	return
 }
 
 func unexpectedEOF(err error) error {
@@ -89,6 +90,16 @@ func unexpectedEOF(err error) error {
 		return io.ErrUnexpectedEOF
 	}
 	return err
+}
+
+func checkFirstCol(col string) error {
+	if col != time_col {
+		if len(col) >= 20 {
+			col = col[:20] + "..."
+		}
+		return fmt.Errorf("First column should be %v, but found: %q", time_col, col)
+	}
+	return nil
 }
 
 func detectFormat(input *bufio.Reader) (Unmarshaller, error) {

@@ -38,6 +38,8 @@ const (
 // To follow the semantics of a correct CSV file, every changed header should start
 // a new CSV file.
 //
+// Every CSV line must be terminated by a newline character (including the last line in a file).
+//
 // CsvMarshaller can deal with multiple header declarations in the same file or
 // data stream. A line that begins with the string "time" is assumed to start a new header,
 // since samples usually start with a timestamp, which cannot be formatted as "time".
@@ -88,10 +90,18 @@ func splitCsvLine(line []byte) []string {
 	return strings.Split(string(line), string(CsvSeparator))
 }
 
+// Read implements the Unmarshaller interface by reading CSV line from the input stream.
+// Based on the first field, Read decides whether the line represents a header or a Sample.
+// In case of a header, the CSV fields are split and parsed to a Header instance.
+// In case of a Sample, the data for the line is returned unparsed.
 func (c *CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Header, []byte, error) {
-	line, err := reader.ReadBytes(CsvNewline)
+	line, err := readUntil(reader, CsvNewline)
 	if err == io.EOF {
-		// Ignore here
+		if len(line) == 0 {
+			return nil, nil, err
+		} else {
+			// Ignore here
+		}
 	} else if err != nil {
 		return nil, nil, err
 	} else if len(line) == 1 {
@@ -109,17 +119,14 @@ func (c *CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Hea
 
 	switch {
 	case previousHeader == nil:
-		if checkErr := checkFirstCol(firstField, err); checkErr != nil {
+		if checkErr := checkFirstCol(firstField); checkErr != nil {
 			return nil, nil, checkErr
 		}
-		return c.parseHeader(line), nil, nil
+		return c.parseHeader(line), nil, err
 	case firstField == time_col:
-		if checkErr := unexpectedEOF(err); checkErr != nil {
-			return nil, nil, checkErr
-		}
-		return c.parseHeader(line), nil, nil
+		return c.parseHeader(line), nil, err
 	default:
-		return nil, line, nil
+		return nil, line, err
 	}
 }
 

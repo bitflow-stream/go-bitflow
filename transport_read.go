@@ -225,28 +225,33 @@ func (stream *SampleInputStream) readData(source string) {
 			return
 		}
 
-		if header, data, err := stream.um.Read(stream.reader, stream.header); err != nil {
+		header, data, err := stream.um.Read(stream.reader, stream.header)
+		if err != nil {
 			stream.err = err
-			return
+			if err != io.EOF || (len(data) == 0 && header == nil) {
+				return
+			}
+		}
+		if header != nil {
+			stream.updateHeader(header, source)
 		} else {
-			if header != nil {
-				stream.updateHeader(header, source)
-			} else {
-				s := &bufferedIncomingSample{
-					outHeader: stream.outHeader,
-					bufferedSample: bufferedSample{
-						header:   stream.header,
-						stream:   &stream.parallelSampleStream,
-						data:     data,
-						doneCond: sync.NewCond(new(sync.Mutex)),
-					},
-				}
-				select {
-				case stream.outgoing <- s:
-				case <-closedChan:
-					return
-				}
-				stream.incoming <- s
+			s := &bufferedIncomingSample{
+				outHeader: stream.outHeader,
+				bufferedSample: bufferedSample{
+					header:   stream.header,
+					stream:   &stream.parallelSampleStream,
+					data:     data,
+					doneCond: sync.NewCond(new(sync.Mutex)),
+				},
+			}
+			select {
+			case stream.outgoing <- s:
+			case <-closedChan:
+				return
+			}
+			stream.incoming <- s
+			if err != nil {
+				return
 			}
 		}
 	}
@@ -260,10 +265,12 @@ func (stream *SampleInputStream) updateHeader(header *Header, source string) (er
 	}
 	stream.header = header
 	stream.outHeader = &Header{
-		Fields:  make([]string, len(header.Fields)),
 		HasTags: header.HasTags,
 	}
-	copy(stream.outHeader.Fields, header.Fields)
+	if numFields := len(header.Fields); numFields > 0 {
+		stream.outHeader.Fields = make([]string, numFields)
+		copy(stream.outHeader.Fields, header.Fields)
+	}
 	if handler := stream.sampleReader.Handler; handler != nil {
 		handler.HandleHeader(stream.outHeader, source)
 	}

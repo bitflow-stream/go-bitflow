@@ -22,8 +22,7 @@ func (suite *MarshallerTestSuite) testRead(m BidiMarshaller, rdr *bufio.Reader, 
 	suite.NoError(err)
 	suite.Nil(data)
 	suite.NotNil(header)
-	suite.Equal(expectedHeader.HasTags, header.HasTags, "Header.HasTags")
-	suite.Equal(expectedHeader.Fields, header.Fields, "Header.Fields")
+	suite.compareHeaders(expectedHeader, header)
 
 	for _, expectedSample := range samples {
 		nilHeader, data, err := m.Read(rdr, header)
@@ -73,19 +72,6 @@ func (suite *MarshallerTestSuite) testIndividualHeaders(m BidiMarshaller) {
 	}
 }
 
-type countingBuf struct {
-	data []byte
-}
-
-func (c *countingBuf) Read(b []byte) (num int, err error) {
-	num = copy(b, c.data)
-	if num < len(b) {
-		err = io.EOF
-	}
-	c.data = c.data[num:]
-	return
-}
-
 func (suite *MarshallerTestSuite) TestCsvMarshallerSingle() {
 	suite.testIndividualHeaders(new(CsvMarshaller))
 }
@@ -107,7 +93,7 @@ type failingBuf struct {
 }
 
 func (c *failingBuf) Read(b []byte) (num int, err error) {
-	return 0, c.err
+	return copy(b, []byte{'x'}), c.err
 }
 
 func (suite *MarshallerTestSuite) testEOF(m Unmarshaller) {

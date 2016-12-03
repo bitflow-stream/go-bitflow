@@ -110,28 +110,28 @@ func (m *BinaryMarshaller) WriteSample(sample *Sample, header *Header, writer io
 	return nil
 }
 
-// ReadHeader implements the Unmarshaller interface by reading until an empty line
-// and splitting the read data on newline characters.
-//
-// ReadSampleData implements the Unmarshaller interface by reading data for a single
-// Sample into a buffer. The size of the Sample is derived from the Header.
+// Read implements the Unmarshaller interface. It peeks a few bytes from the input stream
+// to decide if the stream contains a header or a sample. In case of a header, Read() continues
+// reading until an empty line and parse the data to a header instance. In case of a sample,
+// the size is derived from the previousHeader parameter.
 func (b *BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Header, []byte, error) {
+	if previousHeader == nil {
+		return b.readHeader(reader)
+	}
+
 	start, err := reader.Peek(len(sampleStart))
 	if err == bufio.ErrBufferFull {
-		return nil, nil, errors.New("Buffer too small to distinguish binary sample and header")
-	} else if err == io.EOF {
-		// Ignore here
+		return nil, nil, errors.New("Buffer too small to distinguish between binary sample and header")
 	} else if err != nil {
+		if len(start) > 0 {
+			err = unexpectedEOF(err)
+		}
 		return nil, nil, err
 	}
 
 	switch {
-	case previousHeader == nil || bytes.HasPrefix([]byte(time_col), start):
-		if unexpected := unexpectedEOF(err); unexpected != nil {
-			return nil, nil, unexpected
-		}
-		header, err := b.readHeader(reader)
-		return header, nil, err
+	case bytes.HasPrefix([]byte(time_col), start):
+		return b.readHeader(reader)
 	case bytes.Equal(start, sampleStart):
 		reader.Discard(len(start)) // No error
 		data, err := b.readSampleData(previousHeader, reader)
@@ -142,25 +142,32 @@ func (b *BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*
 	}
 }
 
-func (*BinaryMarshaller) readHeader(reader *bufio.Reader) (header *Header, err error) {
-	name, err := reader.ReadBytes(binary_separator)
+func (*BinaryMarshaller) readHeader(reader *bufio.Reader) (*Header, []byte, error) {
+	name, err := readUntil(reader, binary_separator)
 	if err != nil {
-		return
+		if len(name) > 0 {
+			// EOF unexpected here: at least one empty line is needed
+			err = unexpectedEOF(err)
+		} else {
+			// Empty data and io.EOF means the stream was already closed.
+		}
+		return nil, nil, err
 	}
-	if err = checkFirstCol(string(name[:len(name)-1]), err); err != nil {
-		return
+	if err = checkFirstCol(string(name[:len(name)-1])); err != nil {
+		return nil, nil, err
 	}
 
-	header = new(Header)
+	header := new(Header)
 	first := true
 	for {
-		var nameBytes []byte
-		nameBytes, err = reader.ReadBytes(binary_separator)
-		if err != nil {
-			return
+		nameBytes, err := readUntil(reader, binary_separator)
+		if len(nameBytes) == 1 {
+			// This may return io.EOF
+			return header, nil, err
 		}
-		if len(nameBytes) <= 1 {
-			return
+		if err != nil {
+			// EOF only expected after empty line (covered above)
+			return header, nil, unexpectedEOF(err)
 		}
 		name := string(nameBytes[:len(nameBytes)-1])
 		if first && name == tags_col {
@@ -190,7 +197,7 @@ func (*BinaryMarshaller) readSampleData(header *Header, input *bufio.Reader) ([]
 			_, err := io.ReadFull(input, result[minlen:])
 			return result, unexpectedEOF(err)
 		} else {
-			tagRest, err := input.ReadBytes(binary_separator)
+			tagRest, err := readUntil(input, binary_separator)
 			if err != nil {
 				return nil, unexpectedEOF(err)
 			}

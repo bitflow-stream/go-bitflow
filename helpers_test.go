@@ -2,6 +2,7 @@ package bitflow
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"testing"
 	"time"
@@ -59,10 +60,15 @@ func (suite *testSuiteWithSamples) SetupTest() {
 }
 
 func (suite *testSuiteWithSamples) compareSamples(expected *Sample, sample *Sample) {
-	suite.Equal(expected.tags, sample.tags)
-	suite.Equal(expected.orderedTags, sample.orderedTags)
-	suite.Equal(expected.Values, sample.Values)
+	suite.Equal(expected.tags, sample.tags, "Sample.tags")
+	suite.Equal(expected.orderedTags, sample.orderedTags, "Sample.orderedTags")
+	suite.Equal(expected.Values, sample.Values, "Sample.Values")
 	suite.True(expected.Time.Equal(sample.Time), fmt.Sprintf("Times differ: expected %v, but was %v", expected.Time, sample.Time))
+}
+
+func (suite *testSuiteWithSamples) compareHeaders(expected *Header, header *Header) {
+	suite.Equal(expected.HasTags, header.HasTags, "Header.HasTags")
+	suite.Equal(expected.Fields, header.Fields, "Header.Fields")
 }
 
 func (suite *testSuiteWithSamples) makeSamples(header *Header) (res []*Sample) {
@@ -105,4 +111,28 @@ func (suite *testSuiteWithSamples) nextTimestamp() time.Time {
 	res := suite.timestamp
 	suite.timestamp = res.Add(10 * time.Second)
 	return res
+}
+
+type countingBuf struct {
+	data   []byte
+	closed bool
+}
+
+func (c *countingBuf) Read(b []byte) (num int, err error) {
+	num = copy(b, c.data)
+	c.data = c.data[num:]
+	if num < len(b) || len(c.data) == 0 {
+		err = io.EOF
+	}
+
+	return
+}
+
+func (c *countingBuf) Close() error {
+	c.closed = true
+	return nil
+}
+
+func (c *countingBuf) checkClosed(r *require.Assertions) {
+	r.True(c.closed, "Counting buf not closed")
 }
