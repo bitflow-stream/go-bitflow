@@ -22,8 +22,16 @@ type TCPConnCounter struct {
 	// or initiated. When this is <= 0, the number of not limited.
 	TcpConnLimit uint
 
-	closed   uint
-	accepted uint
+	connCounterDescription interface{}
+	closed                 uint
+	accepted               uint
+}
+
+func (counter *TCPConnCounter) msg() string {
+	if counter.connCounterDescription != nil {
+		return fmt.Sprintf("%v: ", counter.connCounterDescription)
+	}
+	return ""
 }
 
 // Return true, if we can handle further connections. Return false, if the application should stop.
@@ -31,7 +39,7 @@ func (counter *TCPConnCounter) countConnectionClosed() bool {
 	if counter.TcpConnLimit > 0 {
 		counter.closed++
 		if counter.closed >= counter.TcpConnLimit {
-			log.Warnln("Handled", counter.closed, "TCP connection(s)")
+			log.Warnln(counter.msg()+"Handled", counter.closed, "TCP connection(s)")
 			return false
 		}
 	}
@@ -42,7 +50,7 @@ func (counter *TCPConnCounter) countConnectionClosed() bool {
 func (counter *TCPConnCounter) countConnectionAccepted(conn *net.TCPConn) bool {
 	if counter.TcpConnLimit > 0 {
 		if counter.accepted >= counter.TcpConnLimit {
-			log.WithField("remote", conn.RemoteAddr()).Warnln("Rejecting connection, already accepted", counter.accepted, "connections")
+			log.WithField("remote", conn.RemoteAddr()).Warnln(counter.msg()+"Rejecting connection, already accepted", counter.accepted, "connections")
 			_ = conn.Close() // Drop error
 			return false
 		}
@@ -165,6 +173,7 @@ func (sink *TCPSink) String() string {
 // Start implements the MetricSink interface. It creates a log message
 // and prepares the TCPSink for sending data.
 func (sink *TCPSink) Start(wg *sync.WaitGroup) golib.StopChan {
+	sink.connCounterDescription = sink
 	log.WithField("format", sink.Marshaller).Println("Sending data to", sink.Endpoint)
 	sink.stopped = golib.NewOneshotCondition()
 	return sink.stopped.Start(wg)
@@ -303,6 +312,7 @@ func (sink *TCPSource) SourceString() string {
 // configured TCP endpoint. The goroutines continuously try to connect to the remote
 // endpoints and download Headers and Samples as soon as a connection is established.
 func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
+	source.connCounterDescription = source
 	log.WithField("format", source.Reader.Format()).Println("Downloading from", source.SourceString())
 	channels := make([]golib.StopChan, 0, len(source.RemoteAddrs))
 	if len(source.RemoteAddrs) > 1 {

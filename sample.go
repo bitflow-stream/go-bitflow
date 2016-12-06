@@ -21,6 +21,7 @@ var (
 	tagStringEscaper = strings.NewReplacer(
 		tag_equals, tag_replacement,
 		tag_separator, tag_replacement,
+		string(BinarySeparator), tag_replacement,
 		string(CsvSeparator), tag_replacement,
 		string(CsvNewline), tag_replacement)
 )

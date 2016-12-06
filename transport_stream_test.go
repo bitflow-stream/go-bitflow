@@ -2,7 +2,6 @@ package bitflow
 
 import (
 	"bytes"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -30,22 +29,13 @@ func (suite *TransportStreamTestSuite) testAllHeaders(m BidiMarshaller) {
 		},
 	}
 	stream := writer.Open(&buf, m)
-	for i, header := range suite.headers {
-		for _, sample := range suite.samples[i] {
-			suite.NoError(stream.Sample(sample, header))
-		}
-	}
+	suite.sendAllSamples(stream)
 	suite.NoError(stream.Close())
 	buf.checkClosed()
 
 	// ======== Read ========
 	counter := &countingBuf{data: buf.Bytes()}
-	sink := testSampleSink{
-		suite: suite,
-	}
-	for i, header := range suite.headers {
-		sink.add(suite.samples[i], header)
-	}
+	sink := suite.newFilledTestSink()
 
 	source := "Test Source"
 	handler := &testSampleHandler{source: source, suite: suite}
@@ -57,7 +47,7 @@ func (suite *TransportStreamTestSuite) testAllHeaders(m BidiMarshaller) {
 		Handler:      handler,
 		Unmarshaller: m,
 	}
-	readStream := reader.Open(counter, &sink)
+	readStream := reader.Open(counter, sink)
 	num, err := readStream.ReadSamples(source)
 	suite.NoError(err)
 	suite.Equal(len(suite.headers)*_samples_per_test, num)
@@ -69,7 +59,7 @@ func (suite *TransportStreamTestSuite) testAllHeaders(m BidiMarshaller) {
 }
 
 func (suite *TransportStreamTestSuite) testIndividualHeaders(m BidiMarshaller) {
-	for i, header := range suite.headers {
+	for i := range suite.headers {
 
 		// ======== Write ========
 		buf := closingBuffer{
@@ -82,19 +72,14 @@ func (suite *TransportStreamTestSuite) testIndividualHeaders(m BidiMarshaller) {
 			},
 		}
 		stream := writer.Open(&buf, m)
-		for _, sample := range suite.samples[i] {
-			suite.NoError(stream.Sample(sample, header))
-		}
+		suite.sendSamples(stream, i)
 		suite.NoError(stream.Close())
 		buf.checkClosed()
 
 		// ======== Read ========
 		samples := suite.samples[i]
 		counter := &countingBuf{data: buf.Bytes()}
-		sink := testSampleSink{
-			suite: suite,
-		}
-		sink.add(samples, header)
+		sink := suite.newTestSinkFor(i)
 
 		source := "Test Source"
 		handler := &testSampleHandler{source: source, suite: suite}
@@ -106,7 +91,7 @@ func (suite *TransportStreamTestSuite) testIndividualHeaders(m BidiMarshaller) {
 			Handler:      handler,
 			Unmarshaller: m,
 		}
-		readStream := reader.Open(counter, &sink)
+		readStream := reader.Open(counter, sink)
 		num, err := readStream.ReadSamples(source)
 		suite.NoError(err)
 		suite.Equal(len(samples), num)
@@ -115,41 +100,6 @@ func (suite *TransportStreamTestSuite) testIndividualHeaders(m BidiMarshaller) {
 		suite.Equal(0, len(counter.data))
 		sink.checkEmpty()
 	}
-}
-
-type testSampleSink struct {
-	suite    *TransportStreamTestSuite
-	samples  []*Sample
-	headers  []*Header
-	received int
-}
-
-func (s *testSampleSink) add(samples []*Sample, header *Header) {
-	s.samples = append(s.samples, samples...)
-	for _ = range samples {
-		s.headers = append(s.headers, header)
-	}
-}
-
-func (s *testSampleSink) Sample(sample *Sample, header *Header) error {
-	if s.received > len(s.samples)-1 {
-		s.suite.Fail("Did not expect any more samples, received " + strconv.Itoa(s.received))
-	}
-	expectedSample := s.samples[s.received]
-	expectedHeader := s.headers[s.received]
-	s.received++
-	s.suite.compareHeaders(expectedHeader, header)
-	s.suite.compareSamples(expectedSample, sample)
-	return nil
-}
-
-func (s *testSampleSink) checkEmpty() {
-	s.suite.Equal(len(s.samples), s.received, "Number of samples received")
-}
-
-type testSampleHandler struct {
-	suite  *TransportStreamTestSuite
-	source string
 }
 
 type closingBuffer struct {
@@ -165,6 +115,11 @@ func (c *closingBuffer) Close() error {
 
 func (c *closingBuffer) checkClosed() {
 	c.suite.True(c.closed, "input stream buffer has not been closed")
+}
+
+type testSampleHandler struct {
+	suite  *TransportStreamTestSuite
+	source string
 }
 
 func (h *testSampleHandler) HandleHeader(header *Header, source string) {

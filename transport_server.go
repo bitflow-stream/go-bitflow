@@ -45,6 +45,7 @@ func NewTcpListenerSource(endpoint string, reader SampleReader) *TCPListenerSour
 		Reader:      reader,
 		connections: make(map[*tcpListenerConnection]bool),
 	}
+	source.connCounterDescription = source
 	source.task = &golib.TCPListenerTask{
 		ListenEndpoint: endpoint,
 		Handler:        source.handleConnection,
@@ -140,17 +141,21 @@ type TCPListenerSink struct {
 	// aspects of the TCPListenerSink. See AbstractTcpSink for details.
 	AbstractTcpSink
 
-	connections map[*TcpWriteConn]bool
-	task        *golib.TCPListenerTask
+	buf  outputSampleBuffer
+	task *golib.TCPListenerTask
 }
 
 // NewTcpListenerSink creates a new TCPListener sink listening on the given local
 // TCP endpoint. It must be a combination of IP or hostname with a port number, that
 // can be bound to locally.
-func NewTcpListenerSink(endpoint string) *TCPListenerSink {
+func NewTcpListenerSink(endpoint string, bufferedSamples uint) *TCPListenerSink {
 	sink := &TCPListenerSink{
-		connections: make(map[*TcpWriteConn]bool),
+		buf: outputSampleBuffer{
+			Capacity: bufferedSamples,
+			cond:     sync.NewCond(new(sync.Mutex)),
+		},
 	}
+	sink.connCounterDescription = sink
 	sink.task = &golib.TCPListenerTask{
 		ListenEndpoint: endpoint,
 		Handler:        sink.handleConnection,
@@ -176,79 +181,106 @@ func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 // and closes the TCP socket.
 func (sink *TCPListenerSink) Close() {
 	sink.task.ExtendedStop(func() {
-		for conn := range sink.connections {
-			conn.Close()
-		}
+		sink.buf.close()
 	})
 }
 
-func (sink *TCPListenerSink) handleConnection(_ *sync.WaitGroup, conn *net.TCPConn) {
+func (sink *TCPListenerSink) handleConnection(wg *sync.WaitGroup, conn *net.TCPConn) {
 	if !sink.countConnectionAccepted(conn) {
 		return
 	}
 	writeConn := sink.OpenWriteConn(conn)
-	sink.connections[writeConn] = true
+	wg.Add(1)
+	go sink.sendSamples(wg, writeConn)
 }
 
-// Samples implements the MetricSink interface by sending the Sample on all currently
-// established TCP connections. If no connection is currently established, the sample
-// is simply dropped.
+// Sample implements the MetricSink interface. It stores the sample in a ring buffer
+// and sends it to all established connections. New connections will first receive
+// all samples stored in the buffer, before getting the live samples directly.
+// If the buffer is disable or full, and there are no established connections,
+// samples are dropped.
 func (sink *TCPListenerSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	for conn := range sink.connections {
-		if conn.stream == nil {
-			// Clean up closed connections
-			sink.cleanupConnection(conn)
-			continue
-		}
-		conn.Sample(sample, header)
-	}
+	sink.buf.add(sample, header)
 	return nil
 }
 
-func (sink *TCPListenerSink) cleanupConnection(conn *TcpWriteConn) {
-	delete(sink.connections, conn)
+func (sink *TCPListenerSink) closeConn(conn *TcpWriteConn) {
 	conn.Close()
 	if !sink.countConnectionClosed() {
 		sink.Close()
 	}
 }
 
+func (sink *TCPListenerSink) sendSamples(wg *sync.WaitGroup, conn *TcpWriteConn) {
+	defer sink.closeConn(conn)
+	defer wg.Done()
+	first, num := sink.buf.getFirst()
+	if num > 1 {
+		conn.log.Debugln("Sending", num, "buffered samples")
+	}
+	for !sink.buf.closed {
+		if !conn.IsRunning() {
+			return
+		}
+		conn.Sample(first.sample, first.header)
+		if !conn.IsRunning() {
+			return
+		}
+		first = sink.buf.next(first)
+	}
+}
+
 // ======================================= output sample buffer =======================================
 
-// TODO finish implementation: add optional buffer that is delivered to every
-// new connection
-
 type outputSampleBuffer struct {
-	capacity int
-	size     int
-	first    *sampleListLink
-	last     *sampleListLink
-	cond     sync.Cond
+	Capacity uint
+
+	size   uint
+	first  *sampleListLink
+	last   *sampleListLink
+	cond   *sync.Cond
+	closed bool
 }
 
 type sampleListLink struct {
 	sample *Sample
+	header *Header
 	next   *sampleListLink
 }
 
-func (l *outputSampleBuffer) add(sample *Sample) {
+func (b *outputSampleBuffer) getFirst() (*sampleListLink, uint) {
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+	for b.first == nil {
+		b.cond.Wait()
+	}
+	return b.first, b.size
+}
+
+func (b *outputSampleBuffer) add(sample *Sample, header *Header) {
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+
 	link := &sampleListLink{
 		sample: sample,
+		header: header,
 	}
-	if l.first == nil {
-		l.first = link
+	if b.first == nil {
+		b.first = link
 	} else {
-		l.last.next = link
+		b.last.next = link
 	}
-	l.last = link
-	if l.size >= l.capacity {
-		l.first = l.first.next
+	b.last = link
+	if b.size >= b.Capacity {
+		b.first = b.first.next
 	} else {
-		l.size++
+		b.size++
 	}
+
+	b.cond.Broadcast()
 }
 
 func (b *outputSampleBuffer) next(l *sampleListLink) *sampleListLink {
@@ -257,8 +289,15 @@ func (b *outputSampleBuffer) next(l *sampleListLink) *sampleListLink {
 	}
 	b.cond.L.Lock()
 	defer b.cond.L.Unlock()
-	for l.next == nil {
+	for l.next == nil && !b.closed {
 		b.cond.Wait()
 	}
 	return l.next
+}
+
+func (b *outputSampleBuffer) close() {
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+	b.closed = true
+	b.cond.Broadcast()
 }

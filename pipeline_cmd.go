@@ -79,9 +79,10 @@ type CmdSamplePipeline struct {
 
 	// TCP input/output flags
 
-	FlagTcpConnectionLimit  uint
-	FlagInputTcpAcceptLimit uint
-	FlagTcpDropErrors       bool
+	FlagOutputTcpListenBuffer uint
+	FlagTcpConnectionLimit    uint
+	FlagInputTcpAcceptLimit   uint
+	FlagTcpDropErrors         bool
 
 	// Parallel marshalling/unmarshalling flags
 
@@ -134,6 +135,7 @@ func (p *CmdSamplePipeline) RegisterFlags(suppressFlags map[string]bool) {
 	f.BoolVar(&p.FlagOutputFilesClean, "clean", false, "Delete all potential output files before writing")
 
 	// TCP input/output
+	f.UintVar(&p.FlagOutputTcpListenBuffer, "lbuf", 0, "For -l, buffer a number of samples that will be delivered first to all established connections.")
 	f.UintVar(&p.FlagInputTcpAcceptLimit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
 	f.UintVar(&p.FlagTcpConnectionLimit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
 	f.BoolVar(&p.FlagTcpDropErrors, "tcp_drop_err", false, "Don't print errors when establishing actie TCP connection (for sink/source) fails")
@@ -187,8 +189,11 @@ func (p *CmdSamplePipeline) SetSource(source MetricSource) {
 //
 // The only things to do before calling Init() is to set the ReadSampleHandler field
 // and use the SetSource method, as both are evaluated in Init(). Both are optional.
+// p.ParseFlags() should also be called.
 //
 // Init must be called before accessing p.Tasks and before calling StartAndWait().
+//
+// See the documentation of the CmdSamplePipeline type.
 func (p *CmdSamplePipeline) Init() {
 	p.Tasks = golib.NewTaskGroup()
 
@@ -228,7 +233,7 @@ func (p *CmdSamplePipeline) Init() {
 		sinks = append(sinks, sink)
 	}
 	for _, endpoint := range p.FlagOutputTcpListen {
-		sink := NewTcpListenerSink(endpoint)
+		sink := NewTcpListenerSink(endpoint, p.FlagOutputTcpListenBuffer)
 		sink.SetMarshaller(marshaller(p.FlagOutputTcpListenFormat))
 		sink.Writer = writer
 		sink.TcpConnLimit = p.FlagTcpConnectionLimit

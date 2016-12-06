@@ -4,13 +4,22 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/antongulenko/golib"
 	"github.com/stretchr/testify/require"
 )
 
 const _samples_per_test = 5
+
+func init() {
+	golib.LogVerbose = true
+	//golib.LogQuiet = true
+	golib.ConfigureLogging()
+}
 
 type testSuiteWithSamples struct {
 	t *testing.T
@@ -37,21 +46,26 @@ func (suite *testSuiteWithSamples) SetupTest() {
 	suite.rand = rand.New(rand.NewSource(123)) // deterministic
 	suite.headers = []*Header{
 		&Header{
-			Fields:  []string{"a", "b", "c"},
+			Fields: []string{"a", "b", "c"},
+		},
+		&Header{
+			Fields: []string{" ", "_", "="},
+		},
+		&Header{
+			Fields: []string{"x"},
+		},
+		&Header{
+			Fields: nil,
+		},
+	}
+
+	// Add a copy of every header, now with the HasTags flag enabled
+	n := len(suite.headers)
+	for i := 0; i < n; i++ {
+		suite.headers = append(suite.headers, &Header{
+			Fields:  suite.headers[i].Fields,
 			HasTags: true,
-		},
-		&Header{
-			Fields:  []string{"x"},
-			HasTags: false,
-		},
-		&Header{
-			Fields:  nil,
-			HasTags: true,
-		},
-		&Header{
-			Fields:  nil,
-			HasTags: false,
-		},
+		})
 	}
 	suite.samples = make([][]*Sample, len(suite.headers))
 	for i, header := range suite.headers {
@@ -113,6 +127,39 @@ func (suite *testSuiteWithSamples) nextTimestamp() time.Time {
 	return res
 }
 
+func (suite *testSuiteWithSamples) newTestSink() *testSampleSink {
+	return &testSampleSink{
+		suite:     suite,
+		emptyCond: sync.NewCond(new(sync.Mutex)),
+	}
+}
+
+func (suite *testSuiteWithSamples) newTestSinkFor(headerIndex int) *testSampleSink {
+	s := suite.newTestSink()
+	s.add(suite.samples[headerIndex], suite.headers[headerIndex])
+	return s
+}
+
+func (suite *testSuiteWithSamples) newFilledTestSink() *testSampleSink {
+	s := suite.newTestSink()
+	for i, header := range suite.headers {
+		s.add(suite.samples[i], header)
+	}
+	return s
+}
+
+func (suite *testSuiteWithSamples) sendSamples(w MetricSinkBase, headerIndex int) {
+	for _, sample := range suite.samples[headerIndex] {
+		suite.NoError(w.Sample(sample, suite.headers[headerIndex]))
+	}
+}
+
+func (suite *testSuiteWithSamples) sendAllSamples(w MetricSinkBase) {
+	for i := range suite.headers {
+		suite.sendSamples(w, i)
+	}
+}
+
 type countingBuf struct {
 	data   []byte
 	closed bool
@@ -135,4 +182,70 @@ func (c *countingBuf) Close() error {
 
 func (c *countingBuf) checkClosed(r *require.Assertions) {
 	r.True(c.closed, "Counting buf not closed")
+}
+
+type testSampleSink struct {
+	suite     *testSuiteWithSamples
+	emptyCond *sync.Cond
+	samples   []*Sample
+	headers   []*Header
+	received  int
+	closed    bool
+}
+
+func (s *testSampleSink) add(samples []*Sample, header *Header) {
+	s.samples = append(s.samples, samples...)
+	for _ = range samples {
+		s.headers = append(s.headers, header)
+	}
+}
+
+func (s *testSampleSink) Sample(sample *Sample, header *Header) error {
+	s.emptyCond.L.Lock()
+	defer s.emptyCond.L.Unlock()
+
+	if s.received > len(s.samples)-1 {
+		s.suite.Fail("Did not expect any more samples, received " + strconv.Itoa(s.received))
+	}
+	expectedSample := s.samples[s.received]
+	expectedHeader := s.headers[s.received]
+	s.received++
+	s.suite.compareHeaders(expectedHeader, header)
+	s.suite.compareSamples(expectedSample, sample)
+	s.emptyCond.Broadcast()
+	return nil
+}
+
+func (s *testSampleSink) checkEmpty() {
+	s.suite.Equal(len(s.samples), s.received, "Number of samples received")
+}
+
+func (s *testSampleSink) waitEmpty() {
+	s.emptyCond.L.Lock()
+	defer s.emptyCond.L.Unlock()
+	for s.received < len(s.samples) {
+		s.emptyCond.Wait()
+	}
+}
+
+func (s *testSampleSink) Close() {
+	s.closed = true
+}
+
+func (s *testSampleSink) checkClosed() {
+	s.suite.True(s.closed, "test sink closed")
+}
+
+func (s *testSampleSink) Start(_ *sync.WaitGroup) golib.StopChan {
+	s.suite.Fail("testSampleSink.Start() called")
+	return nil
+}
+
+func (s *testSampleSink) Stop() {
+	s.suite.Fail("testSampleSink.Stop() called")
+}
+
+func (s *testSampleSink) String() string {
+	s.suite.Fail("testSampleSink.String() called")
+	return ""
 }

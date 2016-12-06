@@ -5,11 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 )
 
 const (
-	time_col = "time"
-	tags_col = "tags"
+	csv_time_col    = "time"
+	tags_col        = "tags"
+	binary_time_col = "timB" // Must not collide with csv_time_col, but have same length
+
+	detect_format_peek        = len(csv_time_col)
+	illegal_header_characters = string(CsvSeparator) + string(CsvNewline) + string(BinarySeparator)
 )
 
 // Marshaller is an interface for converting Samples and Headers into byte streams.
@@ -92,32 +97,51 @@ func unexpectedEOF(err error) error {
 	return err
 }
 
-func checkFirstCol(col string) error {
-	if col != time_col {
-		if len(col) >= 20 {
-			col = col[:20] + "..."
+func checkFirstField(expected string, found string) error {
+	if found != expected {
+		if len(found) >= 20 {
+			found = found[:20] + "..."
 		}
-		return fmt.Errorf("First column should be %v, but found: %q", time_col, col)
+		return fmt.Errorf("First header field should be '%v', but found: %q", expected, found)
+	}
+	return nil
+}
+
+func checkHeaderField(field string) error {
+	if field == "" {
+		return errors.New("Header fields cannot be empty")
+	}
+	if strings.ContainsAny(field, illegal_header_characters) {
+		return fmt.Errorf("Header field '%s' contains illegal characters", field)
 	}
 	return nil
 }
 
 func detectFormat(input *bufio.Reader) (Unmarshaller, error) {
-	peekNum := len(time_col) + 1
-	peeked, err := input.Peek(peekNum)
+	peeked, err := input.Peek(detect_format_peek)
 	if err == bufio.ErrBufferFull {
 		err = errors.New("IO buffer is too small to auto-detect input stream format")
 	}
 	if err != nil {
 		return nil, err
 	}
-	switch peeked[peekNum-1] {
-	case CsvSeparator:
+	return DetectFormatFrom(string(peeked))
+}
+
+// DetectFormatFrom uses the start of a marshalled header to determine what unmarshaller
+// should be used to decode the header and all following samples.
+func DetectFormatFrom(start string) (Unmarshaller, error) {
+	if len(start) != detect_format_peek {
+		return nil, fmt.Errorf("Cannot auto-detect format of stream based on '%v', need %v characters", start, detect_format_peek)
+	}
+
+	switch start {
+	case csv_time_col:
 		return new(CsvMarshaller), nil
-	case binary_separator:
+	case binary_time_col:
 		return new(BinaryMarshaller), nil
 	default:
-		return nil, errors.New("Failed to auto-detect format of stream starting with: " + string(peeked))
+		return nil, errors.New("Failed to auto-detect format of stream starting with: " + start)
 	}
 }
 

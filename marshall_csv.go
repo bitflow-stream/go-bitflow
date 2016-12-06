@@ -56,12 +56,15 @@ func (*CsvMarshaller) String() string {
 // WriteHeader implements the Marshaller interface by printing a CSV header line.
 func (*CsvMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
-	w.WriteStr(time_col)
+	w.WriteStr(csv_time_col)
 	if header.HasTags {
 		w.WriteByte(CsvSeparator)
 		w.WriteStr(tags_col)
 	}
 	for _, name := range header.Fields {
+		if err := checkHeaderField(name); err != nil {
+			return err
+		}
 		w.WriteByte(CsvSeparator)
 		w.WriteStr(name)
 	}
@@ -119,11 +122,11 @@ func (c *CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Hea
 
 	switch {
 	case previousHeader == nil:
-		if checkErr := checkFirstCol(firstField); checkErr != nil {
+		if checkErr := checkFirstField(csv_time_col, firstField); checkErr != nil {
 			return nil, nil, checkErr
 		}
 		return c.parseHeader(line), nil, err
-	case firstField == time_col:
+	case firstField == csv_time_col:
 		return c.parseHeader(line), nil, err
 	default:
 		return nil, line, err
