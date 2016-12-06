@@ -175,3 +175,12 @@ func (w *WriteCascade) WriteStr(str string) error {
 func (w *WriteCascade) WriteByte(b byte) error {
 	return w.Write([]byte{b})
 }
+
+// WriteAny uses the fmt package to format he given object directly into the underlying
+// writer. The write is only executed, if previous writes have been successful.
+func (w *WriteCascade) WriteAny(i interface{}) error {
+	if w.Err == nil {
+		_, w.Err = fmt.Fprintf(w.Writer, "%v", i)
+	}
+	return nil
+}

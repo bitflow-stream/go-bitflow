@@ -83,7 +83,7 @@ func (*CsvMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writ
 	}
 	for _, value := range sample.Values {
 		w.WriteByte(CsvSeparator)
-		w.WriteStr(fmt.Sprintf("%v", value))
+		w.WriteAny(value)
 	}
 	w.WriteStr(string(CsvNewline))
 	return w.Err
