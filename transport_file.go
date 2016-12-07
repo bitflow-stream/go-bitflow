@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/golib"
+	"vbom.ml/util/sortorder"
 )
 
 // FileGroup provides utility functionality when dealing with a group of files sharing
@@ -83,6 +85,9 @@ var StopWalking = errors.New("stop walking")
 // respective os.FileInfo.
 //
 // WalkFiles walks all files that match the regular expression returnes by FileRegex().
+//
+// The files are walked in lexical order, which does not represent the order the files
+// would be written by FileSink.
 func (group *FileGroup) WalkFiles(walk func(string, os.FileInfo) error) (num int, err error) {
 	r := group.FileRegex()
 	stopped := false
@@ -117,11 +122,28 @@ func (group *FileGroup) WalkFiles(walk func(string, os.FileInfo) error) (num int
 // FileGroup, and a non-nil error if the list could not be determined.
 // AllFiles returns all files matching the regular expression returned by
 // FileRegex().
+//
+// The files are returned sorted in the order they would be written out by
+// FileSink.
 func (group *FileGroup) AllFiles() (all []string, err error) {
+	basefile := group.BuildFilenameStr("")
+	basefileFound := false
 	_, err = group.WalkFiles(func(path string, _ os.FileInfo) error {
-		all = append(all, path)
+		if path == basefile {
+			basefileFound = true
+		} else {
+			all = append(all, path)
+		}
 		return nil
 	})
+
+	// Natural sort: treat numbers as a human would
+	sort.Sort(sortorder.Natural(all))
+
+	if basefileFound {
+		// Treat the first file specially, otherwise it is sorted wrong.
+		all = append([]string{basefile}, all...)
+	}
 	if err == nil && len(all) == 0 {
 		err = errors.New(os.ErrNotExist.Error() + ": " + group.filename)
 	}

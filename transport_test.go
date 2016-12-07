@@ -23,13 +23,10 @@ func (suite *TransportStreamTestSuite) testAllHeaders(m BidiMarshaller) {
 		suite: suite,
 	}
 	writer := SampleWriter{
-		ParallelSampleHandler: ParallelSampleHandler{
-			ParallelParsers: 5,
-			BufferedSamples: 5,
-		},
+		ParallelSampleHandler: parallel_handler,
 	}
 	stream := writer.Open(&buf, m)
-	suite.sendAllSamples(stream)
+	total_samples := suite.sendAllSamples(stream)
 	suite.NoError(stream.Close())
 	buf.checkClosed()
 
@@ -38,19 +35,16 @@ func (suite *TransportStreamTestSuite) testAllHeaders(m BidiMarshaller) {
 	sink := suite.newFilledTestSink()
 
 	source := "Test Source"
-	handler := &testSampleHandler{source: source, suite: suite}
+	handler := suite.newHandler(source)
 	reader := SampleReader{
-		ParallelSampleHandler: ParallelSampleHandler{
-			ParallelParsers: 5,
-			BufferedSamples: 5,
-		},
-		Handler:      handler,
-		Unmarshaller: m,
+		ParallelSampleHandler: parallel_handler,
+		Handler:               handler,
+		Unmarshaller:          m,
 	}
 	readStream := reader.Open(counter, sink)
 	num, err := readStream.ReadSamples(source)
 	suite.NoError(err)
-	suite.Equal(len(suite.headers)*_samples_per_test, num)
+	suite.Equal(total_samples, num)
 
 	counter.checkClosed(suite.Assertions)
 
@@ -66,10 +60,7 @@ func (suite *TransportStreamTestSuite) testIndividualHeaders(m BidiMarshaller) {
 			suite: suite,
 		}
 		writer := SampleWriter{
-			ParallelSampleHandler: ParallelSampleHandler{
-				ParallelParsers: 5,
-				BufferedSamples: 5,
-			},
+			ParallelSampleHandler: parallel_handler,
 		}
 		stream := writer.Open(&buf, m)
 		suite.sendSamples(stream, i)
@@ -82,14 +73,11 @@ func (suite *TransportStreamTestSuite) testIndividualHeaders(m BidiMarshaller) {
 		sink := suite.newTestSinkFor(i)
 
 		source := "Test Source"
-		handler := &testSampleHandler{source: source, suite: suite}
+		handler := suite.newHandler(source)
 		reader := SampleReader{
-			ParallelSampleHandler: ParallelSampleHandler{
-				ParallelParsers: 5,
-				BufferedSamples: 5,
-			},
-			Handler:      handler,
-			Unmarshaller: m,
+			ParallelSampleHandler: parallel_handler,
+			Handler:               handler,
+			Unmarshaller:          m,
 		}
 		readStream := reader.Open(counter, sink)
 		num, err := readStream.ReadSamples(source)
@@ -115,19 +103,6 @@ func (c *closingBuffer) Close() error {
 
 func (c *closingBuffer) checkClosed() {
 	c.suite.True(c.closed, "input stream buffer has not been closed")
-}
-
-type testSampleHandler struct {
-	suite  *TransportStreamTestSuite
-	source string
-}
-
-func (h *testSampleHandler) HandleHeader(header *Header, source string) {
-	h.suite.Equal(h.source, source)
-}
-
-func (h *testSampleHandler) HandleSample(sample *Sample, source string) {
-	h.suite.Equal(h.source, source)
 }
 
 func (suite *TransportStreamTestSuite) TestTransport_CsvMarshallerSingle() {

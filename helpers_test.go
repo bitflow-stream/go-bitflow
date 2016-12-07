@@ -13,11 +13,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const _samples_per_test = 5
+var parallel_handler = ParallelSampleHandler{
+	BufferedSamples: 5,
+	ParallelParsers: 5,
+}
+
+var debug_tests = false
 
 func init() {
-	//golib.LogVerbose = true
-	golib.LogQuiet = true
+	//debug_tests = true
+	if debug_tests {
+		golib.LogVerbose = true
+	} else {
+		golib.LogQuiet = true
+	}
 	golib.ConfigureLogging()
 }
 
@@ -44,7 +53,7 @@ func (suite *testSuiteWithSamples) SetT(t *testing.T) {
 func (suite *testSuiteWithSamples) SetupTest() {
 	suite.timestamp = time.Now()
 	suite.rand = rand.New(rand.NewSource(123)) // deterministic
-	suite.headers = []*Header{
+	headers := []*Header{
 		&Header{
 			Fields: []string{"a", "b", "c"},
 		},
@@ -60,16 +69,24 @@ func (suite *testSuiteWithSamples) SetupTest() {
 	}
 
 	// Add a copy of every header, now with the HasTags flag enabled
-	n := len(suite.headers)
+	n := len(headers)
 	for i := 0; i < n; i++ {
-		suite.headers = append(suite.headers, &Header{
-			Fields:  suite.headers[i].Fields,
+		headers = append(headers, &Header{
+			Fields:  headers[i].Fields,
 			HasTags: true,
 		})
 	}
+
+	suite.headers = make([]*Header, len(headers)*3)
 	suite.samples = make([][]*Sample, len(suite.headers))
-	for i, header := range suite.headers {
-		suite.samples[i] = suite.makeSamples(header)
+	step := len(headers)
+	for i, header := range headers {
+		suite.headers[i+0*step] = header.Clone(header.Fields)
+		suite.samples[i+0*step] = suite.makeSamples(header, 5)
+		suite.headers[i+1*step] = header.Clone(header.Fields)
+		suite.samples[i+1*step] = suite.makeSamples(header, 3)
+		suite.headers[i+2*step] = header.Clone(header.Fields)
+		suite.samples[i+2*step] = suite.makeSamples(header, 1)
 	}
 }
 
@@ -85,8 +102,8 @@ func (suite *testSuiteWithSamples) compareHeaders(expected *Header, header *Head
 	suite.Equal(expected.Fields, header.Fields, "Header.Fields")
 }
 
-func (suite *testSuiteWithSamples) makeSamples(header *Header) (res []*Sample) {
-	for i := 0; i < _samples_per_test; i++ {
+func (suite *testSuiteWithSamples) makeSamples(header *Header, num int) (res []*Sample) {
+	for i := 0; i < num; i++ {
 		sample := &Sample{
 			Values: suite.makeValues(header),
 			Time:   suite.nextTimestamp(),
@@ -127,37 +144,39 @@ func (suite *testSuiteWithSamples) nextTimestamp() time.Time {
 	return res
 }
 
-func (suite *testSuiteWithSamples) newTestSink() *testSampleSink {
-	return &testSampleSink{
+func (suite *testSuiteWithSamples) newTestSinkFor(headerIndex int) *testSampleSink {
+	s := &testSampleSink{
 		suite:     suite,
 		emptyCond: sync.NewCond(new(sync.Mutex)),
 	}
-}
-
-func (suite *testSuiteWithSamples) newTestSinkFor(headerIndex int) *testSampleSink {
-	s := suite.newTestSink()
 	s.add(suite.samples[headerIndex], suite.headers[headerIndex])
 	return s
 }
 
 func (suite *testSuiteWithSamples) newFilledTestSink() *testSampleSink {
-	s := suite.newTestSink()
+	s := &testSampleSink{
+		suite:     suite,
+		emptyCond: sync.NewCond(new(sync.Mutex)),
+	}
 	for i, header := range suite.headers {
 		s.add(suite.samples[i], header)
 	}
 	return s
 }
 
-func (suite *testSuiteWithSamples) sendSamples(w MetricSinkBase, headerIndex int) {
+func (suite *testSuiteWithSamples) sendSamples(w MetricSinkBase, headerIndex int) (res int) {
 	for _, sample := range suite.samples[headerIndex] {
 		suite.NoError(w.Sample(sample, suite.headers[headerIndex]))
+		res++
 	}
+	return
 }
 
-func (suite *testSuiteWithSamples) sendAllSamples(w MetricSinkBase) {
+func (suite *testSuiteWithSamples) sendAllSamples(w MetricSinkBase) (res int) {
 	for i := range suite.headers {
-		suite.sendSamples(w, i)
+		res += suite.sendSamples(w, i)
 	}
+	return
 }
 
 type countingBuf struct {
@@ -248,4 +267,24 @@ func (s *testSampleSink) Stop() {
 func (s *testSampleSink) String() string {
 	s.suite.Fail("testSampleSink.String() called")
 	return ""
+}
+
+type testSampleHandler struct {
+	suite  *testSuiteWithSamples
+	source string
+}
+
+func (suite *testSuiteWithSamples) newHandler(source string) *testSampleHandler {
+	return &testSampleHandler{
+		suite:  suite,
+		source: source,
+	}
+}
+
+func (h *testSampleHandler) HandleHeader(header *Header, source string) {
+	h.suite.Equal(h.source, source)
+}
+
+func (h *testSampleHandler) HandleSample(sample *Sample, source string) {
+	h.suite.Equal(h.source, source)
 }

@@ -9,11 +9,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-var parallel_handler = ParallelSampleHandler{
-	BufferedSamples: 5,
-	ParallelParsers: 5,
-}
-
 type TcpListenerTestSuite struct {
 	testSuiteWithSamples
 }
@@ -27,7 +22,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 
 	l := NewTcpListenerSink(":7878", 100)
 	l.Writer.ParallelSampleHandler = parallel_handler
-	l.Marshaller = m
+	l.SetMarshaller(m)
 
 	s := &TCPSource{
 		PrintErrors:   true,
@@ -63,7 +58,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 
 		l := NewTcpListenerSink(":7878", 100)
 		l.Writer.ParallelSampleHandler = parallel_handler
-		l.Marshaller = m
+		l.SetMarshaller(m)
 
 		s := &TCPSource{
 			PrintErrors:   true,
@@ -121,7 +116,7 @@ func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 		Endpoint:    "localhost:7878",
 	}
 	s.Writer.ParallelSampleHandler = parallel_handler
-	s.Marshaller = m
+	s.SetMarshaller(m)
 
 	sender := &oneshotTask{
 		do: func() {
@@ -155,7 +150,7 @@ func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller
 			Endpoint:    "localhost:7878",
 		}
 		s.Writer.ParallelSampleHandler = parallel_handler
-		s.Marshaller = m
+		s.SetMarshaller(m)
 
 		sender := &oneshotTask{
 			do: func() {
