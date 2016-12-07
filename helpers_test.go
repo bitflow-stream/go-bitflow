@@ -16,8 +16,8 @@ import (
 const _samples_per_test = 5
 
 func init() {
-	golib.LogVerbose = true
-	//golib.LogQuiet = true
+	//golib.LogVerbose = true
+	golib.LogQuiet = true
 	golib.ConfigureLogging()
 }
 
