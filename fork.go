@@ -30,7 +30,6 @@ type MetricFork struct {
 	ParallelClose bool
 
 	pipelines        map[interface{}]bitflow.MetricSink
-	lastHeaders      map[interface{}]*bitflow.Header
 	runningPipelines int
 	stopped          bool
 	stoppedCond      sync.Cond
@@ -43,7 +42,6 @@ func NewMetricFork(distributor ForkDistributor, builder PipelineBuilder) *Metric
 		Builder:       builder,
 		Distributor:   distributor,
 		pipelines:     make(map[interface{}]bitflow.MetricSink),
-		lastHeaders:   make(map[interface{}]*bitflow.Header),
 		ParallelClose: true,
 	}
 	fork.stoppedCond.L = new(sync.Mutex)
@@ -62,11 +60,6 @@ func (f *MetricFork) Start(wg *sync.WaitGroup) golib.StopChan {
 	return result
 }
 
-func (f *MetricFork) Header(header *bitflow.Header) error {
-	// Drop header here, only send to respective subpipeline if changed.
-	return nil
-}
-
 func (f *MetricFork) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := f.Check(sample, header); err != nil {
 		return err
@@ -79,15 +72,7 @@ func (f *MetricFork) Sample(sample *bitflow.Sample, header *bitflow.Header) erro
 			pipeline = f.newPipeline(key)
 		}
 		if pipeline != nil {
-			if lastHeader, ok := f.lastHeaders[key]; !ok || !lastHeader.Equals(header) {
-				if err := pipeline.Header(header); err != nil {
-					errors.Add(err)
-					continue
-				}
-				f.lastHeaders[key] = header
-			}
-			err := pipeline.Sample(sample, header)
-			errors.Add(err)
+			errors.Add(pipeline.Sample(sample, header))
 		}
 	}
 	return errors.NilOrError()
@@ -142,7 +127,8 @@ func (f *MetricFork) newPipeline(key interface{}) bitflow.MetricSink {
 
 		if idx == -1 {
 			// Inactive subpipeline can occur when all processors and the sink return nil from Start().
-			// This means that they simply react on Header()/Sample() and wait for the final Close() call.
+			// This means that none of the elements of the subpipeline spawned any extra goroutines.
+			// They only react on Sample() and wait for the final Close() call.
 			log.Debugf("[%v]: Subpipeline inactive: %v", f, key)
 		} else {
 			log.Debugf("[%v]: Finished forked subpipeline %v", f, key)
@@ -188,13 +174,6 @@ func (sink *AggregatingSink) Start(wg *sync.WaitGroup) golib.StopChan {
 
 func (sink *AggregatingSink) Close() {
 	// The actual outgoing sink is closed after waitForSubpipelines() returns
-}
-
-func (sink *AggregatingSink) Header(header *bitflow.Header) error {
-	if err := sink.fork.CheckSink(); err != nil {
-		return err
-	}
-	return sink.fork.OutgoingSink.Header(header)
 }
 
 func (sink *AggregatingSink) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

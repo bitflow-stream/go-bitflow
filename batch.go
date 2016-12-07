@@ -12,7 +12,7 @@ import (
 
 type BatchProcessor struct {
 	bitflow.AbstractProcessor
-	header  *bitflow.Header
+	checker bitflow.HeaderChecker
 	samples []*bitflow.Sample
 
 	Steps []BatchProcessingStep
@@ -29,28 +29,12 @@ func (p *BatchProcessor) Add(step BatchProcessingStep) *BatchProcessor {
 	return p
 }
 
-func (p *BatchProcessor) checkHeader(header *bitflow.Header) error {
-	if !p.header.Equals(header) {
-		return fmt.Errorf("%v does not allow changing headers", p)
-	}
-	return nil
-}
-
-func (p *BatchProcessor) Header(header *bitflow.Header) error {
-	if p.header == nil {
-		p.header = header
-	} else if err := p.checkHeader(header); err != nil {
-		return err
-	}
-	return p.CheckSink()
-}
-
 func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
-	if err := p.checkHeader(header); err != nil {
-		return err
+	if p.checker.InitializedHeaderChanged(header) {
+		return fmt.Errorf("%v does not allow changing headers", p)
 	}
 	p.samples = append(p.samples, sample)
 	return nil
@@ -58,24 +42,21 @@ func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) 
 
 func (p *BatchProcessor) Close() {
 	defer p.CloseSink(nil)
-	defer func() {
-		// Allow garbage collection
-		p.samples = nil
-	}()
-	if p.header == nil {
+	header := p.checker.LastHeader
+	if header == nil {
 		log.Warnln(p.String(), "has no samples stored")
 		return
 	}
-	if err := p.executeSteps(); err != nil {
+
+	samples := p.samples
+	p.samples = nil // Allow garbage collection
+	var err error
+	if samples, header, err = p.executeSteps(samples, header); err != nil {
 		p.Error(err)
 	} else {
-		log.Println("Flushing", len(p.samples), "batched samples")
-		if err := p.OutgoingSink.Header(p.header); err != nil {
-			p.Error(fmt.Errorf("Error flushing batch header: %v", err))
-			return
-		}
-		for _, sample := range p.samples {
-			if err := p.OutgoingSink.Sample(sample, p.header); err != nil {
+		log.Println("Flushing", len(samples), "batched samples")
+		for _, sample := range samples {
+			if err := p.OutgoingSink.Sample(sample, header); err != nil {
 				p.Error(fmt.Errorf("Error flushing batch: %v", err))
 				return
 			}
@@ -83,22 +64,22 @@ func (p *BatchProcessor) Close() {
 	}
 }
 
-func (p *BatchProcessor) executeSteps() error {
+func (p *BatchProcessor) executeSteps(samples []*bitflow.Sample, header *bitflow.Header) ([]*bitflow.Sample, *bitflow.Header, error) {
 	if len(p.Steps) > 0 {
 		log.Println("Executing", len(p.Steps), "batch processing step(s)")
 		for _, step := range p.Steps {
-			log.Println("Executing", step, "on", len(p.samples), "samples with", len(p.header.Fields), "metrics")
+			log.Println("Executing", step, "on", len(samples), "samples with", len(header.Fields), "metrics")
 			var err error
-			p.header, p.samples, err = step.ProcessBatch(p.header, p.samples)
+			header, samples, err = step.ProcessBatch(header, samples)
 			if err != nil {
-				return err
+				return nil, nil, err
 			}
 		}
-		if p.header == nil {
-			return fmt.Errorf("Cannot flush %v samples because no valid header was returned by last batch processing step", len(p.samples))
+		if header == nil {
+			return nil, nil, fmt.Errorf("Cannot flush %v samples because no valid header was returned by last batch processing step", len(samples))
 		}
 	}
-	return nil
+	return samples, header, nil
 }
 
 func (p *BatchProcessor) String() string {
@@ -206,10 +187,6 @@ func NewMultiHeaderMerger() *MultiHeaderMerger {
 	}
 }
 
-func (p *MultiHeaderMerger) Header(_ *bitflow.Header) error {
-	return p.CheckSink()
-}
-
 func (p *MultiHeaderMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
@@ -251,12 +228,6 @@ func (p *MultiHeaderMerger) Close() {
 	}
 	log.Println(p, "reconstructing and flushing", len(p.samples), "samples with", len(p.metrics), "metrics")
 	outHeader := p.reconstructHeader()
-	if err := p.OutgoingSink.Header(outHeader); err != nil {
-		err = fmt.Errorf("Error flushing reconstructed header: %v", err)
-		log.Errorln(err)
-		p.Error(err)
-		return
-	}
 	for index := range p.samples {
 		outSample := p.reconstructSample(index, outHeader)
 		if err := p.OutgoingSink.Sample(outSample, outHeader); err != nil {

@@ -16,3 +16,10 @@ const (
 func ClusterName(clusterNum int) string {
 	return ClusterPrefix + strconv.Itoa(clusterNum)
 }
+
+// String is a trivial implementation of the fmt.Sringer interface
+type String string
+
+func (s String) String() string {
+	return string(s)
+}

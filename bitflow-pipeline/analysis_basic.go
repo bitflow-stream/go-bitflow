@@ -84,7 +84,7 @@ func pick_x_percent(p *SamplePipeline, params string) {
 	}
 	counter := float64(0)
 	p.Add(&SampleFilter{
-		Description: fmt.Sprintf("Pick %.2f%%", pick_percentage*100),
+		Description: String(fmt.Sprintf("Pick %.2f%%", pick_percentage*100)),
 		IncludeFilter: func(inSample *bitflow.Sample) bool {
 			counter += pick_percentage
 			if counter > 1.0 {
@@ -309,7 +309,7 @@ func rename_metrics(p *SamplePipeline, params string) {
 }
 
 func strip_metrics(p *SamplePipeline) {
-	p.Add(NewMetricStripper())
+	p.Add(new(MetricStripper))
 }
 
 func sleep_samples(p *SamplePipeline) {

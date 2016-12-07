@@ -253,18 +253,20 @@ func count_invalid(p *SamplePipeline) {
 
 type commonMetricsPrinter struct {
 	bitflow.AbstractProcessor
-	common map[string]bool
-	num    int
+	checker bitflow.HeaderChecker
+	common  map[string]bool
+	num     int
 }
 
 func (*commonMetricsPrinter) String() string {
 	return fmt.Sprintf("Common metrics printer")
 }
 
-func (p *commonMetricsPrinter) Header(header *bitflow.Header) error {
-	if err := p.CheckSink(); err != nil {
+func (p *commonMetricsPrinter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+	if err := p.Check(sample, header); err != nil {
 		return err
-	} else {
+	}
+	if p.checker.HeaderChanged(header) {
 		p.num++
 		if p.common == nil {
 			p.common = make(map[string]bool)
@@ -282,8 +284,8 @@ func (p *commonMetricsPrinter) Header(header *bitflow.Header) error {
 				}
 			}
 		}
-		return p.OutgoingSink.Header(header)
 	}
+	return p.OutgoingSink.Sample(sample, header)
 }
 
 func (p *commonMetricsPrinter) Close() {

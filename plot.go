@@ -35,11 +35,12 @@ func init() {
 
 type Plotter struct {
 	bitflow.AbstractProcessor
-	OutputFile     string
-	ColorTag       string
-	SeparatePlots  bool // If true, every ColorTag value will create a new plot
-	incomingHeader *bitflow.Header
-	data           map[string]PlotData
+	checker bitflow.HeaderChecker
+	data    map[string]PlotData
+
+	OutputFile    string
+	ColorTag      string
+	SeparatePlots bool // If true, every ColorTag value will create a new plot
 }
 
 type PlotData []*bitflow.Sample
@@ -60,30 +61,22 @@ func (data PlotData) XY(i int) (x, y float64) {
 	}
 }
 
-func (p *Plotter) Header(header *bitflow.Header) error {
-	if err := p.CheckSink(); err != nil {
+func (p *Plotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+	if err := p.Check(sample, header); err != nil {
 		return err
-	} else {
+	}
+	if p.checker.HeaderChanged(header) {
 		if len(header.Fields) == 0 {
 			log.Warnln("Not receiving any metrics for plotting")
 		} else if len(header.Fields) == 1 {
 			log.Warnln("Plotting only 1 metrics with y=x")
 		}
-		p.incomingHeader = header
-		p.data = make(map[string]PlotData)
-		return p.OutgoingSink.Header(header)
 	}
-}
-
-func (p *Plotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, p.incomingHeader); err != nil {
-		return err
-	}
-	p.plotSample(sample)
+	p.storeSample(sample)
 	return p.OutgoingSink.Sample(sample, header)
 }
 
-func (p *Plotter) plotSample(sample *bitflow.Sample) {
+func (p *Plotter) storeSample(sample *bitflow.Sample) {
 	key := sample.Tag(p.ColorTag)
 	if key == "" && p.ColorTag != "" {
 		key = "(none)"
@@ -92,6 +85,7 @@ func (p *Plotter) plotSample(sample *bitflow.Sample) {
 }
 
 func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
+	p.data = make(map[string]PlotData)
 	if file, err := os.Create(p.OutputFile); err != nil {
 		// Check if file can be created to quickly fail
 		return golib.TaskFinishedError(err)
@@ -144,13 +138,14 @@ func (p *Plotter) fillPlot(plotData map[string]PlotData, copyBounds *plot.Plot) 
 	if err != nil {
 		return nil, err
 	}
-	numFields := len(p.incomingHeader.Fields)
+	header := p.checker.LastHeader
+	numFields := len(header.Fields)
 	if numFields >= 2 {
-		plot.X.Label.Text = p.incomingHeader.Fields[PlottedXAxis]
-		plot.Y.Label.Text = p.incomingHeader.Fields[PlottedYAxis]
+		plot.X.Label.Text = header.Fields[PlottedXAxis]
+		plot.Y.Label.Text = header.Fields[PlottedYAxis]
 	} else if numFields == 1 {
-		plot.X.Label.Text = p.incomingHeader.Fields[PlottedXAxis]
-		plot.Y.Label.Text = p.incomingHeader.Fields[PlottedXAxis]
+		plot.X.Label.Text = header.Fields[PlottedXAxis]
+		plot.Y.Label.Text = header.Fields[PlottedXAxis]
 	}
 	if copyBounds != nil {
 		plot.X.Min = copyBounds.X.Min

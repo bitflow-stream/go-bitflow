@@ -9,7 +9,7 @@ import (
 
 type SampleFilter struct {
 	bitflow.AbstractProcessor
-	Description   string
+	Description   fmt.Stringer
 	IncludeFilter func(inSample *bitflow.Sample) bool // Return true if sample should be INcluded
 }
 
@@ -25,10 +25,10 @@ func (p *SampleFilter) Sample(inSample *bitflow.Sample, header *bitflow.Header) 
 }
 
 func (p *SampleFilter) String() string {
-	if p.Description == "" {
+	if p.Description == nil {
 		return "Sample Filter"
 	} else {
-		return "Sample Filter: " + p.Description
+		return "Sample Filter: " + p.Description.String()
 	}
 }
 

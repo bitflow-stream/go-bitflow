@@ -12,7 +12,7 @@ import (
 )
 
 type MetricMapperHelper struct {
-	Description string
+	Description fmt.Stringer
 
 	inHeader   *bitflow.Header
 	outHeader  *bitflow.Header
@@ -53,31 +53,26 @@ type AbstractMetricMapper struct {
 	helper MetricMapperHelper
 }
 
-func (self *AbstractMetricMapper) Header(header *bitflow.Header) error {
-	if err := self.CheckSink(); err != nil {
+func (m *AbstractMetricMapper) init(desc fmt.Stringer) {
+	m.Description = desc
+	m.helper.Description = m
+}
+
+func (m *AbstractMetricMapper) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+	if err := m.Check(sample, m.helper.inHeader); err != nil {
 		return err
 	}
-	if !header.Equals(self.helper.inHeader) {
-		self.helper = MetricMapperHelper{
-			Description: self.String(),
-		}
-		if err := self.helper.incomingHeader(header, self.ConstructIndices); err != nil {
+	if !header.Equals(m.helper.inHeader) {
+		if err := m.helper.incomingHeader(header, m.ConstructIndices); err != nil {
 			return err
 		}
 	}
-	return self.OutgoingSink.Header(self.helper.outHeader)
+	sample = m.helper.convertSample(sample)
+	return m.OutgoingSink.Sample(sample, m.helper.outHeader)
 }
 
-func (self *AbstractMetricMapper) Sample(inSample *bitflow.Sample, _ *bitflow.Header) error {
-	if err := self.Check(inSample, self.helper.inHeader); err != nil {
-		return err
-	}
-	outSample := self.helper.convertSample(inSample)
-	return self.OutgoingSink.Sample(outSample, self.helper.outHeader)
-}
-
-func (self *AbstractMetricMapper) String() string {
-	if desc := self.Description; desc == nil {
+func (m *AbstractMetricMapper) String() string {
+	if desc := m.Description; desc == nil {
 		return "Abstract Metric Mapper"
 	} else {
 		return desc.String()
@@ -113,7 +108,7 @@ type MetricFilter struct {
 
 func NewMetricFilter() *MetricFilter {
 	res := new(MetricFilter)
-	res.Description = res
+	res.init(res)
 	res.ConstructIndices = res.constructIndices
 	res.IncludeFilter = res.filter
 	return res
@@ -186,8 +181,8 @@ func NewMetricMapper(metrics []string) *MetricMapper {
 	mapper := &MetricMapper{
 		Metrics: metrics,
 	}
+	mapper.init(mapper)
 	mapper.ConstructIndices = mapper.constructIndices
-	mapper.Description = mapper
 	return mapper
 }
 
@@ -227,7 +222,7 @@ type BatchMetricMapper struct {
 
 func (mapper *BatchMetricMapper) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	helper := &MetricMapperHelper{
-		Description: mapper.String(),
+		Description: mapper,
 	}
 	constructIndices := func(_ *bitflow.Header) ([]int, []string) {
 		return mapper.ConstructIndices(header, samples)

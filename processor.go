@@ -10,6 +10,10 @@ import (
 	"github.com/antongulenko/golib"
 )
 
+// MergableProcessor is an extension of bitflow.SampleProcessor, that also allows
+// merging two processor instances of the same time into one. Merging is only allowed
+// when the result of the merge would has exactly the same functionality as using the
+// two separate instances. This can be used as an optional optimization.
 type MergableProcessor interface {
 	bitflow.SampleProcessor
 	MergeProcessor(other bitflow.SampleProcessor) bool
@@ -28,15 +32,6 @@ type DecouplingProcessor struct {
 type TaggedSample struct {
 	Sample *bitflow.Sample
 	Header *bitflow.Header
-}
-
-func (p *DecouplingProcessor) Header(header *bitflow.Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	} else {
-		p.samples <- TaggedSample{Header: header}
-		return nil
-	}
 }
 
 func (p *DecouplingProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -70,14 +65,7 @@ func (p *DecouplingProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (p *DecouplingProcessor) forward(sample TaggedSample) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	}
-	if sample.Sample == nil {
-		return p.OutgoingSink.Header(sample.Header)
-	} else {
-		return p.OutgoingSink.Sample(sample.Sample, sample.Header)
-	}
+	return p.OutgoingSink.Sample(sample.Sample, sample.Header)
 }
 
 func (p *DecouplingProcessor) Close() {
@@ -85,26 +73,21 @@ func (p *DecouplingProcessor) Close() {
 }
 
 func (p *DecouplingProcessor) String() string {
-	return "DecouplingProcessor"
+	return fmt.Sprintf("DecouplingProcessor (buffer %v)", p.ChannelBuffer)
 }
 
 // ==================== SamplePrinter (example) ====================
 type SamplePrinter struct {
 	bitflow.AbstractProcessor
-}
-
-func (p *SamplePrinter) Header(header *bitflow.Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	} else {
-		log.Println("Processing Header len:", len(header.Fields), "tags:", header.HasTags)
-		return p.OutgoingSink.Header(header)
-	}
+	checker bitflow.HeaderChecker
 }
 
 func (p *SamplePrinter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
+	}
+	if p.checker.HeaderChanged(header) {
+		log.Println("Processing Header len:", len(header.Fields), "tags:", header.HasTags)
 	}
 	tags := ""
 	if sample.NumTags() > 0 {

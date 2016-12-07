@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 
 	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
 )
 
