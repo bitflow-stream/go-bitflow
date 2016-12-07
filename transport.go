@@ -30,6 +30,19 @@ func (h *HeaderChecker) HeaderChanged(newHeader *Header) bool {
 	return changed
 }
 
+// InitializedHeaderChanged returns true, if the newHeader parameter represents a different header
+// from the last time HeaderChanged was called. The first call to this method
+// will return false, so this can be used in situations where the header has to be initialized.
+func (h *HeaderChecker) InitializedHeaderChanged(newHeader *Header) bool {
+	if h.LastHeader == nil {
+		h.LastHeader = newHeader
+		return false
+	}
+	changed := !newHeader.Equals(h.LastHeader)
+	h.LastHeader = newHeader
+	return changed
+}
+
 // A MetricSink receives samples and headers to do arbitrary operations on them.
 // If additional goroutines are required for these operations, they should be created
 // after Start() is called. The Stop() method should be ignored, a call to the Close()

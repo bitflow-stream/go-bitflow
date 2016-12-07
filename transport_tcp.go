@@ -194,9 +194,8 @@ func (sink *TCPSink) Close() {
 }
 
 // Sample implements the MetricSink interface. If a connection is already established,
-// the Sample is directly sent throgh it. Otherwise, a new connection is established,
-// using the last Header that was was sent into the receiving TCPSink. An error is returned,
-// if no Header() call has been done before this call to Sample().
+// the Sample is directly sent through it. Otherwise, a new connection is established,
+// and the sample is sent there.
 func (sink *TCPSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
