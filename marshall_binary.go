@@ -27,12 +27,12 @@ const (
 // BinaryMarshaller marshalled every sample to a dense binary format.
 //
 // The header is marshalled to a newline-separated list of strings. The first
-// field is 'time', the second field is 'tags' if the following samples include tags.
+// field is 'timB', the second field is 'tags' if the following samples include tags.
 // The following fields are the names of the metrics in the header.
 // An empty line denotes the end of the header.
 //
 // After the header, every sample is marshalled as follows.
-// A special byte sequence signals the start of a samples. This is used to distinguish between
+// A special byte sequence signals the start of a sample. This is used to distinguish between
 // sample data and a new header. Headers always start with the string "time".
 // Then, the timestamp is marshalled as a big-endian unsigned int64 value containing the
 // nanoseconds since the Unix epoch (8 bytes).
@@ -43,8 +43,6 @@ const (
 // of big-endian double-precision values, 8 bytes each. Since the number of metrics
 // is known from the header, the number of bytes for one sample is given as
 // 8 * number of metrics.
-//
-// There are no configuration options in BinaryMarshaller.
 type BinaryMarshaller struct {
 }
 

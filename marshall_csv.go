@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -135,6 +137,10 @@ func (c *CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Hea
 
 func (*CsvMarshaller) parseHeader(line []byte) *Header {
 	fields := splitCsvLine(line)
+	if len(fields) == 1 {
+		log.Warnln("CSV header contains only time field. This might be the old binary format, " +
+			"use the 'old_binary_format' tag from the go-bitflow-pipeline repository.")
+	}
 	hasTags := len(fields) >= 2 && fields[1] == tags_col
 	header := &Header{HasTags: hasTags}
 	start := 1
