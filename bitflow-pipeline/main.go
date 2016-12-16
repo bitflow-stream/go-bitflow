@@ -63,7 +63,8 @@ func do_main() int {
 	printAnalyses := flag.Bool("analyses", false, "Print a list of available analyses and exit.")
 
 	var p SamplePipeline
-	p.RegisterAllFlags()
+	var f bitflow.EndpointFactory
+	f.RegisterFlags()
 	golib.RegisterLogFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
@@ -79,11 +80,17 @@ func do_main() int {
 	if !ok {
 		log.Fatalf("Sample handler '%v' not registered. Available: %v", *readSampleHandler, allHandlers())
 	}
-	p.ReadSampleHandler = handler
-	p.FlagInputs = flag.Args()
+	if err := f.ReadInputArguments(); err != nil {
+		log.Fatalln(err)
+	}
 	defer golib.ProfileCpu()()
 	p.setup(analyses)
-	p.Init()
+	if err := p.Configure(&f, handler); err != nil {
+		log.Fatalln(err)
+	}
+	if err := p.CheckTasks(); err != nil {
+		log.Fatalln(err)
+	}
 	for _, str := range p.print() {
 		log.Println(str)
 	}
@@ -167,7 +174,7 @@ func (slice SortedAnalyses) Swap(i, j int) {
 }
 
 type SamplePipeline struct {
-	bitflow.CmdSamplePipeline
+	bitflow.SamplePipeline
 	lastProcessor bitflow.SampleProcessor
 }
 
@@ -181,7 +188,7 @@ func (p *SamplePipeline) Add(step bitflow.SampleProcessor) *SamplePipeline {
 		}
 	}
 	p.lastProcessor = step
-	p.CmdSamplePipeline.Add(step)
+	p.SamplePipeline.Add(step)
 	return p
 }
 
