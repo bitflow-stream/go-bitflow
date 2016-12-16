@@ -171,3 +171,8 @@ func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 	err("csv+std://x", "Transport 'std' can only be defined with target '-'")
 	err("std+csv://x", "Transport 'std' can only be defined with target '-'")
 }
+
+func (suite *PipelineTestSuite) TestInit() {
+
+
+}

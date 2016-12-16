@@ -1,26 +1,11 @@
 package bitflow
 
 import (
-	"sync"
+	"errors"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/golib"
 )
-
-// SampleProcessor is the combination of MetricSink and MetricSource.
-// It receives Samples through the Sample method and
-// sends samples to the MetricSink configured over SetSink. The forwarded Samples
-// can be the same as received, completely new generated samples, and also a different
-// number of Samples from the incoming ones. The Header can also be changed, but then
-// the SampleProcessor implementation must take care to adjust the outgoing
-// Samples accordingly. All required goroutines must be started in Start()
-// and stopped when Close() is called. The Stop() method must be ignored,
-// see MetricSink.
-type SampleProcessor interface {
-	golib.Task
-	Sample(sample *Sample, header *Header) error
-	SetSink(sink MetricSink)
-	Close()
-}
 
 // SamplePipeline reads data from a source, pipes it through zero or more SampleProcessor
 // instances and outputs the final Samples into a MetricSink.
@@ -35,7 +20,7 @@ type SamplePipeline struct {
 
 // Construct connects the MetricSource, all SampleProcessors and the MetricSink
 // inside the receiving SamplePipeline. It adds all these golib.Task instances
-// to the golib.TaskGroup parameter. Afterwards, tasks.WaitAndStop() cann be called
+// to the given golib.TaskGroup. Afterwards, tasks.WaitAndStop() cann be called
 // to start the entire pipeline. At least the Source and the Sink field
 // must be set in the pipeline. The Construct method will not fail without them,
 // but starting the resulting pipeline will not work.
@@ -79,82 +64,106 @@ func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 	return p
 }
 
-// AbstractProcessor is an empty implementation of SampleProcessor. It can be
-// directly added to a SamplePipeline and will behave as a no-op processing step.
-// Other implementations of SampleProcessor can embed this and override parts of
-// the methods as required. No initialization is needed for this type, but an
-// instance can only be used once, in one pipeline.
-type AbstractProcessor struct {
-	AbstractMetricSource
-	AbstractMetricSink
-	stopChan chan error
-}
-
-// Sample implements the SampleProcessor interface. It performs a sanity check
-// by calling p.Check() and then forwards the sample to the configured sink.
-func (p *AbstractProcessor) Sample(sample *Sample, header *Header) error {
-	if err := p.Check(sample, header); err != nil {
+// Configure fills the Sink and Source fields of the SamplePipeline using
+// the given EndpointFactory and ReadSampleHandler. Configure calls ConfigureSource
+// and ConfigureSink and returns the first error (if any).
+func (p *SamplePipeline) Configure(f *EndpointFactory, handler ReadSampleHandler) error {
+	if err := p.ConfigureSource(f, handler); err != nil {
 		return err
 	}
-	return p.OutgoingSink.Sample(sample, header)
-}
-
-// Check is a utility method that asserts that the receiving AbstractProcessor has
-// a sink configured and that the given sample matches the given header. This should
-// be done early in every Sample() implementation.
-func (p *AbstractProcessor) Check(sample *Sample, header *Header) error {
-	if err := p.CheckSink(); err != nil {
-		return err
-	}
-	if err := sample.Check(header); err != nil {
+	if err := p.ConfigureSink(f); err != nil {
 		return err
 	}
 	return nil
 }
 
-// Start implements the SampleProcessor interface. It creates an error-channel
-// with a small channel buffer. Calling CloseSink() or Error() writes a value
-// to that channel to signalize that this AbstractProcessor is finished.
-func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
-	// Chan buffer of 2 makes sure the Processor can report an error and then
-	// call AbstractProcessor.CloseSink() without worrying if the error has
-	// been reported previously or not.
-	p.stopChan = make(chan error, 2)
-	return p.stopChan
-}
-
-// CloseSink reports that this AbstractProcessor is finished processing.
-// All goroutines must be stopped, and all Headers and Samples must be already
-// forwarded to the outgoing sink, when this is called. CloseSink forwards
-// the Close() invokation to the outgoing sink.
-func (p *AbstractProcessor) CloseSink(wg *sync.WaitGroup) {
-	if c := p.stopChan; c != nil {
-		// If there was no error, make sure the channel still returns something to signal that this task is done.
-		c <- nil
-		p.stopChan = nil
+// ConfigureSink uses the given EndpointFactory to fill the Sink field of the
+// SamplePipeline.
+func (p *SamplePipeline) ConfigureSink(f *EndpointFactory) error {
+	sinks, err := f.CreateOutput()
+	if err != nil {
+		return err
 	}
-	p.AbstractMetricSource.CloseSink(wg)
-}
-
-// Error reports that AbstractProcessor has encountered an error and has stopped
-// operation. After calling this, no more Headers and Samples can be forwarded
-// to the outgoing sink. Ultimately, p.Close() will be called for cleaning up.
-func (p *AbstractProcessor) Error(err error) {
-	if c := p.stopChan; c != nil {
-		c <- err
+	if len(sinks) == 0 {
+		log.Warnln("No data sinks selected, data will not be output anywhere.")
 	}
+	p.Sink = sinks
+	return nil
 }
 
-// Close implements the SampleProcessor interface by simply closing the outgoing
-// sink. Other types that embed AbstractProcessor can override this to perform
-// specific actions when closing.
-func (p *AbstractProcessor) Close() {
-	// Propagate the Close() invocation
-	p.CloseSink(nil)
+// ConfigureSource uses the given EndpointFactory to fill the Source field of the
+// SamplePipeline.
+//
+// The ReadSampleHandler parmeter can be used to modify Samples and Headers directly after they are read
+// by the SampleReader, e.g. directly after reading a Header from file, or directly
+// after receiving a Sample over a TCP connection. The main purpose of this
+// is that the ReadSampleHandler receives a string representation of the data
+// source, which can be used as a tag in the Samples. By default, the data source is not
+// stored in the Samples and this information will be lost one the Sample enters the pipeline.
+// The data source string differs depending on the MetricSource used. The FileSource will
+// use the file name, while the TCPSource will use the remote TCP endpoint.
+//
+// The ReadSampleHandler parameter can be nil.
+func (p *SamplePipeline) ConfigureSource(f *EndpointFactory, handler ReadSampleHandler) error {
+	source, err := f.CreateInput(handler)
+	if err != nil {
+		return err
+	}
+	if source == nil {
+		log.Warnln("No data source provided, no data will be received or generated.")
+		source = new(EmptyMetricSource)
+	}
+	p.Source = source
+	return nil
 }
 
-// String implements the SampleProcessor interface. This should be overridden
-// by types that are embedding AbstractProcessor.
-func (p *AbstractProcessor) String() string {
-	return "AbstractProcessor"
+// HasTasks returns a non-nil error if the receiving SamplePipeline has no data sink,
+// no data source, and no processor defined. A non-nil error indicates that the
+// pipeline will do nothing when started.
+func (p *SamplePipeline) HasTasks() error {
+	if len(p.Processors) > 0 {
+		return nil
+	}
+	if p.Source != nil {
+		return nil
+	}
+	if p.Sink != nil {
+		if agg, ok := p.Sink.(AggregateSink); !ok && len(agg) > 0 {
+			return nil
+		}
+	}
+	return errors.New("No tasks defined")
+}
+
+// StartAndWait constructs the pipeline and starts it. It blocks until the pipeline
+// is finished. The Sink and Source fields must be set to non-nil values, for example
+// using Configure* methods or setting the fields directly.
+//
+// The sequence of operations to start a SamplePipeline should roughly follow the following example:
+//   // ... Define additional flags using the "flag" package (Optional)
+//   var p sample.SamplePipeline
+//   var f EndpointFactory
+//   f.RegisterAllFlags()
+//   flag.Parse()
+//   p.FlagInputs = flag.Args() // Or other value, optional
+//   // ... Modify f.Flag* values // Optional
+//   defer golib.ProfileCpu()() // Optional
+//   err := p.Configure(&f, sampleHandler) // Or access p.Sink/p.Source directly. sampleHandler can be nil.
+//   // ... Error handling
+//   os.Exit(p.StartAndWait())
+//
+// An additional golib.Task is started along with the pipeline, which listens
+// for the Ctrl-C user external interrupt and makes the pipeline stoppable cleanly
+// by the user.
+//
+// StartAndWait returns the number of errors that occured in the pipeline.
+func (p *SamplePipeline) StartAndWait() int {
+	tasks := golib.NewTaskGroup()
+	p.Construct(tasks)
+	log.Debugln("Press Ctrl-C to interrupt")
+	tasks.Add(&golib.NoopTask{
+		Chan:        golib.ExternalInterrupt(),
+		Description: "external interrupt",
+	})
+	return tasks.PrintWaitAndStop()
 }

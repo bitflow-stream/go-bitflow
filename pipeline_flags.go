@@ -28,6 +28,8 @@ const (
 	TextFormat      = MarshallingFormat("text")
 	CsvFormat       = MarshallingFormat("csv")
 	BinaryFormat    = MarshallingFormat("bin")
+
+	tcp_download_retry_interval = 1000 * time.Millisecond
 )
 
 var (
@@ -44,8 +46,11 @@ var (
 	binaryFileSuffix   = ".bin"
 )
 
-// EndpointFactory creates MetricSink and MetricSource instances for a CmdSamplePipeline.
-// Ir defines command line flags for configuring the instances it creates.
+// EndpointFactory creates MetricSink and MetricSource instances for a SamplePipeline.
+// It defines command line flags for configuring the objects it creates.
+// All fields named Flag* are set by the according command line flags and evaluated in CreateInput() and CreateOutput().
+// FlagInputs is not set by command line flags automatically.
+// After flag.Parse(), those fields can be modified to override the command line flags defined by the user.
 type EndpointFactory struct {
 	// File input/output flags
 
@@ -74,57 +79,61 @@ type EndpointFactory struct {
 	FlagInputs golib.StringSlice
 }
 
-// ParseAllFlags calls ParseFlags without suppressing any available flags.
-func (p *EndpointFactory) RegisterAllFlags() {
-	p.RegisterFlags(nil)
+// RegisterFlags registers all flags to the global CommandLine object.
+func (p *EndpointFactory) RegisterFlags() {
+	p.RegisterFlagsTo(flag.CommandLine)
 }
 
-// ParseFlags registers command-line flags for the receiving CmdSamplePipeline with the
-// global CommandLine object. The flags configure many aspects of the pipeline,
+// RegisterFlagsTo registers all input and output flags by calling RegisterInputFlagsTo
+// and RegisterOutputFlagsTo. The flags configure many aspects of the pipeline,
 // including data source, data sink, performance parameters, debug parmeters and
 // other behavior parameters. See the help texts for more information on the available
 // parameters.
-//
-// The suppressFlags parameter can be filled with flags, that should not be parsed.
-// This allows individual main-packages to refine the available flags.
-//
-// Must be called before flag.Parse().
-func (p *EndpointFactory) RegisterFlags(suppressFlags map[string]bool) {
-	var f flag.FlagSet
+func (p *EndpointFactory) RegisterFlagsTo(f *flag.FlagSet) {
+	p.RegisterGeneralFlagsTo(f)
+	p.RegisterInputFlagsTo(f)
+	p.RegisterOutputFlagsTo(f)
+}
 
+// RegisterGeneralFlagsTo registers flags that configure different aspects of both
+// data input and data output. These flags affect to both performance and functionality of
+// TCP, file and std I/O.
+func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
 	// Files
-	f.BoolVar(&p.FlagInputFilesRobust, "robust", false, "When encountering errors while reading files, print warnings instead of failing.")
 	f.BoolVar(&p.FlagOutputFilesClean, "clean", false, "Delete all potential output files before writing")
 	f.IntVar(&p.FlagIoBuffer, "io_buf", 4096, "Size (byte) of buffered IO when reading/writing files.")
 
 	// TCP
-	f.UintVar(&p.FlagOutputTcpListenBuffer, "lbuf", 0, "For -l, buffer a number of samples that will be delivered first to all established connections.")
-	f.UintVar(&p.FlagInputTcpAcceptLimit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
 	f.UintVar(&p.FlagTcpConnectionLimit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
-	f.BoolVar(&p.FlagTcpDropErrors, "tcp_drop_err", false, "Don't print errors when establishing actie TCP connection (for sink/source) fails")
+	f.BoolVar(&p.FlagTcpDropErrors, "tcp_drop_err", false, "Don't print errors when establishing active TCP connection (for sink/source) fails")
 
 	// Parallel marshalling/unmarshalling
 	f.IntVar(&p.FlagParallelHandler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
 	f.IntVar(&p.FlagParallelHandler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling.")
+}
 
-	// Output
+// RegisterInputFlagsTo registers flags that configure aspects of data input.
+func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
+	f.BoolVar(&p.FlagInputFilesRobust, "robust", false, "When encountering errors while reading files, print warnings instead of failing.")
+	f.UintVar(&p.FlagInputTcpAcceptLimit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
+}
+
+// RegisterOutputFlagsTo registers flags that configure data outputs.
+func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
+	f.UintVar(&p.FlagOutputTcpListenBuffer, "lbuf", 0, "For -l, buffer a number of samples that will be delivered first to all established connections.")
 	f.BoolVar(&p.FlagOutputBox, "p", false, "Display samples in a box on the command line")
 	f.Var(&p.FlagOutputs, "o", "Data sink(s) for outputting data")
-
-	f.VisitAll(func(f *flag.Flag) {
-		if !suppressFlags[f.Name] {
-			flag.Var(f.Value, f.Name, f.Usage)
-		}
-	})
 }
 
 // HasOutputFlag returns true, if at least one data output flag is defined in the
-// receiving CmdSamplePipeline. If false is returned, calling Init() will print
-// a warning since the data will not be output anywhere.
+// receiving EndpointFactory. If false is returned, the CreateOutput method will return
+// an empty instance of AggregateSink.
 func (p *EndpointFactory) HasOutputFlag() bool {
 	return p.FlagOutputBox || len(p.FlagOutputs) > 0
 }
 
+// CreateInput creates a MetricSource object based on the Flag* values in the EndpointFactory
+// object.
 func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, error) {
 	var result MetricSource
 	inputType := UndefinedEndpoint
@@ -172,7 +181,6 @@ func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, 
 				source.Reader = reader
 				result = source
 			default:
-				log.Println("HHHHHHHHHHHHHHHHHHH", endpoint)
 				panic("Unknown endpoint type: " + string(endpoint.Type))
 			}
 		} else {
@@ -198,6 +206,8 @@ func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, 
 	return result, nil
 }
 
+// CreateInput creates a MetricSink object based on the Flag* values in the EndpointFactory
+// object.
 func (p *EndpointFactory) CreateOutput() (AggregateSink, error) {
 	var sinks AggregateSink
 	haveConsoleOutput := false
@@ -265,17 +275,23 @@ func (p *EndpointFactory) CreateOutput() (AggregateSink, error) {
 	return sinks, nil
 }
 
+// EndpointDescription describes a data endpoint, regardless of the data direction
+// (input or output).
 type EndpointDescription struct {
 	Format MarshallingFormat
 	Type   EndpointType
 	Target string
 }
 
+// Unmarshaller creates an Unmarshaller object that is able to read data from the
+// described endpoint.
 func (e EndpointDescription) Unmarshaller() Unmarshaller {
 	// The nil Unmarshaller makes the MetricSource implementations auto-detect the format.
 	return nil
 }
 
+// OutputFormat returns the MarshallingFormat that should be used when sending
+// data to the described endpoint.
 func (e EndpointDescription) OutputFormat() MarshallingFormat {
 	format := e.Format
 	if format == UndefinedFormat {
@@ -284,6 +300,8 @@ func (e EndpointDescription) OutputFormat() MarshallingFormat {
 	return format
 }
 
+// DefaultOutputFormat returns the default MarshallingFormat that should be used when sending
+// data to the described endpoint, if no format is specified by the user.
 func (e EndpointDescription) DefaultOutputFormat() MarshallingFormat {
 	switch e.Type {
 	case TcpEndpoint, TcpListenEndpoint:
@@ -300,6 +318,8 @@ func (e EndpointDescription) DefaultOutputFormat() MarshallingFormat {
 	}
 }
 
+// Marshaller returns a Marshaller object that is able to marshall data for sending
+// it to the described endpoint.
 func (format MarshallingFormat) Marshaller() Marshaller {
 	switch format {
 	case TextFormat:
@@ -314,6 +334,9 @@ func (format MarshallingFormat) Marshaller() Marshaller {
 	}
 }
 
+// ParseEndpointDescription parses the given string to an EndpointDescription object.
+// The string can be one of two forms: the URL-style description will be parsed by
+// ParseUrlEndpointDescription, other descriptions will be parsed by GuessEndpointDescription.
 func ParseEndpointDescription(endpoint string) (EndpointDescription, error) {
 	if strings.Contains(endpoint, "://") {
 		return ParseUrlEndpointDescription(endpoint)
@@ -322,6 +345,13 @@ func ParseEndpointDescription(endpoint string) (EndpointDescription, error) {
 	}
 }
 
+// ParseUrlEndpointDescription parses the endpoint string as a URL endpoint description/
+// It has the form:
+//   format+transport://target
+//
+// The format and transport parts are optional, but at least one must be specified.
+// If one of format or transport is missing, it will be guessed.
+// The order does not matter. The 'target' part must not be empty.
 func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err error) {
 	urlParts := strings.Split(endpoint, "://")
 	if len(urlParts) != 2 || urlParts[0] == "" || urlParts[1] == "" {
@@ -371,12 +401,19 @@ func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err 
 	return
 }
 
+// GuessEndpointDescription guesses the transport type and format of the given endpoint target.
+// See GuessEndpointType for details.
 func GuessEndpointDescription(endpoint string) (res EndpointDescription, err error) {
 	res.Target = endpoint
 	res.Type, err = GuessEndpointType(endpoint)
 	return
 }
 
+// GuessEndpointType guesses the EndpointType for the given target.
+// Three forms of are recognized for the target:
+//  - A host:port pair indicates an active TCP endpoint
+//  - A :port pair (without the host part, but with the colon) indicates a passive TCP endpoint listening on the given port.
+//  - All other targets are treated as file names
 func GuessEndpointType(target string) (EndpointType, error) {
 	var typ EndpointType
 	if target == "" {
