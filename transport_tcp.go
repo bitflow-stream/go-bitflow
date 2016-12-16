@@ -264,7 +264,7 @@ func (sink *TCPSink) assertConnection() error {
 // succeeds. The contained AbstractMetricSource and TCPConnCounter fields provide various parmaeters
 // for configuring different aspects of the TCP connections and reading of data from them.
 type TCPSource struct {
-	AbstractMetricSource
+	AbstractUnmarshallingMetricSource
 	TCPConnCounter
 
 	// PrintErrors controls whether TCP related errors are dropped, or treated normally.
@@ -283,10 +283,6 @@ type TCPSource struct {
 	// RetryInterval defines the time to wait before trying to reconnect after a closed connection
 	// or failed connection attempt.
 	RetryInterval time.Duration
-
-	// Reader defines various parameters configuring reading and parsing aspects of TCPSource.
-	// See the SampleReader doc for more information.
-	Reader SampleReader
 
 	downloaders  []*tcpDownloadTask
 	downloadSink MetricSinkBase

@@ -106,9 +106,10 @@ func (suite *TcpListenerTestSuite) TestListenerSinkAllBinary() {
 func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 	testSink := suite.newFilledTestSink()
 
-	l := NewTcpListenerSource(":7878", SampleReader{
+	l := NewTcpListenerSource(":7878")
+	l.Reader = SampleReader{
 		ParallelSampleHandler: parallel_handler,
-	})
+	}
 	l.SetSink(testSink)
 
 	s := &TCPSink{
@@ -140,9 +141,10 @@ func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller
 	for i := range suite.headers {
 		testSink := suite.newTestSinkFor(i)
 
-		l := NewTcpListenerSource(":7878", SampleReader{
+		l := NewTcpListenerSource(":7878")
+		l.Reader = SampleReader{
 			ParallelSampleHandler: parallel_handler,
-		})
+		}
 		l.SetSink(testSink)
 
 		s := &TCPSink{

@@ -13,6 +13,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
+var WarnObsoleteBinaryFormat = true
+
 const (
 	// CsvSeparator is the character separating fields in the marshalled output
 	// of CsvMarshaller.
@@ -137,7 +139,7 @@ func (c *CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Hea
 
 func (*CsvMarshaller) parseHeader(line []byte) *Header {
 	fields := splitCsvLine(line)
-	if len(fields) == 1 {
+	if WarnObsoleteBinaryFormat && len(fields) == 1 {
 		log.Warnln("CSV header contains only time field. This might be the old binary format, " +
 			"use the 'old_binary_format' tag from the go-bitflow-pipeline repository.")
 	}

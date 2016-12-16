@@ -14,18 +14,13 @@ import (
 // from every accepted connection. See the doc for the different fields for options
 // affecting the TCP connections and aspects of reading and parsing.
 type TCPListenerSource struct {
-	AbstractMetricSource
+	AbstractUnmarshallingMetricSource
 
 	// TCPConnCounter has a configuration for limiting the total number of
 	// accepted connections. After that number of connections were accepted, no
 	// further connections are accepted. After they all are closed, the TCPListenerSource
 	// automatically stops.
 	TCPConnCounter
-
-	// Reader configured aspects of parallel reading and parsing. See SampleReader for more info.
-	// This field should not be accessed directly, as it will be passed along
-	// when calling NewTcpListenerSource().
-	Reader SampleReader
 
 	// SimultaneousConnections can limit the number of TCP connections accepted
 	// at the same time. Set to >0 to activate the limit. Connections going over
@@ -39,10 +34,9 @@ type TCPListenerSource struct {
 
 // NewTcpListenerSource creates a new instance of TCPListenerSource listening on the given
 // TCP endpoint. It must be a IP/hostname combined with a port that can be bound on the local
-// machine. The reader parameter will be set as Reader in the new TCPListenerSource.
-func NewTcpListenerSource(endpoint string, reader SampleReader) *TCPListenerSource {
+// machine.
+func NewTcpListenerSource(endpoint string) *TCPListenerSource {
 	source := &TCPListenerSource{
-		Reader:      reader,
 		connections: make(map[*tcpListenerConnection]bool),
 	}
 	source.connCounterDescription = source

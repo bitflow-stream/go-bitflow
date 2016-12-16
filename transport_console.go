@@ -51,11 +51,7 @@ func (sink *ConsoleSink) Sample(sample *Sample, header *Header) error {
 // Samples from the standard input stream. An instance of SampleReader is used
 // to read the data in parllel.
 type ConsoleSource struct {
-	AbstractMetricSource
-
-	// Reader contains configuration variables that controll the unmarshalling
-	// process. It must be configured before calling Start().
-	Reader SampleReader
+	AbstractUnmarshallingMetricSource
 
 	stream *SampleInputStream
 }
@@ -93,6 +89,6 @@ type nopWriteCloser struct {
 	io.WriteCloser
 }
 
-func (nopWriteCloser) Close() error {
+func (n nopWriteCloser) Close() error {
 	return nil
 }

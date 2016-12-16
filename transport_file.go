@@ -173,14 +173,7 @@ const ReadingDirWarnDuration = 2000 * time.Millisecond
 // from one or more files. Various parameters control the behavior and performance
 // of the FileSource.
 type FileSource struct {
-	AbstractMetricSource
-
-	// Reader contains parameters that configure the parallel reading and parsing
-	// of Headers and Samples. If the Handler field is set to an implementation of
-	// ReadSampleHandler, the FileSource will use the filename that contained each
-	// Header or Sample when calling HandleHeader or HandleSample on the ReadSampleHandler.
-	// This string can be modified using the ConvertFilename hook.
-	Reader SampleReader
+	AbstractUnmarshallingMetricSource
 
 	// Filenames is a slice of all files that will be read by the FileSource in sequence.
 	// For every Filename, the FileSource will not only read the file itself,
