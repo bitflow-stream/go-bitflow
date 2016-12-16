@@ -80,6 +80,7 @@ func do_main() int {
 		log.Fatalf("Sample handler '%v' not registered. Available: %v", *readSampleHandler, allHandlers())
 	}
 	p.ReadSampleHandler = handler
+	p.FlagInputs = flag.Args()
 	defer golib.ProfileCpu()()
 	p.setup(analyses)
 	p.Init()
