@@ -117,15 +117,17 @@ func (p *SamplePipeline) ConfigureSource(f *EndpointFactory, handler ReadSampleH
 	return nil
 }
 
-// HasTasks returns a non-nil error if the receiving SamplePipeline has no data sink,
+// CheckTasks returns a non-nil error if the receiving SamplePipeline has no data sink,
 // no data source, and no processor defined. A non-nil error indicates that the
 // pipeline will do nothing when started.
-func (p *SamplePipeline) HasTasks() error {
+func (p *SamplePipeline) CheckTasks() error {
 	if len(p.Processors) > 0 {
 		return nil
 	}
 	if p.Source != nil {
-		return nil
+		if _, ok := p.Source.(*EmptyMetricSource); !ok {
+			return nil
+		}
 	}
 	if p.Sink != nil {
 		if agg, ok := p.Sink.(AggregateSink); !ok && len(agg) > 0 {

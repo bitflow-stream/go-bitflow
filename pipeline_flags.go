@@ -132,6 +132,23 @@ func (p *EndpointFactory) HasOutputFlag() bool {
 	return p.FlagOutputBox || len(p.FlagOutputs) > 0
 }
 
+// ReadInputArguments uses all non-flag command line arguments (given by flag.Args())
+// to set the FlagInputs field.
+//
+// A non-nil error is returned, any of the non-flag parameters start with a dash ("-").
+// A parameter starting with a dash indicates that the user specified flags after the
+// first non-flag command line argument, which is most likely not intended.
+func (p *EndpointFactory) ReadInputArguments() error {
+	inputs := flag.Args()
+	for _, arg := range inputs {
+		if strings.HasPrefix(arg, "-") && arg != "-" {
+			return fmt.Errorf("All flags must be specified before the first non-flag parameter. Flag %s was specified after %s.", arg, inputs[0])
+		}
+	}
+	p.FlagInputs = inputs
+	return nil
+}
+
 // CreateInput creates a MetricSource object based on the Flag* values in the EndpointFactory
 // object.
 func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, error) {
@@ -181,7 +198,7 @@ func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, 
 				source.Reader = reader
 				result = source
 			default:
-				panic("Unknown endpoint type: " + string(endpoint.Type))
+				return nil, errors.New("Unknown endpoint type: " + string(endpoint.Type))
 			}
 		} else {
 			if inputType != endpoint.Type {
@@ -199,7 +216,7 @@ func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, 
 				source := result.(*FileSource)
 				source.Filenames = append(source.Filenames, endpoint.Target)
 			default:
-				panic("Unknown endpoint type: " + endpoint.Type)
+				return nil, errors.New("Unknown endpoint type: " + string(endpoint.Type))
 			}
 		}
 	}
@@ -252,7 +269,7 @@ func (p *EndpointFactory) CreateOutput() (AggregateSink, error) {
 			marshallingSink = &sink.AbstractMarshallingMetricSink
 			sinks = append(sinks, sink)
 		default:
-			panic("Unknown endpoint type: " + endpoint.Type)
+			return nil, errors.New("Unknown endpoint type: " + string(endpoint.Type))
 		}
 		marshallingSink.SetMarshaller(marshaller)
 		marshallingSink.Writer = SampleWriter{p.FlagParallelHandler}
