@@ -58,14 +58,14 @@ func main() {
 
 func do_main() int {
 	var analysisNames golib.StringSlice
-	flag.Var(&analysisNames, "e", fmt.Sprintf("Select one or more analyses to execute. Use -analysis for listing all analyses."))
+	flag.Var(&analysisNames, "e", fmt.Sprintf("Select one or more analyses to execute. Use -print-analyses for listing all analyses."))
 	readSampleHandler := flag.String("h", "", fmt.Sprintf("Select an optional sample handler for handling incoming samples: %v", allHandlers()))
-	printAnalyses := flag.Bool("analyses", false, "Print a list of available analyses and exit.")
+	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
 
 	var p SamplePipeline
 	var f bitflow.EndpointFactory
+	bitflow.RegisterGolibFlags()
 	f.RegisterFlags()
-	golib.RegisterLogFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
 	if *printAnalyses {
