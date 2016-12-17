@@ -91,6 +91,10 @@ type EndpointFactory struct {
 	testmode bool
 }
 
+func RegisterGolibFlags() {
+	golib.RegisterFlags(golib.FlagsAll & ^golib.FlagsOFL)
+}
+
 // RegisterFlags registers all flags to the global CommandLine object.
 func (p *EndpointFactory) RegisterFlags() {
 	p.RegisterFlagsTo(flag.CommandLine)
@@ -112,12 +116,12 @@ func (p *EndpointFactory) RegisterFlagsTo(f *flag.FlagSet) {
 // TCP, file and std I/O.
 func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
 	// Files
-	f.BoolVar(&p.FlagOutputFilesClean, "clean", false, "Delete all potential output files before writing")
-	f.IntVar(&p.FlagIoBuffer, "io_buf", 4096, "Size (byte) of buffered IO when reading/writing files.")
+	f.BoolVar(&p.FlagOutputFilesClean, "files-clean", false, "Delete all potential output files before writing")
+	f.IntVar(&p.FlagIoBuffer, "files-buf", 4096, "Size (byte) of buffered IO when reading/writing files.")
 
 	// TCP
-	f.UintVar(&p.FlagTcpConnectionLimit, "tcp_limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
-	f.BoolVar(&p.FlagTcpDropErrors, "tcp_drop_err", false, "Don't print errors when establishing active TCP connection (for sink/source) fails")
+	f.UintVar(&p.FlagTcpConnectionLimit, "tcp-limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
+	f.BoolVar(&p.FlagTcpDropErrors, "tcp-drop-err", false, "Don't print errors when establishing active TCP connection (for sink/source) fails")
 
 	// Parallel marshalling/unmarshalling
 	f.IntVar(&p.FlagParallelHandler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
@@ -126,13 +130,13 @@ func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
 
 // RegisterInputFlagsTo registers flags that configure aspects of data input.
 func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
-	f.BoolVar(&p.FlagInputFilesRobust, "robust", false, "When encountering errors while reading files, print warnings instead of failing.")
-	f.UintVar(&p.FlagInputTcpAcceptLimit, "Llimit", 0, "Limit number of simultaneous TCP connections accepted through -L.")
+	f.BoolVar(&p.FlagInputFilesRobust, "files-robust", false, "When encountering errors while reading files, print warnings instead of failing.")
+	f.UintVar(&p.FlagInputTcpAcceptLimit, "listen-limit", 0, "Limit number of simultaneous TCP connections accepted for incoming data.")
 }
 
 // RegisterOutputFlagsTo registers flags that configure data outputs.
 func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
-	f.UintVar(&p.FlagOutputTcpListenBuffer, "lbuf", 0, "For -l, buffer a number of samples that will be delivered first to all established connections.")
+	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
 	f.BoolVar(&p.FlagOutputBox, "p", false, "Display samples in a box on the command line")
 	f.Var(&p.FlagOutputs, "o", "Data sink(s) for outputting data")
 }
