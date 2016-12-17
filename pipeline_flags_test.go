@@ -1,8 +1,11 @@
 package bitflow
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
+	"github.com/antongulenko/golib/gotermBox"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -172,7 +175,240 @@ func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 	err("std+csv://x", "Transport 'std' can only be defined with target '-'")
 }
 
-func (suite *PipelineTestSuite) TestInit() {
+func (suite *PipelineTestSuite) make_factory() EndpointFactory {
+	return EndpointFactory{
+		testmode:                  true,
+		FlagInputFilesRobust:      true,
+		FlagOutputFilesClean:      true,
+		FlagIoBuffer:              666,
+		FlagOutputTcpListenBuffer: 777,
+		FlagTcpConnectionLimit:    10,
+		FlagInputTcpAcceptLimit:   20,
+		FlagTcpDropErrors:         true,
+		FlagParallelHandler:       parallel_handler,
+	}
+}
 
+func (suite *PipelineTestSuite) Test_no_inputs() {
+	factory := suite.make_factory()
+	source, err := factory.CreateInput(nil)
+	suite.NoError(err)
+	suite.Equal(new(EmptyMetricSource), source)
+}
 
+func (suite *PipelineTestSuite) Test_input_file() {
+	factory := suite.make_factory()
+	files := []string{"file1", "file2", "file3"}
+	factory.FlagInputs = files
+	handler := &testSampleHandler{source: "xxx"}
+	source, err := factory.CreateInput(handler)
+	suite.NoError(err)
+	expected := &FileSource{
+		Filenames: files,
+		Robust:    true,
+		IoBuffer:  666,
+	}
+	expected.Reader.Handler = handler
+	expected.Reader.ParallelSampleHandler = parallel_handler
+	suite.Equal(expected, source)
+}
+
+func (suite *PipelineTestSuite) Test_input_tcp() {
+	factory := suite.make_factory()
+	hosts := []string{"host1:123", "host2:2", "host2:5"}
+	factory.FlagInputs = hosts
+	handler := &testSampleHandler{source: "xxx"}
+	source, err := factory.CreateInput(handler)
+	suite.NoError(err)
+	expected := &TCPSource{
+		RemoteAddrs:   hosts,
+		PrintErrors:   false,
+		RetryInterval: tcp_download_retry_interval,
+	}
+	expected.TcpConnLimit = 10
+	expected.Reader.Handler = handler
+	expected.Reader.ParallelSampleHandler = parallel_handler
+	suite.Equal(expected, source)
+}
+
+func (suite *PipelineTestSuite) Test_input_tcp_listen() {
+	factory := suite.make_factory()
+	endpoint := ":123"
+	factory.FlagInputs = []string{endpoint}
+	handler := &testSampleHandler{source: "xxx"}
+	source, err := factory.CreateInput(handler)
+	suite.NoError(err)
+	expected := NewTcpListenerSource(endpoint)
+	expected.SimultaneousConnections = 20
+	expected.TcpConnLimit = 10
+	expected.Reader.Handler = handler
+	expected.Reader.ParallelSampleHandler = parallel_handler
+	suite.Equal(expected, source)
+}
+
+func (suite *PipelineTestSuite) Test_input_std() {
+	factory := suite.make_factory()
+	endpoint := "-"
+	factory.FlagInputs = []string{endpoint}
+	handler := &testSampleHandler{source: "xxx"}
+	source, err := factory.CreateInput(handler)
+	suite.NoError(err)
+	expected := &ConsoleSource{}
+	expected.Reader.Handler = handler
+	expected.Reader.ParallelSampleHandler = parallel_handler
+	suite.Equal(expected, source)
+}
+
+func (suite *PipelineTestSuite) Test_input_multiple() {
+	test := func(input1, input2 string, inputs ...string) {
+		factory := suite.make_factory()
+		factory.FlagInputs = inputs
+		source, err := factory.CreateInput(nil)
+		suite.Error(err)
+		suite.Equal(err.Error(), fmt.Sprintf("Please provide only one data source (Provided %s and %s)", input1, input2))
+		suite.Nil(source)
+	}
+
+	test("tcp", "file", "host:123", "file1", "file2")
+	test("file", "tcp", "fileA", "fileB", "host:123", "file1", "file2")
+	test("tcp", "listen", "host:123", ":123", "file1")
+	test("listen", "std", ":123", "-", "host:123")
+	test("std", "listen", "-", ":123", "-", "host:123")
+}
+
+func (suite *PipelineTestSuite) Test_input_multiple_listener() {
+	factory := suite.make_factory()
+	factory.FlagInputs = []string{":123", ":456"}
+	source, err := factory.CreateInput(nil)
+	suite.Error(err)
+	suite.Equal(err.Error(), fmt.Sprintf("Cannot listen for input on multiple TCP ports"))
+	suite.Nil(source)
+}
+
+func (suite *PipelineTestSuite) Test_input_multiple_std() {
+	factory := suite.make_factory()
+	factory.FlagInputs = []string{"-", "-"}
+	source, err := factory.CreateInput(nil)
+	suite.Error(err)
+	suite.Equal(err.Error(), fmt.Sprintf("Cannot read from stdin multiple times"))
+	suite.Nil(source)
+}
+
+func (suite *PipelineTestSuite) Test_outputs() {
+	test := func(box bool, outputs []string, expected ...MetricSink) {
+		factory := suite.make_factory()
+		factory.FlagOutputBox = box
+		factory.FlagOutputs = outputs
+		sink, err := factory.CreateOutput()
+		suite.NoError(err)
+		for i, ex := range expected {
+			suite.Equal(ex, sink[i], fmt.Sprintf("Sink index %v", i))
+		}
+	}
+
+	setup := func(sink *AbstractMarshallingMetricSink, format string) {
+		sink.Marshaller = MarshallingFormat(format).Marshaller()
+		sink.Writer.ParallelSampleHandler = parallel_handler
+	}
+
+	box_settings := gotermBox.CliLogBox{
+		NoUtf8:        true,
+		LogLines:      22,
+		MessageBuffer: 1000,
+	}
+	box_interval := 666 * time.Millisecond
+
+	// Bad test: sets global configuration state
+	ConsoleBoxSettings = box_settings
+	ConsoleBoxUpdateInterval = box_interval
+
+	box := func() MetricSink {
+		s := &ConsoleBoxSink{
+			CliLogBox:      box_settings,
+			UpdateInterval: box_interval,
+		}
+		return s
+	}
+
+	std := func(format string) MetricSink {
+		s := &ConsoleSink{}
+		setup(&s.AbstractMarshallingMetricSink, format)
+		return s
+	}
+	file := func(filename string, format string) MetricSink {
+		s := &FileSink{
+			Filename:   filename,
+			IoBuffer:   666,
+			CleanFiles: true,
+		}
+		setup(&s.AbstractMarshallingMetricSink, format)
+		return s
+	}
+	tcp := func(endpoint string, format string) MetricSink {
+		s := &TCPSink{
+			Endpoint:    endpoint,
+			PrintErrors: false,
+		}
+		s.TcpConnLimit = 10
+		setup(&s.AbstractMarshallingMetricSink, format)
+		return s
+	}
+	listen := func(endpoint string, format string) MetricSink {
+		s := &TCPListenerSink{
+			Endpoint:        endpoint,
+			BufferedSamples: 777,
+		}
+		s.TcpConnLimit = 10
+		setup(&s.AbstractMarshallingMetricSink, format)
+		return s
+	}
+
+	// No outputs
+	test(false, nil)
+	test(false, []string{})
+
+	// Individual outputs
+	test(true, nil, box())
+	test(true, []string{}, box())
+
+	test(false, []string{"-"}, std("text"))
+	test(false, []string{"csv://-"}, std("csv"))
+	test(false, []string{"bin://-"}, std("bin"))
+	test(false, []string{"text://-"}, std("text"))
+
+	test(false, []string{"file"}, file("file", "csv"))
+	test(false, []string{"csv://file"}, file("file", "csv"))
+	test(false, []string{"bin://file"}, file("file", "bin"))
+	test(false, []string{"text://file"}, file("file", "text"))
+
+	test(false, []string{"host:123"}, tcp("host:123", "bin"))
+	test(false, []string{"csv://host:123"}, tcp("host:123", "csv"))
+	test(false, []string{"bin://host:123"}, tcp("host:123", "bin"))
+	test(false, []string{"text://host:123"}, tcp("host:123", "text"))
+
+	test(false, []string{":123"}, listen(":123", "bin"))
+	test(false, []string{"csv://:123"}, listen(":123", "csv"))
+	test(false, []string{"bin://:123"}, listen(":123", "bin"))
+	test(false, []string{"text://:123"}, listen(":123", "text"))
+
+	// Combined outputs
+	test(true, []string{"file", "text://host:123"}, file("file", "csv"), tcp("host:123", "text"), box())
+	test(false, []string{"text://:123", "bin://file", "csv://-"}, listen(":123", "text"), file("file", "bin"), std("csv"))
+	test(false, []string{"text://:123", "bin://:456", "host:123", "text://host:345"},
+		listen(":123", "text"), listen(":456", "bin"), tcp("host:123", "bin"), tcp("host:345", "text"))
+	test(true, []string{"csv://file1", "text://file2"}, file("file1", "csv"), file("file2", "text"), box())
+
+	// Errors
+	testErr := func(errStr string, box bool, outputs []string) {
+		factory := suite.make_factory()
+		factory.FlagOutputBox = box
+		factory.FlagOutputs = outputs
+		sink, err := factory.CreateOutput()
+		suite.Nil(sink)
+		suite.Error(err)
+		suite.Equal(errStr, err.Error())
+	}
+	testErr("Cannot define multiple outputs to stdout", true, []string{"-"})
+	testErr("Cannot define multiple outputs to stdout", true, []string{"-", "-", "-"})
+	testErr("Cannot define multiple outputs to stdout", false, []string{"-", "-", "-"})
 }

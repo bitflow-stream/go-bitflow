@@ -53,12 +53,12 @@ type CsvMarshaller struct {
 }
 
 // String implements the Marshaller interface.
-func (*CsvMarshaller) String() string {
+func (CsvMarshaller) String() string {
 	return "CSV"
 }
 
 // WriteHeader implements the Marshaller interface by printing a CSV header line.
-func (*CsvMarshaller) WriteHeader(header *Header, writer io.Writer) error {
+func (CsvMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
 	w.WriteStr(csv_time_col)
 	if header.HasTags {
@@ -77,7 +77,7 @@ func (*CsvMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 }
 
 // WriteSample implements the Marshaller interface by writing a CSV line.
-func (*CsvMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
+func (CsvMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
 	w.WriteStr(sample.Time.UTC().Format(CsvDateFormat))
 	if header.HasTags {
@@ -101,7 +101,7 @@ func splitCsvLine(line []byte) []string {
 // Based on the first field, Read decides whether the line represents a header or a Sample.
 // In case of a header, the CSV fields are split and parsed to a Header instance.
 // In case of a Sample, the data for the line is returned unparsed.
-func (c *CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Header, []byte, error) {
+func (c CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Header, []byte, error) {
 	line, err := readUntil(reader, CsvNewline)
 	if err == io.EOF {
 		if len(line) == 0 {
@@ -137,7 +137,7 @@ func (c *CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Hea
 	}
 }
 
-func (*CsvMarshaller) parseHeader(line []byte) *Header {
+func (CsvMarshaller) parseHeader(line []byte) *Header {
 	fields := splitCsvLine(line)
 	if WarnObsoleteBinaryFormat && len(fields) == 1 {
 		log.Warnln("CSV header contains only time field. This might be the old binary format, " +
@@ -157,7 +157,7 @@ func (*CsvMarshaller) parseHeader(line []byte) *Header {
 }
 
 // ParseSample implements the Unmarshaller interface by parsing a CSV line.
-func (*CsvMarshaller) ParseSample(header *Header, data []byte) (sample *Sample, err error) {
+func (CsvMarshaller) ParseSample(header *Header, data []byte) (sample *Sample, err error) {
 	fields := splitCsvLine(data)
 	sample = new(Sample)
 	sample.Time, err = time.Parse(CsvDateFormat, fields[0])

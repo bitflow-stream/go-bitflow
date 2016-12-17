@@ -42,6 +42,13 @@ var (
 		BinaryFormat: true,
 	}
 
+	ConsoleBoxSettings = gotermBox.CliLogBox{
+		NoUtf8:        false,
+		LogLines:      10,
+		MessageBuffer: 500,
+	}
+	ConsoleBoxUpdateInterval = 500 * time.Millisecond
+
 	stdTransportTarget = "-"
 	binaryFileSuffix   = ".bin"
 )
@@ -77,6 +84,11 @@ type EndpointFactory struct {
 	// Input
 
 	FlagInputs golib.StringSlice
+
+	// testmode is a flag used by tests to suppress initialization routines
+	// that are not testable. It is a hack to keep the EndpointFactory easy to use
+	// while making it testable.
+	testmode bool
 }
 
 // RegisterFlags registers all flags to the global CommandLine object.
@@ -220,6 +232,9 @@ func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, 
 			}
 		}
 	}
+	if result == nil {
+		result = new(EmptyMetricSource)
+	}
 	return result, nil
 }
 
@@ -244,6 +259,9 @@ func (p *EndpointFactory) CreateOutput() (AggregateSink, error) {
 			sink := new(ConsoleSink)
 			marshallingSink = &sink.AbstractMarshallingMetricSink
 			sinks = append(sinks, sink)
+			if txt, ok := marshaller.(TextMarshaller); ok {
+				txt.AssumeStdout = true
+			}
 			if txt, ok := marshaller.(*TextMarshaller); ok {
 				txt.AssumeStdout = true
 			}
@@ -264,7 +282,10 @@ func (p *EndpointFactory) CreateOutput() (AggregateSink, error) {
 			marshallingSink = &sink.AbstractMarshallingMetricSink
 			sinks = append(sinks, sink)
 		case TcpListenEndpoint:
-			sink := NewTcpListenerSink(endpoint.Target, p.FlagOutputTcpListenBuffer)
+			sink := &TCPListenerSink{
+				Endpoint:        endpoint.Target,
+				BufferedSamples: p.FlagOutputTcpListenBuffer,
+			}
 			sink.TcpConnLimit = p.FlagTcpConnectionLimit
 			marshallingSink = &sink.AbstractMarshallingMetricSink
 			sinks = append(sinks, sink)
@@ -279,14 +300,12 @@ func (p *EndpointFactory) CreateOutput() (AggregateSink, error) {
 			return nil, errors.New("Cannot define multiple outputs to stdout")
 		}
 		sink := &ConsoleBoxSink{
-			CliLogBox: gotermBox.CliLogBox{
-				NoUtf8:        false,
-				LogLines:      10,
-				MessageBuffer: 500,
-			},
-			UpdateInterval: 500 * time.Millisecond,
+			CliLogBox:      ConsoleBoxSettings,
+			UpdateInterval: ConsoleBoxUpdateInterval,
 		}
-		sink.Init()
+		if !p.testmode {
+			sink.Init()
+		}
 		sinks = append(sinks, sink)
 	}
 	return sinks, nil
@@ -340,11 +359,11 @@ func (e EndpointDescription) DefaultOutputFormat() MarshallingFormat {
 func (format MarshallingFormat) Marshaller() Marshaller {
 	switch format {
 	case TextFormat:
-		return new(TextMarshaller)
+		return TextMarshaller{}
 	case CsvFormat:
-		return new(CsvMarshaller)
+		return CsvMarshaller{}
 	case BinaryFormat:
-		return new(BinaryMarshaller)
+		return BinaryMarshaller{}
 	default:
 		log.WithField("format", format).Fatalln("Illegal data output fromat, must be one of:", OutputFormats)
 		return nil

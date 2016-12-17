@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/golib"
 )
 
@@ -28,6 +28,8 @@ const (
 	// preceding each sample marshalled by TextMarshaller.
 	TextMarshallerHeaderChar = '='
 )
+
+var warn_terminal_size_once sync.Once
 
 // TextMarshaller marshalls Headers and Samples to a human readable test format.
 // It is mainly intended for easily readable output on the console. Headers are
@@ -57,24 +59,22 @@ type TextMarshaller struct {
 	// If true, assume the output is a TTY and try to obtain the TextWidth from
 	// the operating system.
 	AssumeStdout bool
-
-	terminal_size_warned bool
 }
 
 // String implements the Marshaller interface.
-func (*TextMarshaller) String() string {
+func (TextMarshaller) String() string {
 	return "text"
 }
 
 // WriteHeader implements the Marshaller interface. It is empty, because
 // TextMarshaller prints a separate header for each Sample.
-func (m *TextMarshaller) WriteHeader(header *Header, writer io.Writer) error {
+func (TextMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 	return nil
 }
 
 // WriteSample implements the Marshaller interface. See the TextMarshaller godoc
 // for information about the format.
-func (m *TextMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
+func (m TextMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (m *TextMarshaller) WriteSample(sample *Sample, header *Header, writer io.W
 	return nil
 }
 
-func (m *TextMarshaller) calculateWidths(lines []string, writer io.Writer) (textWidth int, columnWidths []int) {
+func (m TextMarshaller) calculateWidths(lines []string, writer io.Writer) (textWidth int, columnWidths []int) {
 	spacing := m.Spacing
 	if spacing <= 0 {
 		spacing = TextMarshallerDefaultSpacing
@@ -115,7 +115,7 @@ func (m *TextMarshaller) calculateWidths(lines []string, writer io.Writer) (text
 	return
 }
 
-func (m *TextMarshaller) fixedColumnWidths(lines []string, columns int, spacing int) (widths []int) {
+func (m TextMarshaller) fixedColumnWidths(lines []string, columns int, spacing int) (widths []int) {
 	widths = make([]int, columns)
 	for i, line := range lines {
 		col := i % columns
@@ -127,19 +127,17 @@ func (m *TextMarshaller) fixedColumnWidths(lines []string, columns int, spacing 
 	return
 }
 
-func (m *TextMarshaller) defaultTextWidth(writer io.Writer) int {
+func (m TextMarshaller) defaultTextWidth(writer io.Writer) int {
 	if m.AssumeStdout || writer == os.Stdout {
 		if size, err := golib.GetTerminalSize(); err != nil {
-			if !m.terminal_size_warned {
+			warn_terminal_size_once.Do(func() {
 				log.Warnln("Failed to get terminal size, using default:", TextMarshallerDefaultWidth, "-", err)
-				m.terminal_size_warned = true
-			}
+			})
 			return TextMarshallerDefaultWidth
 		} else if size.Col == 0 {
-			if !m.terminal_size_warned {
+			warn_terminal_size_once.Do(func() {
 				log.Warnln("Terminal size returned as 0, using default:", TextMarshallerDefaultWidth)
-				m.terminal_size_warned = true
-			}
+			})
 			return TextMarshallerDefaultWidth
 		} else {
 			return int(size.Col)
@@ -149,7 +147,7 @@ func (m *TextMarshaller) defaultTextWidth(writer io.Writer) int {
 	}
 }
 
-func (m *TextMarshaller) variableColumnWidths(strings []string, textWidth int, spacing int) []int {
+func (m TextMarshaller) variableColumnWidths(strings []string, textWidth int, spacing int) []int {
 	columns := make([]int, len(strings))
 	strLengths := make([]int, len(strings))
 	for i, line := range strings {
@@ -176,7 +174,7 @@ func (m *TextMarshaller) variableColumnWidths(strings []string, textWidth int, s
 	return columns
 }
 
-func (m *TextMarshaller) writeHeader(header string, textWidth int, writer io.Writer) {
+func (m TextMarshaller) writeHeader(header string, textWidth int, writer io.Writer) {
 	extraSpace := textWidth - len(header)
 	if extraSpace >= 4 {
 		lineChars := (extraSpace - 2) / 2
@@ -191,7 +189,7 @@ func (m *TextMarshaller) writeHeader(header string, textWidth int, writer io.Wri
 	}
 }
 
-func (m *TextMarshaller) writeLines(lines []string, widths []int, writer io.Writer) {
+func (m TextMarshaller) writeLines(lines []string, widths []int, writer io.Writer) {
 	columns := len(widths)
 	for i, line := range lines {
 		writer.Write([]byte(line))

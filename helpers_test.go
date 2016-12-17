@@ -15,7 +15,7 @@ import (
 
 var parallel_handler = ParallelSampleHandler{
 	BufferedSamples: 5,
-	ParallelParsers: 5,
+	ParallelParsers: 6,
 }
 
 var debug_tests = false

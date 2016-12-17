@@ -109,9 +109,8 @@ func (p *SamplePipeline) ConfigureSource(f *EndpointFactory, handler ReadSampleH
 	if err != nil {
 		return err
 	}
-	if source == nil {
+	if _, ok := source.(*EmptyMetricSource); source == nil || ok {
 		log.Warnln("No data source provided, no data will be received or generated.")
-		source = new(EmptyMetricSource)
 	}
 	p.Source = source
 	return nil

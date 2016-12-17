@@ -39,10 +39,8 @@ func NewTcpListenerSource(endpoint string) *TCPListenerSource {
 	source := &TCPListenerSource{
 		connections: make(map[*tcpListenerConnection]bool),
 	}
-	source.connCounterDescription = source
 	source.task = &golib.TCPListenerTask{
 		ListenEndpoint: endpoint,
-		Handler:        source.handleConnection,
 	}
 	return source
 }
@@ -56,6 +54,8 @@ func (source *TCPListenerSource) String() string {
 // for incoming connections on the configured endpoint. New connections are
 // handled in separate goroutines.
 func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
+	source.connCounterDescription = source
+	source.task.Handler = source.handleConnection
 	source.task.StopHook = func() {
 		source.CloseSink(wg)
 	}
@@ -135,26 +135,18 @@ type TCPListenerSink struct {
 	// aspects of the TCPListenerSink. See AbstractTcpSink for details.
 	AbstractTcpSink
 
+	// Endpoint defines the TCP host and port to listen on for incoming TCP connections.
+	// The host can be empty (e.g. ":1234"). If not, it must contain a hostname or IP of the
+	// local host.
+	Endpoint string
+
+	// If BufferedSamples is >0, the given number of samples will be kept in a ring buffer.
+	// New incoming connections will first receive all samples currently in the buffer, and will
+	// afterwards continue receiving live incoming samples.
+	BufferedSamples uint
+
 	buf  outputSampleBuffer
 	task *golib.TCPListenerTask
-}
-
-// NewTcpListenerSink creates a new TCPListener sink listening on the given local
-// TCP endpoint. It must be a combination of IP or hostname with a port number, that
-// can be bound to locally.
-func NewTcpListenerSink(endpoint string, bufferedSamples uint) *TCPListenerSink {
-	sink := &TCPListenerSink{
-		buf: outputSampleBuffer{
-			Capacity: bufferedSamples,
-			cond:     sync.NewCond(new(sync.Mutex)),
-		},
-	}
-	sink.connCounterDescription = sink
-	sink.task = &golib.TCPListenerTask{
-		ListenEndpoint: endpoint,
-		Handler:        sink.handleConnection,
-	}
-	return sink
 }
 
 // String implements the MetrincSink interface.
@@ -166,6 +158,15 @@ func (sink *TCPListenerSink) String() string {
 // starts listening on it in a separate goroutine. Any incoming connection is
 // then handled in their own goroutine.
 func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
+	sink.connCounterDescription = sink
+	sink.buf = outputSampleBuffer{
+		Capacity: sink.BufferedSamples,
+		cond:     sync.NewCond(new(sync.Mutex)),
+	}
+	sink.task = &golib.TCPListenerTask{
+		ListenEndpoint: sink.Endpoint,
+		Handler:        sink.handleConnection,
+	}
 	return sink.task.ExtendedStart(func(addr net.Addr) {
 		log.WithField("format", sink.Marshaller).Println("Listening for output connections on", addr)
 	}, wg)

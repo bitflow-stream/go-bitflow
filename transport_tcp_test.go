@@ -20,7 +20,10 @@ func TestTcpListener(t *testing.T) {
 func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 	testSink := suite.newFilledTestSink()
 
-	l := NewTcpListenerSink(":7878", 100)
+	l := &TCPListenerSink{
+		Endpoint:        ":7878",
+		BufferedSamples: 100,
+	}
 	l.Writer.ParallelSampleHandler = parallel_handler
 	l.SetMarshaller(m)
 
@@ -56,7 +59,10 @@ func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 
 		// TODO test that a smaller buffer leads to dropped samples
 
-		l := NewTcpListenerSink(":7878", 100)
+		l := &TCPListenerSink{
+			Endpoint:        ":7878",
+			BufferedSamples: 100,
+		}
 		l.Writer.ParallelSampleHandler = parallel_handler
 		l.SetMarshaller(m)
 

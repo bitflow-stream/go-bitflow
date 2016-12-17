@@ -73,7 +73,7 @@ func (sink *ConsoleBoxSink) updateBox() (err error) {
 		header := sink.lastHeader
 		sink.lock.Unlock()
 		if sample != nil && header != nil {
-			marshaller := &TextMarshaller{
+			marshaller := TextMarshaller{
 				TextWidth: textWidth,
 			}
 			err = marshaller.WriteSample(sample, header, out)
