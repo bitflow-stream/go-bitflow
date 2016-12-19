@@ -30,8 +30,9 @@ func (sink *ConsoleSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	return nil
 }
 
-// Close implements the MetricSink interface by actually closing the
-// standard output.
+// Close implements the MetricSink interface. It flushes the remaining data
+// to stdout and marks the stream as closed, but does not actually close the
+// stdout.
 func (sink *ConsoleSink) Close() {
 	if err := sink.stream.Close(); err != nil {
 		log.Errorln("Error closing stdout output:", err)
@@ -77,6 +78,9 @@ func (source *ConsoleSource) Start(wg *sync.WaitGroup) golib.StopChan {
 // Stop implements the MetricSource interface. It stops the underlying stream
 // and prints any errors to the logger.
 func (source *ConsoleSource) Stop() {
+	// TODO closing the os.Stdin stream does not cause the current Read()
+	// invokation to return... This ConsoleSource will hang until stdin is closed
+	// from the outside, or the program is stopped forcefully.
 	err := source.stream.Close()
 	if err != nil && !isFileClosedError(err) {
 		log.Errorln("Error closing stdin:", err)
