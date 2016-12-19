@@ -195,6 +195,10 @@ type FileSource struct {
 	// the Reader field, instead of simply using the filename.
 	ConvertFilename func(string) string
 
+	// KeepAlive makes this FileSource not close after all files have been read.
+	// Instead, it will stay open without producing any more data.
+	KeepAlive bool
+
 	stream *SampleInputStream
 	closed *golib.OneshotCondition
 }
@@ -232,9 +236,36 @@ func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	} else if len(files) > 1 {
 		log.Println("Reading", len(files), "files")
 	}
-	return golib.WaitErrFunc(wg, func() error {
-		return source.readFiles(wg, files)
-	})
+	return source.readFilesKeepAlive(wg, files)
+}
+
+// This is a copy of golib.WaitErrFunc, but extended to implement the FileSource.KeepAlive flag.
+// If KeepAlive is set, and in case the wait() func returns a nil-error, it will not trigger
+// the StopChan immediately, but instead wait for the source.closed condition to be triggered first.
+// After reading all files succesfully, this FileSource will wait for the Stop() call.
+// In case of an error, it will still immediately shut down.
+func (source *FileSource) readFilesKeepAlive(wg *sync.WaitGroup, files []string) golib.StopChan {
+	if wg != nil {
+		wg.Add(1)
+	}
+	finished := make(chan error, 1)
+	go func() {
+		if wg != nil {
+			defer wg.Done()
+		}
+		err := source.readFiles(wg, files)
+		if source.KeepAlive && err == nil {
+			source.closed.Wait()
+		}
+
+		log.Println("CLOSING SINK")
+
+		source.CloseSink(wg)
+		source.closed.EnableOnly()
+		finished <- err
+		close(finished)
+	}()
+	return finished
 }
 
 // Stop implements the MetricSource interface. it stops all goroutines that are spawned
@@ -274,8 +305,6 @@ func (source *FileSource) readFile(filename string) (err error) {
 }
 
 func (source *FileSource) readFiles(wg *sync.WaitGroup, files []string) error {
-	defer source.CloseSink(wg)
-	defer source.closed.EnableOnly()
 	for _, filename := range files {
 		err := source.readFile(filename)
 		if err == fileSourceClosed {

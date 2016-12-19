@@ -133,15 +133,6 @@ func (s *AbstractMetricSource) CheckSink() error {
 	return nil
 }
 
-// AbstractUnmarshallingMetricSource extends AbstractMetricSource by adding
-// configuration fields required for unmarshalling samples.
-type AbstractUnmarshallingMetricSource struct {
-	AbstractMetricSource
-
-	// Reader configures aspects of parallel reading and parsing. See SampleReader for more info.
-	Reader SampleReader
-}
-
 // CloseSink closes the outgoing MetricSink. It must be called when the
 // receiving AbstractMetricSource is stopped. If the wg parameter is not nil,
 // The outgoing MetricSink is closed in a concurrent goroutine, which is registered
@@ -158,6 +149,15 @@ func (s *AbstractMetricSource) CloseSink(wg *sync.WaitGroup) {
 			}()
 		}
 	}
+}
+
+// AbstractUnmarshallingMetricSource extends AbstractMetricSource by adding
+// configuration fields required for unmarshalling samples.
+type AbstractUnmarshallingMetricSource struct {
+	AbstractMetricSource
+
+	// Reader configures aspects of parallel reading and parsing. See SampleReader for more info.
+	Reader SampleReader
 }
 
 // EmptyMetricSource implements MetricSource but does not generate any samples.

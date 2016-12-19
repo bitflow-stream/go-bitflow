@@ -64,6 +64,7 @@ type EndpointFactory struct {
 	FlagInputFilesRobust bool
 	FlagOutputFilesClean bool
 	FlagIoBuffer         int
+	FlagFilesKeepAlive   bool
 
 	// TCP input/output flags
 
@@ -116,7 +117,7 @@ func (p *EndpointFactory) RegisterFlagsTo(f *flag.FlagSet) {
 // TCP, file and std I/O.
 func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
 	// Files
-	f.BoolVar(&p.FlagOutputFilesClean, "files-clean", false, "Delete all potential output files before writing")
+	f.BoolVar(&p.FlagOutputFilesClean, "files-clean", false, "Delete all potential output files before writing.")
 	f.IntVar(&p.FlagIoBuffer, "files-buf", 4096, "Size (byte) of buffered IO when reading/writing files.")
 
 	// TCP
@@ -130,6 +131,7 @@ func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
 
 // RegisterInputFlagsTo registers flags that configure aspects of data input.
 func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
+	f.BoolVar(&p.FlagFilesKeepAlive, "files-keep-alive", false, "Do not shut down after all files have been read. Useful in combination with -listen-buffer.")
 	f.BoolVar(&p.FlagInputFilesRobust, "files-robust", false, "When encountering errors while reading files, print warnings instead of failing.")
 	f.UintVar(&p.FlagInputTcpAcceptLimit, "listen-limit", 0, "Limit number of simultaneous TCP connections accepted for incoming data.")
 }
@@ -210,6 +212,7 @@ func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, 
 					Filenames: []string{endpoint.Target},
 					IoBuffer:  p.FlagIoBuffer,
 					Robust:    p.FlagInputFilesRobust,
+					KeepAlive: p.FlagFilesKeepAlive,
 				}
 				source.Reader = reader
 				result = source

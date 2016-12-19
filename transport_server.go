@@ -216,7 +216,7 @@ func (sink *TCPListenerSink) sendSamples(wg *sync.WaitGroup, conn *TcpWriteConn)
 	if num > 1 {
 		conn.log.Debugln("Sending", num, "buffered samples")
 	}
-	for !sink.buf.closed {
+	for first != nil {
 		if !conn.IsRunning() {
 			return
 		}
@@ -246,15 +246,6 @@ type sampleListLink struct {
 	next   *sampleListLink
 }
 
-func (b *outputSampleBuffer) getFirst() (*sampleListLink, uint) {
-	b.cond.L.Lock()
-	defer b.cond.L.Unlock()
-	for b.first == nil {
-		b.cond.Wait()
-	}
-	return b.first, b.size
-}
-
 func (b *outputSampleBuffer) add(sample *Sample, header *Header) {
 	b.cond.L.Lock()
 	defer b.cond.L.Unlock()
@@ -278,7 +269,19 @@ func (b *outputSampleBuffer) add(sample *Sample, header *Header) {
 	b.cond.Broadcast()
 }
 
+func (b *outputSampleBuffer) getFirst() (*sampleListLink, uint) {
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+	for b.first == nil && !b.closed {
+		b.cond.Wait()
+	}
+	return b.first, b.size
+}
+
 func (b *outputSampleBuffer) next(l *sampleListLink) *sampleListLink {
+	if b.closed {
+		return nil
+	}
 	if l.next != nil {
 		return l.next
 	}

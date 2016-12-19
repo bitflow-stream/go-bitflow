@@ -168,6 +168,14 @@ func (stream *SampleOutputStream) marshallOne(sample *bufferedSample) {
 func (stream *SampleOutputStream) flush() {
 	defer stream.wg.Done()
 	var checker HeaderChecker
+	// TODO possible leak: errors in the output writer are only detected when a sample
+	// is written. When no more samples come into this stream, errors will not be detected and
+	// this SampleOutputStream will linger around. Only solution would be to periodically check
+	// if the underlying io.WriteCloser is still active (e.g. the TCP connection is still established).
+	// This, however, is not possible with a io.WriteCloser and is specific for the implementation.
+	// Idea: add a no-op operation to the bitflow protocol that allows for periodically writing something
+	// to the stream without disturbing the communication. For CSV format it could be an empty line, for binary
+	// format an arbitrary byte that does not collide with 'timB' and 'X'.
 	for sample := range stream.outgoing {
 		sample.waitDone()
 		if stream.hasError() {
