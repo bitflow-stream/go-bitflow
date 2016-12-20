@@ -15,7 +15,6 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/golib"
 	"vbom.ml/util/sortorder"
 )
@@ -257,9 +256,6 @@ func (source *FileSource) readFilesKeepAlive(wg *sync.WaitGroup, files []string)
 		if source.KeepAlive && err == nil {
 			source.closed.Wait()
 		}
-
-		log.Println("CLOSING SINK")
-
 		source.CloseSink(wg)
 		source.closed.EnableOnly()
 		finished <- err
