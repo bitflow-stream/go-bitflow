@@ -13,17 +13,19 @@ import (
 type MetricMapperHelper struct {
 	Description fmt.Stringer
 
-	inHeader   *bitflow.Header
+	bitflow.HeaderChecker
 	outHeader  *bitflow.Header
 	outIndices []int
 }
 
-func (helper *MetricMapperHelper) incomingHeader(header *bitflow.Header, constructIndices func(inHeader *bitflow.Header) ([]int, []string)) error {
-	helper.inHeader = header
+func (helper *MetricMapperHelper) incomingHeader(header *bitflow.Header, constructIndices func(header *bitflow.Header) ([]int, []string)) error {
+	if !helper.HeaderChanged(header) {
+		return nil
+	}
 	var outFields []string
 	helper.outIndices, outFields = constructIndices(header)
 	if len(helper.outIndices) != len(outFields) {
-		return fmt.Errorf("AbstractMetricChanger.ConstructIndices returned non equal sized results")
+		return fmt.Errorf("constructIndices() in MetricMapperHelper.incomingHeader returned non equal sized results")
 	}
 	if len(outFields) == 0 {
 		log.Warnln(helper.Description, "removed all metrics")
@@ -34,12 +36,12 @@ func (helper *MetricMapperHelper) incomingHeader(header *bitflow.Header, constru
 	return nil
 }
 
-func (helper *MetricMapperHelper) convertSample(inSample *bitflow.Sample) *bitflow.Sample {
+func (helper *MetricMapperHelper) convertSample(sample *bitflow.Sample) *bitflow.Sample {
 	outValues := make([]bitflow.Value, len(helper.outIndices))
 	for i, index := range helper.outIndices {
-		outValues[i] = inSample.Values[index]
+		outValues[i] = sample.Values[index]
 	}
-	outSample := inSample.Clone()
+	outSample := sample.Clone()
 	outSample.Values = outValues
 	return outSample
 }
@@ -47,7 +49,7 @@ func (helper *MetricMapperHelper) convertSample(inSample *bitflow.Sample) *bitfl
 type AbstractMetricMapper struct {
 	bitflow.AbstractProcessor
 	Description      fmt.Stringer
-	ConstructIndices func(inHeader *bitflow.Header) ([]int, []string)
+	ConstructIndices func(header *bitflow.Header) ([]int, []string)
 
 	helper MetricMapperHelper
 }
@@ -61,10 +63,8 @@ func (m *AbstractMetricMapper) Sample(sample *bitflow.Sample, header *bitflow.He
 	if err := m.Check(sample, header); err != nil {
 		return err
 	}
-	if !header.Equals(m.helper.inHeader) {
-		if err := m.helper.incomingHeader(header, m.ConstructIndices); err != nil {
-			return err
-		}
+	if err := m.helper.incomingHeader(header, m.ConstructIndices); err != nil {
+		return err
 	}
 	sample = m.helper.convertSample(sample)
 	return m.OutgoingSink.Sample(sample, m.helper.outHeader)
@@ -83,14 +83,14 @@ type AbstractMetricFilter struct {
 	IncludeFilter func(name string) bool // Return true if metric should be INcluded
 }
 
-func (self *AbstractMetricFilter) constructIndices(inHeader *bitflow.Header) ([]int, []string) {
-	outFields := make([]string, 0, len(inHeader.Fields))
-	outIndices := make([]int, 0, len(inHeader.Fields))
+func (self *AbstractMetricFilter) constructIndices(header *bitflow.Header) ([]int, []string) {
+	outFields := make([]string, 0, len(header.Fields))
+	outIndices := make([]int, 0, len(header.Fields))
 	filter := self.IncludeFilter
 	if filter == nil {
 		return nil, nil
 	}
-	for index, field := range inHeader.Fields {
+	for index, field := range header.Fields {
 		if filter(field) {
 			outFields = append(outFields, field)
 			outIndices = append(outIndices, index)
@@ -185,12 +185,12 @@ func NewMetricMapper(metrics []string) *MetricMapper {
 	return mapper
 }
 
-func (mapper *MetricMapper) constructIndices(inHeader *bitflow.Header) ([]int, []string) {
+func (mapper *MetricMapper) constructIndices(header *bitflow.Header) ([]int, []string) {
 	fields := make([]int, 0, len(mapper.Metrics))
 	metrics := make([]string, 0, len(mapper.Metrics))
 	for _, metric := range mapper.Metrics {
 		found := false
-		for field, inMetric := range inHeader.Fields {
+		for field, inMetric := range header.Fields {
 			if metric == inMetric {
 				fields = append(fields, field)
 				metrics = append(metrics, metric)
@@ -230,8 +230,8 @@ func (mapper *BatchMetricMapper) ProcessBatch(header *bitflow.Header, samples []
 		return nil, nil, err
 	}
 	outSamples := make([]*bitflow.Sample, len(samples))
-	for i, inSample := range samples {
-		outSample := helper.convertSample(inSample)
+	for i, sample := range samples {
+		outSample := helper.convertSample(sample)
 		outSamples[i] = outSample
 	}
 	return helper.outHeader, outSamples, nil
@@ -305,9 +305,9 @@ func (r *MetricRenamer) String() string {
 	return fmt.Sprintf("Metric renamer (%v regexes)", len(r.regexes))
 }
 
-func (r *MetricRenamer) constructIndices(inHeader *bitflow.Header) ([]int, []string) {
-	fields := make(indexedFields, len(inHeader.Fields))
-	for i, field := range inHeader.Fields {
+func (r *MetricRenamer) constructIndices(header *bitflow.Header) ([]int, []string) {
+	fields := make(indexedFields, len(header.Fields))
+	for i, field := range header.Fields {
 		for i, regex := range r.regexes {
 			replace := r.replacements[i]
 			field = regex.ReplaceAllString(field, replace)
