@@ -201,8 +201,11 @@ func (sample *Sample) ParseTagString(tags string) (err error) {
 // This is a sanity-check for ensuring correct format of files or TCP connections.
 // This check must be called in the Sample() method of every MetricSink implementation.
 func (sample *Sample) Check(header *Header) error {
-	if sample == nil || header == nil {
-		return errors.New("The sample or header is nil")
+	if sample == nil {
+		return errors.New("The sample is nil")
+	}
+	if header == nil {
+		return errors.New("The header is nil")
 	}
 	if len(sample.Values) != len(header.Fields) {
 		return fmt.Errorf("Unexpected number of values in sample: %v, expected %v",
