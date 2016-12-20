@@ -6,7 +6,6 @@ import (
 	"sort"
 
 	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-onlinestats"
 )
@@ -59,7 +58,7 @@ func (m *AbstractMetricMapper) init(desc fmt.Stringer) {
 }
 
 func (m *AbstractMetricMapper) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := m.Check(sample, m.helper.inHeader); err != nil {
+	if err := m.Check(sample, header); err != nil {
 		return err
 	}
 	if !header.Equals(m.helper.inHeader) {
@@ -297,7 +296,7 @@ func NewMetricRenamer(regexes []*regexp.Regexp, replacements []string) *MetricRe
 		regexes:      regexes,
 		replacements: replacements,
 	}
-	renamer.Description = renamer
+	renamer.init(renamer)
 	renamer.ConstructIndices = renamer.constructIndices
 	return renamer
 }
