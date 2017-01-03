@@ -70,13 +70,13 @@ func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 // All goroutines must be stopped, and all Headers and Samples must be already
 // forwarded to the outgoing sink, when this is called. CloseSink forwards
 // the Close() invokation to the outgoing sink.
-func (p *AbstractProcessor) CloseSink(wg *sync.WaitGroup) {
+func (p *AbstractProcessor) CloseSink() {
 	if c := p.stopChan; c != nil {
 		// If there was no error, make sure the channel still returns something to signal that this task is done.
 		c <- nil
 		p.stopChan = nil
 	}
-	p.AbstractMetricSource.CloseSink(wg)
+	p.AbstractMetricSource.CloseSink(nil)
 }
 
 // Error reports that AbstractProcessor has encountered an error and has stopped
@@ -93,7 +93,7 @@ func (p *AbstractProcessor) Error(err error) {
 // specific actions when closing.
 func (p *AbstractProcessor) Close() {
 	// Propagate the Close() invocation
-	p.CloseSink(nil)
+	p.CloseSink()
 }
 
 // String implements the SampleProcessor interface. This should be overridden

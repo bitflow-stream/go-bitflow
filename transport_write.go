@@ -179,21 +179,24 @@ func (stream *SampleOutputStream) flush() {
 	for sample := range stream.outgoing {
 		sample.waitDone()
 		if stream.hasError() {
-			return
+			break
 		}
 		if checker.HeaderChanged(sample.header) {
 			if err := stream.marshaller.WriteHeader(sample.header, stream.writer); err != nil {
 				stream.err = err
-				return
+				break
 			}
 			if err := stream.flushBuffered(); err != nil {
 				stream.err = err
-				return
+				break
 			}
 		}
 		if _, err := stream.writer.Write(sample.data); err != nil {
 			stream.err = err
-			return
+			break
 		}
+	}
+	for range stream.outgoing {
+		// Flush the outgoing channel to avoid blocking Sample() calls in case of errors
 	}
 }
