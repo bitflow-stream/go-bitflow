@@ -19,7 +19,6 @@ type BatchProcessor struct {
 }
 
 type BatchProcessingStep interface {
-	// TODO Optimize implementors of BatchProcessingStep to reuse the sample-array instead of allocating a new one with the same size.
 	ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error)
 	String() string
 }
@@ -33,34 +32,44 @@ func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) 
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
+	oldHeader := p.checker.LastHeader
 	if p.checker.InitializedHeaderChanged(header) {
-		return fmt.Errorf("%v does not allow changing headers", p)
+		if err := p.flush(oldHeader); err != nil {
+			return err
+		}
 	}
 	p.samples = append(p.samples, sample)
 	return nil
 }
 
 func (p *BatchProcessor) Close() {
-	defer p.CloseSink(nil)
+	defer p.CloseSink()
 	header := p.checker.LastHeader
 	if header == nil {
-		log.Warnln(p.String(), "has no samples stored")
-		return
+		log.Warnln(p.String(), "received no samples")
+	} else if len(p.samples) > 0 {
+		if err := p.flush(header); err != nil {
+			p.Error(err)
+		}
 	}
+}
 
+func (p *BatchProcessor) flush(header *bitflow.Header) error {
 	samples := p.samples
 	p.samples = nil // Allow garbage collection
-	var err error
-	if samples, header, err = p.executeSteps(samples, header); err != nil {
-		p.Error(err)
+	if samples, header, err := p.executeSteps(samples, header); err != nil {
+		return err
 	} else {
-		log.Println("Flushing", len(samples), "batched samples")
+		if header == nil {
+			return fmt.Errorf("Cannot flush %v samples because nil-header was returned by last batch processing step", len(samples))
+		}
+		log.Println("Flushing", len(samples), "batched samples with", len(header.Fields), "metrics")
 		for _, sample := range samples {
 			if err := p.OutgoingSink.Sample(sample, header); err != nil {
-				p.Error(fmt.Errorf("Error flushing batch: %v", err))
-				return
+				return fmt.Errorf("Error flushing batch: %v", err)
 			}
 		}
+		return nil
 	}
 }
 
@@ -74,9 +83,6 @@ func (p *BatchProcessor) executeSteps(samples []*bitflow.Sample, header *bitflow
 			if err != nil {
 				return nil, nil, err
 			}
-		}
-		if header == nil {
-			return nil, nil, fmt.Errorf("Cannot flush %v samples because no valid header was returned by last batch processing step", len(samples))
 		}
 	}
 	return samples, header, nil
@@ -216,7 +222,7 @@ func (p *MultiHeaderMerger) addSample(incomingSample *bitflow.Sample, header *bi
 }
 
 func (p *MultiHeaderMerger) Close() {
-	defer p.CloseSink(nil)
+	defer p.CloseSink()
 	defer func() {
 		// Allow garbage collection
 		p.metrics = nil

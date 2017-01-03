@@ -64,7 +64,7 @@ func (stats *StoreStats) Sample(inSample *bitflow.Sample, header *bitflow.Header
 }
 
 func (stats *StoreStats) Close() {
-	defer stats.CloseSink(nil)
+	defer stats.CloseSink()
 	if err := stats.StoreStatistics(); err != nil {
 		log.Println("Error storing feature statistics:", err)
 		stats.Error(err)

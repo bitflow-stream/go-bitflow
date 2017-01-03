@@ -59,7 +59,7 @@ func (p *DecouplingProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 		return nil
 	})
 	p.loopTask.StopHook = func() {
-		p.CloseSink(wg)
+		p.CloseSink()
 	}
 	return p.loopTask.Start(wg)
 }

@@ -55,7 +55,7 @@ func (f *MetricFork) Start(wg *sync.WaitGroup) golib.StopChan {
 	go func() {
 		defer wg.Done()
 		f.waitForSubpipelines()
-		f.CloseSink(wg)
+		f.CloseSink()
 	}()
 	return result
 }

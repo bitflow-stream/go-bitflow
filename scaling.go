@@ -39,19 +39,15 @@ func scaleMinMax(val, min, max float64) float64 {
 
 func (s *MinMaxScaling) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	min, max := GetMinMax(header, samples)
-	out := make([]*bitflow.Sample, len(samples))
-	for num, inSample := range samples {
-		values := make([]bitflow.Value, len(inSample.Values))
-		for i, val := range inSample.Values {
+	for _, sample := range samples {
+		values := make([]bitflow.Value, len(sample.Values))
+		for i, val := range sample.Values {
 			res := scaleMinMax(float64(val), min[i], max[i])
 			values[i] = bitflow.Value(res)
 		}
-		var outSample bitflow.Sample
-		outSample.Values = values
-		outSample.CopyMetadataFrom(inSample)
-		out[num] = &outSample
+		sample.Values = values
 	}
-	return header, out, nil
+	return header, samples, nil
 }
 
 func (s *MinMaxScaling) String() string {
@@ -73,10 +69,9 @@ func GetStats(header *bitflow.Header, samples []*bitflow.Sample) []FeatureStats 
 
 func (s *StandardizationScaling) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	stats := GetStats(header, samples)
-	out := make([]*bitflow.Sample, len(samples))
-	for num, inSample := range samples {
-		values := make([]bitflow.Value, len(inSample.Values))
-		for i, val := range inSample.Values {
+	for _, sample := range samples {
+		values := make([]bitflow.Value, len(sample.Values))
+		for i, val := range sample.Values {
 			m := stats[i].Mean()
 			s := stats[i].Stddev()
 			res := (float64(val) - m) / s
@@ -88,12 +83,9 @@ func (s *StandardizationScaling) ProcessBatch(header *bitflow.Header, samples []
 			}
 			values[i] = bitflow.Value(res)
 		}
-		var outSample bitflow.Sample
-		outSample.Values = values
-		outSample.CopyMetadataFrom(inSample)
-		out[num] = &outSample
+		sample.Values = values
 	}
-	return header, out, nil
+	return header, samples, nil
 }
 
 func (s *StandardizationScaling) String() string {

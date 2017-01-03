@@ -36,13 +36,17 @@ func (helper *MetricMapperHelper) incomingHeader(header *bitflow.Header, constru
 	return nil
 }
 
-func (helper *MetricMapperHelper) convertSample(sample *bitflow.Sample) *bitflow.Sample {
+func (helper *MetricMapperHelper) convertValues(sample *bitflow.Sample) []bitflow.Value {
 	outValues := make([]bitflow.Value, len(helper.outIndices))
 	for i, index := range helper.outIndices {
 		outValues[i] = sample.Values[index]
 	}
+	return outValues
+}
+
+func (helper *MetricMapperHelper) convertSample(sample *bitflow.Sample) *bitflow.Sample {
 	outSample := sample.Clone()
-	outSample.Values = outValues
+	outSample.Values = helper.convertValues(sample)
 	return outSample
 }
 
@@ -229,12 +233,10 @@ func (mapper *BatchMetricMapper) ProcessBatch(header *bitflow.Header, samples []
 	if err := helper.incomingHeader(header, constructIndices); err != nil {
 		return nil, nil, err
 	}
-	outSamples := make([]*bitflow.Sample, len(samples))
-	for i, sample := range samples {
-		outSample := helper.convertSample(sample)
-		outSamples[i] = outSample
+	for _, sample := range samples {
+		sample.Values = helper.convertValues(sample)
 	}
-	return helper.outHeader, outSamples, nil
+	return helper.outHeader, samples, nil
 }
 
 func (mapper *BatchMetricMapper) String() string {

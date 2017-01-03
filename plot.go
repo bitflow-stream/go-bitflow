@@ -96,6 +96,7 @@ func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (p *Plotter) Close() {
+	defer p.CloseSink()
 	var err error
 	if p.SeparatePlots {
 		_ = os.Remove(p.OutputFile) // Delete file created in Start(), drop error.
@@ -106,7 +107,6 @@ func (p *Plotter) Close() {
 	if err != nil {
 		p.Error(err)
 	}
-	p.CloseSink(nil)
 }
 
 func (p *Plotter) saveSeparatePlots() error {

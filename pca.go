@@ -31,8 +31,7 @@ func SamplesToMatrix(samples []*bitflow.Sample) mat64.Matrix {
 	return mat64.NewDense(len(samples), cols, values)
 }
 
-func SampleToVector(sample *bitflow.Sample) []float64 {
-	input := sample.Values
+func ValuesToVector(input []bitflow.Value) []float64 {
 	values := make([]float64, len(input))
 	for i, val := range input {
 		values[i] = float64(val)
@@ -40,7 +39,11 @@ func SampleToVector(sample *bitflow.Sample) []float64 {
 	return values
 }
 
-func SetSampleValues(s *bitflow.Sample, values []float64) {
+func SampleToVector(sample *bitflow.Sample) []float64 {
+	return ValuesToVector(sample.Values)
+}
+
+func FillSample(s *bitflow.Sample, values []float64) {
 	if len(s.Values) >= len(values) {
 		s.Values = s.Values[:len(values)]
 	} else {
@@ -48,6 +51,16 @@ func SetSampleValues(s *bitflow.Sample, values []float64) {
 	}
 	for i, val := range values {
 		s.Values[i] = bitflow.Value(val)
+	}
+}
+
+func FillSampleFromMatrix(s *bitflow.Sample, row int, mat *mat64.Dense) {
+	FillSample(s, mat.RawRowView(row))
+}
+
+func FillSamplesFromMatrix(s []*bitflow.Sample, mat *mat64.Dense) {
+	for i, sample := range s {
+		FillSampleFromMatrix(sample, i, mat)
 	}
 }
 
@@ -130,7 +143,7 @@ func (model *PCAProjection) Vector(vec []float64) []float64 {
 
 func (model *PCAProjection) Sample(sample *bitflow.Sample) (result *bitflow.Sample) {
 	values := model.Vector(SampleToVector(sample))
-	SetSampleValues(result, values)
+	FillSample(result, values)
 	result.CopyMetadataFrom(sample)
 	return
 }
@@ -156,22 +169,16 @@ func (p *PCABatchProcessing) ProcessBatch(header *bitflow.Header, samples []*bit
 	log.Printf("Projecting data into %v components (variance %.4f)...", comp, variance)
 	proj := model.Project(comp)
 
-	// TODO this could be done in one matrix
-	outputSamples := make([]*bitflow.Sample, len(samples))
-	for i, inputSample := range samples {
-		outputSample := proj.Sample(inputSample)
-		outputSamples[i] = outputSample
-	}
+	// Convert sample slice to matrix, do the projection, then fill the new values back into the same sample slice
+	// Should minimize allocations, since the value slices have the same length before and after projection
+	matrix := proj.Matrix(SamplesToMatrix(samples))
+	FillSamplesFromMatrix(samples, matrix)
 
 	outFields := make([]string, comp)
 	for i := 0; i < comp; i++ {
 		outFields[i] = "component" + strconv.Itoa(i)
 	}
-	outHeader := &bitflow.Header{
-		HasTags: header.HasTags,
-		Fields:  outFields,
-	}
-	return outHeader, outputSamples, nil
+	return header.Clone(outFields), samples, nil
 }
 
 func (p *PCABatchProcessing) String() string {
