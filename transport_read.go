@@ -258,10 +258,11 @@ func (stream *SampleInputStream) readData(source string) {
 }
 
 func (stream *SampleInputStream) updateHeader(header *Header, source string) (err error) {
+	logger := log.WithFields(log.Fields{"format": stream.um, "source": source})
 	if stream.header == nil {
-		log.WithFields(log.Fields{"format": stream.um, "source": source}).Println("Reading", len(header.Fields), "metrics")
+		logger.Println("Reading", len(header.Fields), "metrics")
 	} else {
-		log.WithFields(log.Fields{"format": stream.um, "source": source}).Println("Updated header to", len(header.Fields), "metrics")
+		logger.Println("Updated header to", len(header.Fields), "metrics")
 	}
 	stream.header = header
 	stream.outHeader = &Header{
