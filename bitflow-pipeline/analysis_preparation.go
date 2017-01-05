@@ -22,7 +22,7 @@ func init() {
 	RegisterAnalysisParams("tag_split_files", split_tag_in_files, "tag to use as splitter")
 
 	RegisterAnalysis("tag_injection_info", tag_injection_info)
-	RegisterAnalysis("split_distributed_experiments", split_distributed_experiments)
+	RegisterAnalysis("injection_directory_structure", injection_directory_structure)
 	RegisterAnalysisParams("split_experiments", split_experiments, "number of seconds without sample before starting a new file")
 }
 
@@ -141,7 +141,7 @@ func tag_injection_info(p *SamplePipeline) {
 	p.Add(new(InjectionInfoTagger))
 }
 
-func split_distributed_experiments(p *SamplePipeline) {
+func injection_directory_structure(p *SamplePipeline) {
 	distributor := &TagsDistributor{
 		Tags:        []string{injectedTag, anomalyTag, measuredTag},
 		Separator:   string(filepath.Separator),
