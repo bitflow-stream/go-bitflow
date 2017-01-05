@@ -159,8 +159,12 @@ func (sink *TCPListenerSink) String() string {
 // then handled in their own goroutine.
 func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	sink.connCounterDescription = sink
+	capacity := sink.BufferedSamples
+	if capacity == 0 {
+		capacity = 1
+	}
 	sink.buf = outputSampleBuffer{
-		Capacity: sink.BufferedSamples,
+		Capacity: capacity,
 		cond:     sync.NewCond(new(sync.Mutex)),
 	}
 	sink.task = &golib.TCPListenerTask{
