@@ -76,27 +76,61 @@ func (p *DecouplingProcessor) String() string {
 	return fmt.Sprintf("DecouplingProcessor (buffer %v)", p.ChannelBuffer)
 }
 
-// ==================== SamplePrinter (example) ====================
-type SamplePrinter struct {
+// ==================== SimpleProcessor ====================
+
+type SimpleProcessor struct {
 	bitflow.AbstractProcessor
-	checker bitflow.HeaderChecker
+	Description string
+	Process     func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error)
+	OnClose     func()
 }
 
-func (p *SamplePrinter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (p *SimpleProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
-	if p.checker.HeaderChanged(header) {
-		log.Println("Processing Header len:", len(header.Fields), "tags:", header.HasTags)
+	if process := p.Process; process == nil {
+		return fmt.Errorf("%s: Process function is not set", p)
+	} else {
+		sample, header, err := process(sample, header)
+		if err == nil && sample != nil && header != nil {
+			err = p.OutgoingSink.Sample(sample, header)
+		}
+		return err
 	}
-	tags := ""
-	if sample.NumTags() > 0 {
-		tags = "(" + sample.TagString() + ")"
-	}
-	log.Println("Processing Sample time:", sample.Time, "len:", len(sample.Values), tags)
-	return p.OutgoingSink.Sample(sample, header)
 }
 
-func (p *SamplePrinter) String() string {
-	return "SamplePrinter"
+func (p *SimpleProcessor) Close() {
+	if c := p.OnClose; c != nil {
+		c()
+	}
+	p.AbstractProcessor.Close()
+}
+
+func (p *SimpleProcessor) String() string {
+	if p.Description == "" {
+		return "SimpleProcessor"
+	} else {
+		return p.Description
+	}
+}
+
+// ==================== SamplePrinter (example) ====================
+
+func NewSamplePrinter() *SimpleProcessor {
+	var checker bitflow.HeaderChecker
+	return &SimpleProcessor{
+		Description: "sample printer",
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			if checker.HeaderChanged(header) {
+				log.Println("Processing Header len:", len(header.Fields), "tags:", header.HasTags)
+			}
+			tags := ""
+			if sample.NumTags() > 0 {
+				tags = "(" + sample.TagString() + ")"
+			}
+			log.Println("Processing Sample time:", sample.Time, "len:", len(sample.Values), tags)
+			return sample, header, nil
+		},
+	}
 }

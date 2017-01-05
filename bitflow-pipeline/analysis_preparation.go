@@ -13,8 +13,6 @@ import (
 )
 
 func init() {
-	RegisterSampleHandler("host", &SampleTagger{SourceTags: []string{"host"}, DontOverwrite: true})
-
 	RegisterAnalysis("aggregate_10s", aggregate_data_10s)
 	RegisterAnalysis("filter_basic", filter_basic)
 	RegisterAnalysis("filter_hypervisor", filter_hypervisor)
@@ -25,7 +23,6 @@ func init() {
 
 	RegisterAnalysis("tag_injection_info", tag_injection_info)
 	RegisterAnalysis("split_distributed_experiments", split_distributed_experiments)
-	RegisterAnalysis("split_distributed_experiments_only", split_distributed_experiments_only)
 	RegisterAnalysisParams("split_experiments", split_experiments, "number of seconds without sample before starting a new file")
 }
 
@@ -63,6 +60,8 @@ func convert_filenames(p *SamplePipeline) {
 		filesource.ConvertFilename = func(filename string) string {
 			return filepath.Base(filepath.Dir(filename))
 		}
+	} else {
+		log.Warnf("Cannot apply convert_filenames: data source is not *bitflow.FileSource but %T", p.Source)
 	}
 }
 
@@ -72,6 +71,8 @@ func convert_filenames2(p *SamplePipeline) {
 		filesource.ConvertFilename = func(filename string) string {
 			return filepath.Base(filepath.Dir(filepath.Dir(filename)))
 		}
+	} else {
+		log.Warnf("Cannot apply convert_filenames2: data source is not *bitflow.FileSource but %T", p.Source)
 	}
 }
 
@@ -86,7 +87,7 @@ func split_tag_in_files(p *SamplePipeline, params string) {
 }
 
 const (
-	remoteInjectionTag       = "remote-target"
+	remoteInjectionTag       = "target"
 	remoteInjectionSeparator = "|"
 	injectedTag              = "injected"
 	anomalyTag               = "anomaly"
@@ -120,10 +121,11 @@ func (p *InjectionInfoTagger) Sample(sample *bitflow.Sample, header *bitflow.Hea
 		anomaly = sample.Tag(ClassTag)
 	} else if sample.HasTag(remoteInjectionTag) {
 		// A remote injection
-		remote := sample.Tag(remoteInjectionTag) // Ignore remote-target0 etc.
+		remote := sample.Tag(remoteInjectionTag) // Ignore target0, target1 etc.
 		parts := strings.Split(remote, remoteInjectionSeparator)
 		if len(parts) != 2 {
 			log.Warnln("Tag", remoteInjectionTag, "has invalid value:", remote)
+			return nil
 		}
 		injected = parts[0]
 		anomaly = parts[1]
@@ -140,21 +142,6 @@ func tag_injection_info(p *SamplePipeline) {
 }
 
 func split_distributed_experiments(p *SamplePipeline) {
-	distributor := &TagsDistributor{
-		Tags:        []string{injectedTag, anomalyTag, measuredTag},
-		Separator:   string(filepath.Separator),
-		Replacement: "_unknown_",
-	}
-	builder := MultiFileDirectoryBuilder(false, func() []bitflow.SampleProcessor {
-		return []bitflow.SampleProcessor{
-			NewMultiHeaderMerger(),
-			new(BatchProcessor).Add(new(SampleSorter)),
-		}
-	})
-	p.Add(NewMetricFork(distributor, builder))
-}
-
-func split_distributed_experiments_only(p *SamplePipeline) {
 	distributor := &TagsDistributor{
 		Tags:        []string{injectedTag, anomalyTag, measuredTag},
 		Separator:   string(filepath.Separator),

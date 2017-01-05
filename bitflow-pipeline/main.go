@@ -28,13 +28,13 @@ type registeredAnalysis struct {
 var analysis_registry = map[string]registeredAnalysis{
 	"": registeredAnalysis{"", nil, ""},
 }
-var handler_registry = map[string]bitflow.ReadSampleHandler{
+var handler_registry = map[string]func(string) bitflow.ReadSampleHandler{
 	"": nil,
 }
 
-func RegisterSampleHandler(name string, sampleHandler bitflow.ReadSampleHandler) {
+func RegisterSampleHandler(name string, sampleHandler func(param string) bitflow.ReadSampleHandler) {
 	if _, ok := handler_registry[name]; ok {
-		log.Fatalln("Sample handler already registered:", name)
+		panic("Sample handler already registered: " + name)
 	}
 	handler_registry[name] = sampleHandler
 }
@@ -47,7 +47,7 @@ func RegisterAnalysis(name string, setupPipeline AnalysisFunc) {
 
 func RegisterAnalysisParams(name string, setupPipeline ParameterizedAnalysisFunc, paramDescription string) {
 	if _, ok := analysis_registry[name]; ok {
-		log.Fatalln("Analysis already registered:", name)
+		panic("Analysis already registered: " + name)
 	}
 	analysis_registry[name] = registeredAnalysis{name, setupPipeline, paramDescription}
 }
@@ -59,7 +59,6 @@ func main() {
 func do_main() int {
 	var analysisNames golib.StringSlice
 	flag.Var(&analysisNames, "e", fmt.Sprintf("Select one or more analyses to execute. Use -print-analyses for listing all analyses."))
-	readSampleHandler := flag.String("h", "", fmt.Sprintf("Select an optional sample handler for handling incoming samples: %v", allHandlers()))
 	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
 
 	var p SamplePipeline
@@ -72,22 +71,18 @@ func do_main() int {
 		fmt.Printf("Available analyses:%v\n", allAnalyses())
 		return 0
 	}
-	analyses, err := resolvePipeline(analysisNames)
+	analyses, handler, err := resolvePipeline(analysisNames)
 	if err != nil {
 		log.Fatalln(err)
-	}
-	handler, ok := handler_registry[*readSampleHandler]
-	if !ok {
-		log.Fatalf("Sample handler '%v' not registered. Available: %v", *readSampleHandler, allHandlers())
 	}
 	if err := f.ReadInputArguments(); err != nil {
 		log.Fatalln(err)
 	}
 	defer golib.ProfileCpu()()
-	p.setup(analyses)
 	if err := p.Configure(&f, handler); err != nil {
 		log.Fatalln(err)
 	}
+	p.setup(analyses)
 	if err := p.CheckTasks(); err != nil {
 		log.Fatalln(err)
 	}
@@ -102,25 +97,37 @@ type parameterizedAnalysis struct {
 	params string
 }
 
-func resolvePipeline(analysisNames golib.StringSlice) ([]parameterizedAnalysis, error) {
+func resolvePipeline(analysisNames golib.StringSlice) ([]parameterizedAnalysis, bitflow.ReadSampleHandler, error) {
 	if len(analysisNames) == 0 {
 		analysisNames = append(analysisNames, "") // The default
 	}
-	result := make([]parameterizedAnalysis, len(analysisNames))
-	for i, name := range analysisNames {
+	result := make([]parameterizedAnalysis, 0, len(analysisNames))
+	var handlerNames []string
+	var handlers []bitflow.ReadSampleHandler
+	for _, name := range analysisNames {
 		params := ""
 		if index := strings.IndexRune(name, ','); index >= 0 {
-			full := name
-			name = full[:index]
-			params = full[index+1:]
+			params = name[index+1:]
+			name = name[:index]
 		}
 		analysis, ok := analysis_registry[name]
 		if !ok {
-			return nil, fmt.Errorf("Analysis '%v' not registered. Available analyses:%v", name, allAnalyses())
+			handler, ok := handler_registry[name]
+			if !ok {
+				return nil, nil, fmt.Errorf("Analysis '%v' not registered. Available analyses:%v", name, allAnalyses())
+			}
+			handlerNames = append(handlerNames, name)
+			handlers = append(handlers, handler(params))
+		} else {
+			result = append(result, parameterizedAnalysis{analysis.Func, params})
 		}
-		result[i] = parameterizedAnalysis{analysis.Func, params}
 	}
-	return result, nil
+	if len(handlers) > 1 {
+		return nil, nil, fmt.Errorf("Multiple sample source handlers defined, only one allowed: %v", handlerNames)
+	} else if len(handlers) == 0 {
+		return result, nil, nil
+	}
+	return result, handlers[0], nil
 }
 
 func allAnalyses() string {
@@ -145,18 +152,19 @@ func allAnalyses() string {
 			buf.WriteString(")")
 		}
 	}
-	return buf.String()
-}
-
-func allHandlers() []string {
-	all := make([]string, 0, len(handler_registry))
+	handlers := make([]string, 0, len(handler_registry))
 	for name := range handler_registry {
 		if name != "" {
-			all = append(all, name)
+			handlers = append(handlers, name)
 		}
 	}
-	sort.Strings(all)
-	return all
+	sort.Strings(handlers)
+	for _, handler := range handlers {
+		buf.WriteString("\n")
+		buf.WriteString(" - ")
+		buf.WriteString(handler)
+	}
+	return buf.String()
 }
 
 type SortedAnalyses []registeredAnalysis

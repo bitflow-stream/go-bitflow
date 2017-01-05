@@ -113,6 +113,29 @@ func (p *BatchProcessor) MergeProcessor(other bitflow.SampleProcessor) bool {
 	}
 }
 
+// ==================== Simple implementation ====================
+
+type SimpleBatchProcessingStep struct {
+	Description string
+	Process     func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error)
+}
+
+func (s *SimpleBatchProcessingStep) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+	if process := s.Process; process == nil {
+		return nil, nil, fmt.Errorf("%s: Process function is not set")
+	} else {
+		return process(header, samples)
+	}
+}
+
+func (s *SimpleBatchProcessingStep) String() string {
+	if s.Description == "" {
+		return "SimpleBatchProcessingStep"
+	} else {
+		return s.Description
+	}
+}
+
 // ==================== Tag & Timestamp sort ====================
 // Sort based on given Tags, use Timestamp as last sort criterion
 type SampleSorter struct {
@@ -160,20 +183,18 @@ func (sorter *SampleSorter) String() string {
 }
 
 // ==================== Sample Shuffler ====================
-type SampleShuffler struct {
-}
-
-func (*SampleShuffler) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
-	log.Println("Shuffling", len(samples), "samples")
-	for i := range samples {
-		j := rand.Intn(i + 1)
-		samples[i], samples[j] = samples[j], samples[i]
+func NewSampleShuffler() *SimpleBatchProcessingStep {
+	return &SimpleBatchProcessingStep{
+		Description: "sample shuffler",
+		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+			log.Println("Shuffling", len(samples), "samples")
+			for i := range samples {
+				j := rand.Intn(i + 1)
+				samples[i], samples[j] = samples[j], samples[i]
+			}
+			return header, samples, nil
+		},
 	}
-	return header, samples, nil
-}
-
-func (*SampleShuffler) String() string {
-	return "SampleShuffler"
 }
 
 // ==================== Multi-header merger ====================

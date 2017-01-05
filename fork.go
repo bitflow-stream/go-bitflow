@@ -264,7 +264,11 @@ func (b *SimplePipelineBuilder) String() string {
 			b.examplePipeline = b.Build()
 		}
 	}
-	return fmt.Sprintf("simple %v", b.examplePipeline)
+	if len(b.examplePipeline) == 0 {
+		return "(empty subpipeline)"
+	} else {
+		return fmt.Sprintf("subpipeline %v", b.examplePipeline)
+	}
 }
 
 func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *AggregatingSink) *bitflow.SamplePipeline {
@@ -285,8 +289,12 @@ type MultiFilePipelineBuilder struct {
 }
 
 func (b *MultiFilePipelineBuilder) String() string {
-	_ = b.SimplePipelineBuilder.String()
-	return fmt.Sprintf("MultiFiles %v %v", b.Description, b.examplePipeline)
+	_ = b.SimplePipelineBuilder.String() // Fill the examplePipeline field
+	if len(b.examplePipeline) == 0 {
+		return fmt.Sprintf("MultiFiles %v", b.Description)
+	} else {
+		return fmt.Sprintf("MultiFiles %v (subpipeline: %v)", b.Description, b.examplePipeline)
+	}
 }
 
 func (b *MultiFilePipelineBuilder) BuildPipeline(key interface{}, output *AggregatingSink) *bitflow.SamplePipeline {
@@ -320,7 +328,7 @@ func (b *MultiFilePipelineBuilder) getFileSink(sink bitflow.MetricSink) *bitflow
 				if files == nil {
 					files = converted
 				} else if !warned {
-					log.Warnln("[%v]: Multiple file outputs, using %v", b, files)
+					log.Warnf("[%v]: Multiple file outputs, using %v", b, files)
 					warned = true
 				}
 			}

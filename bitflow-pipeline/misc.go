@@ -12,7 +12,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
+	. "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/http"
 )
 
@@ -101,45 +101,34 @@ func count_tags(p *SamplePipeline, params string) {
 	p.Add(NewUniqueTagCounter(params))
 }
 
-const TimrangePrinterFormat = "02.01.2006 15:04:05"
-
-type TimerangePrinter struct {
-	bitflow.AbstractProcessor
-	from  time.Time
-	to    time.Time
-	count int
-}
-
-func (printer *TimerangePrinter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := printer.Check(sample, header); err != nil {
-		return err
-	}
-	printer.count++
-	t := sample.Time
-	if printer.from.IsZero() || printer.to.IsZero() {
-		printer.from = t
-		printer.to = t
-	} else if t.Before(printer.from) {
-		printer.from = t
-	} else if t.After(printer.to) {
-		printer.to = t
-	}
-	return printer.OutgoingSink.Sample(sample, header)
-}
-
-func (printer *TimerangePrinter) Close() {
-	duration := printer.to.Sub(printer.from) / time.Millisecond * time.Millisecond // Round
-	log.Printf("Time range of %v samples: %v - %v (%v)", printer.count,
-		printer.from.Format(TimrangePrinterFormat), printer.to.Format(TimrangePrinterFormat), duration)
-	printer.AbstractProcessor.Close()
-}
-
-func (printer *TimerangePrinter) String() string {
-	return "Print time range"
-}
-
 func print_timerange(p *SamplePipeline) {
-	p.Add(new(TimerangePrinter))
+	var (
+		from  time.Time
+		to    time.Time
+		count int
+	)
+	p.Add(&SimpleProcessor{
+		Description: "Print time range",
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			count++
+			t := sample.Time
+			if from.IsZero() || to.IsZero() {
+				from = t
+				to = t
+			} else if t.Before(from) {
+				from = t
+			} else if t.After(to) {
+				to = t
+			}
+			return sample, header, nil
+		},
+		OnClose: func() {
+			format := "02.01.2006 15:04:05"
+			duration := to.Sub(from) / time.Millisecond * time.Millisecond // Round
+			log.Printf("Time range of %v samples: %v - %v (%v)", count,
+				from.Format(format), to.Format(format), duration)
+		},
+	})
 }
 
 type TimelinePrinter struct {
@@ -217,89 +206,76 @@ func print_timeline(p *SamplePipeline, param string) {
 	p.Batch(&TimelinePrinter{NumBuckets: buckets})
 }
 
-type InvalidCounter struct {
-	bitflow.AbstractProcessor
-	invalidSamples int
-	totalSamples   int
-	invalidValues  int
-	totalValues    int
-}
-
-func (counter *InvalidCounter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	sampleValid := true
-	for _, val := range sample.Values {
-		counter.totalValues += 1
-		if !pipeline.IsValidNumber(float64(val)) {
-			counter.invalidValues += 1
-			sampleValid = false
-		}
-	}
-	counter.totalSamples += 1
-	if !sampleValid {
-		counter.invalidSamples += 1
-	}
-	return nil
-}
-
-func (counter *InvalidCounter) Close() {
-	log.Printf("Invalid numbers: %v of %v, in %v of %v samples",
-		counter.invalidValues, counter.totalValues, counter.invalidSamples, counter.totalSamples)
-	counter.AbstractProcessor.Close()
-}
-
 func count_invalid(p *SamplePipeline) {
-	p.Add(new(InvalidCounter))
-}
-
-type commonMetricsPrinter struct {
-	bitflow.AbstractProcessor
-	checker bitflow.HeaderChecker
-	common  map[string]bool
-	num     int
-}
-
-func (*commonMetricsPrinter) String() string {
-	return fmt.Sprintf("Common metrics printer")
-}
-
-func (p *commonMetricsPrinter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
-	if p.checker.HeaderChanged(header) {
-		p.num++
-		if p.common == nil {
-			p.common = make(map[string]bool)
-			for _, field := range header.Fields {
-				p.common[field] = true
-			}
-		} else {
-			incoming := make(map[string]bool)
-			for _, field := range header.Fields {
-				incoming[field] = true
-			}
-			for field := range p.common {
-				if !incoming[field] {
-					delete(p.common, field)
+	var (
+		invalidSamples int
+		totalSamples   int
+		invalidValues  int
+		totalValues    int
+	)
+	p.Add(&SimpleProcessor{
+		Description: "Invalid values counter",
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			sampleValid := true
+			for _, val := range sample.Values {
+				totalValues += 1
+				if !IsValidNumber(float64(val)) {
+					invalidValues += 1
+					sampleValid = false
 				}
 			}
-		}
-	}
-	return p.OutgoingSink.Sample(sample, header)
-}
-
-func (p *commonMetricsPrinter) Close() {
-	fields := make([]string, 0, len(p.common))
-	for field := range p.common {
-		fields = append(fields, field)
-	}
-	sort.Strings(fields)
-	log.Printf("%v common metrics in %v headers: %v", len(fields), p.num, fields)
-	p.AbstractProcessor.Close()
+			totalSamples += 1
+			if !sampleValid {
+				invalidSamples += 1
+			}
+			return sample, header, nil
+		},
+		OnClose: func() {
+			log.Printf("Invalid numbers: %v of %v, in %v of %v samples",
+				invalidValues, totalValues, invalidSamples, totalSamples)
+		},
+	})
 }
 
 func print_common_metrics(p *SamplePipeline) {
-	p.Add(new(commonMetricsPrinter))
+	var (
+		checker bitflow.HeaderChecker
+		common  map[string]bool
+		num     int
+	)
+	p.Add(&SimpleProcessor{
+		Description: "Common metrics printer",
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			if checker.HeaderChanged(header) {
+				num++
+				if common == nil {
+					common = make(map[string]bool)
+					for _, field := range header.Fields {
+						common[field] = true
+					}
+				} else {
+					incoming := make(map[string]bool)
+					for _, field := range header.Fields {
+						incoming[field] = true
+					}
+					for field := range common {
+						if !incoming[field] {
+							delete(common, field)
+						}
+					}
+				}
+			}
+			return sample, header, nil
+		},
+		OnClose: func() {
+			fields := make([]string, 0, len(common))
+			for field := range common {
+				fields = append(fields, field)
+			}
+			sort.Strings(fields)
+			log.Printf("%v common metrics in %v headers: %v", len(fields), num, fields)
+		},
+	})
 }
 
 func print_http(p *SamplePipeline, params string) {

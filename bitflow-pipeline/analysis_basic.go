@@ -14,9 +14,6 @@ import (
 )
 
 func init() {
-	RegisterSampleHandler("src", &SampleTagger{SourceTags: []string{SourceTag}})
-	RegisterSampleHandler("src-append", &SampleTagger{SourceTags: []string{SourceTag}, DontOverwrite: true})
-
 	RegisterAnalysisParams("decouple", decouple_samples, "number of buffered samples")
 	RegisterAnalysis("merge_headers", merge_headers)
 	RegisterAnalysisParams("pick", pick_x_percent, "samples to keep 0..1")
@@ -50,11 +47,11 @@ func init() {
 }
 
 func print_samples(p *SamplePipeline) {
-	p.Add(new(SamplePrinter))
+	p.Add(NewSamplePrinter())
 }
 
 func shuffle_data(p *SamplePipeline) {
-	p.Batch(new(SampleShuffler))
+	p.Batch(NewSampleShuffler())
 }
 
 func sort_data(p *SamplePipeline, params string) {
@@ -195,51 +192,18 @@ func pick_head(pipe *SamplePipeline, params string) {
 	if err != nil {
 		log.Fatalln("Error parsing parameter for -e head:", err)
 	}
-	pipe.Add(&PickHead{Num: num})
-}
-
-type PickHead struct {
-	bitflow.AbstractProcessor
-	Num       int // parameter
-	processed int // internal variable
-}
-
-func (head *PickHead) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := head.Check(sample, header); err != nil {
-		return err
-	}
-	if head.Num > head.processed {
-		head.processed++
-		return head.OutgoingSink.Sample(sample, header)
-	} else {
-		return nil
-	}
-}
-
-func (head *PickHead) String() string {
-	return "Pick first " + strconv.Itoa(head.Num) + " samples"
-}
-
-type SampleTagger struct {
-	SourceTags    []string
-	DontOverwrite bool
-}
-
-func (h *SampleTagger) HandleHeader(header *bitflow.Header, source string) {
-	header.HasTags = true
-}
-
-func (h *SampleTagger) HandleSample(sample *bitflow.Sample, source string) {
-	for _, tag := range h.SourceTags {
-		if h.DontOverwrite {
-			base := tag
-			tag = base
-			for i := 0; sample.HasTag(tag); i++ {
-				tag = base + strconv.Itoa(i)
+	processed := 0
+	pipe.Add(&SimpleProcessor{
+		Description: "Pick first " + strconv.Itoa(num) + " samples",
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			if num > processed {
+				processed++
+				return sample, header, nil
+			} else {
+				return nil, nil, nil
 			}
-		}
-		sample.SetTag(tag, source)
-	}
+		},
+	})
 }
 
 func set_tags(pipe *SamplePipeline, params string) {
@@ -254,26 +218,15 @@ func set_tags(pipe *SamplePipeline, params string) {
 		keys[i] = parts[0]
 		values[i] = parts[1]
 	}
-	pipe.Add(&SampleTagProcessor{
-		Keys:   keys,
-		Values: values,
+	pipe.Add(&SimpleProcessor{
+		Description: "",
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			for i, key := range keys {
+				sample.SetTag(key, values[i])
+			}
+			return sample, header, nil
+		},
 	})
-}
-
-type SampleTagProcessor struct {
-	bitflow.AbstractProcessor
-	Keys   []string
-	Values []string
-}
-
-func (p *SampleTagProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
-	for i, key := range p.Keys {
-		sample.SetTag(key, p.Values[i])
-	}
-	return p.OutgoingSink.Sample(sample, header)
 }
 
 func split_files(p *SamplePipeline, params string) {
@@ -309,45 +262,38 @@ func rename_metrics(p *SamplePipeline, params string) {
 }
 
 func strip_metrics(p *SamplePipeline) {
-	p.Add(new(MetricStripper))
+	p.Add(&SimpleProcessor{
+		Description: "remove metrics",
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			return sample.Metadata().NewSample(nil), header.Clone(nil), nil
+		},
+	})
 }
 
 func sleep_samples(p *SamplePipeline) {
-	p.Add(new(SleepProcessor))
-}
-
-type SleepProcessor struct {
-	bitflow.AbstractProcessor
-	lastTimestamp time.Time
-}
-
-func (p *SleepProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
-	last := p.lastTimestamp
-	if !last.IsZero() {
-		diff := sample.Time.Sub(last)
-		if diff > 0 {
-			time.Sleep(diff)
-		}
-	}
-	p.lastTimestamp = sample.Time
-	return p.OutgoingSink.Sample(sample, header)
+	var lastTimestamp time.Time
+	p.Add(&SimpleProcessor{
+		Description: "sleep between samples",
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			last := lastTimestamp
+			if !last.IsZero() {
+				diff := sample.Time.Sub(last)
+				if diff > 0 {
+					time.Sleep(diff)
+				}
+			}
+			lastTimestamp = sample.Time
+			return sample, header, nil
+		},
+	})
 }
 
 func set_time_processor(p *SamplePipeline) {
-	p.Add(new(ResetTimeProcessor))
-}
-
-type ResetTimeProcessor struct {
-	bitflow.AbstractProcessor
-}
-
-func (p *ResetTimeProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
-	sample.Time = time.Now()
-	return p.OutgoingSink.Sample(sample, header)
+	p.Add(&SimpleProcessor{
+		Description: "reset time",
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			sample.Time = time.Now()
+			return sample, header, nil
+		},
+	})
 }
