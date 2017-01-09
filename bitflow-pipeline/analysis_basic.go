@@ -13,11 +13,13 @@ import (
 )
 
 func init() {
-	// Control
+	// Control execution
 	RegisterAnalysisParams("decouple", decouple_samples, "number of buffered samples")
-	RegisterAnalysisParams("split_files", split_files, "tag to use for separating the data")
-	RegisterAnalysisParams("tags", set_tags, "comma-separated list of key-value tags")
 	RegisterAnalysis("sleep", sleep_samples)
+	RegisterAnalysisParams("split_files", split_files, "tag to use for separating the data")
+
+	// Set metadata
+	RegisterAnalysisParams("tags", set_tags, "comma-separated list of key-value tags")
 	RegisterAnalysis("set_time", set_time_processor)
 
 	// Select
@@ -34,12 +36,12 @@ func init() {
 	RegisterAnalysis("standardize", normalize_standardize)
 
 	// Change header/metrics
-	RegisterAnalysis("merge_headers", merge_headers)
-	RegisterAnalysisParams("remap", remap_features, "comma-separated list of metrics")
+	RegisterAnalysisParams("remap", remap_metrics, "comma-separated list of metrics")
 	RegisterAnalysisParams("rename", rename_metrics, "comma-separated list of regex=replace pairs")
 	RegisterAnalysisParams("include", filter_metrics_include, "Regex to match metrics to be included")
 	RegisterAnalysisParams("exclude", filter_metrics_exclude, "Regex to match metrics to be excluded")
 	RegisterAnalysisParams("filter_variance", filter_variance, "minimum weighted stddev of the population (stddev / mean)")
+	RegisterAnalysis("merge_headers", merge_headers)
 	RegisterAnalysis("strip", strip_metrics)
 }
 
@@ -116,7 +118,7 @@ func decouple_samples(pipe *SamplePipeline, params string) {
 	pipe.Add(&DecouplingProcessor{ChannelBuffer: buf})
 }
 
-func remap_features(pipe *SamplePipeline, params string) {
+func remap_metrics(pipe *SamplePipeline, params string) {
 	var metrics []string
 	if params != "" {
 		metrics = strings.Split(params, ",")
@@ -178,7 +180,7 @@ func split_files(p *SamplePipeline, params string) {
 	distributor := &TagsDistributor{
 		Tags:        []string{params},
 		Separator:   "-",
-		Replacement: "_unknown_",
+		Replacement: "_empty_",
 	}
 	p.Add(NewMetricFork(distributor, MultiFileSuffixBuilder(nil)))
 }
@@ -208,7 +210,7 @@ func rename_metrics(p *SamplePipeline, params string) {
 
 func strip_metrics(p *SamplePipeline) {
 	p.Add(&SimpleProcessor{
-		Description: "remove metrics",
+		Description: "remove metric values, keep timestamp and tags",
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 			return sample.Metadata().NewSample(nil), header.Clone(nil), nil
 		},
@@ -235,7 +237,7 @@ func sleep_samples(p *SamplePipeline) {
 
 func set_time_processor(p *SamplePipeline) {
 	p.Add(&SimpleProcessor{
-		Description: "reset time",
+		Description: "reset time to now",
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 			sample.Time = time.Now()
 			return sample, header, nil
