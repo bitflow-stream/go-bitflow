@@ -238,14 +238,19 @@ func (source *FileSource) String() string {
 func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	source.closed = golib.NewOneshotCondition()
 	var files []string
-	for _, filename := range source.Filenames {
-		group := NewFileGroup(filename)
-		if groupFiles, err := group.AllFiles(); err != nil {
-			source.CloseSink(wg)
-			return golib.TaskFinishedError(err)
-		} else {
-			files = append(files, groupFiles...)
+	if source.ReadFileGroups {
+		for _, filename := range source.Filenames {
+			group := NewFileGroup(filename)
+			if groupFiles, err := group.AllFiles(); err != nil {
+				source.CloseSink(wg)
+				return golib.TaskFinishedError(err)
+			} else {
+				files = append(files, groupFiles...)
+			}
 		}
+	} else {
+		files = make([]string, len(source.Filenames))
+		copy(files, source.Filenames)
 	}
 	if len(files) == 0 {
 		source.CloseSink(wg)
