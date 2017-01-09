@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -14,12 +15,9 @@ import (
 
 func init() {
 	RegisterAnalysis("aggregate_10s", aggregate_data_10s)
-	RegisterAnalysis("filter_basic", filter_basic)
-	RegisterAnalysis("filter_hypervisor", filter_hypervisor)
 	RegisterAnalysis("merge_hosts", merge_hosts)
 	RegisterAnalysis("convert_filenames", convert_filenames)
 	RegisterAnalysis("convert_filenames2", convert_filenames2)
-	RegisterAnalysisParams("tag_split_files", split_tag_in_files, "tag to use as splitter")
 
 	RegisterAnalysis("tag_injection_info", tag_injection_info)
 	RegisterAnalysis("injection_directory_structure", injection_directory_structure)
@@ -29,14 +27,6 @@ func init() {
 func aggregate_data_10s(p *SamplePipeline) {
 	// TODO properly parameterize the aggregator, move to analysis_basic.go
 	p.Add((&FeatureAggregator{WindowDuration: 10 * time.Second}).AddAvg("_avg").AddSlope("_slope"))
-}
-
-func filter_basic(p *SamplePipeline) {
-	p.Add(NewMetricFilter().IncludeRegex("^cpu$|^mem/percent$|^net-io/bytes$|^disk-io/[s|v]da/ioTime$"))
-}
-
-func filter_hypervisor(p *SamplePipeline) {
-	p.Add(NewMetricFilter().ExcludeRegex("^ovsdb/|^libvirt/"))
 }
 
 func merge_hosts(p *SamplePipeline) {
@@ -76,16 +66,6 @@ func convert_filenames2(p *SamplePipeline) {
 	}
 }
 
-func split_tag_in_files(p *SamplePipeline, params string) {
-	p.Add(NewMetricFork(
-		&TagsDistributor{
-			Tags:        []string{params},
-			Separator:   "_",
-			Replacement: "empty",
-		},
-		MultiFileSuffixBuilder(nil)))
-}
-
 const (
 	remoteInjectionTag       = "target"
 	remoteInjectionSeparator = "|"
@@ -94,51 +74,41 @@ const (
 	measuredTag              = "measured"
 )
 
-type InjectionInfoTagger struct {
-	bitflow.AbstractProcessor
-}
-
-func (*InjectionInfoTagger) String() string {
-	return "injection info tagger (tags " + ClassTag + " and " + remoteInjectionTag + ")"
-}
-
-func (p *InjectionInfoTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
-	measured := ""
-	injected := ""
-	anomaly := ""
-
-	if sample.HasTag("host") {
-		measured = sample.Tag("host")
-	} else {
-		measured = sample.Tag(SourceTag)
-	}
-	if sample.HasTag(ClassTag) {
-		// A local injection
-		injected = measured
-		anomaly = sample.Tag(ClassTag)
-	} else if sample.HasTag(remoteInjectionTag) {
-		// A remote injection
-		remote := sample.Tag(remoteInjectionTag) // Ignore target0, target1 etc.
-		parts := strings.Split(remote, remoteInjectionSeparator)
-		if len(parts) != 2 {
-			log.Warnln("Tag", remoteInjectionTag, "has invalid value:", remote)
-			return nil
-		}
-		injected = parts[0]
-		anomaly = parts[1]
-	}
-
-	sample.SetTag(injectedTag, injected)
-	sample.SetTag(measuredTag, measured)
-	sample.SetTag(anomalyTag, anomaly)
-	return p.OutgoingSink.Sample(sample, header)
-}
-
 func tag_injection_info(p *SamplePipeline) {
-	p.Add(new(InjectionInfoTagger))
+	p.Add(&SimpleProcessor{
+		Description: fmt.Sprintf("Injection info tagger (transform tags %s and %s into %s, %s and %s)", ClassTag, remoteInjectionTag, injectedTag, measuredTag, anomalyTag),
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			measured := ""
+			injected := ""
+			anomaly := ""
+
+			if sample.HasTag("host") {
+				measured = sample.Tag("host")
+			} else {
+				measured = sample.Tag(SourceTag)
+			}
+			if sample.HasTag(ClassTag) {
+				// A local injection
+				injected = measured
+				anomaly = sample.Tag(ClassTag)
+			} else if sample.HasTag(remoteInjectionTag) {
+				// A remote injection
+				remote := sample.Tag(remoteInjectionTag) // Ignore target0, target1 etc.
+				parts := strings.Split(remote, remoteInjectionSeparator)
+				if len(parts) != 2 {
+					log.Warnln("Tag", remoteInjectionTag, "has invalid value:", remote)
+					return sample, header, nil
+				}
+				injected = parts[0]
+				anomaly = parts[1]
+			}
+
+			sample.SetTag(injectedTag, injected)
+			sample.SetTag(measuredTag, measured)
+			sample.SetTag(anomalyTag, anomaly)
+			return sample, header, nil
+		},
+	})
 }
 
 func injection_directory_structure(p *SamplePipeline) {

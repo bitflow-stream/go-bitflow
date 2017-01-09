@@ -8,46 +8,39 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
 )
 
 func init() {
+	// Control
 	RegisterAnalysisParams("decouple", decouple_samples, "number of buffered samples")
-	RegisterAnalysis("merge_headers", merge_headers)
+	RegisterAnalysisParams("split_files", split_files, "tag to use for separating the data")
+	RegisterAnalysisParams("tags", set_tags, "comma-separated list of key-value tags")
+	RegisterAnalysis("sleep", sleep_samples)
+	RegisterAnalysis("set_time", set_time_processor)
+
+	// Select
 	RegisterAnalysisParams("pick", pick_x_percent, "samples to keep 0..1")
 	RegisterAnalysisParams("head", pick_head, "number of first samples to keep")
-	RegisterAnalysis("print", print_samples)
 	RegisterAnalysisParams("filter_tag", filter_tag, "tag=value or tag!=value")
+	RegisterAnalysisParams("filter_variance", filter_variance, "minimum weighted stddev of the population (stddev / mean)")
 
+	// Reorder
 	RegisterAnalysis("shuffle", shuffle_data)
 	RegisterAnalysisParams("sort", sort_data, "comma-separated list of tags")
 
+	// Change values
 	RegisterAnalysis("scale_min_max", normalize_min_max)
 	RegisterAnalysis("standardize", normalize_standardize)
 
-	RegisterAnalysisParams("plot", plot, "[<color tag>,]<output filename>")
-	RegisterAnalysisParams("plot_separate", separate_plots, "same as plot")
-	RegisterAnalysisParams("stats", feature_stats, "output filename for metric statistics")
-
+	// Change header/metrics
+	RegisterAnalysis("merge_headers", merge_headers)
 	RegisterAnalysisParams("remap", remap_features, "comma-separated list of metrics")
-	RegisterAnalysisParams("filter_variance", filter_variance, "minimum weighted stddev of the population (stddev / mean)")
-
-	RegisterAnalysisParams("tags", set_tags, "comma-separated list of key-value tags")
-	RegisterAnalysisParams("split_files", split_files, "tag to use for separating the data")
 	RegisterAnalysisParams("rename", rename_metrics, "comma-separated list of regex=replace pairs")
-
 	RegisterAnalysisParams("include", filter_metrics_include, "Regex to match metrics to be included")
 	RegisterAnalysisParams("exclude", filter_metrics_exclude, "Regex to match metrics to be excluded")
-
 	RegisterAnalysis("strip", strip_metrics)
-	RegisterAnalysis("sleep", sleep_samples)
-	RegisterAnalysis("set_time", set_time_processor)
-}
-
-func print_samples(p *SamplePipeline) {
-	p.Add(NewSamplePrinter())
 }
 
 func shuffle_data(p *SamplePipeline) {
@@ -126,30 +119,6 @@ func filter_tag(p *SamplePipeline, params string) {
 	p.Add(filter)
 }
 
-func plot(pipe *SamplePipeline, params string) {
-	do_plot(pipe, params, false)
-}
-
-func separate_plots(pipe *SamplePipeline, params string) {
-	do_plot(pipe, params, true)
-}
-
-func do_plot(pipe *SamplePipeline, params string, separatePlots bool) {
-	if params == "" {
-		log.Fatalln("-e plot needs parameters (-e plot,[<tag>,]<filename>)")
-	}
-	index := strings.IndexRune(params, ',')
-	tag := ""
-	filename := params
-	if index == -1 {
-		log.Warnln("-e plot got no tag parameter, not coloring plot (-e plot,[<tag>,]<filename>)")
-	} else {
-		tag = params[:index]
-		filename = params[index+1:]
-	}
-	pipe.Add(&Plotter{OutputFile: filename, ColorTag: tag, SeparatePlots: separatePlots})
-}
-
 func decouple_samples(pipe *SamplePipeline, params string) {
 	buf := 150000
 	if params != "" {
@@ -161,14 +130,6 @@ func decouple_samples(pipe *SamplePipeline, params string) {
 		log.Warnln("No parameter for -e decouple, default channel buffer:", buf)
 	}
 	pipe.Add(&DecouplingProcessor{ChannelBuffer: buf})
-}
-
-func feature_stats(pipe *SamplePipeline, params string) {
-	if params == "" {
-		log.Fatalln("-e stats needs parameter: file to store feature statistics")
-	} else {
-		pipe.Add(NewStoreStats(params))
-	}
 }
 
 func remap_features(pipe *SamplePipeline, params string) {
