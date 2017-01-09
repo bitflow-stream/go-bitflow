@@ -3,10 +3,8 @@ package pipeline
 import (
 	"bytes"
 	"fmt"
-	"sync"
 
 	"github.com/Knetic/govaluate"
-	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 )
 
@@ -14,16 +12,9 @@ type SampleExpressionFilter struct {
 	bitflow.AbstractProcessor
 	checker     bitflow.HeaderChecker
 	expressions []*expression
-
-	warnedTags     map[string]bool
-	warnedTagsLock sync.Mutex
 }
 
 func (p *SampleExpressionFilter) Expr(expressionString string) error {
-	if p.warnedTags == nil {
-		p.warnedTags = make(map[string]bool)
-	}
-
 	newExpression := &expression{
 		filter: p,
 		vars:   make(map[string]bool),
@@ -85,15 +76,6 @@ func (p *SampleExpressionFilter) evaluate(sample *bitflow.Sample, header *bitflo
 		}
 	}
 	return true, nil
-}
-
-func (p *SampleExpressionFilter) warnMissingTag(tag string) {
-	p.warnedTagsLock.Lock()
-	defer p.warnedTagsLock.Unlock()
-	if !p.warnedTags[tag] {
-		log.Warnf("%v: Missing tag for evaluating expression: %v", p, tag)
-		p.warnedTags[tag] = true
-	}
 }
 
 type expression struct {
