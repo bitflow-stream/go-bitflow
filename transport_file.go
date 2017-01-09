@@ -58,20 +58,32 @@ func (group *FileGroup) BuildFilename(num int) string {
 // as suffix. The suffix is added before the file extension, separated with a hyphen, like so:
 //   dir1/dir2/filePrefix-<suffix>.ext
 func (group *FileGroup) BuildFilenameStr(suffix string) string {
-	var filename string
+	filename := group.prefix
 	if suffix == "" {
-		filename = group.prefix + group.suffix
-	} else {
-		filename = fmt.Sprintf("%s-%s%s", group.prefix, suffix, group.suffix)
+		if filename == "" {
+			// Avoid filenames starting with dot and empty filenames.
+			// This does not collide with FileSink.openNextNewFile and is also matched by FileRegex().
+			filename = "0"
+		}
+	} else if filename != "" {
+		filename = filename + "-"
 	}
+	filename += suffix + group.suffix
 	return filepath.Join(group.dir, filename)
 }
 
 // FileRegex returns a regular expresion that matches filenames belonging to the receiving group.
 // Only files with an optional numeric suffix are matched, e.g.:
 //   dir1/dir2/filePrefix(-[0-9]+)?.ext
+// For empty 'filePrefix':
+//   dir1/dir2/[0-9]+.ext
 func (group *FileGroup) FileRegex() *regexp.Regexp {
-	return regexp.MustCompile("^" + regexp.QuoteMeta(group.prefix) + "(-[0-9]+)?" + regexp.QuoteMeta(group.suffix) + "$")
+	prefix := "[0-9]+"
+	if group.prefix != "" {
+		prefix = regexp.QuoteMeta(group.prefix) + "(-" + prefix + ")?"
+	}
+	regex := "^" + prefix + regexp.QuoteMeta(group.suffix) + "$"
+	return regexp.MustCompile(regex)
 }
 
 // StopWalking can be returned from the walk function parameter for WalkFiles to indicate,
@@ -180,6 +192,12 @@ type FileSource struct {
 	//   NewFileGroup(filename).AllFiles()
 	Filenames []string
 
+	// ReadFileGroups can be set to true to extend the input files to the associated
+	// file groups. For an input file named 'data.bin', all files named 'data-[0-9]+.bin'
+	// will be read as well. The file group for 'data' is 'data-[0-9]+', the file
+	// group for '.bin' is '[0-9]+.bin'.
+	ReadFileGroups bool
+
 	// Robust can be set to true to allow errors when reading or parsing files,
 	// and only print Warnings instead. This is useful if the files to be parsed
 	// are mostly valid, but have garbage at the end.
@@ -241,7 +259,7 @@ func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 // This is a copy of golib.WaitErrFunc, but extended to implement the FileSource.KeepAlive flag.
 // If KeepAlive is set, and in case the wait() func returns a nil-error, it will not trigger
 // the StopChan immediately, but instead wait for the source.closed condition to be triggered first.
-// After reading all files succesfully, this FileSource will wait for the Stop() call.
+// In other words: after reading all files succesfully, this FileSource will wait for the Stop() call.
 // In case of an error, it will still immediately shut down.
 func (source *FileSource) readFilesKeepAlive(wg *sync.WaitGroup, files []string) golib.StopChan {
 	if wg != nil {
