@@ -3,19 +3,16 @@ package main
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
 )
 
 func init() {
 	RegisterAnalysis("aggregate_10s", aggregate_data_10s)
-	RegisterAnalysis("merge_hosts", merge_hosts)
 	RegisterAnalysis("convert_filenames", convert_filenames)
 	RegisterAnalysis("convert_filenames2", convert_filenames2)
 
@@ -27,21 +24,6 @@ func init() {
 func aggregate_data_10s(p *SamplePipeline) {
 	// TODO properly parameterize the aggregator, move to analysis_basic.go
 	p.Add((&FeatureAggregator{WindowDuration: 10 * time.Second}).AddAvg("_avg").AddSlope("_slope"))
-}
-
-func merge_hosts(p *SamplePipeline) {
-	merge_headers(p)
-
-	suffix_regex := regexp.MustCompile("\\....$")  // Strip file ending
-	num_regex := regexp.MustCompile("(-[0-9]+)?$") // Strip optional appended numbering
-	if filesource, ok := p.Source.(*bitflow.FileSource); ok {
-		filesource.ConvertFilename = func(filename string) string {
-			name := filepath.Base(filename)
-			name = suffix_regex.ReplaceAllString(name, "")
-			name = num_regex.ReplaceAllString(name, "")
-			return name
-		}
-	}
 }
 
 func convert_filenames(p *SamplePipeline) {

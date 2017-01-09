@@ -67,9 +67,9 @@ func (p *Plotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	}
 	if p.checker.HeaderChanged(header) {
 		if len(header.Fields) == 0 {
-			log.Warnln("Not receiving any metrics for plotting")
+			log.Warnf("%v: Not receiving any metrics for plotting", p)
 		} else if len(header.Fields) == 1 {
-			log.Warnln("Plotting only 1 metrics with y=x")
+			log.Warnf("%v: Plotting only 1 metrics with y=x", p)
 		}
 	}
 	p.storeSample(sample)
@@ -97,6 +97,10 @@ func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
 
 func (p *Plotter) Close() {
 	defer p.CloseSink()
+	if p.checker.LastHeader == nil {
+		log.Warnf("%s: No data received for plotting", p)
+		return
+	}
 	var err error
 	if p.SeparatePlots {
 		_ = os.Remove(p.OutputFile) // Delete file created in Start(), drop error.

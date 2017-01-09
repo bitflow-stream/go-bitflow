@@ -23,8 +23,7 @@ func init() {
 	// Select
 	RegisterAnalysisParams("pick", pick_x_percent, "samples to keep 0..1")
 	RegisterAnalysisParams("head", pick_head, "number of first samples to keep")
-	RegisterAnalysisParams("filter_tag", filter_tag, "tag=value or tag!=value")
-	RegisterAnalysisParams("filter_variance", filter_variance, "minimum weighted stddev of the population (stddev / mean)")
+	RegisterAnalysisParams("filter", filter_expression, "Filter expression including metrics as variables. Tags accessed via tag() and has_tag().")
 
 	// Reorder
 	RegisterAnalysis("shuffle", shuffle_data)
@@ -40,6 +39,7 @@ func init() {
 	RegisterAnalysisParams("rename", rename_metrics, "comma-separated list of regex=replace pairs")
 	RegisterAnalysisParams("include", filter_metrics_include, "Regex to match metrics to be included")
 	RegisterAnalysisParams("exclude", filter_metrics_exclude, "Regex to match metrics to be excluded")
+	RegisterAnalysisParams("filter_variance", filter_variance, "minimum weighted stddev of the population (stddev / mean)")
 	RegisterAnalysis("strip", strip_metrics)
 }
 
@@ -75,13 +75,13 @@ func pick_x_percent(p *SamplePipeline, params string) {
 	counter := float64(0)
 	p.Add(&SampleFilter{
 		Description: String(fmt.Sprintf("Pick %.2f%%", pick_percentage*100)),
-		IncludeFilter: func(inSample *bitflow.Sample) bool {
+		IncludeFilter: func(_ *bitflow.Sample, _ *bitflow.Header) (bool, error) {
 			counter += pick_percentage
 			if counter > 1.0 {
 				counter -= 1.0
-				return true
+				return true, nil
 			}
-			return false
+			return false, nil
 		},
 	})
 }
@@ -94,29 +94,13 @@ func filter_metrics_exclude(p *SamplePipeline, param string) {
 	p.Add(NewMetricFilter().ExcludeRegex(param))
 }
 
-func filter_tag(p *SamplePipeline, params string) {
-	val := ""
-	equals := true
-	index := strings.Index(params, "!=")
-	if index >= 0 {
-		val = params[index+2:]
-		equals = false
-	} else {
-		index = strings.IndexRune(params, '=')
-		if index == -1 {
-			log.Fatalln("Parameter for -e filter_tag must be '<tag>=<value>' or '<tag>!=<value>'")
-		} else {
-			val = params[index+1:]
-		}
+func filter_expression(pipe *SamplePipeline, params string) {
+	filter := new(SampleExpressionFilter)
+	err := filter.Expr(params)
+	if err != nil {
+		log.Fatalln(err)
 	}
-	tag := params[:index]
-	filter := new(SampleTagFilter)
-	if equals {
-		filter.Equal(tag, val)
-	} else {
-		filter.Unequal(tag, val)
-	}
-	p.Add(filter)
+	pipe.Add(filter)
 }
 
 func decouple_samples(pipe *SamplePipeline, params string) {
