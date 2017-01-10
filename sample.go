@@ -51,6 +51,16 @@ func (h *Header) Clone(newFields []string) *Header {
 	}
 }
 
+// String returns a human-readable string-representation of the header, including
+// all meta-data and field names.
+func (h *Header) String() string {
+	hasTags := "no tags"
+	if h.HasTags {
+		hasTags = "with tags"
+	}
+	return fmt.Sprintf("Header (%s) %v field(s): %v", hasTags, len(h.Fields), strings.Join(h.Fields, " "))
+}
+
 // Sample contains an array of Values, a timestamp, and a string-to-string map of tags.
 // The values are explained by the header belonging to this sample. There is no direct
 // pointer from the sample to the header, so the header must be known from the context.
