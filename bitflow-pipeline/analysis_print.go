@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	RegisterAnalysis("print", print_samples)
+	RegisterAnalysis("print_header", print_header)
 	RegisterAnalysisParams("print_tags", print_tags, "tag to print")
 	RegisterAnalysisParams("count_tags", count_tags, "tag to count")
 	RegisterAnalysis("print_timerange", print_timerange)
@@ -23,8 +23,26 @@ func init() {
 	RegisterAnalysis("print_common_metrics", print_common_metrics)
 }
 
-func print_samples(p *SamplePipeline) {
-	p.Add(NewSamplePrinter())
+func print_header(p *SamplePipeline) {
+	var checker bitflow.HeaderChecker
+	numSamples := 0
+	p.Add(&SimpleProcessor{
+		Description: "header printer",
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			if checker.HeaderChanged(header) {
+				if checker.LastHeader != nil {
+					log.Println("Samples after last header:", numSamples)
+				}
+				log.Println(header)
+				numSamples = 0
+			}
+			numSamples++
+			return sample, header, nil
+		},
+		OnClose: func() {
+			log.Println("Samples after last header:", numSamples)
+		},
+	})
 }
 
 type UniqueTagPrinter struct {

@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
 )
@@ -112,25 +110,5 @@ func (p *SimpleProcessor) String() string {
 		return "SimpleProcessor"
 	} else {
 		return p.Description
-	}
-}
-
-// ==================== SamplePrinter (example) ====================
-
-func NewSamplePrinter() *SimpleProcessor {
-	var checker bitflow.HeaderChecker
-	return &SimpleProcessor{
-		Description: "sample printer",
-		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
-			if checker.HeaderChanged(header) {
-				log.Println("Processing Header len:", len(header.Fields), "tags:", header.HasTags)
-			}
-			tags := ""
-			if sample.NumTags() > 0 {
-				tags = "(" + sample.TagString() + ")"
-			}
-			log.Println("Processing Sample time:", sample.Time, "len:", len(sample.Values), tags)
-			return sample, header, nil
-		},
 	}
 }
