@@ -14,8 +14,9 @@ import (
 
 func init() {
 	// Control execution
-	RegisterAnalysisParams("decouple", decouple_samples, "number of buffered samples")
+	RegisterAnalysis("noop", noop_processor)
 	RegisterAnalysis("sleep", sleep_samples)
+	RegisterAnalysisParams("decouple", decouple_samples, "number of buffered samples")
 	RegisterAnalysisParams("split_files", split_files, "tag to use for separating the data")
 
 	// Set metadata
@@ -29,7 +30,7 @@ func init() {
 
 	// Reorder
 	RegisterAnalysis("shuffle", shuffle_data)
-	RegisterAnalysisParams("sort", sort_data, "comma-separated list of tags")
+	RegisterAnalysisParams("sort", sort_data, "comma-separated list of tags. Default criterion is the timestamp.")
 
 	// Change values
 	RegisterAnalysis("scale_min_max", normalize_min_max)
@@ -41,8 +42,14 @@ func init() {
 	RegisterAnalysisParams("include", filter_metrics_include, "Regex to match metrics to be included")
 	RegisterAnalysisParams("exclude", filter_metrics_exclude, "Regex to match metrics to be excluded")
 	RegisterAnalysisParams("filter_variance", filter_variance, "minimum weighted stddev of the population (stddev / mean)")
+	RegisterAnalysisParams("avg", aggregate_avg, "Optional parameter: duration or number of samples.")
+	RegisterAnalysisParams("slope", aggregate_slope, "Optional parameter: duration or number of samples.")
 	RegisterAnalysis("merge_headers", merge_headers)
 	RegisterAnalysis("strip", strip_metrics)
+}
+
+func noop_processor(p *SamplePipeline) {
+	p.Add(new(bitflow.AbstractProcessor))
 }
 
 func shuffle_data(p *SamplePipeline) {
@@ -243,4 +250,28 @@ func set_time_processor(p *SamplePipeline) {
 			return sample, header, nil
 		},
 	})
+}
+
+func aggregate_avg(p *SamplePipeline, param string) {
+	p.Add(create_aggregator(param).AddAvg("_avg"))
+}
+
+func aggregate_slope(p *SamplePipeline, param string) {
+	p.Add(create_aggregator(param).AddSlope("_slope"))
+}
+
+func create_aggregator(param string) *FeatureAggregator {
+	if param == "" {
+		return &FeatureAggregator{}
+	}
+	dur, err := time.ParseDuration(param)
+	if err == nil {
+		return &FeatureAggregator{WindowDuration: dur}
+	}
+	num, err := strconv.Atoi(param)
+	if err == nil {
+		return &FeatureAggregator{WindowSize: num}
+	}
+	log.Fatalf("Failed to parse aggregation parameter %v: Need either a number, or a duration", param)
+	return nil
 }

@@ -12,40 +12,9 @@ import (
 )
 
 func init() {
-	RegisterAnalysis("aggregate_10s", aggregate_data_10s)
-	RegisterAnalysis("convert_filenames", convert_filenames)
-	RegisterAnalysis("convert_filenames2", convert_filenames2)
-
 	RegisterAnalysis("tag_injection_info", tag_injection_info)
 	RegisterAnalysis("injection_directory_structure", injection_directory_structure)
 	RegisterAnalysisParams("split_experiments", split_experiments, "number of seconds without sample before starting a new file")
-}
-
-func aggregate_data_10s(p *SamplePipeline) {
-	// TODO properly parameterize the aggregator, move to analysis_basic.go
-	p.Add((&FeatureAggregator{WindowDuration: 10 * time.Second}).AddAvg("_avg").AddSlope("_slope"))
-}
-
-func convert_filenames(p *SamplePipeline) {
-	// Replace the src tag with the name of the parent folder
-	if filesource, ok := p.Source.(*bitflow.FileSource); ok {
-		filesource.ConvertFilename = func(filename string) string {
-			return filepath.Base(filepath.Dir(filename))
-		}
-	} else {
-		log.Warnf("Cannot apply convert_filenames: data source is not *bitflow.FileSource but %T", p.Source)
-	}
-}
-
-func convert_filenames2(p *SamplePipeline) {
-	// Replace the src tag with the name of the parent-parent folder
-	if filesource, ok := p.Source.(*bitflow.FileSource); ok {
-		filesource.ConvertFilename = func(filename string) string {
-			return filepath.Base(filepath.Dir(filepath.Dir(filename)))
-		}
-	} else {
-		log.Warnf("Cannot apply convert_filenames2: data source is not *bitflow.FileSource but %T", p.Source)
-	}
 }
 
 const (

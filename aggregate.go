@@ -2,7 +2,8 @@ package pipeline
 
 import (
 	"container/list"
-	"strings"
+	"fmt"
+	"strconv"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -38,6 +39,21 @@ func (agg *FeatureAggregator) AddAvg(suffix string) *FeatureAggregator {
 
 func (agg *FeatureAggregator) AddSlope(suffix string) *FeatureAggregator {
 	return agg.Add(suffix, FeatureWindowSlope)
+}
+
+func (agg *FeatureAggregator) MergeProcessor(other bitflow.SampleProcessor) bool {
+	if agg2, ok := other.(*FeatureAggregator); !ok {
+		return false
+	} else {
+		if agg.WindowSize != agg2.WindowSize || agg.WindowDuration != agg2.WindowDuration || agg.UseCurrentTime != agg2.UseCurrentTime {
+			// This is likely not intended, since the follow-up aggregator will aggregate the already aggregated metrics
+			log.Warnf("%v: Cannot merge the follow-up aggregator due to different parameters: %v", agg, agg2)
+			return false
+		}
+		agg.aggregators = append(agg.aggregators, agg2.aggregators...)
+		agg.suffixes = append(agg.suffixes, agg2.suffixes...)
+		return true
+	}
 }
 
 func (agg *FeatureAggregator) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -117,7 +133,18 @@ func (agg *FeatureAggregator) flushWindow(stats *FeatureWindowStats) {
 }
 
 func (agg *FeatureAggregator) String() string {
-	return "Feature Aggregator (" + strings.Join(agg.suffixes, ", ") + ")"
+	desc := "Feature Aggregator"
+	if agg.WindowSize > 0 {
+		desc += " [" + strconv.Itoa(agg.WindowSize) + " samples]"
+	}
+	if agg.WindowDuration > 0 {
+		desc += " [" + agg.WindowDuration.String()
+		if agg.UseCurrentTime {
+			desc += " from current time"
+		}
+		desc += "]"
+	}
+	return fmt.Sprintf("%s %v", desc, agg.suffixes)
 }
 
 type FeatureWindowStats struct {
@@ -157,13 +184,10 @@ func FeatureWindowAverage(stats *FeatureWindowStats) bitflow.Value {
 }
 
 func FeatureWindowSlope(stats *FeatureWindowStats) bitflow.Value {
-	if stats.num == 0 {
+	if stats.num <= 1 {
 		return 0
 	}
 	front := stats.values.Front().Value.(bitflow.Value)
-	if stats.num == 1 {
-		return front
-	}
 	back := stats.values.Back().Value.(bitflow.Value)
 	return back - front
 }
