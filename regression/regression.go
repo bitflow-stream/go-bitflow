@@ -3,22 +3,19 @@ package regression
 import (
 	"bytes"
 	"fmt"
-	"math"
 
 	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/antongulenko/golearn/base"
 	"github.com/antongulenko/golearn/linear_models"
 )
 
-const (
-	RegressionClassAttr = 0
-)
-
 type LinearRegression struct {
 	SubHeader
-	Model     linear_models.LinearRegression
-	TrainData *base.DenseInstances
+	RegressionClassVar int
+	Model              *linear_models.LinearRegression
+	TrainData          *base.DenseInstances
 }
 
 func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearRegression, error) {
@@ -36,7 +33,7 @@ func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearReg
 			return reg, fmt.Errorf("Could not find header field '%v'", searching)
 		}
 	}
-	reg.Header = *header
+	reg.Header = header
 	reg.Vars = fieldNums
 	return reg, nil
 }
@@ -51,18 +48,18 @@ func (reg *LinearRegression) FormulaString() string {
 	return buf.String()
 }
 
-func (reg *LinearRegression) Fit(samples []bitflow.Sample) error {
+func (reg *LinearRegression) Fit(samples []*bitflow.Sample) error {
 	if len(reg.Vars) < 2 {
 		return fmt.Errorf("Need at least 2 variables for a linear regression, got %v", reg.Vars)
 	}
 
 	var err error
-	reg.TrainData, err = reg.BuildInstances(RegressionClassAttr)
+	reg.TrainData, err = reg.BuildInstances(reg.RegressionClassVar)
 	if err != nil {
 		return err
 	}
 	reg.FillInstances(samples, reg.TrainData)
-	reg.Model = *(linear_models.NewLinearRegression())
+	reg.Model = new(linear_models.LinearRegression)
 	return reg.Model.Fit(reg.TrainData)
 }
 
@@ -104,14 +101,14 @@ func (reg *LinearRegression) MeanSquaredError(data base.FixedDataGrid) (float64,
 
 func (reg *LinearRegression) IsValid() bool {
 	non_zero := len(reg.Model.RegressionCoefficients) + 1
-	if !reg.IsValidNumber(reg.Model.Disturbance) {
+	if !pipeline.IsValidNumber(reg.Model.Disturbance) {
 		return false
 	}
 	if reg.Model.Disturbance == 0 {
 		non_zero--
 	}
 	for _, coeff := range reg.Model.RegressionCoefficients {
-		if !reg.IsValidNumber(coeff) {
+		if !pipeline.IsValidNumber(coeff) {
 			return false
 		}
 		if coeff == 0 {
@@ -122,8 +119,4 @@ func (reg *LinearRegression) IsValid() bool {
 		return false
 	}
 	return true
-}
-
-func (reg *LinearRegression) IsValidNumber(val float64) bool {
-	return !math.IsNaN(val) && !math.IsInf(val, 0)
 }

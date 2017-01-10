@@ -18,11 +18,7 @@ func (reg *LinearRegressionBatchProcessor) ProcessBatch(header *bitflow.Header, 
 	if err != nil {
 		return nil, nil, err
 	}
-	allSamples := make([]bitflow.Sample, len(samples))
-	for i, sample := range samples {
-		allSamples[i] = *sample
-	}
-	if err := regression.Fit(allSamples); err != nil {
+	if err := regression.Fit(samples); err != nil {
 		return nil, nil, err
 	}
 	if mse, err := regression.MeanSquaredError(regression.TrainData); err != nil {
@@ -54,18 +50,13 @@ func (brute *LinearRegressionBruteForce) String() string {
 }
 
 func (brute *LinearRegressionBruteForce) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
-	allSamples := make([]bitflow.Sample, len(samples))
-	for i, sample := range samples {
-		allSamples[i] = *sample
-	}
-
 	num_routines := runtime.NumCPU()
 	var wg sync.WaitGroup
 	wg.Add(num_routines + 1)
 	varCombinations := make(chan []int, num_routines*5)
 	brute.resultChan = make(chan EvaluatedLinearRegression, num_routines*2)
 	for i := 0; i < num_routines; i++ {
-		go brute.computeRegressions(&wg, varCombinations, header, allSamples)
+		go brute.computeRegressions(&wg, varCombinations, header, samples)
 	}
 	go brute.generateVarCombinations(&wg, header, varCombinations)
 	var resultWg sync.WaitGroup
@@ -96,11 +87,11 @@ func (brute *LinearRegressionBruteForce) generateVarCombinations(wg *sync.WaitGr
 	close(varCombinations)
 }
 
-func (brute *LinearRegressionBruteForce) computeRegressions(wg *sync.WaitGroup, varChan <-chan []int, header *bitflow.Header, samples []bitflow.Sample) {
+func (brute *LinearRegressionBruteForce) computeRegressions(wg *sync.WaitGroup, varChan <-chan []int, header *bitflow.Header, samples []*bitflow.Sample) {
 	defer wg.Done()
 	for vars := range varChan {
 		var reg LinearRegression
-		reg.Header = *header
+		reg.Header = header
 		reg.Vars = vars
 		if err := reg.Fit(samples); err != nil {
 			log.Warnln("Failed to fit regression (%v): %v", vars, err)

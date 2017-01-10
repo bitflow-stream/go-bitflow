@@ -25,10 +25,6 @@ func GetMinMax(header *bitflow.Header, samples []*bitflow.Sample) ([]float64, []
 	return min, max
 }
 
-func IsValidNumber(val float64) bool {
-	return !math.IsNaN(val) && !math.IsInf(val, 0)
-}
-
 func scaleMinMax(val, min, max float64) float64 {
 	res := (val - min) / (max - min)
 	if !IsValidNumber(res) {
@@ -40,12 +36,10 @@ func scaleMinMax(val, min, max float64) float64 {
 func (s *MinMaxScaling) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	min, max := GetMinMax(header, samples)
 	for _, sample := range samples {
-		values := make([]bitflow.Value, len(sample.Values))
 		for i, val := range sample.Values {
 			res := scaleMinMax(float64(val), min[i], max[i])
-			values[i] = bitflow.Value(res)
+			sample.Values[i] = bitflow.Value(res)
 		}
-		sample.Values = values
 	}
 	return header, samples, nil
 }
@@ -67,23 +61,25 @@ func GetStats(header *bitflow.Header, samples []*bitflow.Sample) []FeatureStats 
 	return res
 }
 
+func scaleStddev(val float64, stats FeatureStats) float64 {
+	m, s := stats.Mean(), stats.Stddev()
+	res := (val - m) / s
+	if !IsValidNumber(res) {
+		// Special case for zero standard deviation: fallback to min-max scaling
+		min, max := stats.Min, stats.Max
+		res = scaleMinMax(float64(val), min, max)
+		res = (res - 0.5) * 2 // Value range: -1..1
+	}
+	return res
+}
+
 func (s *StandardizationScaling) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	stats := GetStats(header, samples)
 	for _, sample := range samples {
-		values := make([]bitflow.Value, len(sample.Values))
 		for i, val := range sample.Values {
-			m := stats[i].Mean()
-			s := stats[i].Stddev()
-			res := (float64(val) - m) / s
-			if !IsValidNumber(res) {
-				// Special case for zero standard deviation: fallback to min-max scaling
-				min, max := stats[i].Min, stats[i].Max
-				res = scaleMinMax(float64(val), min, max)
-				res = (res - 0.5) * 2 // Value range: -1..1
-			}
-			values[i] = bitflow.Value(res)
+			res := scaleStddev(float64(val), stats[i])
+			sample.Values[i] = bitflow.Value(res)
 		}
-		sample.Values = values
 	}
 	return header, samples, nil
 }

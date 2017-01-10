@@ -3,13 +3,10 @@ package pipeline
 import (
 	"container/list"
 	"strings"
-	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/golib"
 )
 
 type FeatureAggregator struct {
@@ -18,12 +15,13 @@ type FeatureAggregator struct {
 	WindowDuration time.Duration // Applied if >0
 	UseCurrentTime bool          // If true, use time.Now() as reference for WindowTime. Otherwise, use the timestamp of the latest Sample.
 
-	FeatureWindowStats map[string]*FeatureWindowStats
-
 	aggregators []FeatureAggregatorOperation
 	suffixes    []string
-	checker     bitflow.HeaderChecker
-	outHeader   *bitflow.Header
+
+	checker            bitflow.HeaderChecker
+	outHeader          *bitflow.Header
+	allStats           map[string]*FeatureWindowStats
+	currentHeaderStats []*FeatureWindowStats
 }
 
 type FeatureAggregatorOperation func(stats *FeatureWindowStats) bitflow.Value
@@ -42,23 +40,6 @@ func (agg *FeatureAggregator) AddSlope(suffix string) *FeatureAggregator {
 	return agg.Add(suffix, FeatureWindowSlope)
 }
 
-func (agg *FeatureAggregator) Start(wg *sync.WaitGroup) golib.StopChan {
-	agg.FeatureWindowStats = make(map[string]*FeatureWindowStats)
-	return agg.AbstractProcessor.Start(wg)
-}
-
-func (agg *FeatureAggregator) newHeader(header *bitflow.Header) {
-	outFields := make([]string, 0, len(header.Fields)*(1+len(agg.suffixes)))
-	for _, field := range header.Fields {
-		outFields = append(outFields, field)
-		for _, suffix := range agg.suffixes {
-			outFields = append(outFields, field+suffix)
-		}
-	}
-	agg.outHeader = header.Clone(outFields)
-	log.Println(agg, "increasing header from", len(header.Fields), "to", len(outFields))
-}
-
 func (agg *FeatureAggregator) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := agg.Check(sample, header); err != nil {
 		return err
@@ -68,8 +49,8 @@ func (agg *FeatureAggregator) Sample(sample *bitflow.Sample, header *bitflow.Hea
 	}
 
 	outValues := make([]bitflow.Value, 0, len(agg.outHeader.Fields))
-	for i, field := range agg.checker.LastHeader.Fields {
-		stats := agg.getFeatureWindowStats(field)
+	for i := range header.Fields {
+		stats := agg.currentHeaderStats[i]
 		inValue := sample.Values[i]
 		outValues = append(outValues, inValue)
 		stats.Push(inValue, sample.Time)
@@ -83,12 +64,28 @@ func (agg *FeatureAggregator) Sample(sample *bitflow.Sample, header *bitflow.Hea
 	return agg.OutgoingSink.Sample(sample, agg.outHeader)
 }
 
-func (agg *FeatureAggregator) getFeatureWindowStats(field string) *FeatureWindowStats {
-	// TODO optimization: arrange *FeatureWindowStats in slice in buildOutHeader, avoid frequent map lookups
-	stats, ok := agg.FeatureWindowStats[field]
+func (agg *FeatureAggregator) newHeader(header *bitflow.Header) {
+	outFields := make([]string, 0, len(header.Fields)*(1+len(agg.suffixes)))
+	agg.currentHeaderStats = agg.currentHeaderStats[0:0]
+	for _, field := range header.Fields {
+		outFields = append(outFields, field)
+		for _, suffix := range agg.suffixes {
+			outFields = append(outFields, field+suffix)
+		}
+		agg.currentHeaderStats = append(agg.currentHeaderStats, agg.getWindow(field))
+	}
+	agg.outHeader = header.Clone(outFields)
+	log.Println(agg, "increasing header from", len(header.Fields), "to", len(outFields))
+}
+
+func (agg *FeatureAggregator) getWindow(field string) *FeatureWindowStats {
+	if agg.allStats == nil {
+		agg.allStats = make(map[string]*FeatureWindowStats)
+	}
+	stats, ok := agg.allStats[field]
 	if !ok {
 		stats = &FeatureWindowStats{}
-		agg.FeatureWindowStats[field] = stats
+		agg.allStats[field] = stats
 	}
 	return stats
 }

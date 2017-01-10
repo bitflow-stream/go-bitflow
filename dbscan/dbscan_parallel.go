@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
-
 	parallel_dbscan "github.com/antongulenko/go-DBSCAN"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
@@ -29,10 +28,7 @@ func (p *ParallelDbscanPoint) String() string {
 
 func (p *ParallelDbscanPoint) GetPoint() []float64 {
 	p.convert.Do(func() {
-		p.point = make([]float64, len(p.sample.Values))
-		for i, val := range p.sample.Values {
-			p.point[i] = float64(val)
-		}
+		p.point = pipeline.SampleToVector(p.sample)
 	})
 	return p.point
 }
@@ -62,7 +58,6 @@ func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *bitflow.Header, samp
 	}
 	clusters := c.cluster(points)
 	c.printSummary(clusters)
-	outSamples := make([]*bitflow.Sample, 0, len(samples))
 	for i, clust := range clusters {
 		clusterName := pipeline.ClusterName(i)
 		for _, p := range clust {
@@ -70,14 +65,12 @@ func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *bitflow.Header, samp
 			if !ok {
 				panic(fmt.Sprintf("Wrong parallel_dbscan.ClusterablePoint implementation (%T): %v", p, p))
 			}
-			outSample := point.sample
-			outSample.SetTag(pipeline.ClusterTag, clusterName)
-			outSamples = append(outSamples, outSample)
+			point.sample.SetTag(pipeline.ClusterTag, clusterName)
 		}
 	}
-	return header, outSamples, nil
+	return header, samples, nil
 }
 
 func (c *ParallelDbscanBatchClusterer) String() string {
-	return fmt.Sprintf("ParallelDbscan(eps: %v, minpts: %v)", c.Eps, c.MinPts)
+	return fmt.Sprintf("ParallelDbscan (eps: %v, minpts: %v)", c.Eps, c.MinPts)
 }

@@ -65,12 +65,15 @@ func (p *Plotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
-	if p.checker.HeaderChanged(header) {
+	if p.checker.LastHeader == nil {
 		if len(header.Fields) == 0 {
 			log.Warnf("%v: Not receiving any metrics for plotting", p)
 		} else if len(header.Fields) == 1 {
 			log.Warnf("%v: Plotting only 1 metrics with y=x", p)
 		}
+	}
+	if p.checker.InitializedHeaderChanged(header) {
+		log.Warnf("%v: Header changed, this will likely result in an invalid output", p)
 	}
 	p.storeSample(sample)
 	return p.OutgoingSink.Sample(sample, header)

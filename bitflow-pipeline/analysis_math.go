@@ -4,7 +4,6 @@ import (
 	"strconv"
 
 	log "github.com/Sirupsen/logrus"
-
 	. "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/dbscan"
 	"github.com/antongulenko/go-bitflow-pipeline/regression"

@@ -11,14 +11,12 @@ import (
 )
 
 type MetricMapperHelper struct {
-	Description fmt.Stringer
-
 	bitflow.HeaderChecker
 	outHeader  *bitflow.Header
 	outIndices []int
 }
 
-func (helper *MetricMapperHelper) incomingHeader(header *bitflow.Header, constructIndices func(header *bitflow.Header) ([]int, []string)) error {
+func (helper *MetricMapperHelper) incomingHeader(header *bitflow.Header, description fmt.Stringer, constructIndices func(header *bitflow.Header) ([]int, []string)) error {
 	if !helper.HeaderChanged(header) {
 		return nil
 	}
@@ -28,9 +26,9 @@ func (helper *MetricMapperHelper) incomingHeader(header *bitflow.Header, constru
 		return fmt.Errorf("constructIndices() in MetricMapperHelper.incomingHeader returned non equal sized results")
 	}
 	if len(outFields) == 0 {
-		log.Warnln(helper.Description, "removed all metrics")
+		log.Warnln(description, "removed all metrics")
 	} else {
-		log.Println(helper.Description, "changes metrics", len(header.Fields), "->", len(outFields))
+		log.Println(description, "changes metrics", len(header.Fields), "->", len(outFields))
 	}
 	helper.outHeader = header.Clone(outFields)
 	return nil
@@ -58,16 +56,11 @@ type AbstractMetricMapper struct {
 	helper MetricMapperHelper
 }
 
-func (m *AbstractMetricMapper) init(desc fmt.Stringer) {
-	m.Description = desc
-	m.helper.Description = m
-}
-
 func (m *AbstractMetricMapper) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := m.Check(sample, header); err != nil {
 		return err
 	}
-	if err := m.helper.incomingHeader(header, m.ConstructIndices); err != nil {
+	if err := m.helper.incomingHeader(header, m, m.ConstructIndices); err != nil {
 		return err
 	}
 	sample = m.helper.convertSample(sample)
@@ -111,7 +104,7 @@ type MetricFilter struct {
 
 func NewMetricFilter() *MetricFilter {
 	res := new(MetricFilter)
-	res.init(res)
+	res.Description = res
 	res.ConstructIndices = res.constructIndices
 	res.IncludeFilter = res.filter
 	return res
@@ -184,7 +177,7 @@ func NewMetricMapper(metrics []string) *MetricMapper {
 	mapper := &MetricMapper{
 		Metrics: metrics,
 	}
-	mapper.init(mapper)
+	mapper.Description = mapper
 	mapper.ConstructIndices = mapper.constructIndices
 	return mapper
 }
@@ -218,19 +211,17 @@ func (mapper *MetricMapper) String() string {
 	}
 }
 
-type BatchMetricMapper struct {
-	Description      string
+type AbstractBatchMetricMapper struct {
+	Description      fmt.Stringer
 	ConstructIndices func(header *bitflow.Header, samples []*bitflow.Sample) ([]int, []string)
 }
 
-func (mapper *BatchMetricMapper) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
-	helper := &MetricMapperHelper{
-		Description: mapper,
-	}
+func (mapper *AbstractBatchMetricMapper) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+	var helper MetricMapperHelper
 	constructIndices := func(_ *bitflow.Header) ([]int, []string) {
 		return mapper.ConstructIndices(header, samples)
 	}
-	if err := helper.incomingHeader(header, constructIndices); err != nil {
+	if err := helper.incomingHeader(header, mapper, constructIndices); err != nil {
 		return nil, nil, err
 	}
 	for _, sample := range samples {
@@ -239,49 +230,40 @@ func (mapper *BatchMetricMapper) ProcessBatch(header *bitflow.Header, samples []
 	return helper.outHeader, samples, nil
 }
 
-func (mapper *BatchMetricMapper) String() string {
-	if mapper.Description == "" {
-		return "Batch Metric Mapper"
+func (mapper *AbstractBatchMetricMapper) String() string {
+	if desc := mapper.Description; desc == nil {
+		return "Abstract Batch Metric Mapper"
 	} else {
-		return mapper.Description
+		return desc.String()
 	}
 }
 
-type MetricVarianceFilter struct {
-	BatchMetricMapper
-	MinimumWeightedStddev float64 // Stddev, relative to the mean. Could also use absolute stddev/variance.
-}
-
-func NewMetricVarianceFilter(minimumWeightedStddev float64) *MetricVarianceFilter {
-	filter := &MetricVarianceFilter{
-		MinimumWeightedStddev: minimumWeightedStddev,
+func NewMetricVarianceFilter(minimumWeightedStddev float64) *AbstractBatchMetricMapper {
+	return &AbstractBatchMetricMapper{
+		Description: String(fmt.Sprintf("Metric Variance Filter (%.2f%%)", minimumWeightedStddev*100)),
+		ConstructIndices: func(header *bitflow.Header, samples []*bitflow.Sample) ([]int, []string) {
+			numFields := len(header.Fields)
+			variances := make([]onlinestats.Running, numFields)
+			for _, sample := range samples {
+				for i := range header.Fields {
+					variances[i].Push(float64(sample.Values[i]))
+				}
+			}
+			indices := make([]int, 0, numFields)
+			fields := make([]string, 0, numFields)
+			for i, field := range header.Fields {
+				weighted_stddev := variances[i].Stddev()
+				if mean := variances[i].Mean(); mean != 0 {
+					weighted_stddev /= mean
+				}
+				if weighted_stddev >= minimumWeightedStddev {
+					indices = append(indices, i)
+					fields = append(fields, field)
+				}
+			}
+			return indices, fields
+		},
 	}
-	filter.ConstructIndices = filter.constructIndices
-	filter.Description = fmt.Sprintf("Metric Variance Filter (%.2f%%)", minimumWeightedStddev*100)
-	return filter
-}
-
-func (filter *MetricVarianceFilter) constructIndices(header *bitflow.Header, samples []*bitflow.Sample) ([]int, []string) {
-	numFields := len(header.Fields)
-	variances := make([]onlinestats.Running, numFields)
-	for _, sample := range samples {
-		for i := range header.Fields {
-			variances[i].Push(float64(sample.Values[i]))
-		}
-	}
-	indices := make([]int, 0, numFields)
-	fields := make([]string, 0, numFields)
-	for i, field := range header.Fields {
-		weighted_stddev := variances[i].Stddev()
-		if mean := variances[i].Mean(); mean != 0 {
-			weighted_stddev /= mean
-		}
-		if weighted_stddev >= filter.MinimumWeightedStddev {
-			indices = append(indices, i)
-			fields = append(fields, field)
-		}
-	}
-	return indices, fields
 }
 
 type MetricRenamer struct {
@@ -298,7 +280,7 @@ func NewMetricRenamer(regexes []*regexp.Regexp, replacements []string) *MetricRe
 		regexes:      regexes,
 		replacements: replacements,
 	}
-	renamer.init(renamer)
+	renamer.Description = renamer
 	renamer.ConstructIndices = renamer.constructIndices
 	return renamer
 }

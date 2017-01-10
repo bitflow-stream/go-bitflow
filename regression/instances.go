@@ -8,17 +8,17 @@ import (
 )
 
 type SubHeader struct {
-	bitflow.Header
-	Vars []int
+	Header *bitflow.Header
+	Vars   []int
 }
 
 func (header SubHeader) BuildInstances(classAttribute int) (*base.DenseInstances, error) {
 	data := base.NewDenseInstances()
 	for i, fieldNum := range header.Vars {
-		if fieldNum >= len(header.Fields) || fieldNum < 0 {
-			return nil, fmt.Errorf("Cannot access field nr. %v, header has %v fields", fieldNum, len(header.Fields))
+		if fieldNum >= len(header.Header.Fields) || fieldNum < 0 {
+			return nil, fmt.Errorf("Cannot access field nr. %v, header has %v fields", fieldNum, len(header.Header.Fields))
 		}
-		name := header.Fields[fieldNum]
+		name := header.Header.Fields[fieldNum]
 		attr := base.NewFloatAttribute(name)
 		data.AddAttribute(attr)
 		if i == classAttribute {
@@ -28,7 +28,7 @@ func (header SubHeader) BuildInstances(classAttribute int) (*base.DenseInstances
 	return data, nil
 }
 
-func (header SubHeader) FillInstances(samples []bitflow.Sample, instances *base.DenseInstances) {
+func (header SubHeader) FillInstances(samples []*bitflow.Sample, instances *base.DenseInstances) {
 	start, capacity := instances.Size()
 	if capacity-start < len(samples) {
 		instances.Extend(len(samples) - (capacity - start))
@@ -47,7 +47,7 @@ func (header SubHeader) FillInstances(samples []bitflow.Sample, instances *base.
 	}
 }
 
-func (header SubHeader) BuildFilledInstances(samples []bitflow.Sample, classAttribute int) (*base.DenseInstances, error) {
+func (header SubHeader) BuildFilledInstances(samples []*bitflow.Sample, classAttribute int) (*base.DenseInstances, error) {
 	data, err := header.BuildInstances(classAttribute)
 	if err != nil {
 		return nil, err
