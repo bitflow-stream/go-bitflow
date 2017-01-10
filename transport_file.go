@@ -300,27 +300,25 @@ func (source *FileSource) Stop() {
 	})
 }
 
-func (source *FileSource) readFile(filename string) (err error) {
-	if file, openErr := os.Open(filename); err != nil {
-		err = openErr
-	} else {
-		var stream *SampleInputStream
-		source.closed.IfNotEnabled(func() {
-			stream = source.Reader.OpenBuffered(file, source.OutgoingSink, source.IoBuffer)
-			source.stream = stream
-		})
-		if stream == nil {
-			err = fileSourceClosed
-		} else {
-			defer stream.Close() // Drop error
-			name := file.Name()
-			if converter := source.ConvertFilename; converter != nil {
-				name = converter(name)
-			}
-			err = stream.ReadNamedSamples(name)
-		}
+func (source *FileSource) readFile(filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
 	}
-	return
+	var stream *SampleInputStream
+	source.closed.IfNotEnabled(func() {
+		stream = source.Reader.OpenBuffered(file, source.OutgoingSink, source.IoBuffer)
+		source.stream = stream
+	})
+	if stream == nil {
+		return fileSourceClosed
+	}
+	defer stream.Close() // Drop error
+	name := file.Name()
+	if converter := source.ConvertFilename; converter != nil {
+		name = converter(name)
+	}
+	return stream.ReadNamedSamples(name)
 }
 
 func (source *FileSource) readFiles(wg *sync.WaitGroup, files []string) error {
