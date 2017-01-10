@@ -18,6 +18,7 @@ func init() {
 	RegisterAnalysis("sleep", sleep_samples)
 	RegisterAnalysisParams("decouple", decouple_samples, "number of buffered samples")
 	RegisterAnalysisParams("split_files", split_files, "tag to use for separating the data")
+	RegisterAnalysisParams("do", general_expression, "expression to execute for each sample")
 
 	// Set metadata
 	RegisterAnalysisParams("tags", set_tags, "comma-separated list of key-value tags")
@@ -104,12 +105,20 @@ func filter_metrics_exclude(p *SamplePipeline, param string) {
 }
 
 func filter_expression(pipe *SamplePipeline, params string) {
-	filter := new(SampleExpressionFilter)
-	err := filter.Expr(params)
+	add_expression(pipe, params, true)
+}
+
+func general_expression(pipe *SamplePipeline, params string) {
+	add_expression(pipe, params, false)
+}
+
+func add_expression(pipe *SamplePipeline, expression string, filter bool) {
+	proc := &ExpressionProcessor{Filter: filter}
+	err := proc.AddExpression(expression)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	pipe.Add(filter)
+	pipe.Add(proc)
 }
 
 func decouple_samples(pipe *SamplePipeline, params string) {
