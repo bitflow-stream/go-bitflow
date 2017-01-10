@@ -51,9 +51,10 @@ func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
 	// ========= Read file
 	testSink := suite.newFilledTestSink()
 	in := &FileSource{
-		Filenames: []string{testfile},
-		Robust:    false,
-		IoBuffer:  1024,
+		Filenames:      []string{testfile},
+		ReadFileGroups: true,
+		Robust:         false,
+		IoBuffer:       1024,
 		ConvertFilename: func(name string) string {
 			suite.True(strings.Contains(name, basename))
 			return newname
