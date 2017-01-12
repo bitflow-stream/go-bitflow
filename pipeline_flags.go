@@ -30,6 +30,7 @@ const (
 	BinaryFormat    = MarshallingFormat("bin")
 
 	tcp_download_retry_interval = 1000 * time.Millisecond
+	tcp_dial_timeout            = 2000 * time.Millisecond
 )
 
 var (
@@ -195,8 +196,9 @@ func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, 
 			case TcpEndpoint:
 				source := &TCPSource{
 					RemoteAddrs:   []string{endpoint.Target},
-					RetryInterval: tcp_download_retry_interval,
 					PrintErrors:   !p.FlagTcpDropErrors,
+					RetryInterval: tcp_download_retry_interval,
+					DialTimeout:   tcp_dial_timeout,
 				}
 				source.TcpConnLimit = p.FlagTcpConnectionLimit
 				source.Reader = reader
@@ -284,6 +286,7 @@ func (p *EndpointFactory) CreateOutput() (AggregateSink, error) {
 			sink := &TCPSink{
 				Endpoint:    endpoint.Target,
 				PrintErrors: !p.FlagTcpDropErrors,
+				DialTimeout: tcp_dial_timeout,
 			}
 			sink.TcpConnLimit = p.FlagTcpConnectionLimit
 			marshallingSink = &sink.AbstractMarshallingMetricSink

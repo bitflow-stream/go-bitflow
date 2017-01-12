@@ -161,6 +161,9 @@ type TCPSink struct {
 	// are expected, or if the errors are already printed otherwise.
 	PrintErrors bool
 
+	// DialTimeout can be set to time out automatically when connecting to a remote TCP endpoint
+	DialTimeout time.Duration
+
 	conn    *TcpWriteConn
 	stopped *golib.OneshotCondition
 }
@@ -245,11 +248,7 @@ func (sink *TCPSink) getOutputConnection() (conn *TcpWriteConn, err error) {
 
 func (sink *TCPSink) assertConnection() error {
 	if sink.conn == nil {
-		endpoint, err := net.ResolveTCPAddr("tcp", sink.Endpoint)
-		if err != nil {
-			return err
-		}
-		conn, err := net.DialTCP("tcp", nil, endpoint)
+		conn, err := dialTcp(sink.Endpoint, sink.DialTimeout)
 		if err != nil {
 			return err
 		}
@@ -283,6 +282,9 @@ type TCPSource struct {
 	// RetryInterval defines the time to wait before trying to reconnect after a closed connection
 	// or failed connection attempt.
 	RetryInterval time.Duration
+
+	// DialTimeout can be set to time out automatically when connecting to a remote TCP endpoint
+	DialTimeout time.Duration
 
 	downloaders  []*tcpDownloadTask
 	downloadSink MetricSinkBase
@@ -399,9 +401,17 @@ func (task *tcpDownloadTask) isConnectionClosed() bool {
 }
 
 func (task *tcpDownloadTask) dial() (*net.TCPConn, error) {
-	endpoint, err := net.ResolveTCPAddr("tcp", task.remote)
+	return dialTcp(task.remote, task.source.DialTimeout)
+}
+
+func dialTcp(endpoint string, timeout time.Duration) (*net.TCPConn, error) {
+	conn, err := net.DialTimeout("tcp", endpoint, timeout)
 	if err != nil {
 		return nil, err
 	}
-	return net.DialTCP("tcp", nil, endpoint)
+	if netConn, ok := conn.(*net.TCPConn); !ok {
+		return nil, fmt.Errorf("net.DialTimeout() returned a %T (%v) instead of *net.TCPConn", conn, conn)
+	} else {
+		return netConn, nil
+	}
 }
