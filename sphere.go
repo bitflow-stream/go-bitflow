@@ -1,16 +1,30 @@
 package pipeline
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
+	"sync"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/golib"
 )
+
+// ====================================== Generate random points on the hull of a sphere ======================================
 
 type SpherePoints struct {
 	bitflow.AbstractProcessor
-	Radius    float64
-	NumPoints int
+	RandomSeed int64
+	Radius     float64
+	NumPoints  int
+
+	rand *rand.Rand
+}
+
+func (p *SpherePoints) Start(wg *sync.WaitGroup) golib.StopChan {
+	p.rand = rand.New(rand.NewSource(p.RandomSeed))
+	return p.AbstractProcessor.Start(wg)
 }
 
 func (p *SpherePoints) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -57,5 +71,44 @@ func (p *SpherePoints) randomSpherePoint(values []bitflow.Value) []bitflow.Value
 }
 
 func (p *SpherePoints) randomAngle() float64 {
-	return rand.Float64() * 0.5 * math.Pi // Random angle in 0..90 degrees
+	return p.rand.Float64() * 2 * math.Pi // Random angle in 0..90 degrees
+}
+
+// ====================================== Filter out points that are not on the convex hull of a point set ======================================
+
+type BatchConvexHull struct {
+	Sort bool
+}
+
+func (b *BatchConvexHull) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+	if len(header.Fields) != 2 {
+		return nil, nil, fmt.Errorf("Cannot compute convex hull for %v dimensions, only 2-dimensional data is allowed", len(header.Fields))
+	}
+	points := make([]Point, len(samples))
+	for i, sample := range samples {
+		points[i].X = float64(sample.Values[0])
+		points[i].Y = float64(sample.Values[1])
+	}
+
+	var hull ConvexHull
+	if b.Sort {
+		hull = SortByAngle(points)
+	} else {
+		hull = ComputeConvexHull(points)
+	}
+
+	for i, point := range hull {
+		samples[i].Values[0] = bitflow.Value(point.X)
+		samples[i].Values[1] = bitflow.Value(point.Y)
+	}
+	log.Println("Convex hull reduced samples from", len(samples), "to", len(hull))
+	return header, samples[:len(hull)], nil
+}
+
+func (b *BatchConvexHull) String() string {
+	res := "convex hull"
+	if b.Sort {
+		res += " sort"
+	}
+	return res
 }

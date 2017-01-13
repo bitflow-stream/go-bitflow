@@ -3,11 +3,11 @@ package pipeline
 import (
 	"errors"
 	"fmt"
+	"image/color"
 	"os"
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
 	"github.com/gonum/plot"
@@ -15,6 +15,7 @@ import (
 	"github.com/gonum/plot/plotutil"
 	"github.com/gonum/plot/vg"
 	"github.com/gonum/plot/vg/draw"
+	"github.com/lucasb-eyer/go-colorful"
 )
 
 const (
@@ -24,18 +25,9 @@ const (
 
 	PlotWidth  = 20 * vg.Centimeter
 	PlotHeight = PlotWidth
-)
 
-func init() {
-	plotutil.DefaultColors = append(plotutil.DefaultColors, plotutil.DarkColors...)
-	plotutil.DefaultGlyphShapes = []draw.GlyphDrawer{
-		draw.RingGlyph{},
-		draw.SquareGlyph{},
-		draw.TriangleGlyph{},
-		draw.CrossGlyph{},
-		draw.PlusGlyph{},
-	}
-}
+	numColors = 100
+)
 
 type PlotFiller func(plot *plot.Plot, data map[string]plotter.XYer) error
 
@@ -50,9 +42,23 @@ type Plotter struct {
 	OutputFile    string
 	ColorTag      string
 	SeparatePlots bool // If true, every ColorTag value will create a new plot
+
+	x      int
+	y      int
+	colors *ColorGenerator
+	glyphs *GlyphGenerator
+	dashes *DashesGenerator
 }
 
 func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
+	var err error
+	p.dashes = NewDashesGenerator()
+	p.glyphs = NewGlyphGenerator()
+	p.colors, err = NewColorGenerator(numColors)
+	if err != nil {
+		return golib.TaskFinishedError(fmt.Errorf("Failed to generate %v colors: %v", numColors, err))
+	}
+
 	p.data = make(map[string][]*bitflow.Sample)
 	if p.Filler == nil {
 		return golib.TaskFinishedError(errors.New("Plotter.Filler field must not be nil"))
@@ -77,43 +83,50 @@ func (p *Plotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
-	if p.checker.LastHeader == nil {
-		if p.AxisX == PlotAxisAuto {
-			if len(header.Fields) > 1 {
-				p.AxisX = 0
-			} else {
-				p.AxisX = PlotAxisTime
-			}
+	if p.checker.HeaderChanged(header) {
+		if err := p.headerChanged(header); err != nil {
+			return err
 		}
-		if p.AxisY == PlotAxisAuto {
-			if len(header.Fields) > 1 {
-				p.AxisY = 1
-			} else {
-				p.AxisY = 0
-			}
-		}
-
-		log.Println("X:", p.AxisX, "Y:", p.AxisY)
-
-		max := p.AxisX
-		if p.AxisY > p.AxisX {
-			max = p.AxisY
-		}
-		if len(header.Fields) <= max {
-			return fmt.Errorf("%v: Header has %v fields, cannot plot with X=%v and Y=%v", p, len(header.Fields), p.AxisX, p.AxisY)
-		}
-	}
-	if p.checker.InitializedHeaderChanged(header) {
-		return fmt.Errorf("%v: Cannot handle changed header", p)
 	}
 	p.storeSample(sample)
 	return p.OutgoingSink.Sample(sample, header)
 }
 
+func (p *Plotter) headerChanged(header *bitflow.Header) error {
+	p.x = p.AxisX
+	p.y = p.AxisY
+	if p.x == PlotAxisAuto {
+		if len(header.Fields) > 1 {
+			p.x = 0
+		} else {
+			p.x = PlotAxisTime
+		}
+	}
+	if p.y == PlotAxisAuto {
+		if len(header.Fields) > 1 {
+			p.y = 1
+		} else {
+			p.y = 0
+		}
+	}
+
+	max := p.x
+	if p.y > p.x {
+		max = p.y
+	}
+	if len(header.Fields) <= max {
+		return fmt.Errorf("%v: Header has %v fields, cannot plot with X=%v and Y=%v", p, len(header.Fields), p.x, p.y)
+	}
+	return nil
+}
+
 func (p *Plotter) storeSample(sample *bitflow.Sample) {
-	key := sample.Tag(p.ColorTag)
-	if key == "" && p.ColorTag != "" {
-		key = "(none)"
+	key := ""
+	if p.ColorTag != "" {
+		key := sample.Tag(p.ColorTag)
+		if key == "" {
+			key = "(none)"
+		}
 	}
 	p.data[key] = append(p.data[key], sample)
 }
@@ -184,23 +197,23 @@ func (p *Plotter) createPlot(plotData map[string][]*bitflow.Sample, copyBounds *
 }
 
 func (p *Plotter) fillPlot(plot *plot.Plot, header *bitflow.Header, plotSamples map[string][]*bitflow.Sample) error {
-	if p.AxisX < 0 {
+	if p.x < 0 {
 		plot.X.Label.Text = "time"
 	} else {
-		plot.X.Label.Text = header.Fields[p.AxisX]
+		plot.X.Label.Text = header.Fields[p.x]
 	}
-	if p.AxisY < 0 {
+	if p.y < 0 {
 		plot.Y.Label.Text = "time"
 	} else {
-		plot.Y.Label.Text = header.Fields[p.AxisY]
+		plot.Y.Label.Text = header.Fields[p.y]
 	}
 
 	plotData := make(map[string]plotter.XYer)
 	for name, data := range plotSamples {
 		plotData[name] = plotDataContainer{
 			values: data,
-			x:      p.AxisX,
-			y:      p.AxisY,
+			x:      p.x,
+			y:      p.y,
 		}
 	}
 	return p.Filler(plot, plotData)
@@ -234,24 +247,118 @@ func (data plotDataContainer) XY(i int) (x, y float64) {
 	return
 }
 
-func FillScatterPlot(plot *plot.Plot, data map[string]plotter.XYer) error {
-	var parameters []interface{}
-	for name, data := range data {
-		parameters = append(parameters, name, data)
-	}
-	if err := plotutil.AddScatters(plot, parameters...); err != nil {
-		return fmt.Errorf("Error creating scatter plot: %v", err)
+func (p *Plotter) FillScatterPlot(plot *plot.Plot, plotData map[string]plotter.XYer) error {
+	for name, data := range plotData {
+		scatter, err := plotter.NewScatter(data)
+		if err != nil {
+			return fmt.Errorf("Error creating scatter plot: %v", err)
+		}
+		scatter.Color = p.colors.Next()
+		scatter.Shape = p.glyphs.Next()
+		plot.Add(scatter)
+		if name != "" {
+			plot.Legend.Add(name, scatter)
+		}
 	}
 	return nil
 }
 
-func FillLinePlot(plot *plot.Plot, plotData map[string]plotter.XYer) error {
-	var parameters []interface{}
+func (p *Plotter) FillLinePlot(plot *plot.Plot, plotData map[string]plotter.XYer) error {
 	for name, data := range plotData {
-		parameters = append(parameters, name, data)
-	}
-	if err := plotutil.AddLines(plot, parameters...); err != nil {
-		return fmt.Errorf("Error creating line plot: %v", err)
+		lines, scatter, err := plotter.NewLinePoints(data)
+		if err != nil {
+			return fmt.Errorf("Error creating line plot: %v", err)
+		}
+		color := p.colors.Next()
+		lines.Color = color
+		scatter.Color = color
+		lines.Dashes = p.dashes.Next()
+		plot.Add(lines, scatter)
+		if name != "" {
+			plot.Legend.Add(name, scatter)
+		}
 	}
 	return nil
+}
+
+// ================================= Random Colors/Shapes =================================
+
+type ColorGenerator struct {
+	palette []color.Color
+	next    int
+}
+
+func NewColorGenerator(numColors int) (*ColorGenerator, error) {
+	if numColors < 1 {
+		numColors = 1
+	}
+	palette, err := colorful.HappyPalette(numColors)
+	if err != nil {
+		return nil, err
+	}
+	colors := make([]color.Color, len(palette))
+	for i, c := range palette {
+		colors[i] = c
+	}
+	return &ColorGenerator{
+		palette: colors,
+	}, nil
+}
+
+func (g *ColorGenerator) Next() color.Color {
+	if g.next >= len(g.palette) {
+		g.next = 0
+	}
+	color := g.palette[g.next]
+	g.next++
+	return color
+}
+
+type GlyphGenerator struct {
+	glyphs []draw.GlyphDrawer
+	next   int
+}
+
+func NewGlyphGenerator() *GlyphGenerator {
+	return &GlyphGenerator{
+		glyphs: []draw.GlyphDrawer{
+			draw.RingGlyph{},
+			draw.SquareGlyph{},
+			draw.TriangleGlyph{},
+			draw.CrossGlyph{},
+			draw.PlusGlyph{},
+			//		draw.CircleGlyph{},
+			//		draw.BoxGlyph{},
+			//		draw.PyramidGlyph{},
+		},
+	}
+}
+
+func (g *GlyphGenerator) Next() draw.GlyphDrawer {
+	if g.next >= len(g.glyphs) {
+		g.next = 0
+	}
+	glyph := g.glyphs[g.next]
+	g.next++
+	return glyph
+}
+
+type DashesGenerator struct {
+	dashes [][]vg.Length
+	next   int
+}
+
+func NewDashesGenerator() *DashesGenerator {
+	return &DashesGenerator{
+		dashes: plotutil.DefaultDashes,
+	}
+}
+
+func (g *DashesGenerator) Next() []vg.Length {
+	if g.next >= len(g.dashes) {
+		g.next = 0
+	}
+	dashes := g.dashes[g.next]
+	g.next++
+	return dashes
 }

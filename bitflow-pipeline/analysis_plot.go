@@ -20,46 +20,38 @@ func plot(pipe *SamplePipeline, params string) {
 		log.Fatalln("-e plot needs parameters")
 	}
 
-	axisX := PlotAxisAuto
-	axisY := PlotAxisAuto
-	colorTag := ""
-	separatePlots := false
-	filler := FillScatterPlot
 	parts := strings.Split(params, ",")
-	filename := parts[len(parts)-1]
+	plot := &Plotter{
+		AxisX:      PlotAxisAuto,
+		AxisY:      PlotAxisAuto,
+		OutputFile: parts[len(parts)-1],
+	}
+	plot.Filler = plot.FillScatterPlot
 	if len(parts) > 0 {
 		for _, part := range parts[:len(parts)-1] {
 			switch part {
 			case "line":
-				filler = FillLinePlot
+				plot.Filler = plot.FillLinePlot
 			case "separate":
-				separatePlots = true
+				plot.SeparatePlots = true
 			case "force_scatter":
-				axisX = 0
-				axisY = 1
+				plot.AxisX = 0
+				plot.AxisY = 1
 			case "force_time":
-				axisX = PlotAxisTime
-				axisY = 0
+				plot.AxisX = PlotAxisTime
+				plot.AxisY = 0
 			default:
-				if colorTag != "" {
+				if plot.ColorTag != "" {
 					log.Fatalln("Multiple color-tag parameters given for plot")
 				}
-				colorTag = part
+				plot.ColorTag = part
 			}
 		}
 	}
-
-	if colorTag == "" {
+	if plot.ColorTag == "" {
 		log.Warnln("Plot got no color-tag parameter, not coloring plot")
 	}
-	pipe.Add(&Plotter{
-		AxisX:         axisX,
-		AxisY:         axisY,
-		Filler:        filler,
-		OutputFile:    filename,
-		ColorTag:      colorTag,
-		SeparatePlots: separatePlots,
-	})
+	pipe.Add(plot)
 }
 
 func feature_stats(pipe *SamplePipeline, params string) {
