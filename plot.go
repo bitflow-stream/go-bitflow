@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -10,16 +11,19 @@ import (
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
 	"github.com/gonum/plot"
+	"github.com/gonum/plot/plotter"
 	"github.com/gonum/plot/plotutil"
 	"github.com/gonum/plot/vg"
 	"github.com/gonum/plot/vg/draw"
 )
 
 const (
-	PlotWidth    = 20 * vg.Centimeter
-	PlotHeight   = PlotWidth
-	PlottedXAxis = 0
-	PlottedYAxis = 1
+	PlotAxisTime = -1
+	PlotAxisAuto = -2
+	minAxis      = PlotAxisAuto
+
+	PlotWidth  = 20 * vg.Centimeter
+	PlotHeight = PlotWidth
 )
 
 func init() {
@@ -33,32 +37,40 @@ func init() {
 	}
 }
 
+type PlotFiller func(plot *plot.Plot, data map[string]plotter.XYer) error
+
 type Plotter struct {
 	bitflow.AbstractProcessor
 	checker bitflow.HeaderChecker
-	data    map[string]PlotData
+	data    map[string][]*bitflow.Sample
 
+	Filler        PlotFiller
+	AxisX         int
+	AxisY         int
 	OutputFile    string
 	ColorTag      string
 	SeparatePlots bool // If true, every ColorTag value will create a new plot
 }
 
-type PlotData []*bitflow.Sample
-
-func (data PlotData) Len() int {
-	return len(data)
-}
-
-func (data PlotData) XY(i int) (x, y float64) {
-	values := data[i].Values
-	if len(values) == 0 {
-		return 0, 0
-	} else if len(values) == 1 {
-		val := float64(values[PlottedXAxis])
-		return val, val
-	} else {
-		return float64(values[PlottedXAxis]), float64(values[PlottedYAxis])
+func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
+	p.data = make(map[string][]*bitflow.Sample)
+	if p.Filler == nil {
+		return golib.TaskFinishedError(errors.New("Plotter.Filler field must not be nil"))
 	}
+	if p.OutputFile == "" {
+		return golib.TaskFinishedError(errors.New("Plotter.OutputFile must be configured"))
+	}
+	if p.AxisX < minAxis || p.AxisY < minAxis {
+		return golib.TaskFinishedError(fmt.Errorf("Invalid plot axis values: X=%v Y=%v", p.AxisX, p.AxisY))
+	}
+
+	if file, err := os.Create(p.OutputFile); err != nil {
+		// Check if file can be created to quickly fail
+		return golib.TaskFinishedError(err)
+	} else {
+		_ = file.Close() // Drop error
+	}
+	return p.AbstractProcessor.Start(wg)
 }
 
 func (p *Plotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -66,14 +78,33 @@ func (p *Plotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 		return err
 	}
 	if p.checker.LastHeader == nil {
-		if len(header.Fields) == 0 {
-			log.Warnf("%v: Not receiving any metrics for plotting", p)
-		} else if len(header.Fields) == 1 {
-			log.Warnf("%v: Plotting only 1 metrics with y=x", p)
+		if p.AxisX == PlotAxisAuto {
+			if len(header.Fields) > 1 {
+				p.AxisX = 0
+			} else {
+				p.AxisX = PlotAxisTime
+			}
+		}
+		if p.AxisY == PlotAxisAuto {
+			if len(header.Fields) > 1 {
+				p.AxisY = 1
+			} else {
+				p.AxisY = 0
+			}
+		}
+
+		log.Println("X:", p.AxisX, "Y:", p.AxisY)
+
+		max := p.AxisX
+		if p.AxisY > p.AxisX {
+			max = p.AxisY
+		}
+		if len(header.Fields) <= max {
+			return fmt.Errorf("%v: Header has %v fields, cannot plot with X=%v and Y=%v", p, len(header.Fields), p.AxisX, p.AxisY)
 		}
 	}
 	if p.checker.InitializedHeaderChanged(header) {
-		log.Warnf("%v: Header changed, this will likely result in an invalid output", p)
+		return fmt.Errorf("%v: Cannot handle changed header", p)
 	}
 	p.storeSample(sample)
 	return p.OutgoingSink.Sample(sample, header)
@@ -87,18 +118,11 @@ func (p *Plotter) storeSample(sample *bitflow.Sample) {
 	p.data[key] = append(p.data[key], sample)
 }
 
-func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
-	p.data = make(map[string]PlotData)
-	if file, err := os.Create(p.OutputFile); err != nil {
-		// Check if file can be created to quickly fail
-		return golib.TaskFinishedError(err)
-	} else {
-		_ = file.Close() // Drop error
-	}
-	return p.AbstractProcessor.Start(wg)
-}
-
 func (p *Plotter) Close() {
+	if p.Filler == nil || p.OutputFile == "" {
+		return
+	}
+
 	defer p.CloseSink()
 	if p.checker.LastHeader == nil {
 		log.Warnf("%s: No data received for plotting", p)
@@ -117,13 +141,13 @@ func (p *Plotter) Close() {
 }
 
 func (p *Plotter) saveSeparatePlots() error {
-	bounds, err := p.fillPlot(p.data, nil)
+	bounds, err := p.createPlot(p.data, nil)
 	if err != nil {
 		return err
 	}
 	group := bitflow.NewFileGroup(p.OutputFile)
 	for name, data := range p.data {
-		plotData := map[string]PlotData{name: data}
+		plotData := map[string][]*bitflow.Sample{name: data}
 		plotFile := group.BuildFilenameStr(name)
 		if err := p.savePlot(plotData, bounds, plotFile); err != nil {
 			return err
@@ -132,27 +156,22 @@ func (p *Plotter) saveSeparatePlots() error {
 	return nil
 }
 
-func (p *Plotter) savePlot(plotData map[string]PlotData, copyBounds *plot.Plot, targetFile string) error {
-	plot, err := p.fillPlot(plotData, copyBounds)
+func (p *Plotter) savePlot(plotData map[string][]*bitflow.Sample, copyBounds *plot.Plot, targetFile string) error {
+	plot, err := p.createPlot(plotData, copyBounds)
 	if err != nil {
 		return err
 	}
-	return plot.Save(PlotWidth, PlotHeight, targetFile)
+	err = plot.Save(PlotWidth, PlotHeight, targetFile)
+	if err != nil {
+		err = errors.New("Error saving plot: " + err.Error())
+	}
+	return err
 }
 
-func (p *Plotter) fillPlot(plotData map[string]PlotData, copyBounds *plot.Plot) (*plot.Plot, error) {
+func (p *Plotter) createPlot(plotData map[string][]*bitflow.Sample, copyBounds *plot.Plot) (*plot.Plot, error) {
 	plot, err := plot.New()
 	if err != nil {
-		return nil, err
-	}
-	header := p.checker.LastHeader
-	numFields := len(header.Fields)
-	if numFields >= 2 {
-		plot.X.Label.Text = header.Fields[PlottedXAxis]
-		plot.Y.Label.Text = header.Fields[PlottedYAxis]
-	} else if numFields == 1 {
-		plot.X.Label.Text = header.Fields[PlottedXAxis]
-		plot.Y.Label.Text = header.Fields[PlottedXAxis]
+		return nil, errors.New("Error creating new plot: " + err.Error())
 	}
 	if copyBounds != nil {
 		plot.X.Min = copyBounds.X.Min
@@ -160,18 +179,79 @@ func (p *Plotter) fillPlot(plotData map[string]PlotData, copyBounds *plot.Plot) 
 		plot.Y.Min = copyBounds.Y.Min
 		plot.Y.Max = copyBounds.Y.Max
 	}
-
-	var parameters []interface{}
-	for name, data := range plotData {
-		parameters = append(parameters, name, data)
-	}
-
-	if err := plotutil.AddScatters(plot, parameters...); err != nil {
-		return nil, fmt.Errorf("Error creating plot: %v", err)
-	}
+	p.fillPlot(plot, p.checker.LastHeader, plotData)
 	return plot, nil
+}
+
+func (p *Plotter) fillPlot(plot *plot.Plot, header *bitflow.Header, plotSamples map[string][]*bitflow.Sample) error {
+	if p.AxisX < 0 {
+		plot.X.Label.Text = "time"
+	} else {
+		plot.X.Label.Text = header.Fields[p.AxisX]
+	}
+	if p.AxisY < 0 {
+		plot.Y.Label.Text = "time"
+	} else {
+		plot.Y.Label.Text = header.Fields[p.AxisY]
+	}
+
+	plotData := make(map[string]plotter.XYer)
+	for name, data := range plotSamples {
+		plotData[name] = plotDataContainer{
+			values: data,
+			x:      p.AxisX,
+			y:      p.AxisY,
+		}
+	}
+	return p.Filler(plot, plotData)
 }
 
 func (p *Plotter) String() string {
 	return fmt.Sprintf("Plotter (color: %s)(file: %s)", p.ColorTag, p.OutputFile)
+}
+
+type plotDataContainer struct {
+	values []*bitflow.Sample
+	x      int
+	y      int
+}
+
+func (data plotDataContainer) Len() int {
+	return len(data.values)
+}
+
+func (data plotDataContainer) XY(i int) (x, y float64) {
+	if data.x < 0 {
+		x = float64(data.values[i].Time.Unix())
+	} else {
+		x = float64(data.values[i].Values[data.x])
+	}
+	if data.y < 0 {
+		y = float64(data.values[i].Time.Unix())
+	} else {
+		y = float64(data.values[i].Values[data.y])
+	}
+	return
+}
+
+func FillScatterPlot(plot *plot.Plot, data map[string]plotter.XYer) error {
+	var parameters []interface{}
+	for name, data := range data {
+		parameters = append(parameters, name, data)
+	}
+	if err := plotutil.AddScatters(plot, parameters...); err != nil {
+		return fmt.Errorf("Error creating scatter plot: %v", err)
+	}
+	return nil
+}
+
+func FillLinePlot(plot *plot.Plot, plotData map[string]plotter.XYer) error {
+	var parameters []interface{}
+	for name, data := range plotData {
+		parameters = append(parameters, name, data)
+	}
+	if err := plotutil.AddLines(plot, parameters...); err != nil {
+		return fmt.Errorf("Error creating line plot: %v", err)
+	}
+	return nil
 }
