@@ -1,7 +1,7 @@
 package pipeline
 
 import (
-	"fmt"
+	"errors"
 	"math"
 	"math/rand"
 	"sync"
@@ -16,8 +16,10 @@ import (
 type SpherePoints struct {
 	bitflow.AbstractProcessor
 	RandomSeed int64
-	Radius     float64
 	NumPoints  int
+
+	RadiusMetric int // If >= 0, use to get radius. Otherwise, use Radius field.
+	Radius       float64
 
 	rand *rand.Rand
 }
@@ -31,6 +33,18 @@ func (p *SpherePoints) Sample(sample *bitflow.Sample, header *bitflow.Header) er
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
+	if p.RadiusMetric >= 0 && len(header.Fields) < 1 {
+		return errors.New("Cannot calculate sphere points with 0 metrics")
+	}
+
+	// If we use a metric as radius, remove it from the header
+	if p.RadiusMetric >= 0 {
+		fields := header.Fields
+		copy(fields[p.RadiusMetric:], fields[p.RadiusMetric+1:])
+		fields = fields[:len(fields)-1]
+		header = header.Clone(fields)
+	}
+
 	for i := 0; i < p.NumPoints; i++ {
 		out := sample.Clone()
 		out.Values = p.randomSpherePoint(sample.Values)
@@ -51,10 +65,19 @@ func (p *SpherePoints) randomSpherePoint(values []bitflow.Value) []bitflow.Value
 		cosValues[i] = math.Cos(angle)
 	}
 
+	radius := p.Radius
+	if p.RadiusMetric >= 0 {
+		// Take the radius metric and remove it from the values
+		radius = float64(values[p.RadiusMetric])
+		values = values[p.RadiusMetric:]
+		copy(values[p.RadiusMetric:], values[p.RadiusMetric+1:])
+		values = values[:len(values)-1]
+	}
+
 	// Calculate point for a sphere around the point (0, 0, 0, ...)
 	result := make([]bitflow.Value, len(values))
 	for i := range values {
-		coord := p.Radius
+		coord := radius
 		for j := 0; j < i; j++ {
 			coord *= sinValues[j]
 		}
@@ -63,6 +86,17 @@ func (p *SpherePoints) randomSpherePoint(values []bitflow.Value) []bitflow.Value
 		}
 		result[i] = bitflow.Value(coord)
 	}
+
+	// Sanity check
+	var sum float64
+	for _, v := range result {
+		sum += float64(v) * float64(v)
+	}
+	radSq := radius * radius
+	if math.Abs(sum-radSq) > (sum * 0.0000000001) {
+		log.Warnf("Illegal sphere point. Radius: %v. Diff: %v. Point: %v", radius, math.Abs(sum-radSq), result)
+	}
+
 	// Move the point so it is part of the sphere around the given center
 	for i, val := range values {
 		result[i] += val
@@ -72,43 +106,4 @@ func (p *SpherePoints) randomSpherePoint(values []bitflow.Value) []bitflow.Value
 
 func (p *SpherePoints) randomAngle() float64 {
 	return p.rand.Float64() * 2 * math.Pi // Random angle in 0..90 degrees
-}
-
-// ====================================== Filter out points that are not on the convex hull of a point set ======================================
-
-type BatchConvexHull struct {
-	Sort bool
-}
-
-func (b *BatchConvexHull) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
-	if len(header.Fields) != 2 {
-		return nil, nil, fmt.Errorf("Cannot compute convex hull for %v dimensions, only 2-dimensional data is allowed", len(header.Fields))
-	}
-	points := make([]Point, len(samples))
-	for i, sample := range samples {
-		points[i].X = float64(sample.Values[0])
-		points[i].Y = float64(sample.Values[1])
-	}
-
-	var hull ConvexHull
-	if b.Sort {
-		hull = SortByAngle(points)
-	} else {
-		hull = ComputeConvexHull(points)
-	}
-
-	for i, point := range hull {
-		samples[i].Values[0] = bitflow.Value(point.X)
-		samples[i].Values[1] = bitflow.Value(point.Y)
-	}
-	log.Println("Convex hull reduced samples from", len(samples), "to", len(hull))
-	return header, samples[:len(hull)], nil
-}
-
-func (b *BatchConvexHull) String() string {
-	res := "convex hull"
-	if b.Sort {
-		res += " sort"
-	}
-	return res
 }

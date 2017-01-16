@@ -123,7 +123,7 @@ func (p *Plotter) headerChanged(header *bitflow.Header) error {
 func (p *Plotter) storeSample(sample *bitflow.Sample) {
 	key := ""
 	if p.ColorTag != "" {
-		key := sample.Tag(p.ColorTag)
+		key = sample.Tag(p.ColorTag)
 		if key == "" {
 			key = "(none)"
 		}
@@ -275,7 +275,7 @@ func (p *Plotter) FillLinePlot(plot *plot.Plot, plotData map[string]plotter.XYer
 		lines.Dashes = p.dashes.Next()
 		plot.Add(lines, scatter)
 		if name != "" {
-			plot.Legend.Add(name, scatter)
+			plot.Legend.Add(name, lines)
 		}
 	}
 	return nil

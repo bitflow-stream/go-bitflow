@@ -16,6 +16,7 @@ func init() {
 	// Control execution
 	RegisterAnalysis("noop", noop_processor)
 	RegisterAnalysis("sleep", sleep_samples)
+	RegisterAnalysisParams("batch", generic_batch, "tag for triggering flush of batch")
 	RegisterAnalysisParams("decouple", decouple_samples, "number of buffered samples")
 	RegisterAnalysisParams("split_files", split_files, "tag to use for separating the data")
 	RegisterAnalysisParams("do", general_expression, "expression to execute for each sample")
@@ -283,4 +284,10 @@ func create_aggregator(param string) *FeatureAggregator {
 	}
 	log.Fatalf("Failed to parse aggregation parameter %v: Need either a number, or a duration", param)
 	return nil
+}
+
+func generic_batch(p *SamplePipeline, param string) {
+	p.Add(&BatchProcessor{
+		FlushTag: param,
+	})
 }

@@ -3,6 +3,9 @@ package pipeline
 import (
 	"fmt"
 	"sort"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/antongulenko/go-bitflow"
 )
 
 // Graham Scan for computing the convex hull of a point set
@@ -48,6 +51,10 @@ func ComputeConvexHull(points []Point) ConvexHull {
 			}
 			p1, p2, p3 = p2, p3, p[i]
 		} else {
+			if len(hull) <= 1 {
+				log.Warnln("Illegal convex hull:", p)
+				return p
+			}
 			p2 = p1
 			p1 = hull[len(hull)-2]
 			hull = hull[:len(hull)-1]
@@ -110,4 +117,41 @@ func (p AngleBasedSort) Less(i, j int) bool {
 		return p.Reference.Distance(a) < p.Reference.Distance(b)
 	}
 	return z > 0
+}
+
+// ====================================== Batch processor ======================================
+
+func BatchConvexHull(sortOnly bool) BatchProcessingStep {
+	desc := "convex hull"
+	if sortOnly {
+		desc += " sort"
+	}
+	return &SimpleBatchProcessingStep{
+		Description: desc,
+		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+			if len(header.Fields) != 2 {
+				return nil, nil, fmt.Errorf(
+					"Cannot compute convex hull for %v dimension(s), only 2-dimensional data is allowed", len(header.Fields))
+			}
+			points := make([]Point, len(samples))
+			for i, sample := range samples {
+				points[i].X = float64(sample.Values[0])
+				points[i].Y = float64(sample.Values[1])
+			}
+
+			var hull ConvexHull
+			if sortOnly {
+				hull = SortByAngle(points)
+			} else {
+				hull = ComputeConvexHull(points)
+			}
+
+			for i, point := range hull {
+				samples[i].Values[0] = bitflow.Value(point.X)
+				samples[i].Values[1] = bitflow.Value(point.Y)
+			}
+			log.Println("Convex hull reduced samples from", len(samples), "to", len(hull))
+			return header, samples[:len(hull)], nil
+		},
+	}
 }

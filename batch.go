@@ -12,10 +12,12 @@ import (
 
 type BatchProcessor struct {
 	bitflow.AbstractProcessor
-	checker bitflow.HeaderChecker
-	samples []*bitflow.Sample
+	checker      bitflow.HeaderChecker
+	samples      []*bitflow.Sample
+	lastFlushTag string
 
-	Steps []BatchProcessingStep
+	Steps    []BatchProcessingStep
+	FlushTag string // If set, flush every time this tag changes
 }
 
 type BatchProcessingStep interface {
@@ -33,7 +35,15 @@ func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) 
 		return err
 	}
 	oldHeader := p.checker.LastHeader
-	if p.checker.InitializedHeaderChanged(header) {
+	flush := p.checker.InitializedHeaderChanged(header)
+	if p.FlushTag != "" {
+		val := sample.Tag(p.FlushTag)
+		if oldHeader != nil {
+			flush = flush || val != p.lastFlushTag
+		}
+		p.lastFlushTag = val
+	}
+	if flush {
 		if err := p.flush(oldHeader); err != nil {
 			return err
 		}
@@ -101,7 +111,11 @@ func (p *BatchProcessor) String() string {
 	} else {
 		extra = "s: "
 	}
-	return fmt.Sprintf("BatchProcessor %v step%s%v", len(p.Steps), extra, strings.Join(steps, ", "))
+	flushed := ""
+	if p.FlushTag != "" {
+		flushed = " flushed with " + p.FlushTag
+	}
+	return fmt.Sprintf("BatchProcessor%v %v step%s%v", flushed, len(p.Steps), extra, strings.Join(steps, ", "))
 }
 
 func (p *BatchProcessor) MergeProcessor(other bitflow.SampleProcessor) bool {

@@ -2,8 +2,11 @@ package pipeline
 
 import (
 	"bytes"
+	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 
 	log "github.com/Sirupsen/logrus"
@@ -64,6 +67,17 @@ func (model *PCAModel) ComputeModel(samples []*bitflow.Sample) error {
 	return nil
 }
 
+func (model *PCAModel) ComputeAndReport(samples []*bitflow.Sample) error {
+	log.Println("Computing PCA model")
+	if err := model.ComputeModel(samples); err != nil {
+		outErr := fmt.Errorf("Error computing PCA model: %v", err)
+		log.Errorln(outErr)
+		return outErr
+	}
+	log.Println(model.Report(DefaultContainedVariance))
+	return nil
+}
+
 func (model *PCAModel) ComponentsContainingVariance(variance float64) (count int, sum float64) {
 	for _, contained := range model.ContainedVariances {
 		sum += contained
@@ -91,10 +105,21 @@ func (model *PCAModel) Report(reportVariance float64) string {
 	return buf.String()
 }
 
-type PCAProjection struct {
-	Model      *PCAModel
-	Vectors    mat64.Matrix
-	Components int
+func (model *PCAModel) WriteTo(writer io.Writer) error {
+	err := gob.NewEncoder(writer).Encode(model)
+	if err != nil {
+		err = fmt.Errorf("Failed to marshal *PCAModel to binary gob: %v", err)
+	}
+	return err
+}
+
+func (model *PCAModel) Load(filename string) (err error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close() // Drop error
+	return gob.NewDecoder(file).Decode(model)
 }
 
 func (model *PCAModel) Project(numComponents int) *PCAProjection {
@@ -104,6 +129,31 @@ func (model *PCAModel) Project(numComponents int) *PCAProjection {
 		Vectors:    vectors,
 		Components: numComponents,
 	}
+}
+
+func (model *PCAModel) ProjectHeader(variance float64, header *bitflow.Header) (*PCAProjection, *bitflow.Header, error) {
+	if len(header.Fields) != len(model.ContainedVariances) {
+		return nil, nil, fmt.Errorf("Cannot compute PCA projection: PCA model contains %v columns, but samples have %v", len(model.ContainedVariances), len(header.Fields))
+	}
+
+	if variance <= 0 {
+		variance = DefaultContainedVariance
+	}
+	comp, variance := model.ComponentsContainingVariance(variance)
+	log.Printf("Projecting data into %v components (variance %.4f)...", comp, variance)
+	proj := model.Project(comp)
+
+	outFields := make([]string, comp)
+	for i := 0; i < comp; i++ {
+		outFields[i] = "component" + strconv.Itoa(i)
+	}
+	return proj, header.Clone(outFields), nil
+}
+
+type PCAProjection struct {
+	Model      *PCAModel
+	Vectors    mat64.Matrix
+	Components int
 }
 
 func (model *PCAProjection) Matrix(matrix mat64.Matrix) *mat64.Dense {
@@ -124,39 +174,99 @@ func (model *PCAProjection) Sample(sample *bitflow.Sample) (result *bitflow.Samp
 	return
 }
 
-type PCABatchProcessing struct {
-	ContainedVariance float64
+func StorePCAModel(filename string) BatchProcessingStep {
+	var counter int
+	group := bitflow.NewFileGroup(filename)
+
+	return &SimpleBatchProcessingStep{
+		Description: fmt.Sprintf("Compute & store PCA model to %v", filename),
+		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+			var model PCAModel
+			err := model.ComputeAndReport(samples)
+			if err == nil {
+				var file *os.File
+				file, err = group.OpenNewFile(&counter)
+				if err == nil {
+					defer file.Close() // Drop error
+					log.Println("Storing PCA model to", file.Name())
+					err = model.WriteTo(file)
+				}
+			}
+			return header, samples, err
+		},
+	}
 }
 
-func (p *PCABatchProcessing) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
-	variance := p.ContainedVariance
-	if variance <= 0 {
-		variance = DefaultContainedVariance
-	}
-	log.Println("Computing PCA model...")
+func LoadBatchPCAModel(filename string, containedVariance float64) (BatchProcessingStep, error) {
 	var model PCAModel
-	if err := model.ComputeModel(samples); err != nil {
-		outErr := fmt.Errorf("Error in %v: %v", p, err)
-		log.Errorln(outErr)
-		return header, nil, outErr
+	if err := model.Load(filename); err != nil {
+		return nil, err
 	}
-	comp, variance := model.ComponentsContainingVariance(variance)
-	log.Println(model.Report(DefaultContainedVariance))
-	log.Printf("Projecting data into %v components (variance %.4f)...", comp, variance)
-	proj := model.Project(comp)
 
-	// Convert sample slice to matrix, do the projection, then fill the new values back into the same sample slice
-	// Should minimize allocations, since the value slices have the same length before and after projection
-	matrix := proj.Matrix(SamplesToMatrix(samples))
-	FillSamplesFromMatrix(samples, matrix)
+	return &SimpleBatchProcessingStep{
+		Description: fmt.Sprintf("Project PCA (model loaded from %v)", filename),
+		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+			proj, header, err := model.ProjectHeader(containedVariance, header)
+			if err != nil {
+				return nil, nil, err
+			}
 
-	outFields := make([]string, comp)
-	for i := 0; i < comp; i++ {
-		outFields[i] = "component" + strconv.Itoa(i)
-	}
-	return header.Clone(outFields), samples, nil
+			// Convert sample slice to matrix, do the projection, then fill the new values back into the same sample slice
+			// Should minimize allocations, since the value slices have the same length before and after projection
+			matrix := proj.Matrix(SamplesToMatrix(samples))
+			FillSamplesFromMatrix(samples, matrix)
+			return header, samples, nil
+		},
+	}, nil
 }
 
-func (p *PCABatchProcessing) String() string {
-	return fmt.Sprintf("PCA batch processing (%v variance)", p.ContainedVariance)
+func LoadStreamingPCAModel(filename string, containedVariance float64) (bitflow.SampleProcessor, error) {
+	var (
+		model      PCAModel
+		checker    bitflow.HeaderChecker
+		outHeader  *bitflow.Header
+		projection *PCAProjection
+	)
+	if err := model.Load(filename); err != nil {
+		return nil, err
+	}
+
+	return &SimpleProcessor{
+		Description: fmt.Sprintf("Streaming-project PCA (model loaded from %v)", filename),
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			var err error
+			if checker.HeaderChanged(header) {
+				projection, outHeader, err = model.ProjectHeader(containedVariance, header)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+			if outHeader != nil {
+				sample = projection.Sample(sample)
+			}
+			return sample, outHeader, nil
+		},
+	}, nil
+}
+
+func ComputeAndProjectPCA(containedVariance float64) BatchProcessingStep {
+	return &SimpleBatchProcessingStep{
+		Description: fmt.Sprintf("Compute & project PCA (%v variance)", containedVariance),
+		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+			var model PCAModel
+			if err := model.ComputeAndReport(samples); err != nil {
+				return nil, nil, err
+			}
+			proj, header, err := model.ProjectHeader(containedVariance, header)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			// Convert sample slice to matrix, do the projection, then fill the new values back into the same sample slice
+			// Should minimize allocations, since the value slices have the same length before and after projection
+			matrix := proj.Matrix(SamplesToMatrix(samples))
+			FillSamplesFromMatrix(samples, matrix)
+			return header, samples, nil
+		},
+	}
 }

@@ -15,6 +15,7 @@ type Expression struct {
 	varIndices map[int]string
 	sample     *bitflow.Sample
 	header     *bitflow.Header
+	num        int
 }
 
 func NewExpression(expressionString string) (*Expression, error) {
@@ -59,7 +60,9 @@ func (p *Expression) Evaluate(sample *bitflow.Sample, header *bitflow.Header) (i
 		p.sample = nil
 		p.header = nil
 	}()
-	return p.expr.Evaluate(parameters)
+	res, err := p.expr.Evaluate(parameters)
+	p.num++
+	return res, err
 }
 
 func (p *Expression) EvaluateBool(sample *bitflow.Sample, header *bitflow.Header) (bool, error) {
@@ -104,6 +107,9 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 		}),
 		"now": p.makeStringFunction("now", 0, func(sample *bitflow.Sample, args ...string) (interface{}, error) {
 			return time.Now().UnixNano(), nil
+		}),
+		"num": p.makeStringFunction("num", 0, func(sample *bitflow.Sample, args ...string) (interface{}, error) {
+			return p.num, nil
 		}),
 		"str": func(arguments ...interface{}) (interface{}, error) {
 			if len(arguments) == 1 {
