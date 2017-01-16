@@ -29,6 +29,17 @@ type FileGroup struct {
 	suffix   string
 }
 
+const (
+	// MaxOutputFileErrors is the number of retries that are accepted before
+	// giving up to open a new output file. After each try, the output filename
+	// will be changed.
+	MaxOutputFileErrors = 5
+
+	// MkdirsPermissions defines the permission bits used when creating new
+	// directories for storing output files.
+	MkdirsPermissions = 0755
+)
+
 // NewFileGroup returns a new FileGroup instance. The filename parameter is parsed
 // and split into directory, file name prefix and file extension. The file can also have no extension.
 func NewFileGroup(filename string) (group FileGroup) {
@@ -170,6 +181,49 @@ func (group *FileGroup) DeleteFiles() error {
 		return os.Remove(path)
 	})
 	return err
+}
+
+// OpenNewFile attempts to open a new file that will belong to the file group.
+// An integer suffix is counted up to find a non-existing file. A small number
+// of errors is tolerated before giving up.
+func (group *FileGroup) OpenNewFile(counter *int) (file *os.File, err error) {
+	num_errors := 0
+	file_num := *counter
+	for {
+		var name string
+		if file_num == 0 {
+			name = group.BuildFilenameStr("")
+		} else {
+			name = group.BuildFilename(file_num)
+		}
+		file_num++
+
+		if _, err = os.Stat(name); os.IsNotExist(err) {
+			// File does not exist, try to open and create it
+
+			dir := path.Dir(name)
+			if _, err = os.Stat(dir); os.IsNotExist(err) {
+				// Directory does not exist, try to create entire path
+				err = os.MkdirAll(dir, MkdirsPermissions)
+			}
+			if err == nil {
+				file, err = os.Create(name)
+			}
+		} else if err == nil {
+			// File exists, try next one
+			continue
+		}
+
+		if err == nil {
+			*counter = file_num
+			return
+		}
+		log.WithField("file", name).Warnln("Failed to open file:", err)
+		num_errors++
+		if num_errors >= MaxOutputFileErrors {
+			return
+		}
+	}
 }
 
 // ==================== File data source ====================
@@ -376,17 +430,6 @@ func ListMatchingFiles(dir string, regexStr string) ([]string, error) {
 
 // ==================== File data sink ====================
 
-const (
-	// MaxOutputFileErrors is the number of retries that are accepted before
-	// giving up to open an output file. After each try, the output filename
-	// will be changed.
-	MaxOutputFileErrors = 5
-
-	// MkdirsPermissions defines the permission bits used when creating new
-	// directories for storing output files.
-	MkdirsPermissions = 0755
-)
-
 // FileSink is an implementation of MetricSink that writes output Headers and Samples
 // to a given file. Every time a new Header is received by the FileSink, a new file is opened
 // using an automatically incremented number as suffix (see FileGroup). Other parameters
@@ -479,43 +522,7 @@ func (sink *FileSink) openNextFile() (err error) {
 }
 
 func (sink *FileSink) openNextNewFile() (file *os.File, err error) {
-	num_errors := 0
-	file_num := sink.file_num
-	for {
-		var name string
-		if file_num == 0 {
-			name = sink.group.BuildFilenameStr("")
-		} else {
-			name = sink.group.BuildFilename(file_num)
-		}
-		file_num++
-
-		if _, err = os.Stat(name); os.IsNotExist(err) {
-			// File does not exist, try to open and create it
-
-			dir := path.Dir(name)
-			if _, err = os.Stat(dir); os.IsNotExist(err) {
-				// Directory does not exist, try to create entire path
-				err = os.MkdirAll(dir, MkdirsPermissions)
-			}
-			if err == nil {
-				file, err = os.Create(name)
-			}
-		} else if err == nil {
-			// File exists, try next one
-			continue
-		}
-
-		if err == nil {
-			sink.file_num = file_num
-			return
-		}
-		log.WithField("file", name).Warnln("Failed to open output file:", err)
-		num_errors++
-		if num_errors >= MaxOutputFileErrors {
-			return
-		}
-	}
+	return sink.group.OpenNewFile(&sink.file_num)
 }
 
 // Sample writes a Sample to the current open file.
