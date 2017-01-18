@@ -26,7 +26,8 @@ const (
 	PlotWidth  = 20 * vg.Centimeter
 	PlotHeight = PlotWidth
 
-	numColors = 100
+	numColors      = 100
+	plotTimeFormat = "02.01.2006 15:04:05"
 )
 
 type PlotFiller func(plot *plot.Plot, data map[string]plotter.XYer) error
@@ -42,6 +43,7 @@ type Plotter struct {
 	OutputFile    string
 	ColorTag      string
 	SeparatePlots bool // If true, every ColorTag value will create a new plot
+	NoLegend      bool
 
 	x      int
 	y      int
@@ -196,27 +198,29 @@ func (p *Plotter) createPlot(plotData map[string][]*bitflow.Sample, copyBounds *
 	return plot, nil
 }
 
-func (p *Plotter) fillPlot(plot *plot.Plot, header *bitflow.Header, plotSamples map[string][]*bitflow.Sample) error {
-	if p.x < 0 {
-		plot.X.Label.Text = "time"
+func (self *Plotter) fillPlot(p *plot.Plot, header *bitflow.Header, plotSamples map[string][]*bitflow.Sample) error {
+	if self.x < 0 {
+		p.X.Label.Text = "time"
+		p.X.Tick.Marker = plot.TimeTicks{Format: plotTimeFormat}
 	} else {
-		plot.X.Label.Text = header.Fields[p.x]
+		p.X.Label.Text = header.Fields[self.x]
 	}
-	if p.y < 0 {
-		plot.Y.Label.Text = "time"
+	if self.y < 0 {
+		p.Y.Label.Text = "time"
+		p.Y.Tick.Marker = plot.TimeTicks{Format: plotTimeFormat}
 	} else {
-		plot.Y.Label.Text = header.Fields[p.y]
+		p.Y.Label.Text = header.Fields[self.y]
 	}
 
 	plotData := make(map[string]plotter.XYer)
 	for name, data := range plotSamples {
 		plotData[name] = plotDataContainer{
 			values: data,
-			x:      p.x,
-			y:      p.y,
+			x:      self.x,
+			y:      self.y,
 		}
 	}
-	return p.Filler(plot, plotData)
+	return self.Filler(p, plotData)
 }
 
 func (p *Plotter) String() string {
@@ -256,8 +260,26 @@ func (p *Plotter) FillScatterPlot(plot *plot.Plot, plotData map[string]plotter.X
 		scatter.Color = p.colors.Next()
 		scatter.Shape = p.glyphs.Next()
 		plot.Add(scatter)
-		if name != "" {
+		if name != "" && !p.NoLegend {
 			plot.Legend.Add(name, scatter)
+		}
+	}
+	return nil
+}
+
+func (p *Plotter) FillLinePointPlot(plot *plot.Plot, plotData map[string]plotter.XYer) error {
+	for name, data := range plotData {
+		lines, scatter, err := plotter.NewLinePoints(data)
+		if err != nil {
+			return fmt.Errorf("Error creating line point plot: %v", err)
+		}
+		color := p.colors.Next()
+		lines.Color = color
+		scatter.Color = color
+		lines.Dashes = p.dashes.Next()
+		plot.Add(lines, scatter)
+		if name != "" && !p.NoLegend {
+			plot.Legend.Add(name, lines)
 		}
 	}
 	return nil
@@ -265,16 +287,15 @@ func (p *Plotter) FillScatterPlot(plot *plot.Plot, plotData map[string]plotter.X
 
 func (p *Plotter) FillLinePlot(plot *plot.Plot, plotData map[string]plotter.XYer) error {
 	for name, data := range plotData {
-		lines, scatter, err := plotter.NewLinePoints(data)
+		lines, err := plotter.NewLine(data)
 		if err != nil {
 			return fmt.Errorf("Error creating line plot: %v", err)
 		}
 		color := p.colors.Next()
 		lines.Color = color
-		scatter.Color = color
 		lines.Dashes = p.dashes.Next()
-		plot.Add(lines, scatter)
-		if name != "" {
+		plot.Add(lines)
+		if name != "" && !p.NoLegend {
 			plot.Legend.Add(name, lines)
 		}
 	}

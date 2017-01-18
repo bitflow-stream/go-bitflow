@@ -33,21 +33,29 @@ func (p *SpherePoints) Sample(sample *bitflow.Sample, header *bitflow.Header) er
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
-	if p.RadiusMetric >= 0 && len(header.Fields) < 1 {
+	if len(header.Fields) < 1 {
 		return errors.New("Cannot calculate sphere points with 0 metrics")
 	}
 
 	// If we use a metric as radius, remove it from the header
+	values := sample.Values
+	radius := p.Radius
 	if p.RadiusMetric >= 0 {
+		radius = float64(values[p.RadiusMetric])
+
 		fields := header.Fields
 		copy(fields[p.RadiusMetric:], fields[p.RadiusMetric+1:])
 		fields = fields[:len(fields)-1]
 		header = header.Clone(fields)
+
+		values = values[p.RadiusMetric:]
+		copy(values[p.RadiusMetric:], values[p.RadiusMetric+1:])
+		values = values[:len(values)-1]
 	}
 
 	for i := 0; i < p.NumPoints; i++ {
 		out := sample.Clone()
-		out.Values = p.randomSpherePoint(sample.Values)
+		out.Values = p.randomSpherePoint(radius, values)
 		if err := p.OutgoingSink.Sample(out, header); err != nil {
 			return err
 		}
@@ -56,32 +64,23 @@ func (p *SpherePoints) Sample(sample *bitflow.Sample, header *bitflow.Header) er
 }
 
 // https://de.wikipedia.org/wiki/Kugelkoordinaten#Verallgemeinerung_auf_n-dimensionale_Kugelkoordinaten
-func (p *SpherePoints) randomSpherePoint(values []bitflow.Value) []bitflow.Value {
-	sinValues := make([]float64, len(values))
-	cosValues := make([]float64, len(values))
-	for i := range values {
+func (p *SpherePoints) randomSpherePoint(radius float64, center []bitflow.Value) []bitflow.Value {
+	sinValues := make([]float64, len(center))
+	cosValues := make([]float64, len(center))
+	for i := range center {
 		angle := p.randomAngle()
 		sinValues[i] = math.Sin(angle)
 		cosValues[i] = math.Cos(angle)
 	}
 
-	radius := p.Radius
-	if p.RadiusMetric >= 0 {
-		// Take the radius metric and remove it from the values
-		radius = float64(values[p.RadiusMetric])
-		values = values[p.RadiusMetric:]
-		copy(values[p.RadiusMetric:], values[p.RadiusMetric+1:])
-		values = values[:len(values)-1]
-	}
-
 	// Calculate point for a sphere around the point (0, 0, 0, ...)
-	result := make([]bitflow.Value, len(values))
-	for i := range values {
+	result := make([]bitflow.Value, len(center))
+	for i := range center {
 		coord := radius
 		for j := 0; j < i; j++ {
 			coord *= sinValues[j]
 		}
-		if i < len(values)-1 {
+		if i < len(center)-1 {
 			coord *= cosValues[i]
 		}
 		result[i] = bitflow.Value(coord)
@@ -98,7 +97,7 @@ func (p *SpherePoints) randomSpherePoint(values []bitflow.Value) []bitflow.Value
 	}
 
 	// Move the point so it is part of the sphere around the given center
-	for i, val := range values {
+	for i, val := range center {
 		result[i] += val
 	}
 	return result

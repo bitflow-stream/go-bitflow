@@ -30,8 +30,12 @@ func plot(pipe *SamplePipeline, params string) {
 	if len(parts) > 0 {
 		for _, part := range parts[:len(parts)-1] {
 			switch part {
+			case "nolegend":
+				plot.NoLegend = true
 			case "line":
 				plot.Filler = plot.FillLinePlot
+			case "linepoint":
+				plot.Filler = plot.FillLinePointPlot
 			case "separate":
 				plot.SeparatePlots = true
 			case "force_scatter":
