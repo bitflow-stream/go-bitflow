@@ -28,16 +28,22 @@ const (
 
 	numColors      = 100
 	plotTimeFormat = "02.01.2006 15:04:05"
+	plotTimeLabel  = "time"
+
+	ScatterPlot = PlotType(iota)
+	LinePlot
+	LinePointPlot
+	InvalidPlotType
 )
 
-type PlotFiller func(plot *plot.Plot, data map[string]plotter.XYer) error
+type PlotType uint
 
 type Plotter struct {
 	bitflow.AbstractProcessor
 	checker bitflow.HeaderChecker
 	data    map[string][]*bitflow.Sample
 
-	Filler        PlotFiller
+	Type          PlotType
 	AxisX         int
 	AxisY         int
 	OutputFile    string
@@ -45,25 +51,14 @@ type Plotter struct {
 	SeparatePlots bool // If true, every ColorTag value will create a new plot
 	NoLegend      bool
 
-	x      int
-	y      int
-	colors *ColorGenerator
-	glyphs *GlyphGenerator
-	dashes *DashesGenerator
+	x int
+	y int
 }
 
 func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
-	var err error
-	p.dashes = NewDashesGenerator()
-	p.glyphs = NewGlyphGenerator()
-	p.colors, err = NewColorGenerator(numColors)
-	if err != nil {
-		return golib.TaskFinishedError(fmt.Errorf("Failed to generate %v colors: %v", numColors, err))
-	}
-
 	p.data = make(map[string][]*bitflow.Sample)
-	if p.Filler == nil {
-		return golib.TaskFinishedError(errors.New("Plotter.Filler field must not be nil"))
+	if p.Type >= InvalidPlotType {
+		return golib.TaskFinishedError(fmt.Errorf("Invalid PlotType: %v", p.Type))
 	}
 	if p.OutputFile == "" {
 		return golib.TaskFinishedError(errors.New("Plotter.OutputFile must be configured"))
@@ -134,7 +129,7 @@ func (p *Plotter) storeSample(sample *bitflow.Sample) {
 }
 
 func (p *Plotter) Close() {
-	if p.Filler == nil || p.OutputFile == "" {
+	if p.Type >= InvalidPlotType || p.OutputFile == "" {
 		return
 	}
 
@@ -194,37 +189,85 @@ func (p *Plotter) createPlot(plotData map[string][]*bitflow.Sample, copyBounds *
 		plot.Y.Min = copyBounds.Y.Min
 		plot.Y.Max = copyBounds.Y.Max
 	}
-	p.fillPlot(plot, p.checker.LastHeader, plotData)
-	return plot, nil
+	p.configureAxes(plot, p.checker.LastHeader)
+	return plot, p.fillPlot(plot, plotData)
 }
 
-func (self *Plotter) fillPlot(p *plot.Plot, header *bitflow.Header, plotSamples map[string][]*bitflow.Sample) error {
-	if self.x < 0 {
-		p.X.Label.Text = "time"
+func (self *Plotter) configureAxes(p *plot.Plot, header *bitflow.Header) {
+	x, y := self.x, self.y
+	if x < 0 {
+		p.X.Label.Text = plotTimeLabel
 		p.X.Tick.Marker = plot.TimeTicks{Format: plotTimeFormat}
 	} else {
-		p.X.Label.Text = header.Fields[self.x]
+		p.X.Label.Text = header.Fields[x]
 	}
-	if self.y < 0 {
-		p.Y.Label.Text = "time"
+	if y < 0 {
+		p.Y.Label.Text = plotTimeLabel
 		p.Y.Tick.Marker = plot.TimeTicks{Format: plotTimeFormat}
 	} else {
-		p.Y.Label.Text = header.Fields[self.y]
+		p.Y.Label.Text = header.Fields[y]
+	}
+}
+
+func (p *Plotter) fillPlot(plot *plot.Plot, plotData map[string][]*bitflow.Sample) (err error) {
+	shape, err := NewPlotShapeGenerator(numColors)
+	if err != nil {
+		return err
 	}
 
-	plotData := make(map[string]plotter.XYer)
-	for name, data := range plotSamples {
-		plotData[name] = plotDataContainer{
-			values: data,
-			x:      self.x,
-			y:      self.y,
+	for name, samples := range plotData {
+		data := plotDataContainer{
+			values: samples,
+			x:      p.x,
+			y:      p.y,
+		}
+		var line *plotter.Line
+		var scatter *plotter.Scatter
+
+		switch p.Type {
+		case ScatterPlot:
+			scatter, err = plotter.NewScatter(data)
+		case LinePlot:
+			line, err = plotter.NewLine(data)
+		case LinePointPlot:
+			line, scatter, err = plotter.NewLinePoints(data)
+		default:
+			return fmt.Errorf("Invalid PlotType: %v", p.Type)
+		}
+
+		if err != nil {
+			return fmt.Errorf("Error creating plot (type %v): %v", p.Type, err)
+		}
+		color := shape.Colors.Next()
+		legend := name != "" && !p.NoLegend
+		if line != nil {
+			line.Color = color
+			line.Dashes = shape.Dashes.Next()
+			plot.Add(line)
+			if legend {
+				plot.Legend.Add(name, line)
+				legend = false
+			}
+		}
+		if scatter != nil {
+			scatter.Color = color
+			scatter.Shape = shape.Glyphs.Next()
+			plot.Add(scatter)
+			if legend {
+				plot.Legend.Add(name, line)
+				legend = false
+			}
 		}
 	}
-	return self.Filler(p, plotData)
+	return nil
 }
 
 func (p *Plotter) String() string {
-	return fmt.Sprintf("Plotter (color: %s)(file: %s)", p.ColorTag, p.OutputFile)
+	color := "not colored"
+	if p.ColorTag != "" {
+		color = "color: " + p.ColorTag
+	}
+	return fmt.Sprintf("Plotter (%s)(file: %s)", color, p.OutputFile)
 }
 
 type plotDataContainer struct {
@@ -251,58 +294,25 @@ func (data plotDataContainer) XY(i int) (x, y float64) {
 	return
 }
 
-func (p *Plotter) FillScatterPlot(plot *plot.Plot, plotData map[string]plotter.XYer) error {
-	for name, data := range plotData {
-		scatter, err := plotter.NewScatter(data)
-		if err != nil {
-			return fmt.Errorf("Error creating scatter plot: %v", err)
-		}
-		scatter.Color = p.colors.Next()
-		scatter.Shape = p.glyphs.Next()
-		plot.Add(scatter)
-		if name != "" && !p.NoLegend {
-			plot.Legend.Add(name, scatter)
-		}
-	}
-	return nil
-}
-
-func (p *Plotter) FillLinePointPlot(plot *plot.Plot, plotData map[string]plotter.XYer) error {
-	for name, data := range plotData {
-		lines, scatter, err := plotter.NewLinePoints(data)
-		if err != nil {
-			return fmt.Errorf("Error creating line point plot: %v", err)
-		}
-		color := p.colors.Next()
-		lines.Color = color
-		scatter.Color = color
-		lines.Dashes = p.dashes.Next()
-		plot.Add(lines, scatter)
-		if name != "" && !p.NoLegend {
-			plot.Legend.Add(name, lines)
-		}
-	}
-	return nil
-}
-
-func (p *Plotter) FillLinePlot(plot *plot.Plot, plotData map[string]plotter.XYer) error {
-	for name, data := range plotData {
-		lines, err := plotter.NewLine(data)
-		if err != nil {
-			return fmt.Errorf("Error creating line plot: %v", err)
-		}
-		color := p.colors.Next()
-		lines.Color = color
-		lines.Dashes = p.dashes.Next()
-		plot.Add(lines)
-		if name != "" && !p.NoLegend {
-			plot.Legend.Add(name, lines)
-		}
-	}
-	return nil
-}
-
 // ================================= Random Colors/Shapes =================================
+
+type PlotShapeGenerator struct {
+	Colors *ColorGenerator
+	Glyphs *GlyphGenerator
+	Dashes *DashesGenerator
+}
+
+func NewPlotShapeGenerator(numColors int) (*PlotShapeGenerator, error) {
+	colors, err := NewColorGenerator(numColors)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to generate %v colors: %v", numColors, err)
+	}
+	return &PlotShapeGenerator{
+		Colors: colors,
+		Glyphs: NewGlyphGenerator(),
+		Dashes: NewDashesGenerator(),
+	}, nil
+}
 
 type ColorGenerator struct {
 	palette []color.Color

@@ -25,17 +25,17 @@ func plot(pipe *SamplePipeline, params string) {
 		AxisX:      PlotAxisAuto,
 		AxisY:      PlotAxisAuto,
 		OutputFile: parts[len(parts)-1],
+		Type:       ScatterPlot,
 	}
-	plot.Filler = plot.FillScatterPlot
 	if len(parts) > 0 {
 		for _, part := range parts[:len(parts)-1] {
 			switch part {
 			case "nolegend":
 				plot.NoLegend = true
 			case "line":
-				plot.Filler = plot.FillLinePlot
+				plot.Type = LinePlot
 			case "linepoint":
-				plot.Filler = plot.FillLinePointPlot
+				plot.Type = LinePointPlot
 			case "separate":
 				plot.SeparatePlots = true
 			case "force_scatter":
