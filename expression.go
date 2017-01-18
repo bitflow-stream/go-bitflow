@@ -121,20 +121,20 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 		},
 		"date_str": func(arguments ...interface{}) (interface{}, error) {
 			if len(arguments) == 1 {
-				if numArg, ok := arguments[0].(int64); ok {
-					return time.Unix(0, numArg).Format(bitflow.TextMarshallerDateFormat), nil
+				if numArg, ok := arguments[0].(float64); ok {
+					return time.Unix(int64(numArg), 0).Format(bitflow.TextMarshallerDateFormat), nil
 				}
 			}
-			return nil, fmt.Errorf("date_str() needs 1 int64 parameter, but received: %v", printParamStrings(arguments))
+			return nil, fmt.Errorf("date_str() needs 1 float64 parameter, but received: %v", printParamStrings(arguments))
 		},
 		"set_timestamp": func(arguments ...interface{}) (interface{}, error) {
 			if len(arguments) == 1 {
-				if numArg, ok := arguments[0].(int64); ok {
-					p.currentSample().Time = time.Unix(0, numArg)
+				if numArg, ok := arguments[0].(float64); ok {
+					p.currentSample().Time = time.Unix(int64(numArg), 0)
 					return arguments[0], nil
 				}
 			}
-			return nil, fmt.Errorf("set_timestamp() needs 1 int64 parameter, but received: %v", printParamStrings(arguments))
+			return nil, fmt.Errorf("set_timestamp() needs 1 float64 parameter, but received: %v", printParamStrings(arguments))
 		},
 	}
 }
