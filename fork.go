@@ -1,13 +1,10 @@
 package pipeline
 
 import (
-	"bytes"
 	"fmt"
-	"path/filepath"
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
 )
@@ -18,7 +15,7 @@ type ForkDistributor interface {
 }
 
 type PipelineBuilder interface {
-	BuildPipeline(key interface{}, output *AggregatingSink) *bitflow.SamplePipeline
+	BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline
 	String() string
 }
 
@@ -34,7 +31,7 @@ type MetricFork struct {
 	stopped          bool
 	stoppedCond      sync.Cond
 	subpipelineWg    sync.WaitGroup
-	aggregatingSink  AggregatingSink
+	merger           ForkMerger
 }
 
 func NewMetricFork(distributor ForkDistributor, builder PipelineBuilder) *MetricFork {
@@ -45,7 +42,7 @@ func NewMetricFork(distributor ForkDistributor, builder PipelineBuilder) *Metric
 		ParallelClose: true,
 	}
 	fork.stoppedCond.L = new(sync.Mutex)
-	fork.aggregatingSink.fork = fork
+	fork.merger.fork = fork
 	return fork
 }
 
@@ -107,7 +104,7 @@ func (f *MetricFork) String() string {
 
 func (f *MetricFork) newPipeline(key interface{}) bitflow.MetricSink {
 	log.Debugf("[%v]: Starting forked subpipeline %v", f, key)
-	pipeline := f.Builder.BuildPipeline(key, &f.aggregatingSink)
+	pipeline := f.Builder.BuildPipeline(key, &f.merger)
 	group := golib.NewTaskGroup()
 	pipeline.Source = nil // The source is already started
 	pipeline.Construct(group)
@@ -159,96 +156,33 @@ func (f *MetricFork) waitForSubpipelines() {
 	f.subpipelineWg.Wait()
 }
 
-type AggregatingSink struct {
+type ForkMerger struct {
 	bitflow.AbstractMetricSink
-	fork *MetricFork
+	mutex sync.Mutex
+	fork  *MetricFork
 }
 
-func (sink *AggregatingSink) String() string {
-	return "aggregating sink for " + sink.fork.String()
+func (sink *ForkMerger) String() string {
+	return "fork merger for " + sink.fork.String()
 }
 
-func (sink *AggregatingSink) Start(wg *sync.WaitGroup) golib.StopChan {
+func (sink *ForkMerger) Start(wg *sync.WaitGroup) golib.StopChan {
 	return nil
 }
 
-func (sink *AggregatingSink) Close() {
-	// The actual outgoing sink is closed after waitForSubpipelines() returns
-}
-
-func (sink *AggregatingSink) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := sink.fork.Check(sample, header); err != nil {
-		return err
-	}
+func (sink *ForkMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+	sink.mutex.Lock()
+	defer sink.mutex.Unlock()
 	return sink.fork.OutgoingSink.Sample(sample, header)
 }
 
-func (sink *AggregatingSink) GetOriginalSink() bitflow.MetricSink {
+func (sink *ForkMerger) Close() {
+	// The actual outgoing sink is closed after waitForSubpipelines() returns
+}
+
+// Can be used by implementations of PipelineBuilder to access the next step of the entire fork.
+func (sink *ForkMerger) GetOriginalSink() bitflow.MetricSink {
 	return sink.fork.OutgoingSink
-}
-
-type RoundRobinDistributor struct {
-	NumSubpipelines int
-	current         int
-}
-
-func (rr *RoundRobinDistributor) Distribute(_ *bitflow.Sample, _ *bitflow.Header) []interface{} {
-	cur := rr.current % rr.NumSubpipelines
-	rr.current++
-	return []interface{}{cur}
-}
-
-func (rr *RoundRobinDistributor) String() string {
-	return fmt.Sprintf("round robin (%v)", rr.NumSubpipelines)
-}
-
-type MultiplexDistributor struct {
-	numSubpipelines int
-	keys            []interface{}
-}
-
-func NewMultiplexDistributor(numSubpipelines int) *MultiplexDistributor {
-	multi := &MultiplexDistributor{
-		numSubpipelines: numSubpipelines,
-		keys:            make([]interface{}, numSubpipelines),
-	}
-	for i := 0; i < numSubpipelines; i++ {
-		multi.keys[i] = i
-	}
-	return multi
-}
-
-func (d *MultiplexDistributor) Distribute(_ *bitflow.Sample, _ *bitflow.Header) []interface{} {
-	return d.keys
-}
-
-func (d *MultiplexDistributor) String() string {
-	return fmt.Sprintf("multiplex (%v)", d.numSubpipelines)
-}
-
-type TagsDistributor struct {
-	Tags        []string
-	Separator   string
-	Replacement string // For missing/empty tags
-}
-
-func (d *TagsDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) []interface{} {
-	var key bytes.Buffer
-	for i, tag := range d.Tags {
-		if i > 0 {
-			key.WriteString(d.Separator)
-		}
-		value := sample.Tag(tag)
-		if value == "" {
-			value = d.Replacement
-		}
-		key.WriteString(value)
-	}
-	return []interface{}{key.String()}
-}
-
-func (d *TagsDistributor) String() string {
-	return fmt.Sprintf("tags %v, separated by %v", d.Tags, d.Separator)
 }
 
 type SimplePipelineBuilder struct {
@@ -271,7 +205,7 @@ func (b *SimplePipelineBuilder) String() string {
 	}
 }
 
-func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *AggregatingSink) *bitflow.SamplePipeline {
+func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
 	var res bitflow.SamplePipeline
 	res.Sink = output
 	if b.Build != nil {
@@ -280,93 +214,4 @@ func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *Aggregati
 		}
 	}
 	return &res
-}
-
-type MultiFilePipelineBuilder struct {
-	SimplePipelineBuilder
-	NewFile     func(originalFile string, key interface{}) string
-	Description string
-}
-
-func (b *MultiFilePipelineBuilder) String() string {
-	_ = b.SimplePipelineBuilder.String() // Fill the examplePipeline field
-	if len(b.examplePipeline) == 0 {
-		return fmt.Sprintf("MultiFiles %v", b.Description)
-	} else {
-		return fmt.Sprintf("MultiFiles %v (subpipeline: %v)", b.Description, b.examplePipeline)
-	}
-}
-
-func (b *MultiFilePipelineBuilder) BuildPipeline(key interface{}, output *AggregatingSink) *bitflow.SamplePipeline {
-	simple := b.SimplePipelineBuilder.BuildPipeline(key, output)
-	files := b.getFileSink(output.GetOriginalSink())
-	if files != nil {
-		newFilename := b.NewFile(files.Filename, key)
-		newFiles := &bitflow.FileSink{
-			AbstractMarshallingMetricSink: files.AbstractMarshallingMetricSink,
-			Filename:                      newFilename,
-			CleanFiles:                    files.CleanFiles,
-			IoBuffer:                      files.IoBuffer,
-		}
-		simple.Sink = newFiles
-	} else {
-		log.Warnf("[%v]: Cannot assign new files, did not find *bitflow.FileSink as my direct output", b)
-	}
-	return simple
-}
-
-func (b *MultiFilePipelineBuilder) getFileSink(sink bitflow.MetricSink) *bitflow.FileSink {
-	if files, ok := sink.(*bitflow.FileSink); ok {
-		return files
-	}
-	if agg, ok := sink.(bitflow.AggregateSink); ok {
-		var files *bitflow.FileSink
-		warned := false
-		for _, sink := range agg {
-			converted := b.getFileSink(sink)
-			if converted != nil {
-				if files == nil {
-					files = converted
-				} else if !warned {
-					log.Warnf("[%v]: Multiple file outputs, using %v", b, files)
-					warned = true
-				}
-			}
-		}
-		return files
-	}
-	return nil
-}
-
-func MultiFileSuffixBuilder(buildPipeline func() []bitflow.SampleProcessor) *MultiFilePipelineBuilder {
-	builder := &MultiFilePipelineBuilder{
-		Description: "files suffixed with subpipeline key",
-		NewFile: func(oldFile string, key interface{}) string {
-			suffix := fmt.Sprintf("%v", key)
-			group := bitflow.NewFileGroup(oldFile)
-			return group.BuildFilenameStr(suffix)
-		},
-	}
-	builder.Build = buildPipeline
-	return builder
-}
-
-func MultiFileDirectoryBuilder(replaceFilename bool, buildPipeline func() []bitflow.SampleProcessor) *MultiFilePipelineBuilder {
-	builder := &MultiFilePipelineBuilder{
-		Description: fmt.Sprintf("directory tree built from subpipeline key"),
-		NewFile: func(oldFile string, key interface{}) string {
-			path := fmt.Sprintf("%v", key)
-			if path == "" {
-				return oldFile
-			}
-			if replaceFilename {
-				path += filepath.Ext(oldFile)
-			} else {
-				path = filepath.Join(path, filepath.Base(oldFile))
-			}
-			return filepath.Join(filepath.Dir(oldFile), path)
-		},
-	}
-	builder.Build = buildPipeline
-	return builder
 }
