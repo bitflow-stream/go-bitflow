@@ -38,25 +38,24 @@ const (
 
 type PlotType uint
 
-type Plotter struct {
+type PlotProcessor struct {
 	bitflow.AbstractProcessor
 	checker bitflow.HeaderChecker
-	data    map[string][]*bitflow.Sample
 
 	Type          PlotType
+	NoLegend      bool
 	AxisX         int
 	AxisY         int
 	OutputFile    string
 	ColorTag      string
 	SeparatePlots bool // If true, every ColorTag value will create a new plot
-	NoLegend      bool
 
-	x int
-	y int
+	data         map[string]plotter.XYs
+	x, y         int
+	xName, yName string
 }
 
-func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
-	p.data = make(map[string][]*bitflow.Sample)
+func (p *PlotProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	if p.Type >= InvalidPlotType {
 		return golib.TaskFinishedError(fmt.Errorf("Invalid PlotType: %v", p.Type))
 	}
@@ -66,6 +65,7 @@ func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
 	if p.AxisX < minAxis || p.AxisY < minAxis {
 		return golib.TaskFinishedError(fmt.Errorf("Invalid plot axis values: X=%v Y=%v", p.AxisX, p.AxisY))
 	}
+	p.data = make(map[string]plotter.XYs)
 
 	if file, err := os.Create(p.OutputFile); err != nil {
 		// Check if file can be created to quickly fail
@@ -76,7 +76,7 @@ func (p *Plotter) Start(wg *sync.WaitGroup) golib.StopChan {
 	return p.AbstractProcessor.Start(wg)
 }
 
-func (p *Plotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (p *PlotProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (p *Plotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	return p.OutgoingSink.Sample(sample, header)
 }
 
-func (p *Plotter) headerChanged(header *bitflow.Header) error {
+func (p *PlotProcessor) headerChanged(header *bitflow.Header) error {
 	p.x = p.AxisX
 	p.y = p.AxisY
 	if p.x == PlotAxisAuto {
@@ -114,10 +114,29 @@ func (p *Plotter) headerChanged(header *bitflow.Header) error {
 	if len(header.Fields) <= max {
 		return fmt.Errorf("%v: Header has %v fields, cannot plot with X=%v and Y=%v", p, len(header.Fields), p.x, p.y)
 	}
+
+	var xName, yName string
+	if p.x < 0 {
+		xName = plotTimeLabel
+	} else {
+		xName = header.Fields[p.x]
+	}
+	if p.y < 0 {
+		yName = plotTimeLabel
+	} else {
+		yName = header.Fields[p.y]
+	}
+
+	if p.xName == "" && p.yName == "" {
+		p.xName = xName
+		p.yName = yName
+	} else if p.xName != xName || p.yName != yName {
+		return fmt.Errorf("%v: Header updated and changed the X/Y metric names from %v, %v -> %v, %v", p.xName, p.yName, xName, yName)
+	}
 	return nil
 }
 
-func (p *Plotter) storeSample(sample *bitflow.Sample) {
+func (p *PlotProcessor) storeSample(sample *bitflow.Sample) {
 	key := ""
 	if p.ColorTag != "" {
 		key = sample.Tag(p.ColorTag)
@@ -125,10 +144,23 @@ func (p *Plotter) storeSample(sample *bitflow.Sample) {
 			key = "(none)"
 		}
 	}
-	p.data[key] = append(p.data[key], sample)
+
+	var x, y float64
+	if p.x < 0 {
+		x = float64(sample.Time.Unix())
+	} else {
+		x = float64(sample.Values[p.x])
+	}
+	if p.y < 0 {
+		y = float64(sample.Time.Unix())
+	} else {
+		y = float64(sample.Values[p.y])
+	}
+
+	p.data[key] = append(p.data[key], struct{ X, Y float64 }{x, y})
 }
 
-func (p *Plotter) Close() {
+func (p *PlotProcessor) Close() {
 	if p.Type >= InvalidPlotType || p.OutputFile == "" {
 		return
 	}
@@ -138,26 +170,54 @@ func (p *Plotter) Close() {
 		log.Warnf("%s: No data received for plotting", p)
 		return
 	}
+	plot := Plot{
+		LabelX:   p.xName,
+		LabelY:   p.yName,
+		Type:     p.Type,
+		NoLegend: p.NoLegend,
+	}
 	var err error
 	if p.SeparatePlots {
 		_ = os.Remove(p.OutputFile) // Delete file created in Start(), drop error.
-		err = p.saveSeparatePlots()
+		err = plot.saveSeparatePlots(p.data, p.OutputFile)
 	} else {
-		err = p.savePlot(p.data, nil, p.OutputFile)
+		err = plot.savePlot(p.data, nil, p.OutputFile)
 	}
 	if err != nil {
 		p.Error(err)
 	}
 }
 
-func (p *Plotter) saveSeparatePlots() error {
-	bounds, err := p.createPlot(p.data, nil)
+func (p *PlotProcessor) String() string {
+	color := "not colored"
+	if p.ColorTag != "" {
+		color = "color: " + p.ColorTag
+	}
+	file := p.OutputFile
+	if p.SeparatePlots {
+		file = "separate files: " + file
+	} else {
+		file = "file: " + file
+	}
+	return fmt.Sprintf("Plotter (%s)(%s)", color, file)
+}
+
+// ================================= Plot =================================
+
+type Plot struct {
+	LabelX, LabelY string
+	Type           PlotType
+	NoLegend       bool
+}
+
+func (p *Plot) saveSeparatePlots(plotData map[string]plotter.XYs, targetFile string) error {
+	bounds, err := p.createPlot(plotData, nil)
 	if err != nil {
 		return err
 	}
-	group := bitflow.NewFileGroup(p.OutputFile)
-	for name, data := range p.data {
-		plotData := map[string][]*bitflow.Sample{name: data}
+	group := bitflow.NewFileGroup(targetFile)
+	for name, data := range plotData {
+		plotData := map[string]plotter.XYs{name: data}
 		plotFile := group.BuildFilenameStr(name)
 		if err := p.savePlot(plotData, bounds, plotFile); err != nil {
 			return err
@@ -166,7 +226,7 @@ func (p *Plotter) saveSeparatePlots() error {
 	return nil
 }
 
-func (p *Plotter) savePlot(plotData map[string][]*bitflow.Sample, copyBounds *plot.Plot, targetFile string) error {
+func (p *Plot) savePlot(plotData map[string]plotter.XYs, copyBounds *plot.Plot, targetFile string) error {
 	plot, err := p.createPlot(plotData, copyBounds)
 	if err != nil {
 		return err
@@ -178,7 +238,7 @@ func (p *Plotter) savePlot(plotData map[string][]*bitflow.Sample, copyBounds *pl
 	return err
 }
 
-func (p *Plotter) createPlot(plotData map[string][]*bitflow.Sample, copyBounds *plot.Plot) (*plot.Plot, error) {
+func (p *Plot) createPlot(plotData map[string]plotter.XYs, copyBounds *plot.Plot) (*plot.Plot, error) {
 	plot, err := plot.New()
 	if err != nil {
 		return nil, errors.New("Error creating new plot: " + err.Error())
@@ -189,38 +249,28 @@ func (p *Plotter) createPlot(plotData map[string][]*bitflow.Sample, copyBounds *
 		plot.Y.Min = copyBounds.Y.Min
 		plot.Y.Max = copyBounds.Y.Max
 	}
-	p.configureAxes(plot, p.checker.LastHeader)
+	p.configureAxes(plot)
 	return plot, p.fillPlot(plot, plotData)
 }
 
-func (self *Plotter) configureAxes(p *plot.Plot, header *bitflow.Header) {
-	x, y := self.x, self.y
-	if x < 0 {
-		p.X.Label.Text = plotTimeLabel
-		p.X.Tick.Marker = plot.TimeTicks{Format: plotTimeFormat}
-	} else {
-		p.X.Label.Text = header.Fields[x]
+func (p *Plot) configureAxes(plt *plot.Plot) {
+	plt.X.Label.Text = p.LabelX
+	plt.Y.Label.Text = p.LabelY
+	if p.LabelX == plotTimeLabel {
+		plt.X.Tick.Marker = plot.TimeTicks{Format: plotTimeFormat}
 	}
-	if y < 0 {
-		p.Y.Label.Text = plotTimeLabel
-		p.Y.Tick.Marker = plot.TimeTicks{Format: plotTimeFormat}
-	} else {
-		p.Y.Label.Text = header.Fields[y]
+	if p.LabelY == plotTimeLabel {
+		plt.Y.Tick.Marker = plot.TimeTicks{Format: plotTimeFormat}
 	}
 }
 
-func (p *Plotter) fillPlot(plot *plot.Plot, plotData map[string][]*bitflow.Sample) (err error) {
+func (p *Plot) fillPlot(plot *plot.Plot, plotData map[string]plotter.XYs) error {
 	shape, err := NewPlotShapeGenerator(numColors)
 	if err != nil {
 		return err
 	}
 
-	for name, samples := range plotData {
-		data := plotDataContainer{
-			values: samples,
-			x:      p.x,
-			y:      p.y,
-		}
+	for name, data := range plotData {
 		var line *plotter.Line
 		var scatter *plotter.Scatter
 
@@ -253,45 +303,13 @@ func (p *Plotter) fillPlot(plot *plot.Plot, plotData map[string][]*bitflow.Sampl
 			scatter.Color = color
 			scatter.Shape = shape.Glyphs.Next()
 			plot.Add(scatter)
-			if legend {
-				plot.Legend.Add(name, line)
+			if legend && line == nil {
+				plot.Legend.Add(name, scatter)
 				legend = false
 			}
 		}
 	}
 	return nil
-}
-
-func (p *Plotter) String() string {
-	color := "not colored"
-	if p.ColorTag != "" {
-		color = "color: " + p.ColorTag
-	}
-	return fmt.Sprintf("Plotter (%s)(file: %s)", color, p.OutputFile)
-}
-
-type plotDataContainer struct {
-	values []*bitflow.Sample
-	x      int
-	y      int
-}
-
-func (data plotDataContainer) Len() int {
-	return len(data.values)
-}
-
-func (data plotDataContainer) XY(i int) (x, y float64) {
-	if data.x < 0 {
-		x = float64(data.values[i].Time.Unix())
-	} else {
-		x = float64(data.values[i].Values[data.x])
-	}
-	if data.y < 0 {
-		y = float64(data.values[i].Time.Unix())
-	} else {
-		y = float64(data.values[i].Values[data.y])
-	}
-	return
 }
 
 // ================================= Random Colors/Shapes =================================

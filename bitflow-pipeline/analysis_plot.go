@@ -21,7 +21,7 @@ func plot(pipe *SamplePipeline, params string) {
 	}
 
 	parts := strings.Split(params, ",")
-	plot := &Plotter{
+	plot := &PlotProcessor{
 		AxisX:      PlotAxisAuto,
 		AxisY:      PlotAxisAuto,
 		OutputFile: parts[len(parts)-1],
