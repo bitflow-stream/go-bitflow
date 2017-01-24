@@ -191,7 +191,7 @@ func (suite *PipelineTestSuite) make_factory() EndpointFactory {
 
 func (suite *PipelineTestSuite) Test_no_inputs() {
 	factory := suite.make_factory()
-	source, err := factory.CreateInput(nil)
+	source, err := factory.CreateInput()
 	suite.NoError(err)
 	suite.Equal(new(EmptyMetricSource), source)
 }
@@ -201,7 +201,8 @@ func (suite *PipelineTestSuite) Test_input_file() {
 	files := []string{"file1", "file2", "file3"}
 	factory.FlagInputs = files
 	handler := &testSampleHandler{source: "xxx"}
-	source, err := factory.CreateInput(handler)
+	source, err := factory.CreateInput()
+	source.SetSampleHandler(handler)
 	suite.NoError(err)
 	expected := &FileSource{
 		Filenames: files,
@@ -218,12 +219,14 @@ func (suite *PipelineTestSuite) Test_input_tcp() {
 	hosts := []string{"host1:123", "host2:2", "host2:5"}
 	factory.FlagInputs = hosts
 	handler := &testSampleHandler{source: "xxx"}
-	source, err := factory.CreateInput(handler)
+	source, err := factory.CreateInput()
+	source.SetSampleHandler(handler)
 	suite.NoError(err)
 	expected := &TCPSource{
 		RemoteAddrs:   hosts,
 		PrintErrors:   false,
 		RetryInterval: tcp_download_retry_interval,
+		DialTimeout:   tcp_dial_timeout,
 	}
 	expected.TcpConnLimit = 10
 	expected.Reader.Handler = handler
@@ -236,7 +239,8 @@ func (suite *PipelineTestSuite) Test_input_tcp_listen() {
 	endpoint := ":123"
 	factory.FlagInputs = []string{endpoint}
 	handler := &testSampleHandler{source: "xxx"}
-	source, err := factory.CreateInput(handler)
+	source, err := factory.CreateInput()
+	source.SetSampleHandler(handler)
 	suite.NoError(err)
 	expected := NewTcpListenerSource(endpoint)
 	expected.SimultaneousConnections = 20
@@ -251,7 +255,8 @@ func (suite *PipelineTestSuite) Test_input_std() {
 	endpoint := "-"
 	factory.FlagInputs = []string{endpoint}
 	handler := &testSampleHandler{source: "xxx"}
-	source, err := factory.CreateInput(handler)
+	source, err := factory.CreateInput()
+	source.SetSampleHandler(handler)
 	suite.NoError(err)
 	expected := &ConsoleSource{}
 	expected.Reader.Handler = handler
@@ -263,7 +268,7 @@ func (suite *PipelineTestSuite) Test_input_multiple() {
 	test := func(input1, input2 string, inputs ...string) {
 		factory := suite.make_factory()
 		factory.FlagInputs = inputs
-		source, err := factory.CreateInput(nil)
+		source, err := factory.CreateInput()
 		suite.Error(err)
 		suite.Equal(err.Error(), fmt.Sprintf("Please provide only one data source (Provided %s and %s)", input1, input2))
 		suite.Nil(source)
@@ -279,7 +284,7 @@ func (suite *PipelineTestSuite) Test_input_multiple() {
 func (suite *PipelineTestSuite) Test_input_multiple_listener() {
 	factory := suite.make_factory()
 	factory.FlagInputs = []string{":123", ":456"}
-	source, err := factory.CreateInput(nil)
+	source, err := factory.CreateInput()
 	suite.Error(err)
 	suite.Equal(err.Error(), fmt.Sprintf("Cannot listen for input on multiple TCP ports"))
 	suite.Nil(source)
@@ -288,7 +293,7 @@ func (suite *PipelineTestSuite) Test_input_multiple_listener() {
 func (suite *PipelineTestSuite) Test_input_multiple_std() {
 	factory := suite.make_factory()
 	factory.FlagInputs = []string{"-", "-"}
-	source, err := factory.CreateInput(nil)
+	source, err := factory.CreateInput()
 	suite.Error(err)
 	suite.Equal(err.Error(), fmt.Sprintf("Cannot read from stdin multiple times"))
 	suite.Nil(source)
@@ -348,6 +353,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 		s := &TCPSink{
 			Endpoint:    endpoint,
 			PrintErrors: false,
+			DialTimeout: tcp_dial_timeout,
 		}
 		s.TcpConnLimit = 10
 		setup(&s.AbstractMarshallingMetricSink, format)

@@ -151,6 +151,13 @@ func (s *AbstractMetricSource) CloseSink(wg *sync.WaitGroup) {
 	}
 }
 
+// UnmarshallingMetricSource extends MetricSource and adds a configuration setter
+// that gives access to the samples that are read by this data source.
+type UnmarshallingMetricSource interface {
+	MetricSource
+	SetSampleHandler(handler ReadSampleHandler)
+}
+
 // AbstractUnmarshallingMetricSource extends AbstractMetricSource by adding
 // configuration fields required for unmarshalling samples.
 type AbstractUnmarshallingMetricSource struct {
@@ -158,6 +165,11 @@ type AbstractUnmarshallingMetricSource struct {
 
 	// Reader configures aspects of parallel reading and parsing. See SampleReader for more info.
 	Reader SampleReader
+}
+
+// SetSampleHandler implements the UnmarshallingMetricSource interface
+func (s *AbstractUnmarshallingMetricSource) SetSampleHandler(handler ReadSampleHandler) {
+	s.Reader.Handler = handler
 }
 
 // EmptyMetricSource implements MetricSource but does not generate any samples.
@@ -181,6 +193,11 @@ func (s *EmptyMetricSource) Stop() {
 // String implements the golib.Task interface.
 func (s *EmptyMetricSource) String() string {
 	return "empty metric source"
+}
+
+// Stop implements the UnmarshallingMetricSource interface.
+func (s *EmptyMetricSource) SetSampleHandler(handler ReadSampleHandler) {
+	// Do nothing
 }
 
 // AggregateSink will distribute all incoming Headers and Samples to a slice of

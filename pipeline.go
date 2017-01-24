@@ -65,10 +65,10 @@ func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 }
 
 // Configure fills the Sink and Source fields of the SamplePipeline using
-// the given EndpointFactory and ReadSampleHandler. Configure calls ConfigureSource
+// the given EndpointFactory. Configure calls ConfigureSource
 // and ConfigureSink and returns the first error (if any).
-func (p *SamplePipeline) Configure(f *EndpointFactory, handler ReadSampleHandler) error {
-	if err := p.ConfigureSource(f, handler); err != nil {
+func (p *SamplePipeline) Configure(f *EndpointFactory) error {
+	if err := p.ConfigureSource(f); err != nil {
 		return err
 	}
 	if err := p.ConfigureSink(f); err != nil {
@@ -93,19 +93,8 @@ func (p *SamplePipeline) ConfigureSink(f *EndpointFactory) error {
 
 // ConfigureSource uses the given EndpointFactory to fill the Source field of the
 // SamplePipeline.
-//
-// The ReadSampleHandler parmeter can be used to modify Samples and Headers directly after they are read
-// by the SampleReader, e.g. directly after reading a Header from file, or directly
-// after receiving a Sample over a TCP connection. The main purpose of this
-// is that the ReadSampleHandler receives a string representation of the data
-// source, which can be used as a tag in the Samples. By default, the data source is not
-// stored in the Samples and this information will be lost one the Sample enters the pipeline.
-// The data source string differs depending on the MetricSource used. The FileSource will
-// use the file name, while the TCPSource will use the remote TCP endpoint.
-//
-// The ReadSampleHandler parameter can be nil.
-func (p *SamplePipeline) ConfigureSource(f *EndpointFactory, handler ReadSampleHandler) error {
-	source, err := f.CreateInput(handler)
+func (p *SamplePipeline) ConfigureSource(f *EndpointFactory) error {
+	source, err := f.CreateInput()
 	if err != nil {
 		return err
 	}

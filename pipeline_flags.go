@@ -170,8 +170,8 @@ func (p *EndpointFactory) ReadInputArguments() error {
 
 // CreateInput creates a MetricSource object based on the Flag* values in the EndpointFactory
 // object.
-func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, error) {
-	var result MetricSource
+func (p *EndpointFactory) CreateInput() (UnmarshallingMetricSource, error) {
+	var result UnmarshallingMetricSource
 	inputType := UndefinedEndpoint
 	for _, input := range p.FlagInputs {
 		endpoint, err := ParseEndpointDescription(input)
@@ -184,7 +184,6 @@ func (p *EndpointFactory) CreateInput(handler ReadSampleHandler) (MetricSource, 
 		if result == nil {
 			reader := SampleReader{
 				ParallelSampleHandler: p.FlagParallelHandler,
-				Handler:               handler,
 				Unmarshaller:          endpoint.Unmarshaller(),
 			}
 			inputType = endpoint.Type
