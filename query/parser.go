@@ -1,6 +1,9 @@
 package query
 
-import "io"
+import (
+	"errors"
+	"io"
+)
 
 const ExpectedPipelineStepError = "Expected pipeline step (identifier, string or '{')"
 
@@ -117,7 +120,7 @@ func (p *Parser) parsePipelines(isInput, isFork bool) (res Pipelines, err error)
 func (p *Parser) parsePipeline(isInput, isFork bool) (res Pipeline, err error) {
 	firstStep := true
 	for {
-		var step Node
+		var step PipelineStep
 		step, err = p.parseStep(isInput, isFork, firstStep)
 		if err != nil {
 			break
@@ -133,7 +136,7 @@ func (p *Parser) parsePipeline(isInput, isFork bool) (res Pipeline, err error) {
 	return
 }
 
-func (p *Parser) parseStep(isInput, isFork, firstStep bool) (Node, error) {
+func (p *Parser) parseStep(isInput, isFork, firstStep bool) (PipelineStep, error) {
 	tok, err := p.scan()
 	if err != nil {
 		return nil, err
@@ -147,7 +150,7 @@ func (p *Parser) parseStep(isInput, isFork, firstStep bool) (Node, error) {
 			return nil, err
 		}
 		if !haveParams {
-			return p.parseEdges(tok, (isInput || isFork) && firstStep)
+			return p.parseInOutStep(tok, (isInput || isFork) && firstStep)
 		}
 
 		_, haveOpen, err := p.scanOptional(OPEN)
@@ -175,39 +178,31 @@ func (p *Parser) parseStep(isInput, isFork, firstStep bool) (Node, error) {
 	}
 }
 
-func (p *Parser) parseEdges(firstEdge Token, inputEdge bool) (Node, error) {
-	edges := []Token{firstEdge}
+func (p *Parser) parseInOutStep(firstStep Token, isInputStep bool) (PipelineStep, error) {
+	steps := []Token{firstStep}
 	for {
 		tok, err := p.scan()
 		if err != nil {
 			return nil, err
 		}
 		if tok.Type == STR || tok.Type == QUOT_STR {
-			edges = append(edges, tok)
+			steps = append(steps, tok)
 		} else {
 			p.unscan()
 			break
 		}
 	}
-	var result Node
-	if inputEdge {
-		inputs := make(Inputs, len(edges))
-		for i, edge := range edges {
-			inputs[i] = Input{Name: edge}
-		}
-		if len(inputs) == 1 {
-			result = inputs[0]
-		} else {
-			result = inputs
-		}
+	var result PipelineStep
+	if isInputStep {
+		result = Input(steps)
 	} else {
-		if len(edges) > 1 {
+		if len(steps) > 1 {
 			return nil, ParserError{
-				Pos:     firstEdge,
-				Message: "Multiple output edges are not allowed",
+				Pos:     firstStep,
+				Message: "Multiple sequential outputs are not allowed",
 			}
 		}
-		result = Output{Name: edges[0]}
+		result = Output(steps[0])
 	}
 	return result, nil
 }
@@ -218,4 +213,54 @@ func (p *Parser) parseOpenedPipelines(isInput bool, isFork bool) (Pipelines, err
 		_, err = p.scanRequired(CLOSE, "}")
 	}
 	return pipes, err
+}
+
+func (p Pipeline) Validate(isInput bool, isFork bool) error {
+	if len(p) == 0 {
+		return errors.New("Empty pipeline is not allowed") // Should not occur when parsing
+	}
+	isMultiplex := !isInput && !isFork
+
+	for i, node := range p {
+		switch i {
+		case 0:
+			if isMultiplex && len(p) > 1 {
+				switch node.(type) {
+				case Input, Output:
+					return ParserError{
+						Pos:     node.Pos(),
+						Message: "Multiplexed pipeline cannot start with an identifier (string)",
+					}
+				}
+			}
+			if isFork {
+				if _, ok := node.(Input); !ok {
+					return ParserError{
+						Pos:     node.Pos(),
+						Message: "Forked pipeline must start with a pipeline identifier (string)",
+					}
+				}
+			}
+		case len(p) - 1:
+			if _, ok := node.(Input); ok {
+				return errors.New("The last pipeline element cannot be an Input") // Should not occur when parsing
+			}
+		default:
+			// Intermediate pipeline step
+			switch node.(type) {
+			case Input, Output:
+				return ParserError{
+					Pos:     node.Pos(),
+					Message: "Intermediate pipeline step cannot be an input or output identifier",
+				}
+			}
+		}
+	}
+	if isFork && len(p) < 2 {
+		return ParserError{
+			Pos:     p.Pos(),
+			Message: "Forked pipeline must have at least one pipeline step",
+		}
+	}
+	return nil
 }
