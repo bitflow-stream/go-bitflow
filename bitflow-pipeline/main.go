@@ -25,19 +25,7 @@ type registeredAnalysis struct {
 }
 
 // Can be filled from init() functions using RegisterAnalysis() and RegisterParameterizedAnalysis
-var analysis_registry = map[string]registeredAnalysis{
-	"": registeredAnalysis{"", nil, ""},
-}
-var handler_registry = map[string]func(string) bitflow.ReadSampleHandler{
-	"": nil,
-}
-
-func RegisterSampleHandler(name string, sampleHandler func(param string) bitflow.ReadSampleHandler) {
-	if _, ok := handler_registry[name]; ok {
-		panic("Sample handler already registered: " + name)
-	}
-	handler_registry[name] = sampleHandler
-}
+var analysis_registry = make(map[string]registeredAnalysis)
 
 func RegisterAnalysis(name string, setupPipeline AnalysisFunc) {
 	RegisterAnalysisParams(name, func(pipeline *SamplePipeline, _ string) {
@@ -64,14 +52,14 @@ func do_main() int {
 	var p SamplePipeline
 	var f bitflow.EndpointFactory
 	bitflow.RegisterGolibFlags()
-	f.RegisterFlags()
+	f.RegisterAllFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
 	if *printAnalyses {
 		fmt.Printf("Available analyses:%v\n", allAnalyses())
 		return 0
 	}
-	analyses, handler, err := resolvePipeline(analysisNames)
+	analyses, err := resolvePipeline(analysisNames)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -79,7 +67,7 @@ func do_main() int {
 		log.Fatalln(err)
 	}
 	defer golib.ProfileCpu()()
-	if err := p.Configure(&f, handler); err != nil {
+	if err := p.Configure(&f); err != nil {
 		log.Fatalln(err)
 	}
 	p.setup(analyses)
@@ -97,13 +85,8 @@ type parameterizedAnalysis struct {
 	params string
 }
 
-func resolvePipeline(analysisNames golib.StringSlice) ([]parameterizedAnalysis, bitflow.ReadSampleHandler, error) {
-	if len(analysisNames) == 0 {
-		analysisNames = append(analysisNames, "") // The default
-	}
+func resolvePipeline(analysisNames golib.StringSlice) ([]parameterizedAnalysis, error) {
 	result := make([]parameterizedAnalysis, 0, len(analysisNames))
-	var handlerNames []string
-	var handlers []bitflow.ReadSampleHandler
 	for _, name := range analysisNames {
 		params := ""
 		if index := strings.IndexRune(name, ','); index >= 0 {
@@ -112,22 +95,11 @@ func resolvePipeline(analysisNames golib.StringSlice) ([]parameterizedAnalysis, 
 		}
 		analysis, ok := analysis_registry[name]
 		if !ok {
-			handler, ok := handler_registry[name]
-			if !ok {
-				return nil, nil, fmt.Errorf("Analysis '%v' not registered. Available analyses:%v", name, allAnalyses())
-			}
-			handlerNames = append(handlerNames, name)
-			handlers = append(handlers, handler(params))
-		} else {
-			result = append(result, parameterizedAnalysis{analysis.Func, params})
+			return nil, fmt.Errorf("Analysis '%v' not registered. Available analyses:%v", name, allAnalyses())
 		}
+		result = append(result, parameterizedAnalysis{analysis.Func, params})
 	}
-	if len(handlers) > 1 {
-		return nil, nil, fmt.Errorf("Multiple sample source handlers defined, only one allowed: %v", handlerNames)
-	} else if len(handlers) == 0 {
-		return result, nil, nil
-	}
-	return result, handlers[0], nil
+	return result, nil
 }
 
 func allAnalyses() string {
@@ -151,18 +123,6 @@ func allAnalyses() string {
 			buf.WriteString(analysis.Params)
 			buf.WriteString(")")
 		}
-	}
-	handlers := make([]string, 0, len(handler_registry))
-	for name := range handler_registry {
-		if name != "" {
-			handlers = append(handlers, name)
-		}
-	}
-	sort.Strings(handlers)
-	for _, handler := range handlers {
-		buf.WriteString("\n")
-		buf.WriteString(" - ")
-		buf.WriteString(handler)
 	}
 	return buf.String()
 }
