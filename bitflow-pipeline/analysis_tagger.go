@@ -13,18 +13,14 @@ func init() {
 	RegisterAnalysisParams("set_filename", set_filename_tag,
 		"Number of levels to go up the directory. 0 means filename, etc. Requires file input and -e source_tag")
 
-	RegisterSampleHandler("source_tag", func(param string) bitflow.ReadSampleHandler {
-		if param == "" {
-			log.Fatalln("Sample handler source_tag needs a parameter")
-		}
-		return &SampleTagger{SourceTags: []string{param}}
-	})
-	RegisterSampleHandler("source_tag_append", func(param string) bitflow.ReadSampleHandler {
-		if param == "" {
-			log.Fatalln("Sample handler source_tag needs a parameter")
-		}
-		return &SampleTagger{SourceTags: []string{param}, DontOverwrite: true}
-	})
+	RegisterAnalysisParams("source_tag",
+		func(p *SamplePipeline, param string) {
+			set_sample_tagger(p, param, false)
+		}, "the tag to set as the data source")
+	RegisterAnalysisParams("source_tag_append",
+		func(p *SamplePipeline, param string) {
+			set_sample_tagger(p, param, true)
+		}, "the tag to set as the data source (will create new tag if already present)")
 }
 
 type SampleTagger struct {
@@ -46,6 +42,15 @@ func (h *SampleTagger) HandleSample(sample *bitflow.Sample, source string) {
 			}
 		}
 		sample.SetTag(tag, source)
+	}
+}
+
+func set_sample_tagger(p *SamplePipeline, tag string, dontOverwrite bool) {
+	if tag == "" {
+		log.Fatalln("Sample tagger needs a parameter")
+	}
+	if source, ok := p.Source.(bitflow.UnmarshallingMetricSource); ok {
+		source.SetSampleHandler(&SampleTagger{SourceTags: []string{tag}, DontOverwrite: dontOverwrite})
 	}
 }
 
