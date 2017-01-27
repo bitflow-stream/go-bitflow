@@ -1,14 +1,11 @@
 package query
 
-import "github.com/antongulenko/go-bitflow"
-
 type Node interface {
 	Pos() Token
 }
 
 type PipelineStep interface {
 	Node
-	ExtendPipeline(p *bitflow.SamplePipeline, builder PipelineBuilder) error
 }
 
 type Pipelines []Pipeline
@@ -39,8 +36,7 @@ func (p Pipeline) Pos() (res Token) {
 }
 
 type Fork struct {
-	Name      Token
-	Params    Token
+	Step
 	Pipelines Pipelines
 }
 
@@ -50,7 +46,7 @@ func (p Fork) Pos() Token {
 
 type Step struct {
 	Name   Token
-	Params Token
+	Params map[Token]Token
 }
 
 func (p Step) Pos() Token {

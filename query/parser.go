@@ -2,6 +2,7 @@ package query
 
 import (
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -76,9 +77,14 @@ func (p *Parser) scanOptional(expected TokenType) (Token, bool, error) {
 	return tok, ok, err
 }
 
-func (p *Parser) scanRequired(expected TokenType, expectedStr string) (Token, error) {
+func (p *Parser) scanRequired(expectedStr string, expected ...TokenType) (Token, error) {
 	tok, err := p.scan()
-	if err == nil && tok.Type != expected {
+	if err == nil {
+		for _, exp := range expected {
+			if tok.Type == exp {
+				return tok, err
+			}
+		}
 		err = ParserError{
 			Pos:     tok,
 			Message: "Expected '" + expectedStr + "'",
@@ -87,15 +93,20 @@ func (p *Parser) scanRequired(expected TokenType, expectedStr string) (Token, er
 	return tok, err
 }
 
-func (p *Parser) Parse() (Pipelines, error) {
+func (p *Parser) Parse() (Pipeline, error) {
 	pipes, err := p.parsePipelines(true, false)
 	if err == nil {
-		_, err = p.scanRequired(EOF, "EOF")
+		_, err = p.scanRequired("EOF", EOF)
 	}
 	if err != nil {
-		pipes = nil
+		return nil, err
+	} else {
+		if len(pipes) == 1 {
+			return pipes[0], nil
+		} else {
+			return Pipeline{pipes}, nil
+		}
 	}
-	return pipes, err
 }
 
 func (p *Parser) parsePipelines(isInput, isFork bool) (res Pipelines, err error) {
@@ -145,7 +156,7 @@ func (p *Parser) parseStep(isInput, isFork, firstStep bool) (PipelineStep, error
 	case OPEN:
 		return p.parseOpenedPipelines(isInput, false)
 	case STR, QUOT_STR:
-		params, haveParams, err := p.scanOptional(PARAM)
+		_, haveParams, err := p.scanOptional(PARAM_OPEN)
 		if err != nil {
 			return nil, err
 		}
@@ -153,6 +164,10 @@ func (p *Parser) parseStep(isInput, isFork, firstStep bool) (PipelineStep, error
 			return p.parseInOutStep(tok, (isInput || isFork) && firstStep)
 		}
 
+		params, err := p.parseOpenedParams()
+		if err != nil {
+			return nil, err
+		}
 		_, haveOpen, err := p.scanOptional(OPEN)
 		if err != nil {
 			return nil, err
@@ -160,8 +175,10 @@ func (p *Parser) parseStep(isInput, isFork, firstStep bool) (PipelineStep, error
 		if haveOpen {
 			pipes, err := p.parseOpenedPipelines(isInput, true)
 			return Fork{
-				Name:      tok,
-				Params:    params,
+				Step: Step{
+					Name:   tok,
+					Params: params,
+				},
 				Pipelines: pipes,
 			}, err
 		} else {
@@ -176,6 +193,63 @@ func (p *Parser) parseStep(isInput, isFork, firstStep bool) (PipelineStep, error
 			Message: ExpectedPipelineStepError,
 		}
 	}
+}
+
+func (p *Parser) parseOpenedParams() (map[Token]Token, error) {
+	if _, haveClose, err := p.scanOptional(PARAM_CLOSE); haveClose || err != nil {
+		return nil, err
+	}
+
+	res := make(map[Token]Token)
+	expect := 0
+	var name, value Token
+	var err error
+	for {
+		closed := false
+		switch expect {
+		case 0: // parameter name
+			name, err = p.scanRequired("parameter name (string)", STR, QUOT_STR)
+			expect = 1
+		case 1: // PARAM_EQ
+			_, err = p.scanRequired("=", PARAM_EQ)
+			expect = 2
+		case 2: // parameter value
+			value, err = p.scanRequired("parameter value (string)", STR, QUOT_STR)
+			expect = 3
+		case 3: // PARAM_SEP or PARAM_CLOSE
+			res[name] = value
+			name = Token{}
+			value = Token{}
+
+			var tok Token
+			tok, err = p.scan()
+			if err != nil {
+				break
+			}
+			switch tok.Type {
+			case PARAM_SEP:
+				expect = 0
+			case PARAM_CLOSE:
+				closed = true
+			default:
+				err = ParserError{
+					Pos:     tok,
+					Message: "Expected ',' or ')'",
+				}
+			}
+		default:
+			err = ParserError{
+				Message: fmt.Sprintf("Unexpected 'expect' value: %v", expect),
+			}
+		}
+		if closed || err != nil {
+			break
+		}
+	}
+	if len(res) == 0 {
+		res = nil
+	}
+	return res, err
 }
 
 func (p *Parser) parseInOutStep(firstStep Token, isInputStep bool) (PipelineStep, error) {
@@ -210,7 +284,7 @@ func (p *Parser) parseInOutStep(firstStep Token, isInputStep bool) (PipelineStep
 func (p *Parser) parseOpenedPipelines(isInput bool, isFork bool) (Pipelines, error) {
 	pipes, err := p.parsePipelines(isInput, isFork)
 	if err == nil {
-		_, err = p.scanRequired(CLOSE, "}")
+		_, err = p.scanRequired("}", CLOSE)
 	}
 	return pipes, err
 }

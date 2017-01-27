@@ -4,128 +4,148 @@ import (
 	"fmt"
 
 	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/golib"
 )
 
-type AnalysisFunc func(pipeline *SamplePipeline)
-type ParameterizedAnalysisFunc func(pipeline *SamplePipeline, params string)
-type HandlerFunc func(string) bitflow.ReadSampleHandler
+type AnalysisFunc func(pipeline *SamplePipeline, params map[string]string) error
 
 type PipelineBuilder struct {
 	Endpoints bitflow.EndpointFactory
 
 	analysis_registry map[string]registeredAnalysis
-	handler_registry  map[string]HandlerFunc
-}
-
-func NewPipelineBuilder() PipelineBuilder {
-	return PipelineBuilder{
-		analysis_registry: make(map[string]registeredAnalysis),
-		handler_registry:  make(map[string]HandlerFunc),
-	}
 }
 
 type registeredAnalysis struct {
-	Name   string
-	Func   ParameterizedAnalysisFunc
-	Params string
+	Name        string
+	Func        AnalysisFunc
+	Description string
 }
 
-func (b PipelineBuilder) RegisterSampleHandler(name string, sampleHandler HandlerFunc) {
-	if _, ok := handler_registry[name]; ok {
-		panic("Sample handler already registered: " + name)
+func (b *PipelineBuilder) RegisterAnalysis(name string, setupPipeline AnalysisFunc, description string) {
+	if b.analysis_registry == nil {
+		b.analysis_registry = make(map[string]registeredAnalysis)
 	}
-	b.handler_registry[name] = sampleHandler
-}
-
-func (b PipelineBuilder) RegisterAnalysis(name string, setupPipeline AnalysisFunc) {
-	b.RegisterAnalysisParams(name, func(pipeline *SamplePipeline, _ string) {
-		setupPipeline(pipeline)
-	}, "")
-}
-
-func (b PipelineBuilder) RegisterAnalysisParams(name string, setupPipeline ParameterizedAnalysisFunc, paramDescription string) {
 	if _, ok := b.analysis_registry[name]; ok {
 		panic("Analysis already registered: " + name)
 	}
-	b.analysis_registry[name] = registeredAnalysis{name, setupPipeline, paramDescription}
+	b.analysis_registry[name] = registeredAnalysis{name, setupPipeline, description}
 }
 
-func (builder PipelineBuilder) getAnalysis(name_tok Token) (AnalysisFunc, HandlerFunc, error) {
+func CheckParameters(params map[string]string, optional []string, required []string) error {
+	checked := map[string]bool{}
+	for _, opt := range optional {
+		checked[opt] = true
+	}
+	for _, req := range required {
+		if _, ok := params[req]; !ok {
+			return fmt.Errorf("Missing required parameter %v", req)
+		}
+		checked[req] = true
+	}
+	for key := range params {
+		if _, ok := checked[key]; !ok {
+			return fmt.Errorf("Unexpected parameter %v", key)
+		}
+	}
+	return nil
+}
+
+func (builder PipelineBuilder) MakePipeline(pipe Pipeline) (SamplePipeline, error) {
+	var res SamplePipeline
+	if len(pipe) == 0 {
+		return res, ParserError{
+			Pos:     pipe.Pos(),
+			Message: "Empty pipeline is not allowed",
+		}
+	}
+
+	if input, ok := pipe[0].(Input); ok {
+		pipe = pipe[1:]
+		for _, in := range input {
+			builder.Endpoints.FlagInputs = append(builder.Endpoints.FlagInputs, in.Content())
+		}
+	}
+	if len(pipe) >= 1 {
+		if output, ok := pipe[len(pipe)-1].(Output); ok {
+			pipe = pipe[:len(pipe)-1]
+			builder.Endpoints.FlagOutputs = golib.StringSlice{Token(output).Content()}
+		}
+	}
+	if err := res.Configure(&builder.Endpoints); err != nil {
+		return res, err
+	}
+
+	for _, step := range pipe {
+		switch step := step.(type) {
+		case Step:
+			if err := builder.addStep(&res, step); err != nil {
+				return res, err
+			}
+		default:
+			return res, ParserError{
+				Pos:     step.Pos(),
+				Message: fmt.Sprintf("Unsupported pipeline step type: %T", step),
+			}
+		}
+	}
+	return res, nil
+}
+
+func (builder PipelineBuilder) addStep(pipe *SamplePipeline, step Step) error {
+	stepFunc, err := builder.getAnalysis(step.Name)
+	if err != nil {
+		return err
+	}
+	params := make(map[string]string, len(step.Params))
+	for key, val := range step.Params {
+		params[key.Content()] = val.Content()
+	}
+	err = stepFunc(pipe, params)
+	if err != nil {
+		err = ParserError{
+			Pos:     step.Name,
+			Message: fmt.Sprintf("%v: %v", step.Name.Content(), err),
+		}
+	}
+	return err
+}
+
+func (builder PipelineBuilder) getAnalysis(name_tok Token) (AnalysisFunc, error) {
 	name := name_tok.Content()
-	if analysis, ok := analysis_registry[name]; ok {
-		return analysis, nil, nil
+	if analysis, ok := builder.analysis_registry[name]; ok {
+		return analysis.Func, nil
 	} else {
-		handler, ok := handler_registry[name]
-		if !ok {
-			return nil, nil, ParserError{
-				Pos:     name_tok,
-				Message: fmt.Sprintf("Pipeline step '%v' is unknown", name),
+		return nil, ParserError{
+			Pos:     name_tok,
+			Message: fmt.Sprintf("Pipeline step '%v' is unknown", name),
+		}
+	}
+}
+
+type SamplePipeline struct {
+	bitflow.SamplePipeline
+	lastProcessor bitflow.SampleProcessor
+}
+
+func (p *SamplePipeline) Add(step bitflow.SampleProcessor) *SamplePipeline {
+	if p.lastProcessor != nil {
+		if merger, ok := p.lastProcessor.(pipeline.MergableProcessor); ok {
+			if merger.MergeProcessor(step) {
+				// Merge successful: drop the incoming step
+				return p
 			}
 		}
-		return nil, handler, nil
 	}
+	p.lastProcessor = step
+	p.SamplePipeline.Add(step)
+	return p
 }
 
-func (builder PipelineBuilder) MakePipelines(pipes Pipelines) (res []bitflow.SamplePipeline, err error) {
-	for _, pipe := range pipes {
-		for _, step := range pipe {
-			var currentPipeline bitflow.SamplePipeline
-			if err := step.ExtendPipeline(&currentPipeline, builder); err != nil {
-				return nil, err
-			}
-			res = append(res, currentPipeline)
-		}
+func (p *SamplePipeline) Batch(steps ...pipeline.BatchProcessingStep) *SamplePipeline {
+	batch := new(pipeline.BatchProcessor)
+	for _, step := range steps {
+		batch.Add(step)
 	}
-	return
-}
-
-func (p Pipelines) ExtendPipeline(pipe *bitflow.SamplePipelin, builder PipelineBuildere) error {
-
-}
-
-func (p Fork) ExtendPipeline(pipe *bitflow.SamplePipeline, builder PipelineBuilder) error {
-	return ParserError{
-		Pos:     p.Pos(),
-		Message: "Forks are not implemented",
-	}
-}
-
-func (p Step) ExtendPipeline(pipe *bitflow.SamplePipeline, builder PipelineBuilder) error {
-
-}
-
-func (p Input) ExtendPipeline(pipe *bitflow.SamplePipeline, builder PipelineBuilder) error {
-	if pipe.Source != nil {
-		return ParserError{
-			Pos:     p.Pos(),
-			Message: "Multiple inputs defined for the pipeline",
-		}
-	}
-	for _, in := range p {
-		builder.Endpoints.FlagInputs = append(builder.Endpoints.FlagInputs, in.Content())
-	}
-	source, err := builder.Endpoints.CreateInput()
-	if err != nil {
-		return err
-	}
-	pipe.Source = source
-	return nil
-}
-
-func (p Output) ExtendPipeline(pipe *bitflow.SamplePipeline, builder PipelineBuilder) error {
-	if pipe.Sink != nil {
-		return ParserError{
-			Pos:     p.Pos(),
-			Message: "Multiple outputs defined for the pipeline",
-		}
-	}
-
-	builder.Endpoints.FlagOutputs = golib.StringSlice{p.Content()}
-	sink, err := builder.Endpoints.CreateOutput()
-	if err != nil {
-		return err
-	}
-	pipe.Sink = sink
-	return nil
+	return p.Add(batch)
 }

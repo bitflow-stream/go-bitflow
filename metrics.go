@@ -116,11 +116,19 @@ func (filter *MetricFilter) Exclude(regex *regexp.Regexp) *MetricFilter {
 }
 
 func (filter *MetricFilter) ExcludeStr(substr string) *MetricFilter {
-	return filter.ExcludeRegex(regexp.QuoteMeta(substr))
+	res, err := filter.ExcludeRegex(regexp.QuoteMeta(substr))
+	if err != nil {
+		panic(err)
+	}
+	return res
 }
 
-func (filter *MetricFilter) ExcludeRegex(regexStr string) *MetricFilter {
-	return filter.Exclude(regexp.MustCompile(regexStr))
+func (filter *MetricFilter) ExcludeRegex(regexStr string) (*MetricFilter, error) {
+	regex, err := regexp.Compile(regexStr)
+	if err != nil {
+		return nil, err
+	}
+	return filter.Exclude(regex), nil
 }
 
 func (filter *MetricFilter) Include(regex *regexp.Regexp) *MetricFilter {
@@ -129,11 +137,19 @@ func (filter *MetricFilter) Include(regex *regexp.Regexp) *MetricFilter {
 }
 
 func (filter *MetricFilter) IncludeStr(substr string) *MetricFilter {
-	return filter.IncludeRegex(regexp.QuoteMeta(substr))
+	res, err := filter.IncludeRegex(regexp.QuoteMeta(substr))
+	if err != nil {
+		panic(err)
+	}
+	return res
 }
 
-func (filter *MetricFilter) IncludeRegex(regexStr string) *MetricFilter {
-	return filter.Include(regexp.MustCompile(regexStr))
+func (filter *MetricFilter) IncludeRegex(regexStr string) (*MetricFilter, error) {
+	regex, err := regexp.Compile(regexStr)
+	if err != nil {
+		return nil, err
+	}
+	return filter.Include(regex), nil
 }
 
 func (filter *MetricFilter) filter(name string) bool {

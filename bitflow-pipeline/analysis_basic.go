@@ -1,53 +1,59 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/golib"
 )
 
 func init() {
 	// Control execution
-	RegisterAnalysis("noop", noop_processor)
-	RegisterAnalysis("sleep", sleep_samples)
-	RegisterAnalysisParams("batch", generic_batch, "tag for triggering flush of batch")
-	RegisterAnalysisParams("decouple", decouple_samples, "number of buffered samples")
-	RegisterAnalysisParams("split_files", split_files, "tag to use for separating the data")
-	RegisterAnalysisParams("do", general_expression, "expression to execute for each sample")
+	RegisterAnalysis("noop", noop_processor, "Pass samples through without modification")
+	RegisterAnalysis("sleep", sleep_samples, "Between every two samples, sleep the time difference between their timestamps")
+	RegisterAnalysisParams("batch", generic_batch, "Collect samples and flush them when the given tag changes its value. Affects the follow-up analysis step, if it is also a batch analysis", []string{"tag"})
+	RegisterAnalysisParamsErr("decouple", decouple_samples, "Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples", []string{"batch"})
+
+	RegisterAnalysisParams("split_files", split_files, "Split the samples into multiple files, one file per value of the given tag. Must be used as last step before a file output", []string{"tag"})
+	RegisterAnalysisParamsErr("do", general_expression, "Execute the given expression on every sample", []string{"expr"})
 
 	// Set metadata
-	RegisterAnalysisParams("tags", set_tags, "comma-separated list of key-value tags")
-	RegisterAnalysis("set_time", set_time_processor)
+	RegisterAnalysisParams("tags", set_tags, "Set the given tags on every sample", nil)
+	RegisterAnalysis("set_time", set_time_processor, "Set the timestamp on every processed sample to the current time")
 
 	// Select
-	RegisterAnalysisParams("pick", pick_x_percent, "samples to keep 0..1")
-	RegisterAnalysisParams("head", pick_head, "number of first samples to keep")
-	RegisterAnalysisParams("filter", filter_expression, "Filter expression including metrics as variables. Tags accessed via tag() and has_tag().")
+	RegisterAnalysisParamsErr("pick", pick_x_percent, "Forward only a percentage of samples, parameter is in the range 0..1", []string{"percent"})
+	RegisterAnalysisParamsErr("head", pick_head, "Forward only a number of the first processed samples", []string{"num"})
+	RegisterAnalysisParamsErr("filter", filter_expression, "Filter the samples based on a boolean expression", []string{"expr"})
 
 	// Reorder
-	RegisterAnalysis("shuffle", shuffle_data)
-	RegisterAnalysisParams("sort", sort_data, "comma-separated list of tags. Default criterion is the timestamp.")
+	RegisterAnalysis("shuffle", shuffle_data, "Shuffle a batch of samples to a random ordering")
+	RegisterAnalysisParams("sort", sort_data, "Sort a batch of samples based on the values of the given comma-separated tags. The default criterion is the timestmap", []string{}, "tags")
 
 	// Change values
-	RegisterAnalysis("scale_min_max", normalize_min_max)
-	RegisterAnalysis("standardize", normalize_standardize)
+	RegisterAnalysis("scale_min_max", normalize_min_max, "Normalize a batch of samples using a min-max scale")
+	RegisterAnalysis("standardize", normalize_standardize, "Normalize a batch of samples based on the mean and std-deviation")
 
 	// Change header/metrics
-	RegisterAnalysisParams("remap", remap_metrics, "comma-separated list of metrics")
-	RegisterAnalysisParams("rename", rename_metrics, "comma-separated list of regex=replace pairs")
-	RegisterAnalysisParams("include", filter_metrics_include, "Regex to match metrics to be included")
-	RegisterAnalysisParams("exclude", filter_metrics_exclude, "Regex to match metrics to be excluded")
-	RegisterAnalysisParams("filter_variance", filter_variance, "minimum weighted stddev of the population (stddev / mean)")
-	RegisterAnalysisParams("avg", aggregate_avg, "Optional parameter: duration or number of samples.")
-	RegisterAnalysisParams("slope", aggregate_slope, "Optional parameter: duration or number of samples.")
-	RegisterAnalysis("merge_headers", merge_headers)
-	RegisterAnalysis("strip", strip_metrics)
+	RegisterAnalysisParams("remap", remap_metrics, "Change (reorder) the header to the given comma-separated list of metrics", []string{"header"})
+	RegisterAnalysisParamsErr("rename", rename_metrics, "Find the keys (regexes) in every metric name and replace the matched parts with the given values", nil)
+	RegisterAnalysisParamsErr("include", filter_metrics_include, "Match every metric with the given regex and only include the matched metrics", []string{"m"})
+	RegisterAnalysisParamsErr("exclude", filter_metrics_exclude, "Match every metric with the given regex and exclude the matched metrics", []string{"m"})
+	RegisterAnalysisParamsErr("filter_variance", filter_variance, "In a batch of samples, filter out the metrics with a variance lower than the given theshold (based on the weighted stdev of the population, stddev/mean)", []string{"min"})
+	RegisterAnalysisParamsErr("avg", aggregate_avg, "Add an average metric for every incoming metric. Optional parameter: duration or number of samples", []string{}, "window")
+	RegisterAnalysisParamsErr("slope", aggregate_slope, "Add a slope metric for every incoming metric. Optional parameter: duration or number of samples", []string{}, "window")
+	RegisterAnalysis("merge_headers", merge_headers, "Accept any number of changing headers and merge them into one output header when flushing the results")
+	RegisterAnalysis("strip", strip_metrics, "Remove all metrics, only keeping the timestamp and the tags of eacy sample")
+}
+
+func parameterError(name string, err error) error {
+	return fmt.Errorf("Failed to parse '%v' parameter: %v", name, err)
 }
 
 func noop_processor(p *SamplePipeline) {
@@ -58,10 +64,10 @@ func shuffle_data(p *SamplePipeline) {
 	p.Batch(NewSampleShuffler())
 }
 
-func sort_data(p *SamplePipeline, params string) {
+func sort_data(p *SamplePipeline, params map[string]string) {
 	var tags []string
-	if params != "" {
-		tags = strings.Split(params, ",")
+	if tags_param, ok := params["tags"]; ok {
+		tags = strings.Split(tags_param, ",")
 	}
 	p.Batch(&SampleSorter{tags})
 }
@@ -78,10 +84,10 @@ func normalize_standardize(p *SamplePipeline) {
 	p.Batch(new(StandardizationScaling))
 }
 
-func pick_x_percent(p *SamplePipeline, params string) {
-	pick_percentage, err := strconv.ParseFloat(params, 64)
+func pick_x_percent(p *SamplePipeline, params map[string]string) error {
+	pick_percentage, err := strconv.ParseFloat(params["percent"], 64)
 	if err != nil {
-		log.Fatalln("Failed to parse parameter for -e pick:", err)
+		return parameterError("percent", err)
 	}
 	counter := float64(0)
 	p.Add(&SampleFilter{
@@ -95,134 +101,126 @@ func pick_x_percent(p *SamplePipeline, params string) {
 			return false, nil
 		},
 	})
+	return nil
 }
 
-func filter_metrics_include(p *SamplePipeline, param string) {
-	p.Add(NewMetricFilter().IncludeRegex(param))
+func filter_metrics_include(p *SamplePipeline, params map[string]string) error {
+	filter, err := NewMetricFilter().IncludeRegex(params["m"])
+	if err == nil {
+		p.Add(filter)
+	}
+	return err
 }
 
-func filter_metrics_exclude(p *SamplePipeline, param string) {
-	p.Add(NewMetricFilter().ExcludeRegex(param))
+func filter_metrics_exclude(p *SamplePipeline, params map[string]string) error {
+	filter, err := NewMetricFilter().ExcludeRegex(params["m"])
+	if err == nil {
+		p.Add(filter)
+	}
+	return err
 }
 
-func filter_expression(pipe *SamplePipeline, params string) {
-	add_expression(pipe, params, true)
+func filter_expression(pipe *SamplePipeline, params map[string]string) error {
+	return add_expression(pipe, params, true)
 }
 
-func general_expression(pipe *SamplePipeline, params string) {
-	add_expression(pipe, params, false)
+func general_expression(pipe *SamplePipeline, params map[string]string) error {
+	return add_expression(pipe, params, false)
 }
 
-func add_expression(pipe *SamplePipeline, expression string, filter bool) {
+func add_expression(pipe *SamplePipeline, params map[string]string, filter bool) error {
 	proc := &ExpressionProcessor{Filter: filter}
-	err := proc.AddExpression(expression)
+	err := proc.AddExpression(params["expr"])
+	if err == nil {
+		pipe.Add(proc)
+	}
+	return err
+}
+
+func decouple_samples(pipe *SamplePipeline, params map[string]string) error {
+	buf, err := strconv.Atoi(params["batch"])
 	if err != nil {
-		log.Fatalln(err)
-	}
-	pipe.Add(proc)
-}
-
-func decouple_samples(pipe *SamplePipeline, params string) {
-	buf := 150000
-	if params != "" {
-		var err error
-		if buf, err = strconv.Atoi(params); err != nil {
-			log.Fatalln("Failed to parse parameter for -e decouple:", err)
-		}
+		err = parameterError("batch", err)
 	} else {
-		log.Warnln("No parameter for -e decouple, default channel buffer:", buf)
+		pipe.Add(&DecouplingProcessor{ChannelBuffer: buf})
 	}
-	pipe.Add(&DecouplingProcessor{ChannelBuffer: buf})
+	return err
 }
 
-func remap_metrics(pipe *SamplePipeline, params string) {
-	var metrics []string
-	if params != "" {
-		metrics = strings.Split(params, ",")
-	}
+func remap_metrics(pipe *SamplePipeline, params map[string]string) {
+	metrics := strings.Split(params["header"], ",")
 	pipe.Add(NewMetricMapper(metrics))
 }
 
-func filter_variance(pipe *SamplePipeline, params string) {
-	variance, err := strconv.ParseFloat(params, 64)
+func filter_variance(pipe *SamplePipeline, params map[string]string) error {
+	variance, err := strconv.ParseFloat(params["min"], 64)
 	if err != nil {
-		log.Fatalln("Error parsing parameter for -e filter_variance:", err)
+		err = parameterError("min", err)
+	} else {
+		pipe.Batch(NewMetricVarianceFilter(variance))
 	}
-	pipe.Batch(NewMetricVarianceFilter(variance))
+	return err
 }
 
-func pick_head(pipe *SamplePipeline, params string) {
-	num, err := strconv.Atoi(params)
+func pick_head(pipe *SamplePipeline, params map[string]string) error {
+	num, err := strconv.Atoi(params["num"])
 	if err != nil {
-		log.Fatalln("Error parsing parameter for -e head:", err)
+		err = parameterError("num", err)
+	} else {
+		processed := 0
+		pipe.Add(&SimpleProcessor{
+			Description: "Pick first " + strconv.Itoa(num) + " samples",
+			Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+				if num > processed {
+					processed++
+					return sample, header, nil
+				} else {
+					return nil, nil, nil
+				}
+			},
+		})
 	}
-	processed := 0
-	pipe.Add(&SimpleProcessor{
-		Description: "Pick first " + strconv.Itoa(num) + " samples",
-		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
-			if num > processed {
-				processed++
-				return sample, header, nil
-			} else {
-				return nil, nil, nil
-			}
-		},
-	})
+	return err
 }
 
-func set_tags(pipe *SamplePipeline, params string) {
-	pairs := strings.Split(params, ",")
-	keys := make([]string, len(pairs))
-	values := make([]string, len(pairs))
-	for i, pair := range pairs {
-		parts := strings.SplitN(pair, "=", 2)
-		if len(parts) != 2 {
-			log.Fatalln("Parameter for -e tags must be comma-separated key-value pairs: -e tags,KEY=VAL,KEY2=VAL2")
-		}
-		keys[i] = parts[0]
-		values[i] = parts[1]
-	}
+func set_tags(pipe *SamplePipeline, params map[string]string) {
 	pipe.Add(&SimpleProcessor{
-		Description: "",
+		Description: fmt.Sprintf("Set tags %v", params),
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
-			for i, key := range keys {
-				sample.SetTag(key, values[i])
+			for key, value := range params {
+				sample.SetTag(key, value)
 			}
 			return sample, header, nil
 		},
 	})
 }
 
-func split_files(p *SamplePipeline, params string) {
+func split_files(p *SamplePipeline, params map[string]string) {
 	distributor := &TagsDistributor{
-		Tags:        []string{params},
+		Tags:        []string{params["tag"]},
 		Separator:   "-",
 		Replacement: "_empty_",
 	}
 	p.Add(NewMetricFork(distributor, MultiFileSuffixBuilder(nil)))
 }
 
-func rename_metrics(p *SamplePipeline, params string) {
+func rename_metrics(p *SamplePipeline, params map[string]string) error {
+	if len(params) == 0 {
+		return errors.New("Need at least one regex=replacement parameter")
+	}
+
 	var regexes []*regexp.Regexp
 	var replacements []string
-	for i, part := range strings.Split(params, ",") {
-		keyVal := strings.SplitN(part, "=", 2)
-		if len(keyVal) != 2 {
-			log.Fatalf("Parmameter %v for -e rename is not regex=replace: %v", i, part)
-		}
-		regexCode := keyVal[0]
-		replace := keyVal[1]
-		r, err := regexp.Compile(regexCode)
+	for regex, repl := range params {
+		r, err := regexp.Compile(regex)
 		if err != nil {
-			log.Fatalf("Error compiling regex %v: %v", regexCode, err)
+			return parameterError(regex, err)
 		}
 		regexes = append(regexes, r)
-		replacements = append(replacements, replace)
-	}
-	if len(regexes) == 0 {
-		log.Fatalln("-e rename needs at least one regex=replace parameter (comma-separated)")
+		replacements = append(replacements, repl)
 	}
 	p.Add(NewMetricRenamer(regexes, replacements))
+	return nil
 }
 
 func strip_metrics(p *SamplePipeline) {
@@ -262,32 +260,42 @@ func set_time_processor(p *SamplePipeline) {
 	})
 }
 
-func aggregate_avg(p *SamplePipeline, param string) {
-	p.Add(create_aggregator(param).AddAvg("_avg"))
-}
-
-func aggregate_slope(p *SamplePipeline, param string) {
-	p.Add(create_aggregator(param).AddSlope("_slope"))
-}
-
-func create_aggregator(param string) *FeatureAggregator {
-	if param == "" {
-		return &FeatureAggregator{}
+func aggregate_avg(p *SamplePipeline, params map[string]string) error {
+	agg, err := create_aggregator(params)
+	if err != nil {
+		return err
 	}
-	dur, err := time.ParseDuration(param)
-	if err == nil {
-		return &FeatureAggregator{WindowDuration: dur}
-	}
-	num, err := strconv.Atoi(param)
-	if err == nil {
-		return &FeatureAggregator{WindowSize: num}
-	}
-	log.Fatalf("Failed to parse aggregation parameter %v: Need either a number, or a duration", param)
+	p.Add(agg.AddAvg("_avg"))
 	return nil
 }
 
-func generic_batch(p *SamplePipeline, param string) {
+func aggregate_slope(p *SamplePipeline, params map[string]string) error {
+	agg, err := create_aggregator(params)
+	if err != nil {
+		return err
+	}
+	p.Add(agg.AddSlope("_slope"))
+	return nil
+}
+
+func create_aggregator(params map[string]string) (*FeatureAggregator, error) {
+	window, haveWindow := params["window"]
+	if !haveWindow {
+		return &FeatureAggregator{}, nil
+	}
+	dur, err1 := time.ParseDuration(window)
+	if err1 == nil {
+		return &FeatureAggregator{WindowDuration: dur}, nil
+	}
+	num, err2 := strconv.Atoi(window)
+	if err2 == nil {
+		return &FeatureAggregator{WindowSize: num}, nil
+	}
+	return nil, parameterError("window", golib.MultiError{err1, err2})
+}
+
+func generic_batch(p *SamplePipeline, params map[string]string) {
 	p.Add(&BatchProcessor{
-		FlushTag: param,
+		FlushTag: params["tag"],
 	})
 }

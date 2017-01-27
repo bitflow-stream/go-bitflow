@@ -12,9 +12,9 @@ import (
 )
 
 func init() {
-	RegisterAnalysis("tag_injection_info", tag_injection_info)
-	RegisterAnalysis("injection_directory_structure", injection_directory_structure)
-	RegisterAnalysisParams("split_experiments", split_experiments, "number of seconds without sample before starting a new file")
+	RegisterAnalysis("tag_injection_info", tag_injection_info, "Convert tags (cls, target) into (injected, measured, anomaly)")
+	RegisterAnalysis("injection_directory_structure", injection_directory_structure, "Split samples into a directory structure based on the tags provided by tag_injection_info. Must be used as last step before a file output")
+	RegisterAnalysisParamsErr("split_experiments", split_experiments, "Split samples into separate files based on their timestamps. When the difference between two (sorted) timestamps is too large, start a new file. Must be used as the last step before a file output", []string{"min_duration"})
 }
 
 const (
@@ -92,10 +92,12 @@ func (d *TimeDistributor) Distribute(sample *bitflow.Sample, header *bitflow.Hea
 	return []interface{}{d.counter}
 }
 
-func split_experiments(p *SamplePipeline, params string) {
-	duration, err := time.ParseDuration(params)
+func split_experiments(p *SamplePipeline, params map[string]string) error {
+	duration, err := time.ParseDuration(params["min_duration"])
 	if err != nil {
-		log.Fatalln("Error parsing duration parameter for -e split_experiments:", err)
+		err = parameterError("min_duration", err)
+	} else {
+		p.Add(NewMetricFork(&TimeDistributor{MinimumPause: duration}, MultiFileSuffixBuilder(nil)))
 	}
-	p.Add(NewMetricFork(&TimeDistributor{MinimumPause: duration}, MultiFileSuffixBuilder(nil)))
+	return err
 }

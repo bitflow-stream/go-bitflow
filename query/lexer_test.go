@@ -104,38 +104,52 @@ func (suite *lexerTestSuite) TestOperators() {
 		})
 }
 
-func (suite *lexerTestSuite) TestStrParam() {
-	suite.test("xx \"c c\nv\" a d (a b c) (\"a\"\n \"c\",--v) \"x\"xxx\"tt\" cc(({(}(cc() \"{f{f(ff)\"(g)",
+func (suite *lexerTestSuite) TestStr() {
+	suite.test("xx \"c =,(){}'`c v\" ` \" =,(){} a '`a\"d\"`c`'=,(){}t'",
 		[]Token{
 			{Type: STR, Lit: "xx"},
 			{Type: WS, Lit: " "},
-			{Type: QUOT_STR, Lit: "\"c c\nv\""},
+			{Type: QUOT_STR, Lit: "\"c =,(){}'`c v\""},
 			{Type: WS, Lit: " "},
+			{Type: QUOT_STR, Lit: "` \" =,(){} a '`"},
 			{Type: STR, Lit: "a"},
+			{Type: QUOT_STR, Lit: "\"d\""},
+			{Type: QUOT_STR, Lit: "`c`"},
+			{Type: QUOT_STR, Lit: "'=,(){}t'"},
+			{Type: EOF, Lit: string(eof)},
+		})
+}
+
+func (suite *lexerTestSuite) TestParam() {
+	suite.test(`(a=b)( ("a,a"=='b=(b',  d='ee'))`,
+		[]Token{
+			{Type: PARAM_OPEN, Lit: "("},
+			{Type: STR, Lit: "a"},
+			{Type: PARAM_EQ, Lit: "="},
+			{Type: STR, Lit: "b"},
+			{Type: PARAM_CLOSE, Lit: ")"},
+			{Type: PARAM_OPEN, Lit: "("},
 			{Type: WS, Lit: " "},
+			{Type: PARAM_OPEN, Lit: "("},
+			{Type: QUOT_STR, Lit: "\"a,a\""},
+			{Type: PARAM_EQ, Lit: "="},
+			{Type: PARAM_EQ, Lit: "="},
+			{Type: QUOT_STR, Lit: "'b=(b'"},
+			{Type: PARAM_SEP, Lit: ","},
+			{Type: WS, Lit: "  "},
 			{Type: STR, Lit: "d"},
-			{Type: WS, Lit: " "},
-			{Type: PARAM, Lit: "(a b c)"},
-			{Type: WS, Lit: " "},
-			{Type: PARAM, Lit: "(\"a\"\n \"c\",--v)"},
-			{Type: WS, Lit: " "},
-			{Type: QUOT_STR, Lit: "\"x\""},
-			{Type: STR, Lit: "xxx"},
-			{Type: QUOT_STR, Lit: "\"tt\""},
-			{Type: WS, Lit: " "},
-			{Type: STR, Lit: "cc"},
-			{Type: PARAM, Lit: "(({(}(cc()"},
-			{Type: WS, Lit: " "},
-			{Type: QUOT_STR, Lit: "\"{f{f(ff)\""},
-			{Type: PARAM, Lit: "(g)"},
+			{Type: PARAM_EQ, Lit: "="},
+			{Type: QUOT_STR, Lit: "'ee'"},
+			{Type: PARAM_CLOSE, Lit: ")"},
+			{Type: PARAM_CLOSE, Lit: ")"},
 			{Type: EOF, Lit: string(eof)},
 		})
 }
 
 func (suite *lexerTestSuite) TestExample() {
 	suite.test(
-		`{ "file1" file2 -> avg;:111->slope(t=2);host:44} -> "do stats"(a.ini)->`+
-			`fork(rr=2){"1"->min;2->noop}->{extend->outfile;:444} ; host:6767->otherfile`,
+		`{ "file1" file2 -> avg;:111->slope(t=2);host:44} -> "do stats"(file=a.ini)->`+
+			`fork(rr=2,'parallel'=true){"1"->min;2->noop}->{extend->outfile;:444} ; host:6767->otherfile`,
 		[]Token{
 			{Type: OPEN, Lit: "{"},
 			{Type: WS, Lit: " "},
@@ -149,20 +163,41 @@ func (suite *lexerTestSuite) TestExample() {
 			{Type: SEP, Lit: ";"},
 			{Type: STR, Lit: ":111"},
 			{Type: NEXT, Lit: "->"},
+
 			{Type: STR, Lit: "slope"},
-			{Type: PARAM, Lit: "(t=2)"},
+			{Type: PARAM_OPEN, Lit: "("},
+			{Type: STR, Lit: "t"},
+			{Type: PARAM_EQ, Lit: "="},
+			{Type: STR, Lit: "2"},
+			{Type: PARAM_CLOSE, Lit: ")"},
+
 			{Type: SEP, Lit: ";"},
 			{Type: STR, Lit: "host:44"},
 			{Type: CLOSE, Lit: "}"},
 			{Type: WS, Lit: " "},
 			{Type: NEXT, Lit: "->"},
 			{Type: WS, Lit: " "},
+
 			{Type: QUOT_STR, Lit: "\"do stats\""},
-			{Type: PARAM, Lit: "(a.ini)"},
+			{Type: PARAM_OPEN, Lit: "("},
+			{Type: STR, Lit: "file"},
+			{Type: PARAM_EQ, Lit: "="},
+			{Type: STR, Lit: "a.ini"},
+			{Type: PARAM_CLOSE, Lit: ")"},
+
 			{Type: NEXT, Lit: "->"},
 
 			{Type: STR, Lit: "fork"},
-			{Type: PARAM, Lit: "(rr=2)"},
+			{Type: PARAM_OPEN, Lit: "("},
+			{Type: STR, Lit: "rr"},
+			{Type: PARAM_EQ, Lit: "="},
+			{Type: STR, Lit: "2"},
+			{Type: PARAM_SEP, Lit: ","},
+			{Type: QUOT_STR, Lit: "'parallel'"},
+			{Type: PARAM_EQ, Lit: "="},
+			{Type: STR, Lit: "true"},
+			{Type: PARAM_CLOSE, Lit: ")"},
+
 			{Type: OPEN, Lit: "{"},
 			{Type: QUOT_STR, Lit: "\"1\""},
 			{Type: NEXT, Lit: "->"},
@@ -193,10 +228,10 @@ func (suite *lexerTestSuite) TestExample() {
 }
 
 func (suite *lexerTestSuite) TestErrors() {
-	suite.testErr("x- (o)", []Token{
+	suite.testErr("x- (", []Token{
 		{Type: STR, Lit: "x"},
 		{Type: NEXT, Lit: "- "},
-		{Type: PARAM, Lit: "(o)"}, // Continue lexing normally after this error
+		{Type: PARAM_OPEN, Lit: "("}, // Continue lexing normally after this error
 		{Type: EOF, Lit: string(eof)},
 	}, 1, ErrorMissingNext)
 
@@ -204,18 +239,25 @@ func (suite *lexerTestSuite) TestErrors() {
 		{Type: STR, Lit: "x"},
 		{Type: QUOT_STR, Lit: "\"XX"},
 		{Type: EOF, Lit: string(eof)},
-	}, 1, ErrorMissingQuote)
+	}, 1, fmt.Errorf(ErrorMissingQuote, "\""))
 
-	suite.testErr("x(XX", []Token{
+	suite.testErr("x'XX", []Token{
 		{Type: STR, Lit: "x"},
-		{Type: PARAM, Lit: "(XX"},
+		{Type: QUOT_STR, Lit: "'XX"},
 		{Type: EOF, Lit: string(eof)},
-	}, 1, ErrorMissingClosingBracket)
+	}, 1, fmt.Errorf(ErrorMissingQuote, "'"))
+
+	suite.testErr("x`XX", []Token{
+		{Type: STR, Lit: "x"},
+		{Type: QUOT_STR, Lit: "`XX"},
+		{Type: EOF, Lit: string(eof)},
+	}, 1, fmt.Errorf(ErrorMissingQuote, "`"))
 }
 
 func (suite *lexerTestSuite) TestContent() {
 	suite.Equal("xx", Token{Type: STR, Lit: "xx"}.Content())
-	suite.Equal("xx", Token{Type: QUOT_STR, Lit: "\"xx\""}.Content())
 	suite.Equal("(xx)", Token{Type: QUOT_STR, Lit: "\"(xx)\""}.Content())
-	suite.Equal(" xx ", Token{Type: PARAM, Lit: "( xx )"}.Content())
+	suite.Equal("xx", Token{Type: QUOT_STR, Lit: "\"xx\""}.Content())
+	suite.Equal("xx", Token{Type: QUOT_STR, Lit: "'xx'"}.Content())
+	suite.Equal("xx", Token{Type: QUOT_STR, Lit: "`xx`"}.Content())
 }

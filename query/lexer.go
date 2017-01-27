@@ -18,8 +18,13 @@ const (
 
 	// Literals
 	STR
-	QUOT_STR
-	PARAM
+	QUOT_STR // Surrounded by one of: " ' `
+
+	// Parameters
+	PARAM_OPEN  // (
+	PARAM_CLOSE // )
+	PARAM_SEP   // ,
+	PARAM_EQ    // =
 
 	// Misc & operators
 	SEP   // ;
@@ -31,9 +36,8 @@ const (
 )
 
 var (
-	ErrorMissingQuote          = errors.New("Unexpected EOF, missing closing '\"'")
-	ErrorMissingClosingBracket = errors.New("Unexpected EOF, missing closing ')'")
-	ErrorMissingNext           = errors.New("Expected '->'")
+	ErrorMissingQuote = "Unexpected EOF, missing closing %v quote"
+	ErrorMissingNext  = errors.New("Expected '->'")
 )
 
 // These runes interrupt a non-quoted string
@@ -42,8 +46,13 @@ var specialRunes = map[rune]bool{
 	'{':  true,
 	'}':  true,
 	'-':  true,
-	'(':  true,
 	'"':  true,
+	'\'': true,
+	'`':  true,
+	'(':  true,
+	')':  true,
+	'=':  true,
+	',':  true,
 	' ':  true,
 	'\t': true,
 	'\n': true,
@@ -58,14 +67,21 @@ type Token struct {
 
 func (tok Token) Content() string {
 	lit := tok.Lit
-	if tok.Type == QUOT_STR || tok.Type == PARAM {
-		lit = lit[1 : len(tok.Lit)-1] // Strip quotes or brackets
+	if tok.Type == QUOT_STR {
+		lit = lit[1 : len(tok.Lit)-1] // Strip quotes
 	}
 	return lit
 }
 
 func (tok Token) String() string {
-	return fmt.Sprintf("[%v-%v, %v] '%v'", tok.Start, tok.End, tok.Type, tok.Lit)
+	typ := tok.Type.String()
+	lit := tok.Content()
+	if typ == lit {
+		typ = ""
+	} else {
+		typ = ", " + typ
+	}
+	return fmt.Sprintf("[%v-%v%v] '%v'", tok.Start, tok.End, typ, tok.Lit)
 }
 
 func (t TokenType) String() (s string) {
@@ -80,16 +96,22 @@ func (t TokenType) String() (s string) {
 		s = "STR"
 	case QUOT_STR:
 		s = "QUOT_STR"
-	case PARAM:
-		s = "PARAM"
+	case PARAM_OPEN:
+		s = "("
+	case PARAM_CLOSE:
+		s = ")"
+	case PARAM_EQ:
+		s = "="
+	case PARAM_SEP:
+		s = ","
 	case SEP:
-		s = "SEP"
+		s = ";"
 	case NEXT:
-		s = "NEXT"
+		s = "->"
 	case OPEN:
-		s = "OPEN"
+		s = "{"
 	case CLOSE:
-		s = "CLOSE"
+		s = "}"
 	default:
 		s = fmt.Sprintf("UNKNOWN_TOKEN_TYPE(%v)", t)
 	}
@@ -155,6 +177,18 @@ func (s *Scanner) Scan() (Token, error) {
 	case ';':
 		tok.Type = SEP
 		return tok, nil
+	case '(':
+		tok.Type = PARAM_OPEN
+		return tok, nil
+	case ')':
+		tok.Type = PARAM_CLOSE
+		return tok, nil
+	case '=':
+		tok.Type = PARAM_EQ
+		return tok, nil
+	case ',':
+		tok.Type = PARAM_SEP
+		return tok, nil
 	case '-':
 		ch2 := s.read()
 		tok.Type = NEXT
@@ -165,12 +199,9 @@ func (s *Scanner) Scan() (Token, error) {
 		} else {
 			return tok, ErrorMissingNext
 		}
-	case '(':
+	case '"', '`', '\'':
 		s.unread()
-		return s.scanParams()
-	case '"':
-		s.unread()
-		return s.scanQuotedStr()
+		return s.scanQuotedStr(ch)
 	default:
 		s.unread()
 		return s.scanDirectStr(), nil
@@ -199,41 +230,19 @@ func (s *Scanner) scanWhitespace() Token {
 	return tok
 }
 
-func (s *Scanner) scanParams() (tok Token, err error) {
-	tok.Type = PARAM
-	tok.Start = s.pos
-
-	var buf bytes.Buffer
-	buf.WriteRune(s.read()) // Current character is '('
-	for {
-		if ch := s.read(); ch == eof {
-			err = ErrorMissingClosingBracket
-			break
-		} else {
-			buf.WriteRune(ch)
-			if ch == ')' {
-				break
-			}
-		}
-	}
-	tok.End = s.pos
-	tok.Lit = buf.String()
-	return
-}
-
-func (s *Scanner) scanQuotedStr() (tok Token, err error) {
+func (s *Scanner) scanQuotedStr(quoteRune rune) (tok Token, err error) {
 	tok.Type = QUOT_STR
 	tok.Start = s.pos
 
 	var buf bytes.Buffer
-	buf.WriteRune(s.read()) // Current character is '"'
+	buf.WriteRune(s.read()) // Current character is the opening quote
 	for {
 		if ch := s.read(); ch == eof {
-			err = ErrorMissingQuote
+			err = fmt.Errorf(ErrorMissingQuote, string(quoteRune))
 			break
 		} else {
 			buf.WriteRune(ch)
-			if ch == '"' {
+			if ch == quoteRune {
 				break
 			}
 		}
