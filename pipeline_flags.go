@@ -97,20 +97,18 @@ func RegisterGolibFlags() {
 	golib.RegisterFlags(golib.FlagsAll & ^golib.FlagsOFL)
 }
 
-// RegisterFlags registers all flags to the global CommandLine object.
-func (p *EndpointFactory) RegisterFlags() {
-	p.RegisterFlagsTo(flag.CommandLine)
+// RegisterConfigFlags registers all configuration flags to the global CommandLine object.
+func (p *EndpointFactory) RegisterConfigFlags() {
+	p.RegisterGeneralFlagsTo(flag.CommandLine)
+	p.RegisterInputConfigFlagsTo(flag.CommandLine)
+	p.RegisterOutputConfigFlagsTo(flag.CommandLine)
 }
 
-// RegisterFlagsTo registers all input and output flags by calling RegisterInputFlagsTo
-// and RegisterOutputFlagsTo. The flags configure many aspects of the pipeline,
-// including data source, data sink, performance parameters, debug parmeters and
-// other behavior parameters. See the help texts for more information on the available
-// parameters.
-func (p *EndpointFactory) RegisterFlagsTo(f *flag.FlagSet) {
-	p.RegisterGeneralFlagsTo(f)
-	p.RegisterInputFlagsTo(f)
-	p.RegisterOutputFlagsTo(f)
+// RegisterConfigFlags registers all flags to the global CommandLine object.
+func (p *EndpointFactory) RegisterAllFlags() {
+	p.RegisterGeneralFlagsTo(flag.CommandLine)
+	p.RegisterInputConfigFlagsTo(flag.CommandLine)
+	p.RegisterOutputFlagsTo(flag.CommandLine)
 }
 
 // RegisterGeneralFlagsTo registers flags that configure different aspects of both
@@ -131,17 +129,22 @@ func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
 }
 
 // RegisterInputFlagsTo registers flags that configure aspects of data input.
-func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
+func (p *EndpointFactory) RegisterInputConfigFlagsTo(f *flag.FlagSet) {
 	f.BoolVar(&p.FlagFilesKeepAlive, "files-keep-alive", false, "Do not shut down after all files have been read. Useful in combination with -listen-buffer.")
 	f.BoolVar(&p.FlagInputFilesRobust, "files-robust", false, "When encountering errors while reading files, print warnings instead of failing.")
 	f.UintVar(&p.FlagInputTcpAcceptLimit, "listen-limit", 0, "Limit number of simultaneous TCP connections accepted for incoming data.")
 }
 
-// RegisterOutputFlagsTo registers flags that configure data outputs.
+// RegisterOutputFlagsTo registers flags that select and configure data outputs.
 func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
-	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
+	p.RegisterOutputConfigFlagsTo(f)
 	f.BoolVar(&p.FlagOutputBox, "p", false, "Display samples in a box on the command line")
 	f.Var(&p.FlagOutputs, "o", "Data sink(s) for outputting data")
+}
+
+// RegisterOutputConfigFlagsTo registers flags that configure data outputs.
+func (p *EndpointFactory) RegisterOutputConfigFlagsTo(f *flag.FlagSet) {
+	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
 }
 
 // HasOutputFlag returns true, if at least one data output flag is defined in the
