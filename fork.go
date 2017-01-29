@@ -26,12 +26,9 @@ type MetricFork struct {
 	Builder       PipelineBuilder
 	ParallelClose bool
 
-	pipelines        map[interface{}]bitflow.MetricSink
-	runningPipelines int
-	stopped          bool
-	stoppedCond      sync.Cond
-	subpipelineWg    sync.WaitGroup
-	merger           ForkMerger
+	pipelines map[interface{}]bitflow.MetricSink
+	multi     *MultiPipeline
+	merger    ForkMerger
 }
 
 func NewMetricFork(distributor ForkDistributor, builder PipelineBuilder) *MetricFork {
@@ -40,20 +37,15 @@ func NewMetricFork(distributor ForkDistributor, builder PipelineBuilder) *Metric
 		Distributor:   distributor,
 		pipelines:     make(map[interface{}]bitflow.MetricSink),
 		ParallelClose: true,
+		multi:         NewMultiPipeline(),
 	}
-	fork.stoppedCond.L = new(sync.Mutex)
 	fork.merger.fork = fork
 	return fork
 }
 
 func (f *MetricFork) Start(wg *sync.WaitGroup) golib.StopChan {
 	result := f.AbstractProcessor.Start(wg)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		f.waitForSubpipelines()
-		f.CloseSink()
-	}()
+	f.multi.RunAfterClose(f.CloseSink, wg)
 	return result
 }
 
@@ -76,84 +68,40 @@ func (f *MetricFork) Sample(sample *bitflow.Sample, header *bitflow.Header) erro
 }
 
 func (f *MetricFork) Close() {
-	f.stoppedCond.L.Lock()
-	defer f.stoppedCond.L.Unlock()
-	f.stopped = true
-
-	var wg sync.WaitGroup
-	for i, pipeline := range f.pipelines {
-		f.pipelines[i] = nil // Enable GC
-		if pipeline != nil {
-			wg.Add(1)
-			go func(pipeline bitflow.MetricSink) {
-				defer wg.Done()
-				pipeline.Close()
-			}(pipeline)
-			if !f.ParallelClose {
-				wg.Wait()
-			}
-		}
-	}
-	wg.Wait()
-	f.stoppedCond.Broadcast()
+	f.multi.Close()
 }
 
 func (f *MetricFork) String() string {
-	return fmt.Sprintf("Fork. Distributor: %v, Builder: %v", f.Distributor, f.Builder)
+	return "Fork: " + f.Distributor.String()
+}
+
+func (f *MetricFork) ContainedStringers() []fmt.Stringer {
+	if builder, ok := f.Builder.(StringerContainer); ok {
+		return builder.ContainedStringers()
+	} else {
+		return []fmt.Stringer{f.Builder}
+	}
 }
 
 func (f *MetricFork) newPipeline(key interface{}) bitflow.MetricSink {
 	log.Debugf("[%v]: Starting forked subpipeline %v", f, key)
 	pipeline := f.Builder.BuildPipeline(key, &f.merger)
-	group := golib.NewTaskGroup()
-	pipeline.Source = nil // The source is already started
-	pipeline.Construct(group)
-	f.runningPipelines++
-	waitingTasks, channels := group.StartTasks(&f.subpipelineWg)
-	f.subpipelineWg.Add(1)
-
-	go func() {
-		defer f.subpipelineWg.Done()
-
-		idx, err := golib.WaitForAny(channels)
-		if err != nil {
-			log.Errorln(err)
-		}
-		group.ReverseStop(golib.DefaultPrintTaskStopWait) // The Stop() calls are actually ignored because group contains only MetricSinks
-		_ = golib.PrintErrors(channels, waitingTasks, golib.DefaultPrintTaskStopWait)
-
-		if idx == -1 {
-			// Inactive subpipeline can occur when all processors and the sink return nil from Start().
-			// This means that none of the elements of the subpipeline spawned any extra goroutines.
-			// They only react on Sample() and wait for the final Close() call.
-			log.Debugf("[%v]: Subpipeline inactive: %v", f, key)
+	if pipeline.Source != nil {
+		// Forked pipelines should not have an explicit source, as they receive
+		// samples from the steps preceeding them
+		log.Warnf("The Source field of the %v subpipeline was set (%v) and is ignored", key, pipeline.Source)
+		pipeline.Source = nil
+	}
+	first := f.multi.StartPipeline(pipeline, func(isPassive bool) {
+		f.pipelines[key] = nil // Allow GC
+		if isPassive {
+			log.Debugf("[%v]: Passive subpipeline: %v", f, key)
 		} else {
 			log.Debugf("[%v]: Finished forked subpipeline %v", f, key)
 		}
-
-		f.stoppedCond.L.Lock()
-		defer f.stoppedCond.L.Unlock()
-		f.runningPipelines--
-		f.stoppedCond.Broadcast()
-	}()
-
-	var first bitflow.MetricSink
-	if len(pipeline.Processors) == 0 {
-		first = pipeline.Sink
-	} else {
-		first = pipeline.Processors[0]
-	}
+	})
 	f.pipelines[key] = first
 	return first
-}
-
-func (f *MetricFork) waitForSubpipelines() {
-	f.stoppedCond.L.Lock()
-	for !f.stopped || f.runningPipelines > 0 {
-		f.stoppedCond.Wait()
-	}
-	f.stoppedCond.L.Unlock()
-	f.subpipelineWg.Wait()
 }
 
 type ForkMerger struct {

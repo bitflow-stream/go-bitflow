@@ -51,39 +51,44 @@ func CheckParameters(params map[string]string, optional []string, required []str
 	return nil
 }
 
-func (builder PipelineBuilder) MakePipeline(pipe Pipeline) (SamplePipeline, error) {
-	var res SamplePipeline
+func (builder PipelineBuilder) MakePipeline(pipe Pipeline) (*SamplePipeline, error) {
 	if len(pipe) == 0 {
-		return res, ParserError{
+		return nil, ParserError{
 			Pos:     pipe.Pos(),
 			Message: "Empty pipeline is not allowed",
 		}
 	}
+	endpoints := builder.Endpoints // Copy all parmeters
 
 	if input, ok := pipe[0].(Input); ok {
 		pipe = pipe[1:]
 		for _, in := range input {
-			builder.Endpoints.FlagInputs = append(builder.Endpoints.FlagInputs, in.Content())
+			endpoints.FlagInputs = append(endpoints.FlagInputs, in.Content())
 		}
 	}
 	if len(pipe) >= 1 {
 		if output, ok := pipe[len(pipe)-1].(Output); ok {
 			pipe = pipe[:len(pipe)-1]
-			builder.Endpoints.FlagOutputs = golib.StringSlice{Token(output).Content()}
+			endpoints.FlagOutputs = golib.StringSlice{Token(output).Content()}
 		}
 	}
-	if err := res.Configure(&builder.Endpoints); err != nil {
-		return res, err
+	res := new(SamplePipeline)
+	if err := res.Configure(&endpoints); err != nil {
+		return nil, err
 	}
 
 	for _, step := range pipe {
 		switch step := step.(type) {
 		case Step:
-			if err := builder.addStep(&res, step); err != nil {
-				return res, err
+			if err := builder.addStep(res, step); err != nil {
+				return nil, err
+			}
+		case Pipelines:
+			if err := builder.addMultiplex(res, step); err != nil {
+				return nil, err
 			}
 		default:
-			return res, ParserError{
+			return nil, ParserError{
 				Pos:     step.Pos(),
 				Message: fmt.Sprintf("Unsupported pipeline step type: %T", step),
 			}
@@ -121,6 +126,49 @@ func (builder PipelineBuilder) getAnalysis(name_tok Token) (AnalysisFunc, error)
 			Message: fmt.Sprintf("Pipeline step '%v' is unknown", name),
 		}
 	}
+}
+
+func (builder PipelineBuilder) addMultiplex(pipe *SamplePipeline, pipes Pipelines) error {
+	num := len(pipes) // Must be the same for the builder and the distributor
+	subpipelines := make(MultiplexPipelineBuilder, num)
+	for i, subpipe := range pipes {
+		subpipe, err := builder.MakePipeline(subpipe)
+		if err != nil {
+			return err
+		}
+		subpipelines[i] = subpipe
+	}
+
+	// TODO control/configure parallelism of the Fork
+
+	pipe.Add(&pipeline.MetricFork{
+		ParallelClose: true,
+		Distributor:   pipeline.NewMultiplexDistributor(num),
+		Builder:       subpipelines,
+	})
+	return nil
+}
+
+type MultiplexPipelineBuilder []*SamplePipeline
+
+func (b MultiplexPipelineBuilder) BuildPipeline(key interface{}, output *pipeline.ForkMerger) *bitflow.SamplePipeline {
+	pipe := &(b[key.(int)].SamplePipeline) // Type of key must be int, and index must be in range
+	if pipe.Sink == nil {
+		pipe.Sink = output
+	}
+	return pipe
+}
+
+func (b MultiplexPipelineBuilder) String() string {
+	return fmt.Sprintf("Multiplex builder, %v subpipelines", len(b))
+}
+
+func (b MultiplexPipelineBuilder) ContainedStringers() []fmt.Stringer {
+	res := make([]fmt.Stringer, len(b))
+	for i, pipe := range b {
+		res[i] = pipe
+	}
+	return res
 }
 
 type SamplePipeline struct {
