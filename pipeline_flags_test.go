@@ -193,7 +193,7 @@ func (suite *PipelineTestSuite) Test_no_inputs() {
 	factory := suite.make_factory()
 	source, err := factory.CreateInput()
 	suite.NoError(err)
-	suite.Equal(new(EmptyMetricSource), source)
+	suite.Equal(nil, source)
 }
 
 func (suite *PipelineTestSuite) Test_input_file() {
@@ -306,8 +306,18 @@ func (suite *PipelineTestSuite) Test_outputs() {
 		factory.FlagOutputs = outputs
 		sink, err := factory.CreateOutput()
 		suite.NoError(err)
-		for i, ex := range expected {
-			suite.Equal(ex, sink[i], fmt.Sprintf("Sink index %v", i))
+		if sink == nil {
+			suite.Empty(expected)
+		} else {
+			sinks, ok := sink.(AggregateSink)
+			if ok {
+				for i, ex := range expected {
+					suite.Equal(ex, sinks[i], fmt.Sprintf("Sink index %v", i))
+				}
+			} else {
+				suite.Len(expected, 1)
+				suite.Equal(expected[0], sink)
+			}
 		}
 	}
 

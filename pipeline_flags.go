@@ -243,15 +243,12 @@ func (p *EndpointFactory) CreateInput() (UnmarshallingMetricSource, error) {
 			}
 		}
 	}
-	if result == nil {
-		result = new(EmptyMetricSource)
-	}
 	return result, nil
 }
 
 // CreateInput creates a MetricSink object based on the Flag* values in the EndpointFactory
 // object.
-func (p *EndpointFactory) CreateOutput() (AggregateSink, error) {
+func (p *EndpointFactory) CreateOutput() (MetricSink, error) {
 	var sinks AggregateSink
 	haveConsoleOutput := false
 	for _, output := range p.FlagOutputs {
@@ -320,7 +317,14 @@ func (p *EndpointFactory) CreateOutput() (AggregateSink, error) {
 		}
 		sinks = append(sinks, sink)
 	}
-	return sinks, nil
+	switch len(sinks) {
+	case 0:
+		return nil, nil
+	case 1:
+		return sinks[0], nil
+	default:
+		return sinks, nil
+	}
 }
 
 // EndpointDescription describes a data endpoint, regardless of the data direction

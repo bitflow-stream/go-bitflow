@@ -151,7 +151,7 @@ type TCPListenerSink struct {
 
 // String implements the MetrincSink interface.
 func (sink *TCPListenerSink) String() string {
-	return "TCP sink on " + sink.task.ListenEndpoint
+	return "TCP sink on " + sink.Endpoint
 }
 
 // Start implements the MetricSink interface. It creates the TCP socket and

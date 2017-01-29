@@ -23,7 +23,7 @@ type SamplePipeline struct {
 // to the given golib.TaskGroup. Afterwards, tasks.WaitAndStop() cann be called
 // to start the entire pipeline. At least the Source and the Sink field
 // must be set in the pipeline. The Construct method will not fail without them,
-// but starting the resulting pipeline will not work.
+// but starting the resulting pipeline will usually not work.
 func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 	// First connect all sources with their sinks
 	source := p.Source
@@ -65,8 +65,7 @@ func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 }
 
 // Configure fills the Sink and Source fields of the SamplePipeline using
-// the given EndpointFactory. Configure calls ConfigureSource
-// and ConfigureSink and returns the first error (if any).
+// the given EndpointFactory.
 func (p *SamplePipeline) Configure(f *EndpointFactory) error {
 	if err := p.ConfigureSource(f); err != nil {
 		return err
@@ -77,32 +76,32 @@ func (p *SamplePipeline) Configure(f *EndpointFactory) error {
 	return nil
 }
 
-// ConfigureSink uses the given EndpointFactory to fill the Sink field of the
-// SamplePipeline.
-func (p *SamplePipeline) ConfigureSink(f *EndpointFactory) error {
-	sinks, err := f.CreateOutput()
-	if err != nil {
-		return err
-	}
-	if len(sinks) == 0 {
-		log.Warnln("No data sinks selected, data will not be output anywhere.")
-	}
-	p.Sink = sinks
-	return nil
+// ConfigureSource sets the Source field of the SamplePipeline using
+// the given EndpointFactory.
+func (p *SamplePipeline) ConfigureSource(f *EndpointFactory) (err error) {
+	p.Source, err = f.CreateInput()
+	return
 }
 
-// ConfigureSource uses the given EndpointFactory to fill the Source field of the
-// SamplePipeline.
-func (p *SamplePipeline) ConfigureSource(f *EndpointFactory) error {
-	source, err := f.CreateInput()
-	if err != nil {
-		return err
+// ConfigureSink sets the Sink field of the SamplePipeline using
+// the given EndpointFactory.
+func (p *SamplePipeline) ConfigureSink(f *EndpointFactory) (err error) {
+	p.Sink, err = f.CreateOutput()
+	return
+}
+
+// ConfigureStandalone prints a warning if the sink or source of the pipeline
+// are not set, and sets them to non-nil values. This can optionally be called after
+// p.Configure().
+func (p *SamplePipeline) ConfigureStandalone() {
+	if p.Sink == nil {
+		log.Warnln("No data sinks selected, data will not be output anywhere.")
+		p.Sink = AggregateSink{}
 	}
-	if _, ok := source.(*EmptyMetricSource); source == nil || ok {
+	if p.Source == nil {
 		log.Warnln("No data source provided, no data will be received or generated.")
+		p.Source = new(EmptyMetricSource)
 	}
-	p.Source = source
-	return nil
 }
 
 // CheckTasks returns a non-nil error if the receiving SamplePipeline has no data sink,
