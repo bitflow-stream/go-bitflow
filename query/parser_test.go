@@ -43,9 +43,14 @@ func (suite *parserTestSuite) test(code string, expectedRes interface{}) {
 }
 
 func (suite *parserTestSuite) TestErrorString() {
-	suite.Equal("msg (at [2-4, ->] '->')", ParserError{
+	suite.Equal("msg (at [2-4] '->')", ParserError{
 		Message: "msg",
 		Pos:     Token{Start: 2, End: 4, Lit: "->", Type: NEXT},
+	}.Error())
+
+	suite.Equal("msg (at [2-4, STR] 'XX')", ParserError{
+		Message: "msg",
+		Pos:     Token{Start: 2, End: 4, Lit: "XX", Type: STR},
 	}.Error())
 }
 

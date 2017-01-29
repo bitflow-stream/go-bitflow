@@ -10,6 +10,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 )
@@ -17,6 +18,8 @@ import (
 type SamplePipeline struct {
 	*query.SamplePipeline
 }
+
+var builder query.PipelineBuilder
 
 func RegisterAnalysis(name string, setupPipeline func(pipeline *SamplePipeline), description string) {
 	builder.RegisterAnalysis(name, func(pipeline *query.SamplePipeline, params map[string]string) error {
@@ -64,14 +67,13 @@ func RegisterAnalysisParamsErr(name string, setupPipeline func(pipeline *SampleP
 	}, description)
 }
 
-var builder query.PipelineBuilder
-
 func main() {
 	os.Exit(do_main())
 }
 
 func do_main() int {
 	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
+	printPipeline := flag.Bool("print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
 
 	bitflow.RegisterGolibFlags()
 	builder.Endpoints.RegisterConfigFlags()
@@ -88,18 +90,35 @@ func do_main() int {
 		log.Fatalln("Use -print-analyses to print all available analysis steps.")
 	}
 	defer golib.ProfileCpu()()
-	for _, str := range pipeline.Print() {
-		log.Println(str)
+	print_pipeline(pipeline)
+	if *printPipeline {
+		return 0
 	}
 	return pipeline.StartAndWait()
 }
 
-func make_pipeline() (query.SamplePipeline, error) {
+func make_pipeline() (*query.SamplePipeline, error) {
 	script := strings.Join(flag.Args(), " ")
-	parser := query.NewParser(bytes.NewReader([]byte(script)))
-	pipes, err := parser.Parse()
-	if err != nil {
-		return query.SamplePipeline{}, err
+	if strings.TrimSpace(script) == "" {
+		return nil, errors.New("Please provide a bitflow pipeline script")
 	}
-	return builder.MakePipeline(pipes)
+	parser := query.NewParser(bytes.NewReader([]byte(script)))
+	pipe, err := parser.Parse()
+	if err != nil {
+		return nil, err
+	}
+	return builder.MakePipeline(pipe)
+}
+
+func print_pipeline(pipe *query.SamplePipeline) {
+	printer := pipeline.IndentPrinter{
+		OuterIndent:  "│ ",
+		InnerIndent:  "├─",
+		CornerIndent: "└─",
+		FillerIndent: "  ",
+	}
+	lines := printer.PrintLines(pipe)
+	for _, str := range lines {
+		log.Println(str)
+	}
 }

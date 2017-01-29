@@ -30,6 +30,14 @@ func (p *BatchProcessor) Add(step BatchProcessingStep) *BatchProcessor {
 	return p
 }
 
+func (p *BatchProcessor) ContainedStringers() []fmt.Stringer {
+	res := make([]fmt.Stringer, len(p.Steps))
+	for i, step := range p.Steps {
+		res[i] = step
+	}
+	return res
+}
+
 func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := p.Check(sample, header); err != nil {
 		return err
@@ -99,23 +107,15 @@ func (p *BatchProcessor) executeSteps(samples []*bitflow.Sample, header *bitflow
 }
 
 func (p *BatchProcessor) String() string {
-	steps := make([]string, len(p.Steps))
-	for i, step := range p.Steps {
-		steps[i] = step.String()
-	}
-	var extra string
-	if len(p.Steps) == 0 {
-		extra = "s"
-	} else if len(p.Steps) == 1 {
-		extra = ": "
-	} else {
-		extra = "s: "
+	extra := "s"
+	if len(p.Steps) == 1 {
+		extra = ""
 	}
 	flushed := ""
 	if p.FlushTag != "" {
-		flushed = " flushed with " + p.FlushTag
+		flushed = ", flushed with " + p.FlushTag
 	}
-	return fmt.Sprintf("BatchProcessor%v %v step%s%v", flushed, len(p.Steps), extra, strings.Join(steps, ", "))
+	return fmt.Sprintf("BatchProcessor (%v step%s%s)", len(p.Steps), extra, flushed)
 }
 
 func (p *BatchProcessor) MergeProcessor(other bitflow.SampleProcessor) bool {

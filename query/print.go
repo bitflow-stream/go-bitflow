@@ -2,31 +2,26 @@ package query
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 )
 
-func (p *SamplePipeline) Print() []string {
-	return p.print("")
+func (p *SamplePipeline) String() string {
+	return "Pipeline"
 }
 
-func (p *SamplePipeline) print(indent string) []string {
-	processors := p.Processors
-	if len(processors) == 0 {
-		return []string{"Empty analysis pipeline"}
-	} else if len(processors) == 1 {
-		return []string{"Analysis: " + processors[0].String()}
-	} else {
-		res := make([]string, 0, len(processors)+1)
-		res = append(res, "Analysis pipeline:")
-		for i, proc := range processors {
-			indent := "├─"
-			if i == len(processors)-1 {
-				indent = "└─"
-			}
-			res = append(res, indent+proc.String())
-		}
-		return res
+func (p *SamplePipeline) ContainedStringers() []fmt.Stringer {
+	res := make([]fmt.Stringer, 0, len(p.Processors)+2)
+	if p.Source != nil {
+		res = append(res, p.Source)
 	}
+	for _, proc := range p.Processors {
+		res = append(res, proc)
+	}
+	if p.Sink != nil {
+		res = append(res, p.Sink)
+	}
+	return res
 }
 
 func (builder PipelineBuilder) PrintAllAnalyses() string {
