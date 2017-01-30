@@ -200,65 +200,29 @@ func (s *EmptyMetricSource) SetSampleHandler(handler ReadSampleHandler) {
 	// Do nothing
 }
 
-// AggregateSink will distribute all incoming Headers and Samples to a slice of
-// outgoing MetricSinks. This is used for example to write the same samples both
-// to a file and a TCP connection.
-type AggregateSink []MetricSink
-
-// String implements the golib.Task interface.
-func (agg AggregateSink) String() string {
-	return fmt.Sprintf("AggregateSink(len %v)", len(agg))
+// EmptyMetricSink implements the MetricSink interface without outputting the
+// received samples anywhere.
+type EmptyMetricSink struct {
+	AbstractMetricSink
 }
 
 // Start implements the golib.Task interface.
-// The full golib.Task interface cannot really be supported here, so this panics
-// if it's called. AggregateSink should not be added to a golib.TaskGroup
-// directly, instead all the MetricSinks in it should be added separately.
-func (agg AggregateSink) Start(wg *sync.WaitGroup) golib.StopChan {
-	panic("Start should not be called on AggregateSink")
+func (s *EmptyMetricSink) Start(wg *sync.WaitGroup) golib.StopChan {
+	return nil
 }
 
-// Stop implements the golib.Task interface, but panics when called.
-// See Start.
-func (agg AggregateSink) Stop() {
-	panic("Stop should not be called on AggregateSink")
+// String implements the MetricSink interface.
+func (s *EmptyMetricSink) Close() {
 }
 
-// Close implements the MetricSink interface by forwarding the call to all
-// MetricSinks in the receiver.
-func (agg AggregateSink) Close() {
-	for _, sink := range agg {
-		sink.Close()
-	}
+// String implements the golib.Task interface.
+func (s *EmptyMetricSink) String() string {
+	return "empty metric sink"
 }
 
-// SetMarshaller implements the MarshallingMetricSink interface by forwarding the call
-// to all MarshallingMetricSinks in the receiver. It preforms type checks
-// on all MetricSinks.
-func (agg AggregateSink) SetMarshaller(marshaller Marshaller) {
-	for _, sink := range agg {
-		if um, ok := sink.(MarshallingMetricSink); ok {
-			um.SetMarshaller(marshaller)
-		}
-	}
-}
-
-// Sample implements MetricSink by forwarding the call to all MetricSinks in
-// the receiver. This is not done in parallel. All errors are combined and
-// returned as one error. A sanity check makes sure that the Sample and the
-// Header fit each other.
-func (agg AggregateSink) Sample(sample *Sample, header *Header) error {
-	if len(agg) == 0 {
-		// Perform sanity check, since no child-sinks are there to perform it
-		return sample.Check(header)
-	}
-	var errors golib.MultiError
-	for _, sink := range agg {
-		if err := sink.Sample(sample, header); err != nil {
-			errors.Add(err)
-		}
-	}
-	return errors.NilOrError()
+// Sample implements the MetricSink interface.
+func (s *EmptyMetricSink) Sample(sample *Sample, header *Header) error {
+	return nil
 }
 
 // SynchronizingMetricSink is a MetricSinkBase implementation that allows multiple

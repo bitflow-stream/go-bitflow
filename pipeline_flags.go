@@ -18,11 +18,12 @@ type MarshallingFormat string
 type EndpointType string
 
 const (
-	UndefinedEndpoint = EndpointType("")
-	TcpEndpoint       = EndpointType("tcp")
-	TcpListenEndpoint = EndpointType("listen")
-	FileEndpoint      = EndpointType("file")
-	StdEndpoint       = EndpointType("std")
+	UndefinedEndpoint  = EndpointType("")
+	TcpEndpoint        = EndpointType("tcp")
+	TcpListenEndpoint  = EndpointType("listen")
+	FileEndpoint       = EndpointType("file")
+	StdEndpoint        = EndpointType("std")
+	ConsoleBoxEndpoint = EndpointType("box")
 
 	UndefinedFormat = MarshallingFormat("")
 	TextFormat      = MarshallingFormat("text")
@@ -35,7 +36,7 @@ const (
 
 var (
 	OutputFormats = []MarshallingFormat{TextFormat, CsvFormat, BinaryFormat}
-	AllTransports = []EndpointType{TcpEndpoint, TcpListenEndpoint, FileEndpoint, StdEndpoint}
+	AllTransports = []EndpointType{TcpEndpoint, TcpListenEndpoint, FileEndpoint, StdEndpoint, ConsoleBoxEndpoint}
 
 	allFormatsMap = map[MarshallingFormat]bool{
 		TextFormat:   true,
@@ -78,15 +79,6 @@ type EndpointFactory struct {
 
 	FlagParallelHandler ParallelSampleHandler
 
-	// Output
-
-	FlagOutputBox bool
-	FlagOutputs   golib.StringSlice
-
-	// Input
-
-	FlagInputs golib.StringSlice
-
 	// testmode is a flag used by tests to suppress initialization routines
 	// that are not testable. It is a hack to keep the EndpointFactory easy to use
 	// while making it testable.
@@ -97,17 +89,10 @@ func RegisterGolibFlags() {
 	golib.RegisterFlags(golib.FlagsAll & ^golib.FlagsOFL)
 }
 
-// RegisterConfigFlags registers all configuration flags to the global CommandLine object.
-func (p *EndpointFactory) RegisterConfigFlags() {
-	p.RegisterGeneralFlagsTo(flag.CommandLine)
-	p.RegisterInputConfigFlagsTo(flag.CommandLine)
-	p.RegisterOutputConfigFlagsTo(flag.CommandLine)
-}
-
 // RegisterConfigFlags registers all flags to the global CommandLine object.
-func (p *EndpointFactory) RegisterAllFlags() {
+func (p *EndpointFactory) RegisterFlags() {
 	p.RegisterGeneralFlagsTo(flag.CommandLine)
-	p.RegisterInputConfigFlagsTo(flag.CommandLine)
+	p.RegisterInputFlagsTo(flag.CommandLine)
 	p.RegisterOutputFlagsTo(flag.CommandLine)
 }
 
@@ -129,54 +114,23 @@ func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
 }
 
 // RegisterInputFlagsTo registers flags that configure aspects of data input.
-func (p *EndpointFactory) RegisterInputConfigFlagsTo(f *flag.FlagSet) {
+func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
 	f.BoolVar(&p.FlagFilesKeepAlive, "files-keep-alive", false, "Do not shut down after all files have been read. Useful in combination with -listen-buffer.")
 	f.BoolVar(&p.FlagInputFilesRobust, "files-robust", false, "When encountering errors while reading files, print warnings instead of failing.")
 	f.UintVar(&p.FlagInputTcpAcceptLimit, "listen-limit", 0, "Limit number of simultaneous TCP connections accepted for incoming data.")
 }
 
-// RegisterOutputFlagsTo registers flags that select and configure data outputs.
-func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
-	p.RegisterOutputConfigFlagsTo(f)
-	f.BoolVar(&p.FlagOutputBox, "p", false, "Display samples in a box on the command line")
-	f.Var(&p.FlagOutputs, "o", "Data sink(s) for outputting data")
-}
-
 // RegisterOutputConfigFlagsTo registers flags that configure data outputs.
-func (p *EndpointFactory) RegisterOutputConfigFlagsTo(f *flag.FlagSet) {
+func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
 	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
 }
 
-// HasOutputFlag returns true, if at least one data output flag is defined in the
-// receiving EndpointFactory. If false is returned, the CreateOutput method will return
-// an empty instance of AggregateSink.
-func (p *EndpointFactory) HasOutputFlag() bool {
-	return p.FlagOutputBox || len(p.FlagOutputs) > 0
-}
-
-// ReadInputArguments uses all non-flag command line arguments (given by flag.Args())
-// to set the FlagInputs field.
-//
-// A non-nil error is returned, any of the non-flag parameters start with a dash ("-").
-// A parameter starting with a dash indicates that the user specified flags after the
-// first non-flag command line argument, which is most likely not intended.
-func (p *EndpointFactory) ReadInputArguments() error {
-	inputs := flag.Args()
-	for _, arg := range inputs {
-		if strings.HasPrefix(arg, "-") && arg != "-" {
-			return fmt.Errorf("All flags must be specified before the first non-flag parameter. Flag %s was specified after %s.", arg, inputs[0])
-		}
-	}
-	p.FlagInputs = inputs
-	return nil
-}
-
-// CreateInput creates a MetricSource object based on the Flag* values in the EndpointFactory
-// object.
-func (p *EndpointFactory) CreateInput() (UnmarshallingMetricSource, error) {
+// CreateInput creates a MetricSource object based on the given input endpoint descriptions
+// and the configuration flags in the EndpointFactory.
+func (p *EndpointFactory) CreateInput(inputs ...string) (UnmarshallingMetricSource, error) {
 	var result UnmarshallingMetricSource
 	inputType := UndefinedEndpoint
-	for _, input := range p.FlagInputs {
+	for _, input := range inputs {
 		endpoint, err := ParseEndpointDescription(input)
 		if err != nil {
 			return nil, err
@@ -221,7 +175,7 @@ func (p *EndpointFactory) CreateInput() (UnmarshallingMetricSource, error) {
 				source.Reader = reader
 				result = source
 			default:
-				return nil, errors.New("Unknown endpoint type: " + string(endpoint.Type))
+				return nil, errors.New("Unknown input endpoint type: " + string(endpoint.Type))
 			}
 		} else {
 			if inputType != endpoint.Type {
@@ -246,68 +200,28 @@ func (p *EndpointFactory) CreateInput() (UnmarshallingMetricSource, error) {
 	return result, nil
 }
 
-// CreateInput creates a MetricSink object based on the Flag* values in the EndpointFactory
-// object.
-func (p *EndpointFactory) CreateOutput() (MetricSink, error) {
-	var sinks AggregateSink
-	haveConsoleOutput := false
-	for _, output := range p.FlagOutputs {
-		endpoint, err := ParseEndpointDescription(output)
-		if err != nil {
-			return nil, err
-		}
-		var marshallingSink *AbstractMarshallingMetricSink
-		marshaller := endpoint.OutputFormat().Marshaller()
-		switch endpoint.Type {
-		case StdEndpoint:
-			if haveConsoleOutput {
-				return nil, errors.New("Cannot define multiple outputs to stdout")
-			}
-			haveConsoleOutput = true
-			sink := new(ConsoleSink)
-			marshallingSink = &sink.AbstractMarshallingMetricSink
-			sinks = append(sinks, sink)
-			if txt, ok := marshaller.(TextMarshaller); ok {
-				txt.AssumeStdout = true
-			}
-			if txt, ok := marshaller.(*TextMarshaller); ok {
-				txt.AssumeStdout = true
-			}
-		case FileEndpoint:
-			sink := &FileSink{
-				Filename:   endpoint.Target,
-				IoBuffer:   p.FlagIoBuffer,
-				CleanFiles: p.FlagOutputFilesClean,
-			}
-			marshallingSink = &sink.AbstractMarshallingMetricSink
-			sinks = append(sinks, sink)
-		case TcpEndpoint:
-			sink := &TCPSink{
-				Endpoint:    endpoint.Target,
-				PrintErrors: !p.FlagTcpDropErrors,
-				DialTimeout: tcp_dial_timeout,
-			}
-			sink.TcpConnLimit = p.FlagTcpConnectionLimit
-			marshallingSink = &sink.AbstractMarshallingMetricSink
-			sinks = append(sinks, sink)
-		case TcpListenEndpoint:
-			sink := &TCPListenerSink{
-				Endpoint:        endpoint.Target,
-				BufferedSamples: p.FlagOutputTcpListenBuffer,
-			}
-			sink.TcpConnLimit = p.FlagTcpConnectionLimit
-			marshallingSink = &sink.AbstractMarshallingMetricSink
-			sinks = append(sinks, sink)
-		default:
-			return nil, errors.New("Unknown endpoint type: " + string(endpoint.Type))
-		}
-		marshallingSink.SetMarshaller(marshaller)
-		marshallingSink.Writer = SampleWriter{p.FlagParallelHandler}
+// CreateInput creates a MetricSink object based on the given output endpoint description
+// and the configuration flags in the EndpointFactory.
+func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
+	var resultSink MetricSink
+	endpoint, err := ParseEndpointDescription(output)
+	if err != nil {
+		return nil, err
 	}
-	if p.FlagOutputBox {
-		if haveConsoleOutput {
-			return nil, errors.New("Cannot define multiple outputs to stdout")
+	var marshallingSink *AbstractMarshallingMetricSink
+	marshaller := endpoint.OutputFormat().Marshaller()
+	switch endpoint.Type {
+	case StdEndpoint:
+		sink := new(ConsoleSink)
+		marshallingSink = &sink.AbstractMarshallingMetricSink
+		if txt, ok := marshaller.(TextMarshaller); ok {
+			txt.AssumeStdout = true
 		}
+		if txt, ok := marshaller.(*TextMarshaller); ok {
+			txt.AssumeStdout = true
+		}
+		resultSink = sink
+	case ConsoleBoxEndpoint:
 		sink := &ConsoleBoxSink{
 			CliLogBox:      ConsoleBoxSettings,
 			UpdateInterval: ConsoleBoxUpdateInterval,
@@ -315,16 +229,46 @@ func (p *EndpointFactory) CreateOutput() (MetricSink, error) {
 		if !p.testmode {
 			sink.Init()
 		}
-		sinks = append(sinks, sink)
-	}
-	switch len(sinks) {
-	case 0:
-		return nil, nil
-	case 1:
-		return sinks[0], nil
+		resultSink = sink
+	case FileEndpoint:
+		sink := &FileSink{
+			Filename:   endpoint.Target,
+			IoBuffer:   p.FlagIoBuffer,
+			CleanFiles: p.FlagOutputFilesClean,
+		}
+		marshallingSink = &sink.AbstractMarshallingMetricSink
+		resultSink = sink
+	case TcpEndpoint:
+		sink := &TCPSink{
+			Endpoint:    endpoint.Target,
+			PrintErrors: !p.FlagTcpDropErrors,
+			DialTimeout: tcp_dial_timeout,
+		}
+		sink.TcpConnLimit = p.FlagTcpConnectionLimit
+		marshallingSink = &sink.AbstractMarshallingMetricSink
+		resultSink = sink
+	case TcpListenEndpoint:
+		sink := &TCPListenerSink{
+			Endpoint:        endpoint.Target,
+			BufferedSamples: p.FlagOutputTcpListenBuffer,
+		}
+		sink.TcpConnLimit = p.FlagTcpConnectionLimit
+		marshallingSink = &sink.AbstractMarshallingMetricSink
+		resultSink = sink
 	default:
-		return sinks, nil
+		return nil, errors.New("Unknown output endpoint type: " + string(endpoint.Type))
 	}
+	if marshallingSink != nil {
+		marshallingSink.SetMarshaller(marshaller)
+		marshallingSink.Writer = SampleWriter{p.FlagParallelHandler}
+	}
+	return resultSink, nil
+}
+
+func IsConsoleOutput(sink MetricSink) bool {
+	_, ok1 := sink.(*ConsoleSink)
+	_, ok2 := sink.(*ConsoleBoxSink)
+	return ok1 || ok2
 }
 
 // EndpointDescription describes a data endpoint, regardless of the data direction
@@ -365,6 +309,8 @@ func (e EndpointDescription) DefaultOutputFormat() MarshallingFormat {
 		return CsvFormat
 	case StdEndpoint:
 		return TextFormat
+	case ConsoleBoxEndpoint:
+		return UndefinedFormat
 	default:
 		panic("Unknown endpoint type: " + e.Type)
 	}
@@ -381,7 +327,7 @@ func (format MarshallingFormat) Marshaller() Marshaller {
 	case BinaryFormat:
 		return BinaryMarshaller{}
 	default:
-		log.WithField("format", format).Fatalln("Illegal data output fromat, must be one of:", OutputFormats)
+		// This can occurr with ConsoleBoxEndpoint, where the Format is parsed as UndefinedFormat
 		return nil
 	}
 }
@@ -397,11 +343,11 @@ func ParseEndpointDescription(endpoint string) (EndpointDescription, error) {
 	}
 }
 
-// ParseUrlEndpointDescription parses the endpoint string as a URL endpoint description/
+// ParseUrlEndpointDescription parses the endpoint string as a URL endpoint description.
 // It has the form:
 //   format+transport://target
 //
-// The format and transport parts are optional, but at least one must be specified.
+// One of the format and transport parts must be specified, optionally both.
 // If one of format or transport is missing, it will be guessed.
 // The order does not matter. The 'target' part must not be empty.
 func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err error) {
@@ -431,12 +377,12 @@ func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err 
 				res.Type = TcpListenEndpoint
 			case FileEndpoint:
 				res.Type = FileEndpoint
-			case StdEndpoint:
+			case StdEndpoint, ConsoleBoxEndpoint:
 				if target != stdTransportTarget {
-					err = fmt.Errorf("Transport '%v' can only be defined with target '%v'", StdEndpoint, stdTransportTarget)
+					err = fmt.Errorf("Transport '%v' can only be defined with target '%v'", part, stdTransportTarget)
 					return
 				}
-				res.Type = StdEndpoint
+				res.Type = EndpointType(part)
 			default:
 				err = fmt.Errorf("Illegal transport type: %v", part)
 				return
@@ -449,6 +395,9 @@ func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err 
 		if guessErr != nil {
 			err = guessErr
 		}
+	}
+	if res.Type == ConsoleBoxEndpoint && res.Format != UndefinedFormat {
+		err = fmt.Errorf("Cannot define the format for transport '%v'", ConsoleBoxEndpoint)
 	}
 	return
 }

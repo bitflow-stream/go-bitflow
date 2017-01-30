@@ -27,7 +27,7 @@ var (
 		string(CsvNewline), tag_replacement)
 )
 
-// Value is a type alias for float64 and defines the type metric values.
+// Value is a type alias for float64 and defines the type for metric values.
 type Value float64
 
 // Header defines the structure of samples that belong to this header.
@@ -187,7 +187,7 @@ func escapeTagString(str string) string {
 // follow the defined format (see TagString).
 //
 // This method is used on freshly created Samples by CsvMarshaller and
-// BniaryMarshaller when unmarshalling Samples from the respective format.
+// BinaryMarshaller when unmarshalling Samples from the respective format.
 func (sample *Sample) ParseTagString(tags string) (err error) {
 	sample.lockWrite(func() {
 		sample.tags = make(map[string]string)

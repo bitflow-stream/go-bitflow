@@ -132,7 +132,7 @@ func (suite *PipelineTestSuite) TestUrlEndpoint() {
 	checkFormat(CsvFormat)
 	checkFormat(TextFormat)
 
-	// Test StdEndpoint specially
+	// Test StdEndpoint
 	compare("std://-", UndefinedFormat, TextFormat, StdEndpoint, "-")
 	compare("std+csv://-", CsvFormat, CsvFormat, StdEndpoint, "-")
 	compare("csv+std://-", CsvFormat, CsvFormat, StdEndpoint, "-")
@@ -140,6 +140,9 @@ func (suite *PipelineTestSuite) TestUrlEndpoint() {
 	compare("bin+std://-", BinaryFormat, BinaryFormat, StdEndpoint, "-")
 	compare("std+text://-", TextFormat, TextFormat, StdEndpoint, "-")
 	compare("text+std://-", TextFormat, TextFormat, StdEndpoint, "-")
+
+	// Test ConsoleBoxEndpoint (no variations)
+	compare("box://-", UndefinedFormat, UndefinedFormat, ConsoleBoxEndpoint, "-")
 }
 
 func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
@@ -173,6 +176,11 @@ func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 	err("std://x", "Transport 'std' can only be defined with target '-'")
 	err("csv+std://x", "Transport 'std' can only be defined with target '-'")
 	err("std+csv://x", "Transport 'std' can only be defined with target '-'")
+
+	err("box://x", "Transport 'box' can only be defined with target '-'")
+	err("box+csv://x", "Transport 'box' can only be defined with target '-'")
+	err("csv+box://-", "Cannot define the format for transport 'box'")
+	err("box+box://-", "Multiple transport")
 }
 
 func (suite *PipelineTestSuite) make_factory() EndpointFactory {
@@ -199,9 +207,8 @@ func (suite *PipelineTestSuite) Test_no_inputs() {
 func (suite *PipelineTestSuite) Test_input_file() {
 	factory := suite.make_factory()
 	files := []string{"file1", "file2", "file3"}
-	factory.FlagInputs = files
 	handler := &testSampleHandler{source: "xxx"}
-	source, err := factory.CreateInput()
+	source, err := factory.CreateInput(files...)
 	source.SetSampleHandler(handler)
 	suite.NoError(err)
 	expected := &FileSource{
@@ -217,9 +224,8 @@ func (suite *PipelineTestSuite) Test_input_file() {
 func (suite *PipelineTestSuite) Test_input_tcp() {
 	factory := suite.make_factory()
 	hosts := []string{"host1:123", "host2:2", "host2:5"}
-	factory.FlagInputs = hosts
 	handler := &testSampleHandler{source: "xxx"}
-	source, err := factory.CreateInput()
+	source, err := factory.CreateInput(hosts...)
 	source.SetSampleHandler(handler)
 	suite.NoError(err)
 	expected := &TCPSource{
@@ -237,9 +243,8 @@ func (suite *PipelineTestSuite) Test_input_tcp() {
 func (suite *PipelineTestSuite) Test_input_tcp_listen() {
 	factory := suite.make_factory()
 	endpoint := ":123"
-	factory.FlagInputs = []string{endpoint}
 	handler := &testSampleHandler{source: "xxx"}
-	source, err := factory.CreateInput()
+	source, err := factory.CreateInput(endpoint)
 	source.SetSampleHandler(handler)
 	suite.NoError(err)
 	expected := NewTcpListenerSource(endpoint)
@@ -253,9 +258,8 @@ func (suite *PipelineTestSuite) Test_input_tcp_listen() {
 func (suite *PipelineTestSuite) Test_input_std() {
 	factory := suite.make_factory()
 	endpoint := "-"
-	factory.FlagInputs = []string{endpoint}
 	handler := &testSampleHandler{source: "xxx"}
-	source, err := factory.CreateInput()
+	source, err := factory.CreateInput(endpoint)
 	source.SetSampleHandler(handler)
 	suite.NoError(err)
 	expected := &ConsoleSource{}
@@ -267,8 +271,7 @@ func (suite *PipelineTestSuite) Test_input_std() {
 func (suite *PipelineTestSuite) Test_input_multiple() {
 	test := func(input1, input2 string, inputs ...string) {
 		factory := suite.make_factory()
-		factory.FlagInputs = inputs
-		source, err := factory.CreateInput()
+		source, err := factory.CreateInput(inputs...)
 		suite.Error(err)
 		suite.Equal(err.Error(), fmt.Sprintf("Please provide only one data source (Provided %s and %s)", input1, input2))
 		suite.Nil(source)
@@ -281,10 +284,25 @@ func (suite *PipelineTestSuite) Test_input_multiple() {
 	test("std", "listen", "-", ":123", "-", "host:123")
 }
 
+func (suite *PipelineTestSuite) Test_unknown_endpoint_type() {
+	factory := suite.make_factory()
+
+	source, err := factory.CreateInput("abc://x")
+	suite.Error(err, "Unknown endpoint input type 'abc'")
+	suite.Nil(source)
+
+	source, err = factory.CreateInput("box://x")
+	suite.Error(err, "Unknown endpoint input type 'box'")
+	suite.Nil(source)
+
+	sink, err := factory.CreateOutput("abc://x")
+	suite.Error(err, "Unknown endpoint input type 'abc'")
+	suite.Nil(sink)
+}
+
 func (suite *PipelineTestSuite) Test_input_multiple_listener() {
 	factory := suite.make_factory()
-	factory.FlagInputs = []string{":123", ":456"}
-	source, err := factory.CreateInput()
+	source, err := factory.CreateInput(":123", ":456")
 	suite.Error(err)
 	suite.Equal(err.Error(), fmt.Sprintf("Cannot listen for input on multiple TCP ports"))
 	suite.Nil(source)
@@ -292,33 +310,18 @@ func (suite *PipelineTestSuite) Test_input_multiple_listener() {
 
 func (suite *PipelineTestSuite) Test_input_multiple_std() {
 	factory := suite.make_factory()
-	factory.FlagInputs = []string{"-", "-"}
-	source, err := factory.CreateInput()
+	source, err := factory.CreateInput("-", "-")
 	suite.Error(err)
 	suite.Equal(err.Error(), fmt.Sprintf("Cannot read from stdin multiple times"))
 	suite.Nil(source)
 }
 
 func (suite *PipelineTestSuite) Test_outputs() {
-	test := func(box bool, outputs []string, expected ...MetricSink) {
+	test := func(output string, expected MetricSink) {
 		factory := suite.make_factory()
-		factory.FlagOutputBox = box
-		factory.FlagOutputs = outputs
-		sink, err := factory.CreateOutput()
+		sink, err := factory.CreateOutput(output)
 		suite.NoError(err)
-		if sink == nil {
-			suite.Empty(expected)
-		} else {
-			sinks, ok := sink.(AggregateSink)
-			if ok {
-				for i, ex := range expected {
-					suite.Equal(ex, sinks[i], fmt.Sprintf("Sink index %v", i))
-				}
-			} else {
-				suite.Len(expected, 1)
-				suite.Equal(expected[0], sink)
-			}
-		}
+		suite.Equal(expected, sink)
 	}
 
 	setup := func(sink *AbstractMarshallingMetricSink, format string) {
@@ -379,52 +382,25 @@ func (suite *PipelineTestSuite) Test_outputs() {
 		return s
 	}
 
-	// No outputs
-	test(false, nil)
-	test(false, []string{})
-
 	// Individual outputs
-	test(true, nil, box())
-	test(true, []string{}, box())
+	test("box://-", box())
+	test("-", std("text"))
+	test("csv://-", std("csv"))
+	test("bin://-", std("bin"))
+	test("text://-", std("text"))
 
-	test(false, []string{"-"}, std("text"))
-	test(false, []string{"csv://-"}, std("csv"))
-	test(false, []string{"bin://-"}, std("bin"))
-	test(false, []string{"text://-"}, std("text"))
+	test("file", file("file", "csv"))
+	test("csv://file", file("file", "csv"))
+	test("bin://file", file("file", "bin"))
+	test("text://file", file("file", "text"))
 
-	test(false, []string{"file"}, file("file", "csv"))
-	test(false, []string{"csv://file"}, file("file", "csv"))
-	test(false, []string{"bin://file"}, file("file", "bin"))
-	test(false, []string{"text://file"}, file("file", "text"))
+	test("host:123", tcp("host:123", "bin"))
+	test("csv://host:123", tcp("host:123", "csv"))
+	test("bin://host:123", tcp("host:123", "bin"))
+	test("text://host:123", tcp("host:123", "text"))
 
-	test(false, []string{"host:123"}, tcp("host:123", "bin"))
-	test(false, []string{"csv://host:123"}, tcp("host:123", "csv"))
-	test(false, []string{"bin://host:123"}, tcp("host:123", "bin"))
-	test(false, []string{"text://host:123"}, tcp("host:123", "text"))
-
-	test(false, []string{":123"}, listen(":123", "bin"))
-	test(false, []string{"csv://:123"}, listen(":123", "csv"))
-	test(false, []string{"bin://:123"}, listen(":123", "bin"))
-	test(false, []string{"text://:123"}, listen(":123", "text"))
-
-	// Combined outputs
-	test(true, []string{"file", "text://host:123"}, file("file", "csv"), tcp("host:123", "text"), box())
-	test(false, []string{"text://:123", "bin://file", "csv://-"}, listen(":123", "text"), file("file", "bin"), std("csv"))
-	test(false, []string{"text://:123", "bin://:456", "host:123", "text://host:345"},
-		listen(":123", "text"), listen(":456", "bin"), tcp("host:123", "bin"), tcp("host:345", "text"))
-	test(true, []string{"csv://file1", "text://file2"}, file("file1", "csv"), file("file2", "text"), box())
-
-	// Errors
-	testErr := func(errStr string, box bool, outputs []string) {
-		factory := suite.make_factory()
-		factory.FlagOutputBox = box
-		factory.FlagOutputs = outputs
-		sink, err := factory.CreateOutput()
-		suite.Nil(sink)
-		suite.Error(err)
-		suite.Equal(errStr, err.Error())
-	}
-	testErr("Cannot define multiple outputs to stdout", true, []string{"-"})
-	testErr("Cannot define multiple outputs to stdout", true, []string{"-", "-", "-"})
-	testErr("Cannot define multiple outputs to stdout", false, []string{"-", "-", "-"})
+	test(":123", listen(":123", "bin"))
+	test("csv://:123", listen(":123", "csv"))
+	test("bin://:123", listen(":123", "bin"))
+	test("text://:123", listen(":123", "text"))
 }

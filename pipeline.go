@@ -1,8 +1,6 @@
 package bitflow
 
 import (
-	"errors"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/golib"
 )
@@ -39,13 +37,7 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 
 	// Then add all tasks in reverse: start the final sink first.
 	// Each sink must be started before the source can push data into it.
-	if agg, ok := p.Sink.(AggregateSink); ok {
-		for _, sink := range agg {
-			tasks.Add(sink)
-		}
-	} else {
-		tasks.Add(p.Sink)
-	}
+	tasks.Add(p.Sink)
 	for i := len(p.Processors) - 1; i >= 0; i-- {
 		tasks.Add(p.Processors[i])
 	}
@@ -64,64 +56,18 @@ func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 	return p
 }
 
-// Configure fills the Sink and Source fields of the SamplePipeline using
-// the given EndpointFactory.
-func (p *SamplePipeline) Configure(f *EndpointFactory) error {
-	if err := p.ConfigureSource(f); err != nil {
-		return err
-	}
-	if err := p.ConfigureSink(f); err != nil {
-		return err
-	}
-	return nil
-}
-
-// ConfigureSource sets the Source field of the SamplePipeline using
-// the given EndpointFactory.
-func (p *SamplePipeline) ConfigureSource(f *EndpointFactory) (err error) {
-	p.Source, err = f.CreateInput()
-	return
-}
-
-// ConfigureSink sets the Sink field of the SamplePipeline using
-// the given EndpointFactory.
-func (p *SamplePipeline) ConfigureSink(f *EndpointFactory) (err error) {
-	p.Sink, err = f.CreateOutput()
-	return
-}
-
 // ConfigureStandalone prints a warning if the sink or source of the pipeline
 // are not set, and sets them to non-nil values. This can optionally be called after
 // p.Configure().
 func (p *SamplePipeline) ConfigureStandalone() {
 	if p.Sink == nil {
 		log.Warnln("No data sinks selected, data will not be output anywhere.")
-		p.Sink = AggregateSink{}
+		p.Sink = new(EmptyMetricSink)
 	}
 	if p.Source == nil {
 		log.Warnln("No data source provided, no data will be received or generated.")
 		p.Source = new(EmptyMetricSource)
 	}
-}
-
-// CheckTasks returns a non-nil error if the receiving SamplePipeline has no data sink,
-// no data source, and no processor defined. A non-nil error indicates that the
-// pipeline will do nothing when started.
-func (p *SamplePipeline) CheckTasks() error {
-	if len(p.Processors) > 0 {
-		return nil
-	}
-	if p.Source != nil {
-		if _, ok := p.Source.(*EmptyMetricSource); !ok {
-			return nil
-		}
-	}
-	if p.Sink != nil {
-		if agg, ok := p.Sink.(AggregateSink); !ok && len(agg) > 0 {
-			return nil
-		}
-	}
-	return errors.New("No tasks defined")
 }
 
 // StartAndWait constructs the pipeline and starts it. It blocks until the pipeline
@@ -132,14 +78,14 @@ func (p *SamplePipeline) CheckTasks() error {
 //   // ... Define additional flags using the "flag" package (Optional)
 //   var p sample.SamplePipeline
 //   var f EndpointFactory
-//   f.RegisterAllFlags()
+//   f.RegisterFlags()
 //   flag.Parse()
-//   p.FlagInputs = flag.Args() // Or other value, optional
-//   // ... Modify f.Flag* values // Optional
-//   defer golib.ProfileCpu()() // Optional
-//   err := p.Configure(&f, sampleHandler) // Or access p.Sink/p.Source directly. sampleHandler can be nil.
-//   // ... Error handling
-//   os.Exit(p.StartAndWait())
+//   // ... Modify f.Flag* values (Optional)
+//   defer golib.ProfileCpu()() // (Optional)
+//   // ... Set p.Processors (Optional)
+//   // ... Set p.Source and p.Sink using f.CreateSource() and f.CreateSink()
+//   // p.ConfigureStandalone // (Optional)
+//   os.Exit(p.StartAndWait()) // os.Exit() should be called in an outer method if 'defer' is used here
 //
 // An additional golib.Task is started along with the pipeline, which listens
 // for the Ctrl-C user external interrupt and makes the pipeline stoppable cleanly
