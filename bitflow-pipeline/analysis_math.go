@@ -27,15 +27,15 @@ func init() {
 	RegisterAnalysis("convex_hull_sort", sort_convex_hull, "Sort a two-dimensional batch of samples in order around their center")
 }
 
-func linear_regression(p *SamplePipeline) {
+func linear_regression(p *Pipeline) {
 	p.Batch(&regression.LinearRegressionBatchProcessor{})
 }
 
-func linear_regression_bruteforce(p *SamplePipeline) {
+func linear_regression_bruteforce(p *Pipeline) {
 	p.Batch(&regression.LinearRegressionBruteForce{})
 }
 
-func pca_analysis(pipe *SamplePipeline, params map[string]string) error {
+func pca_analysis(pipe *Pipeline, params map[string]string) error {
 	variance, err := parse_pca_variance(params)
 	if err == nil {
 		pipe.Batch(ComputeAndProjectPCA(variance))
@@ -43,11 +43,11 @@ func pca_analysis(pipe *SamplePipeline, params map[string]string) error {
 	return err
 }
 
-func pca_analysis_store(pipe *SamplePipeline, params map[string]string) {
+func pca_analysis_store(pipe *Pipeline, params map[string]string) {
 	pipe.Batch(StorePCAModel(params["file"]))
 }
 
-func pca_analysis_load(pipe *SamplePipeline, params map[string]string) error {
+func pca_analysis_load(pipe *Pipeline, params map[string]string) error {
 	variance, err := parse_pca_variance(params)
 	if err == nil {
 		var step BatchProcessingStep
@@ -59,7 +59,7 @@ func pca_analysis_load(pipe *SamplePipeline, params map[string]string) error {
 	return err
 }
 
-func pca_analysis_load_stream(pipe *SamplePipeline, params map[string]string) error {
+func pca_analysis_load_stream(pipe *Pipeline, params map[string]string) error {
 	variance, err := parse_pca_variance(params)
 	if err == nil {
 		var step bitflow.SampleProcessor
@@ -79,7 +79,7 @@ func parse_pca_variance(params map[string]string) (float64, error) {
 	return variance, err
 }
 
-func dbscan_rtree(pipe *SamplePipeline) {
+func dbscan_rtree(pipe *Pipeline) {
 	pipe.Batch(&dbscan.DbscanBatchClusterer{
 		Dbscan:          dbscan.Dbscan{Eps: 0.1, MinPts: 5},
 		TreeMinChildren: 25,
@@ -88,11 +88,11 @@ func dbscan_rtree(pipe *SamplePipeline) {
 	})
 }
 
-func dbscan_parallel(pipe *SamplePipeline) {
+func dbscan_parallel(pipe *Pipeline) {
 	pipe.Batch(&dbscan.ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5})
 }
 
-func add_sphere(pipe *SamplePipeline, params map[string]string) error {
+func add_sphere(pipe *Pipeline, params map[string]string) error {
 	var err error
 	points, err := strconv.Atoi(params["points"])
 	if err != nil {
@@ -131,10 +131,10 @@ func add_sphere(pipe *SamplePipeline, params map[string]string) error {
 	return nil
 }
 
-func filter_convex_hull(pipe *SamplePipeline) {
+func filter_convex_hull(pipe *Pipeline) {
 	pipe.Batch(BatchConvexHull(false))
 }
 
-func sort_convex_hull(pipe *SamplePipeline) {
+func sort_convex_hull(pipe *Pipeline) {
 	pipe.Batch(BatchConvexHull(true))
 }

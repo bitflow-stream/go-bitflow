@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,10 +13,10 @@ import (
 func init() {
 	RegisterAnalysisParamsErr("plot", plot, "Plot a batch of samples to a given filename. The file ending denotes the file type", []string{"file"}, "color", "flags")
 	RegisterAnalysisParams("stats", feature_stats, "Output statistics about processed samples to a given ini-file", []string{"file"})
-	RegisterAnalysisParamsErr("http", print_http, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", []string{"endpoint"}, "window")
+	RegisterAnalysisParamsErr("http", print_http, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", []string{"endpoint"}, "window", "local_static")
 }
 
-func plot(pipe *SamplePipeline, params map[string]string) error {
+func plot(pipe *Pipeline, params map[string]string) error {
 	plot := &PlotProcessor{
 		AxisX:      PlotAxisAuto,
 		AxisY:      PlotAxisAuto,
@@ -54,11 +55,11 @@ func plot(pipe *SamplePipeline, params map[string]string) error {
 	return nil
 }
 
-func feature_stats(pipe *SamplePipeline, params map[string]string) {
+func feature_stats(pipe *Pipeline, params map[string]string) {
 	pipe.Add(NewStoreStats(params["file"]))
 }
 
-func print_http(p *SamplePipeline, params map[string]string) error {
+func print_http(p *Pipeline, params map[string]string) error {
 	windowSize := 100
 	if windowStr, ok := params["window"]; ok {
 		var err error
@@ -67,6 +68,15 @@ func print_http(p *SamplePipeline, params map[string]string) error {
 			return parameterError("window", err)
 		}
 	}
-	p.Add(plotHttp.NewHttpPlotter(params["endpoint"], windowSize))
+	useLocalStatic := false
+	static, ok := params["local_static"]
+	if ok {
+		if static == "true" {
+			useLocalStatic = true
+		} else {
+			return parameterError("local_static", errors.New("The only accepted value is 'true'"))
+		}
+	}
+	p.Add(plotHttp.NewHttpPlotter(params["endpoint"], windowSize, useLocalStatic))
 	return nil
 }

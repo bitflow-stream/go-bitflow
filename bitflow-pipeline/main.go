@@ -15,55 +15,55 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-type SamplePipeline struct {
-	*query.SamplePipeline
+type Pipeline struct {
+	*pipeline.SamplePipeline
 }
 
 var builder query.PipelineBuilder
 
-func RegisterAnalysis(name string, setupPipeline func(pipeline *SamplePipeline), description string) {
-	builder.RegisterAnalysis(name, func(pipeline *query.SamplePipeline, params map[string]string) error {
+func RegisterAnalysis(name string, setupPipeline func(pipeline *Pipeline), description string) {
+	builder.RegisterAnalysis(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 		if len(params) > 0 {
 			return errors.New("No parmeters expected")
 		}
-		setupPipeline(&SamplePipeline{pipeline})
+		setupPipeline(&Pipeline{pipeline})
 		return nil
 	}, description)
 }
 
-func RegisterAnalysisErr(name string, setupPipeline func(pipeline *SamplePipeline) error, description string) {
-	builder.RegisterAnalysis(name, func(pipeline *query.SamplePipeline, params map[string]string) error {
+func RegisterAnalysisErr(name string, setupPipeline func(pipeline *Pipeline) error, description string) {
+	builder.RegisterAnalysis(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 		if len(params) > 0 {
 			return errors.New("No parmeters expected")
 		}
-		return setupPipeline(&SamplePipeline{pipeline})
+		return setupPipeline(&Pipeline{pipeline})
 	}, description)
 }
 
-func RegisterAnalysisParams(name string, setupPipeline func(pipeline *SamplePipeline, params map[string]string), description string, requiredParams []string, optionalParams ...string) {
-	RegisterAnalysisParamsErr(name, func(pipeline *SamplePipeline, params map[string]string) error {
+func RegisterAnalysisParams(name string, setupPipeline func(pipeline *Pipeline, params map[string]string), description string, requiredParams []string, optionalParams ...string) {
+	RegisterAnalysisParamsErr(name, func(pipeline *Pipeline, params map[string]string) error {
 		setupPipeline(pipeline, params)
 		return nil
 	}, description, requiredParams, optionalParams...)
 }
 
-func RegisterAnalysisParamsErr(name string, setupPipeline func(pipeline *SamplePipeline, params map[string]string) error, description string, requiredParams []string, optionalParams ...string) {
+func RegisterAnalysisParamsErr(name string, setupPipeline func(pipeline *Pipeline, params map[string]string) error, description string, requiredParams []string, optionalParams ...string) {
 	if len(requiredParams) > 0 {
 		description += fmt.Sprintf(". Required parameters: %v", requiredParams)
 	} else if requiredParams == nil {
 		description += ". Variable parameters"
 	}
 	if len(optionalParams) > 0 {
-		description += fmt.Sprintf(". Required parameters: %v", optionalParams)
+		description += fmt.Sprintf(". Optional parameters: %v", optionalParams)
 	}
 
-	builder.RegisterAnalysis(name, func(pipeline *query.SamplePipeline, params map[string]string) error {
+	builder.RegisterAnalysis(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 		if requiredParams != nil {
 			if err := query.CheckParameters(params, optionalParams, requiredParams); err != nil {
 				return err
 			}
 		}
-		return setupPipeline(&SamplePipeline{pipeline}, params)
+		return setupPipeline(&Pipeline{pipeline}, params)
 	}, description)
 }
 
@@ -76,7 +76,7 @@ func do_main() int {
 	printPipeline := flag.Bool("print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
 
 	bitflow.RegisterGolibFlags()
-	builder.Endpoints.RegisterConfigFlags()
+	builder.Endpoints.RegisterFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
 	if *printAnalyses {
@@ -97,7 +97,7 @@ func do_main() int {
 	return pipeline.StartAndWait()
 }
 
-func make_pipeline() (*query.SamplePipeline, error) {
+func make_pipeline() (*pipeline.SamplePipeline, error) {
 	script := strings.Join(flag.Args(), " ")
 	if strings.TrimSpace(script) == "" {
 		return nil, errors.New("Please provide a bitflow pipeline script")
@@ -110,7 +110,7 @@ func make_pipeline() (*query.SamplePipeline, error) {
 	return builder.MakePipeline(pipe)
 }
 
-func print_pipeline(pipe *query.SamplePipeline) {
+func print_pipeline(pipe *pipeline.SamplePipeline) {
 	printer := pipeline.IndentPrinter{
 		OuterIndent:  "│ ",
 		InnerIndent:  "├─",

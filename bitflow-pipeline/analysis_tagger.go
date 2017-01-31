@@ -14,12 +14,12 @@ func init() {
 		[]string{"level"})
 
 	RegisterAnalysisParams("source_tag",
-		func(p *SamplePipeline, params map[string]string) {
+		func(p *Pipeline, params map[string]string) {
 			set_sample_tagger(p, params["tag"], false)
 		}, "Set the name of the data source to the given tag. For files it is the file path (except see set_filename), for TCP connections it is the remote endpoint",
 		[]string{"tag"})
 	RegisterAnalysisParams("source_tag_append",
-		func(p *SamplePipeline, params map[string]string) {
+		func(p *Pipeline, params map[string]string) {
 			set_sample_tagger(p, params["tag"], true)
 		}, "Like source_tag, but don't override existing tag values. Instead, append a new tag with an incremented tag name",
 		[]string{"tag"})
@@ -47,13 +47,13 @@ func (h *SampleTagger) HandleSample(sample *bitflow.Sample, source string) {
 	}
 }
 
-func set_sample_tagger(p *SamplePipeline, tag string, dontOverwrite bool) {
+func set_sample_tagger(p *Pipeline, tag string, dontOverwrite bool) {
 	if source, ok := p.Source.(bitflow.UnmarshallingMetricSource); ok {
 		source.SetSampleHandler(&SampleTagger{SourceTags: []string{tag}, DontOverwrite: dontOverwrite})
 	}
 }
 
-func set_filename_tag(p *SamplePipeline, params map[string]string) error {
+func set_filename_tag(p *Pipeline, params map[string]string) error {
 	num, err := strconv.ParseUint(params["level"], 10, 64)
 	if err != nil {
 		return parameterError("level", err)

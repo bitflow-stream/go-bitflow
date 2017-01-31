@@ -20,32 +20,18 @@ type PipelineBuilder interface {
 }
 
 type MetricFork struct {
+	MultiPipeline
 	bitflow.AbstractProcessor
 
-	Distributor   ForkDistributor
-	Builder       PipelineBuilder
-	ParallelClose bool
+	Distributor ForkDistributor
+	Builder     PipelineBuilder
 
 	pipelines map[interface{}]bitflow.MetricSink
-	multi     *MultiPipeline
-	merger    ForkMerger
-}
-
-func NewMetricFork(distributor ForkDistributor, builder PipelineBuilder) *MetricFork {
-	fork := &MetricFork{
-		Builder:       builder,
-		Distributor:   distributor,
-		pipelines:     make(map[interface{}]bitflow.MetricSink),
-		ParallelClose: true,
-		multi:         NewMultiPipeline(),
-	}
-	fork.merger.fork = fork
-	return fork
 }
 
 func (f *MetricFork) Start(wg *sync.WaitGroup) golib.StopChan {
 	result := f.AbstractProcessor.Start(wg)
-	f.multi.RunAfterClose(f.CloseSink, wg)
+	f.MultiPipeline.Init(f.OutgoingSink, f.CloseSink, wg)
 	return result
 }
 
@@ -67,8 +53,35 @@ func (f *MetricFork) Sample(sample *bitflow.Sample, header *bitflow.Header) erro
 	return errors.NilOrError()
 }
 
+func (f *MetricFork) newPipeline(key interface{}) bitflow.MetricSink {
+	if f.pipelines == nil {
+		f.pipelines = make(map[interface{}]bitflow.MetricSink)
+	}
+
+	log.Debugf("[%v]: Starting forked subpipeline %v", f, key)
+	pipeline := f.Builder.BuildPipeline(key, &f.merger)
+	if pipeline.Source != nil {
+		// Forked pipelines should not have an explicit source, as they receive
+		// samples from the steps preceeding them
+		log.Warnf("The Source field of the %v subpipeline was set and will be ignored: %v", key, pipeline.Source)
+		pipeline.Source = nil
+	}
+	f.StartPipeline(pipeline, func(isPassive bool, err error) {
+		f.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Subpipeline %v", f, key))
+	})
+
+	var first bitflow.MetricSink
+	if len(pipeline.Processors) == 0 {
+		first = pipeline.Sink
+	} else {
+		first = pipeline.Processors[0]
+	}
+	f.pipelines[key] = first
+	return first
+}
+
 func (f *MetricFork) Close() {
-	f.multi.Close()
+	f.StopPipelines()
 }
 
 func (f *MetricFork) String() string {
@@ -83,74 +96,28 @@ func (f *MetricFork) ContainedStringers() []fmt.Stringer {
 	}
 }
 
-func (f *MetricFork) newPipeline(key interface{}) bitflow.MetricSink {
-	log.Debugf("[%v]: Starting forked subpipeline %v", f, key)
-	pipeline := f.Builder.BuildPipeline(key, &f.merger)
-	if pipeline.Source != nil {
-		// Forked pipelines should not have an explicit source, as they receive
-		// samples from the steps preceeding them
-		log.Warnf("The Source field of the %v subpipeline was set (%v) and is ignored", key, pipeline.Source)
-		pipeline.Source = nil
-	}
-	first := f.multi.StartPipeline(pipeline, func(isPassive bool) {
-		f.pipelines[key] = nil // Allow GC
-		if isPassive {
-			log.Debugf("[%v]: Passive subpipeline: %v", f, key)
-		} else {
-			log.Debugf("[%v]: Finished forked subpipeline %v", f, key)
-		}
-	})
-	f.pipelines[key] = first
-	return first
-}
-
-type ForkMerger struct {
-	bitflow.AbstractMetricSink
-	mutex sync.Mutex
-	fork  *MetricFork
-}
-
-func (sink *ForkMerger) String() string {
-	return "fork merger for " + sink.fork.String()
-}
-
-func (sink *ForkMerger) Start(wg *sync.WaitGroup) golib.StopChan {
-	return nil
-}
-
-func (sink *ForkMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	sink.mutex.Lock()
-	defer sink.mutex.Unlock()
-	return sink.fork.OutgoingSink.Sample(sample, header)
-}
-
-func (sink *ForkMerger) Close() {
-	// The actual outgoing sink is closed after waitForSubpipelines() returns
-}
-
-// Can be used by implementations of PipelineBuilder to access the next step of the entire fork.
-func (sink *ForkMerger) GetOriginalSink() bitflow.MetricSink {
-	return sink.fork.OutgoingSink
-}
-
 type SimplePipelineBuilder struct {
 	Build           func() []bitflow.SampleProcessor
-	examplePipeline []bitflow.SampleProcessor
+	examplePipeline []fmt.Stringer
+}
+
+func (b *SimplePipelineBuilder) ContainedStringers() []fmt.Stringer {
+	if b.examplePipeline == nil {
+		if b.Build == nil {
+			b.examplePipeline = make([]fmt.Stringer, 0)
+		} else {
+			pipeline := b.Build()
+			b.examplePipeline = make([]fmt.Stringer, len(pipeline))
+			for i, step := range pipeline {
+				b.examplePipeline[i] = step
+			}
+		}
+	}
+	return b.examplePipeline
 }
 
 func (b *SimplePipelineBuilder) String() string {
-	if b.examplePipeline == nil {
-		if b.Build == nil {
-			b.examplePipeline = make([]bitflow.SampleProcessor, 0)
-		} else {
-			b.examplePipeline = b.Build()
-		}
-	}
-	if len(b.examplePipeline) == 0 {
-		return "(empty subpipeline)"
-	} else {
-		return fmt.Sprintf("subpipeline %v", b.examplePipeline)
-	}
+	return fmt.Sprintf("Simple Pipeline Builder len %v", len(b.ContainedStringers()))
 }
 
 func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {

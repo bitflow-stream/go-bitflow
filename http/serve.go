@@ -1,7 +1,6 @@
 package plotHttp
 
 import (
-	"flag"
 	"html/template"
 	"net/http/httputil"
 
@@ -10,13 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var useLocalStatic = false
 var ginLogHandler = ginrus.Ginrus(log.StandardLogger(), log.DefaultTimestampFormat, false)
 
 func init() {
-	flag.BoolVar(&useLocalStatic, "http-local-static", useLocalStatic,
-		"For -e http: serve local static files, instead of the ones embedded in the binary")
-
 	gin.SetMode(gin.ReleaseMode)
 }
 
@@ -25,13 +20,17 @@ func (p *HttpPlotter) serve() error {
 	engine.Use(ginLogHandler, ginRecover)
 
 	index := template.New("index")
-	index.Parse(FSMustString(useLocalStatic, "/index.html"))
+	indexStr, err := FSString(p.UseLocalStatic, "/index.html")
+	if err != nil {
+		return err
+	}
+	index.Parse(indexStr)
 	engine.SetHTMLTemplate(index)
 
 	engine.GET("/", p.serveMain)
 	engine.GET("/metrics", p.serveListData)
 	engine.GET("/data", p.serveData)
-	engine.StaticFS("/static", FS(useLocalStatic))
+	engine.StaticFS("/static", FS(p.UseLocalStatic))
 
 	return engine.Run(p.Endpoint)
 }

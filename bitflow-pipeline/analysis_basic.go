@@ -56,15 +56,15 @@ func parameterError(name string, err error) error {
 	return fmt.Errorf("Failed to parse '%v' parameter: %v", name, err)
 }
 
-func noop_processor(p *SamplePipeline) {
+func noop_processor(p *Pipeline) {
 	p.Add(new(bitflow.AbstractProcessor))
 }
 
-func shuffle_data(p *SamplePipeline) {
+func shuffle_data(p *Pipeline) {
 	p.Batch(NewSampleShuffler())
 }
 
-func sort_data(p *SamplePipeline, params map[string]string) {
+func sort_data(p *Pipeline, params map[string]string) {
 	var tags []string
 	if tags_param, ok := params["tags"]; ok {
 		tags = strings.Split(tags_param, ",")
@@ -72,19 +72,19 @@ func sort_data(p *SamplePipeline, params map[string]string) {
 	p.Batch(&SampleSorter{tags})
 }
 
-func merge_headers(p *SamplePipeline) {
+func merge_headers(p *Pipeline) {
 	p.Add(NewMultiHeaderMerger())
 }
 
-func normalize_min_max(p *SamplePipeline) {
+func normalize_min_max(p *Pipeline) {
 	p.Batch(new(MinMaxScaling))
 }
 
-func normalize_standardize(p *SamplePipeline) {
+func normalize_standardize(p *Pipeline) {
 	p.Batch(new(StandardizationScaling))
 }
 
-func pick_x_percent(p *SamplePipeline, params map[string]string) error {
+func pick_x_percent(p *Pipeline, params map[string]string) error {
 	pick_percentage, err := strconv.ParseFloat(params["percent"], 64)
 	if err != nil {
 		return parameterError("percent", err)
@@ -104,7 +104,7 @@ func pick_x_percent(p *SamplePipeline, params map[string]string) error {
 	return nil
 }
 
-func filter_metrics_include(p *SamplePipeline, params map[string]string) error {
+func filter_metrics_include(p *Pipeline, params map[string]string) error {
 	filter, err := NewMetricFilter().IncludeRegex(params["m"])
 	if err == nil {
 		p.Add(filter)
@@ -112,7 +112,7 @@ func filter_metrics_include(p *SamplePipeline, params map[string]string) error {
 	return err
 }
 
-func filter_metrics_exclude(p *SamplePipeline, params map[string]string) error {
+func filter_metrics_exclude(p *Pipeline, params map[string]string) error {
 	filter, err := NewMetricFilter().ExcludeRegex(params["m"])
 	if err == nil {
 		p.Add(filter)
@@ -120,15 +120,15 @@ func filter_metrics_exclude(p *SamplePipeline, params map[string]string) error {
 	return err
 }
 
-func filter_expression(pipe *SamplePipeline, params map[string]string) error {
+func filter_expression(pipe *Pipeline, params map[string]string) error {
 	return add_expression(pipe, params, true)
 }
 
-func general_expression(pipe *SamplePipeline, params map[string]string) error {
+func general_expression(pipe *Pipeline, params map[string]string) error {
 	return add_expression(pipe, params, false)
 }
 
-func add_expression(pipe *SamplePipeline, params map[string]string, filter bool) error {
+func add_expression(pipe *Pipeline, params map[string]string, filter bool) error {
 	proc := &ExpressionProcessor{Filter: filter}
 	err := proc.AddExpression(params["expr"])
 	if err == nil {
@@ -137,7 +137,7 @@ func add_expression(pipe *SamplePipeline, params map[string]string, filter bool)
 	return err
 }
 
-func decouple_samples(pipe *SamplePipeline, params map[string]string) error {
+func decouple_samples(pipe *Pipeline, params map[string]string) error {
 	buf, err := strconv.Atoi(params["batch"])
 	if err != nil {
 		err = parameterError("batch", err)
@@ -147,12 +147,12 @@ func decouple_samples(pipe *SamplePipeline, params map[string]string) error {
 	return err
 }
 
-func remap_metrics(pipe *SamplePipeline, params map[string]string) {
+func remap_metrics(pipe *Pipeline, params map[string]string) {
 	metrics := strings.Split(params["header"], ",")
 	pipe.Add(NewMetricMapper(metrics))
 }
 
-func filter_variance(pipe *SamplePipeline, params map[string]string) error {
+func filter_variance(pipe *Pipeline, params map[string]string) error {
 	variance, err := strconv.ParseFloat(params["min"], 64)
 	if err != nil {
 		err = parameterError("min", err)
@@ -162,7 +162,7 @@ func filter_variance(pipe *SamplePipeline, params map[string]string) error {
 	return err
 }
 
-func pick_head(pipe *SamplePipeline, params map[string]string) error {
+func pick_head(pipe *Pipeline, params map[string]string) error {
 	num, err := strconv.Atoi(params["num"])
 	if err != nil {
 		err = parameterError("num", err)
@@ -183,7 +183,7 @@ func pick_head(pipe *SamplePipeline, params map[string]string) error {
 	return err
 }
 
-func set_tags(pipe *SamplePipeline, params map[string]string) {
+func set_tags(pipe *Pipeline, params map[string]string) {
 	pipe.Add(&SimpleProcessor{
 		Description: fmt.Sprintf("Set tags %v", params),
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -195,16 +195,22 @@ func set_tags(pipe *SamplePipeline, params map[string]string) {
 	})
 }
 
-func split_files(p *SamplePipeline, params map[string]string) {
+func split_files(p *Pipeline, params map[string]string) {
 	distributor := &TagsDistributor{
 		Tags:        []string{params["tag"]},
 		Separator:   "-",
 		Replacement: "_empty_",
 	}
-	p.Add(NewMetricFork(distributor, MultiFileSuffixBuilder(nil)))
+	p.Add(&MetricFork{
+		MultiPipeline: MultiPipeline{
+			ParallelClose: true,
+		},
+		Distributor: distributor,
+		Builder:     MultiFileSuffixBuilder(nil),
+	})
 }
 
-func rename_metrics(p *SamplePipeline, params map[string]string) error {
+func rename_metrics(p *Pipeline, params map[string]string) error {
 	if len(params) == 0 {
 		return errors.New("Need at least one regex=replacement parameter")
 	}
@@ -223,7 +229,7 @@ func rename_metrics(p *SamplePipeline, params map[string]string) error {
 	return nil
 }
 
-func strip_metrics(p *SamplePipeline) {
+func strip_metrics(p *Pipeline) {
 	p.Add(&SimpleProcessor{
 		Description: "remove metric values, keep timestamp and tags",
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -232,7 +238,7 @@ func strip_metrics(p *SamplePipeline) {
 	})
 }
 
-func sleep_samples(p *SamplePipeline) {
+func sleep_samples(p *Pipeline) {
 	var lastTimestamp time.Time
 	p.Add(&SimpleProcessor{
 		Description: "sleep between samples",
@@ -250,7 +256,7 @@ func sleep_samples(p *SamplePipeline) {
 	})
 }
 
-func set_time_processor(p *SamplePipeline) {
+func set_time_processor(p *Pipeline) {
 	p.Add(&SimpleProcessor{
 		Description: "reset time to now",
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -260,7 +266,7 @@ func set_time_processor(p *SamplePipeline) {
 	})
 }
 
-func aggregate_avg(p *SamplePipeline, params map[string]string) error {
+func aggregate_avg(p *Pipeline, params map[string]string) error {
 	agg, err := create_aggregator(params)
 	if err != nil {
 		return err
@@ -269,7 +275,7 @@ func aggregate_avg(p *SamplePipeline, params map[string]string) error {
 	return nil
 }
 
-func aggregate_slope(p *SamplePipeline, params map[string]string) error {
+func aggregate_slope(p *Pipeline, params map[string]string) error {
 	agg, err := create_aggregator(params)
 	if err != nil {
 		return err
@@ -294,7 +300,7 @@ func create_aggregator(params map[string]string) (*FeatureAggregator, error) {
 	return nil, parameterError("window", golib.MultiError{err1, err2})
 }
 
-func generic_batch(p *SamplePipeline, params map[string]string) {
+func generic_batch(p *Pipeline, params map[string]string) {
 	p.Add(&BatchProcessor{
 		FlushTag: params["tag"],
 	})

@@ -23,7 +23,7 @@ func init() {
 	RegisterAnalysis("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
 }
 
-func print_header(p *SamplePipeline) {
+func print_header(p *Pipeline) {
 	var checker bitflow.HeaderChecker
 	numSamples := 0
 	p.Add(&SimpleProcessor{
@@ -119,15 +119,15 @@ func (printer *UniqueTagPrinter) String() string {
 	return res + " unique values of tag '" + printer.Tag + "'"
 }
 
-func print_tags(p *SamplePipeline, params map[string]string) {
+func print_tags(p *Pipeline, params map[string]string) {
 	p.Add(NewUniqueTagPrinter(params["tag"]))
 }
 
-func count_tags(p *SamplePipeline, params map[string]string) {
+func count_tags(p *Pipeline, params map[string]string) {
 	p.Add(NewUniqueTagCounter(params["tag"]))
 }
 
-func print_timerange(p *SamplePipeline) {
+func print_timerange(p *Pipeline) {
 	var (
 		from  time.Time
 		to    time.Time
@@ -157,7 +157,7 @@ func print_timerange(p *SamplePipeline) {
 	})
 }
 
-func print_timeline(p *SamplePipeline, params map[string]string) error {
+func print_timeline(p *Pipeline, params map[string]string) error {
 	numBuckets := uint64(10)
 	if bucketsStr, hasBuckets := params["buckets"]; hasBuckets {
 		var err error
@@ -228,7 +228,7 @@ func print_timeline(p *SamplePipeline, params map[string]string) error {
 	return nil
 }
 
-func count_invalid(p *SamplePipeline) {
+func count_invalid(p *Pipeline) {
 	var (
 		invalidSamples int
 		totalSamples   int
@@ -259,7 +259,7 @@ func count_invalid(p *SamplePipeline) {
 	})
 }
 
-func print_common_metrics(p *SamplePipeline) {
+func print_common_metrics(p *Pipeline) {
 	var (
 		checker bitflow.HeaderChecker
 		common  map[string]bool
