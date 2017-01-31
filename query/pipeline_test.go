@@ -1,13 +1,6 @@
 package query
 
-import (
-	"bytes"
-	"testing"
-
-	"github.com/antongulenko/go-bitflow"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-)
+/*
 
 type pipeTestSuite struct {
 	t *testing.T
@@ -51,3 +44,5 @@ func (suite *pipeTestSuite) TestRegularPipeline() {
 		Source: &bitflow.FileSource{},
 	})
 }
+
+*/
