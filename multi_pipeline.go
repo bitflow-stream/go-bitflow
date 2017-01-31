@@ -11,7 +11,7 @@ import (
 type MultiPipeline struct {
 	ParallelClose bool
 
-	pipelines        []*bitflow.SamplePipeline
+	pipelines        []*runningSubpipeline
 	runningPipelines int
 	stopped          bool
 	stoppedCond      *sync.Cond
@@ -38,19 +38,19 @@ func (m *MultiPipeline) StartPipeline(pipeline *bitflow.SamplePipeline, finished
 		// Use an empty source to make stopPipeline() work
 		pipeline.Source = new(bitflow.EmptyMetricSource)
 	}
-	m.pipelines = append(m.pipelines, pipeline)
 	m.runningPipelines++
 
-	group := golib.NewTaskGroup()
-	pipeline.Construct(group)
-	waitingTasks, channels := group.StartTasks(&m.subpipelineWg)
+	running := runningSubpipeline{
+		pipeline: pipeline,
+	}
+	m.pipelines = append(m.pipelines, &running)
+	waitingTasks, channels := running.init(&m.subpipelineWg)
 
 	m.subpipelineWg.Add(1)
 	go func() {
 		defer m.subpipelineWg.Done()
 
 		idx, err := golib.WaitForAny(channels)
-		group.ReverseStop(golib.DefaultPrintTaskStopWait)
 		_ = golib.PrintErrors(channels, waitingTasks, golib.DefaultPrintTaskStopWait)
 
 		// A passive pipeline can occur when all processors, source and sink return nil from Start().
@@ -68,10 +68,11 @@ func (m *MultiPipeline) StartPipeline(pipeline *bitflow.SamplePipeline, finished
 }
 
 func (m *MultiPipeline) StopPipelines() {
+	m.stopPipelines()
+
 	m.stoppedCond.L.Lock()
 	defer m.stoppedCond.L.Unlock()
 	m.stopped = true
-	m.stopPipelines()
 	m.stoppedCond.Broadcast()
 }
 
@@ -81,10 +82,10 @@ func (m *MultiPipeline) stopPipelines() {
 		m.pipelines[i] = nil // Enable GC
 		if pipeline != nil {
 			wg.Add(1)
-			go func(pipeline bitflow.MetricSource) {
+			go func(pipeline *runningSubpipeline) {
 				defer wg.Done()
-				pipeline.Stop()
-			}(pipeline.Source)
+				pipeline.stop()
+			}(pipeline)
 			if !m.ParallelClose {
 				wg.Wait()
 			}
@@ -95,24 +96,39 @@ func (m *MultiPipeline) stopPipelines() {
 
 func (m *MultiPipeline) waitForPipelines() {
 	m.stoppedCond.L.Lock()
+	defer m.stoppedCond.L.Unlock()
 	for !m.stopped || m.runningPipelines > 0 {
 		m.stoppedCond.Wait()
 	}
-	m.stoppedCond.L.Unlock()
 	m.subpipelineWg.Wait()
 }
 
 func (m *MultiPipeline) LogFinishedPipeline(isPassive bool, err error, prefix string) {
 	if isPassive {
-		prefix += " finished (passive)"
+		prefix += " is passive"
 	} else {
-		prefix += " finished (active)"
+		prefix += " finished"
 	}
 	if err == nil {
 		log.Debugln(prefix)
 	} else {
 		log.Errorf("%v (Error: %v)", prefix, err)
 	}
+}
+
+type runningSubpipeline struct {
+	pipeline *bitflow.SamplePipeline
+	group    *golib.TaskGroup
+}
+
+func (r *runningSubpipeline) init(wg *sync.WaitGroup) ([]golib.Task, []golib.StopChan) {
+	r.group = golib.NewTaskGroup()
+	r.pipeline.Construct(r.group)
+	return r.group.StartTasks(wg)
+}
+
+func (r *runningSubpipeline) stop() {
+	r.group.ReverseStop(golib.DefaultPrintTaskStopWait)
 }
 
 type ForkMerger struct {
