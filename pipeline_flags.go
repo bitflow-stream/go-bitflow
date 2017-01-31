@@ -351,7 +351,7 @@ func ParseEndpointDescription(endpoint string) (EndpointDescription, error) {
 // If one of format or transport is missing, it will be guessed.
 // The order does not matter. The 'target' part must not be empty.
 func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err error) {
-	urlParts := strings.Split(endpoint, "://")
+	urlParts := strings.SplitN(endpoint, "://", 2)
 	if len(urlParts) != 2 || urlParts[0] == "" || urlParts[1] == "" {
 		err = fmt.Errorf("Invalid URL endpoint: %v", endpoint)
 		return
