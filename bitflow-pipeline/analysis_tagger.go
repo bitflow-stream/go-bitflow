@@ -1,26 +1,28 @@
 package main
 
 import (
-	"errors"
+	"fmt"
 	"path/filepath"
 	"strconv"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 )
 
 func init() {
-	RegisterAnalysisParams("set_filename", set_filename_tag,
-		"Number of levels to go up the directory. 0 means filename, etc. Requires file input and -e source_tag")
+	RegisterAnalysisParamsErr("set_filename", set_filename_tag,
+		"When reading files, instead of using the entire path for source_tag, use only the given level in the directory tree (0 is the file, 1 the containing directory name, 2 the parent directory, ...)",
+		[]string{"level"})
 
 	RegisterAnalysisParams("source_tag",
-		func(p *SamplePipeline, param string) {
-			set_sample_tagger(p, param, false)
-		}, "the tag to set as the data source")
+		func(p *Pipeline, params map[string]string) {
+			set_sample_tagger(p, params["tag"], false)
+		}, "Set the name of the data source to the given tag. For files it is the file path (except see set_filename), for TCP connections it is the remote endpoint",
+		[]string{"tag"})
 	RegisterAnalysisParams("source_tag_append",
-		func(p *SamplePipeline, param string) {
-			set_sample_tagger(p, param, true)
-		}, "the tag to set as the data source (will create new tag if already present)")
+		func(p *Pipeline, params map[string]string) {
+			set_sample_tagger(p, params["tag"], true)
+		}, "Like source_tag, but don't override existing tag values. Instead, append a new tag with an incremented tag name",
+		[]string{"tag"})
 }
 
 type SampleTagger struct {
@@ -45,32 +47,27 @@ func (h *SampleTagger) HandleSample(sample *bitflow.Sample, source string) {
 	}
 }
 
-func set_sample_tagger(p *SamplePipeline, tag string, dontOverwrite bool) {
-	if tag == "" {
-		log.Fatalln("Sample tagger needs a parameter")
-	}
+func set_sample_tagger(p *Pipeline, tag string, dontOverwrite bool) {
 	if source, ok := p.Source.(bitflow.UnmarshallingMetricSource); ok {
 		source.SetSampleHandler(&SampleTagger{SourceTags: []string{tag}, DontOverwrite: dontOverwrite})
 	}
 }
 
-func set_filename_tag(p *SamplePipeline, param string) {
-	num, err := strconv.Atoi(param)
-	if err == nil && num < 0 {
-		err = errors.New("Number must be >= 0")
-	}
+func set_filename_tag(p *Pipeline, params map[string]string) error {
+	num, err := strconv.ParseUint(params["level"], 10, 64)
 	if err != nil {
-		log.Fatalf("Failed to parse parameter for -e set_filename: %v", err)
+		return parameterError("level", err)
 	}
 
 	if filesource, ok := p.Source.(*bitflow.FileSource); ok {
 		filesource.ConvertFilename = func(filename string) string {
-			for i := 0; i < num; i++ {
+			for i := uint64(0); i < num; i++ {
 				filename = filepath.Dir(filename)
 			}
 			return filepath.Base(filename)
 		}
+		return nil
 	} else {
-		log.Warnf("Cannot apply set_filename: data source is not *bitflow.FileSource but %T", p.Source)
+		return fmt.Errorf("Data source must be *bitflow.FileSource, but was %T instead: %v", p.Source, p.Source)
 	}
 }

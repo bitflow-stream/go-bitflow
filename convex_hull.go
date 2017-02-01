@@ -52,7 +52,8 @@ func ComputeConvexHull(points []Point) ConvexHull {
 			p1, p2, p3 = p2, p3, p[i]
 		} else {
 			if len(hull) <= 1 {
-				log.Warnln("Illegal convex hull:", p)
+				// TODO this is probably a bug, debug and fix
+				log.Warnln("Illegal convex hull with", len(p), "points")
 				return p
 			}
 			p2 = p1

@@ -12,9 +12,9 @@ import (
 )
 
 func init() {
-	RegisterAnalysis("tag_injection_info", tag_injection_info)
-	RegisterAnalysis("injection_directory_structure", injection_directory_structure)
-	RegisterAnalysisParams("split_experiments", split_experiments, "number of seconds without sample before starting a new file")
+	RegisterAnalysis("tag_injection_info", tag_injection_info, "Convert tags (cls, target) into (injected, measured, anomaly)")
+	RegisterAnalysis("injection_directory_structure", injection_directory_structure, "Split samples into a directory structure based on the tags provided by tag_injection_info. Must be used as last step before a file output")
+	RegisterAnalysisParamsErr("split_experiments", split_experiments, "Split samples into separate files based on their timestamps. When the difference between two (sorted) timestamps is too large, start a new file. Must be used as the last step before a file output", []string{"min_duration"})
 }
 
 const (
@@ -25,7 +25,7 @@ const (
 	measuredTag              = "measured"
 )
 
-func tag_injection_info(p *SamplePipeline) {
+func tag_injection_info(p *Pipeline) {
 	p.Add(&SimpleProcessor{
 		Description: fmt.Sprintf("Injection info tagger (transform tags %s and %s into %s, %s and %s)", ClassTag, remoteInjectionTag, injectedTag, measuredTag, anomalyTag),
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -62,14 +62,20 @@ func tag_injection_info(p *SamplePipeline) {
 	})
 }
 
-func injection_directory_structure(p *SamplePipeline) {
+func injection_directory_structure(p *Pipeline) {
 	distributor := &TagsDistributor{
 		Tags:        []string{injectedTag, anomalyTag, measuredTag},
 		Separator:   string(filepath.Separator),
 		Replacement: "_unknown_",
 	}
 	builder := MultiFileDirectoryBuilder(false, nil)
-	p.Add(NewMetricFork(distributor, builder))
+	p.Add(&MetricFork{
+		MultiPipeline: MultiPipeline{
+			ParallelClose: true,
+		},
+		Distributor: distributor,
+		Builder:     builder},
+	)
 }
 
 type TimeDistributor struct {
@@ -92,10 +98,18 @@ func (d *TimeDistributor) Distribute(sample *bitflow.Sample, header *bitflow.Hea
 	return []interface{}{d.counter}
 }
 
-func split_experiments(p *SamplePipeline, params string) {
-	duration, err := time.ParseDuration(params)
+func split_experiments(p *Pipeline, params map[string]string) error {
+	duration, err := time.ParseDuration(params["min_duration"])
 	if err != nil {
-		log.Fatalln("Error parsing duration parameter for -e split_experiments:", err)
+		err = parameterError("min_duration", err)
+	} else {
+		p.Add(&MetricFork{
+			MultiPipeline: MultiPipeline{
+				ParallelClose: true,
+			},
+			Distributor: &TimeDistributor{MinimumPause: duration},
+			Builder:     MultiFileSuffixBuilder(nil),
+		})
 	}
-	p.Add(NewMetricFork(&TimeDistributor{MinimumPause: duration}, MultiFileSuffixBuilder(nil)))
+	return err
 }

@@ -25,8 +25,8 @@ func (b *MultiFilePipelineBuilder) String() string {
 
 func (b *MultiFilePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
 	simple := b.SimplePipelineBuilder.BuildPipeline(key, output)
-	files := b.getFileSink(output.GetOriginalSink())
-	if files != nil {
+	files, ok := output.GetOriginalSink().(*bitflow.FileSink)
+	if ok {
 		newFilename := b.NewFile(files.Filename, key)
 		newFiles := &bitflow.FileSink{
 			AbstractMarshallingMetricSink: files.AbstractMarshallingMetricSink,
@@ -39,29 +39,6 @@ func (b *MultiFilePipelineBuilder) BuildPipeline(key interface{}, output *ForkMe
 		log.Warnf("[%v]: Cannot assign new files, did not find *bitflow.FileSink as my direct output", b)
 	}
 	return simple
-}
-
-func (b *MultiFilePipelineBuilder) getFileSink(sink bitflow.MetricSink) *bitflow.FileSink {
-	if files, ok := sink.(*bitflow.FileSink); ok {
-		return files
-	}
-	if agg, ok := sink.(bitflow.AggregateSink); ok {
-		var files *bitflow.FileSink
-		warned := false
-		for _, sink := range agg {
-			converted := b.getFileSink(sink)
-			if converted != nil {
-				if files == nil {
-					files = converted
-				} else if !warned {
-					log.Warnf("[%v]: Multiple file outputs, using %v", b, files)
-					warned = true
-				}
-			}
-		}
-		return files
-	}
-	return nil
 }
 
 func MultiFileSuffixBuilder(buildPipeline func() []bitflow.SampleProcessor) *MultiFilePipelineBuilder {

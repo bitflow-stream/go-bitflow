@@ -14,16 +14,16 @@ import (
 )
 
 func init() {
-	RegisterAnalysis("print_header", print_header)
-	RegisterAnalysisParams("print_tags", print_tags, "tag to print")
-	RegisterAnalysisParams("count_tags", count_tags, "tag to count")
-	RegisterAnalysis("print_timerange", print_timerange)
-	RegisterAnalysisParams("print_timeline", print_timeline, "number of buckets for the timeline-histogram") // Print a timeline showing a rudimentary histogram of the number of samples
-	RegisterAnalysis("count_invalid", count_invalid)
-	RegisterAnalysis("print_common_metrics", print_common_metrics)
+	RegisterAnalysis("print_header", print_header, "Print every changing header to the log")
+	RegisterAnalysisParams("print_tags", print_tags, "When done processing, print every encountered value of the given tag", []string{"tag"})
+	RegisterAnalysisParams("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", []string{"tag"})
+	RegisterAnalysis("print_timerange", print_timerange, "When done processing, print the first and last encountered timestamp")
+	RegisterAnalysisParamsErr("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", []string{}, "buckets")
+	RegisterAnalysis("count_invalid", count_invalid, "When done processing, print the number of invalid metric values and samples containing such values (NaN, -/+ infinity, ...)")
+	RegisterAnalysis("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
 }
 
-func print_header(p *SamplePipeline) {
+func print_header(p *Pipeline) {
 	var checker bitflow.HeaderChecker
 	numSamples := 0
 	p.Add(&SimpleProcessor{
@@ -119,15 +119,15 @@ func (printer *UniqueTagPrinter) String() string {
 	return res + " unique values of tag '" + printer.Tag + "'"
 }
 
-func print_tags(p *SamplePipeline, params string) {
-	p.Add(NewUniqueTagPrinter(params))
+func print_tags(p *Pipeline, params map[string]string) {
+	p.Add(NewUniqueTagPrinter(params["tag"]))
 }
 
-func count_tags(p *SamplePipeline, params string) {
-	p.Add(NewUniqueTagCounter(params))
+func count_tags(p *Pipeline, params map[string]string) {
+	p.Add(NewUniqueTagCounter(params["tag"]))
 }
 
-func print_timerange(p *SamplePipeline) {
+func print_timerange(p *Pipeline) {
 	var (
 		from  time.Time
 		to    time.Time
@@ -157,82 +157,78 @@ func print_timerange(p *SamplePipeline) {
 	})
 }
 
-type TimelinePrinter struct {
-	NumBuckets uint64
-}
-
-func (p *TimelinePrinter) String() string {
-	return fmt.Sprintf("Print timeline (len %v)", p.NumBuckets)
-}
-
-func (p *TimelinePrinter) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
-	var from time.Time
-	var to time.Time
-	for _, sample := range samples {
-		t := sample.Time
-		if from.IsZero() || to.IsZero() {
-			from = t
-			to = t
-		} else if t.Before(from) {
-			from = t
-		} else if t.After(to) {
-			to = t
+func print_timeline(p *Pipeline, params map[string]string) error {
+	numBuckets := uint64(10)
+	if bucketsStr, hasBuckets := params["buckets"]; hasBuckets {
+		var err error
+		numBuckets, err = strconv.ParseUint(bucketsStr, 10, 64)
+		if err != nil {
+			return parameterError("buckets", err)
 		}
 	}
-	duration := to.Sub(from)
-	bucketDuration := duration / time.Duration(p.NumBuckets)
-	buckets := make([]int, p.NumBuckets)
-	bucketEnds := make([]time.Time, p.NumBuckets)
-	for i := uint64(0); i < p.NumBuckets-1; i++ {
-		bucketEnds[i] = from.Add(time.Duration(i+1) * bucketDuration)
-	}
-	bucketEnds[p.NumBuckets-1] = to // No rounding error
-	for _, sample := range samples {
-		index := sort.Search(len(buckets), func(n int) bool {
-			return !sample.Time.After(bucketEnds[n])
-		})
-		if index == len(buckets) {
-			log.Fatalln("WRONG:", sample.Time, "FIRST:", bucketEnds[0], "LAST:", bucketEnds[len(bucketEnds)-1], "START:", from, "END:", to)
-		}
-		buckets[index]++
-	}
-	largestBuffer := 0
-	for _, num := range buckets {
-		if num > largestBuffer {
-			largestBuffer = num
-		}
-	}
-	var timeline bytes.Buffer
-	for _, bucketSize := range buckets {
-		if bucketSize == 0 {
-			timeline.WriteRune('-')
-		} else {
-			num := int(math.Ceil(float64(bucketSize)/float64(largestBuffer)*10)) - 1 // [0..9]
-			timeline.WriteString(strconv.Itoa(num))
-		}
+	if numBuckets <= 0 {
+		numBuckets = 1
 	}
 
-	log.Println("[Timeline]: Start:", from)
-	log.Println("[Timeline]: End:", to)
-	log.Println("[Timeline]: Duration:", duration)
-	log.Println("[Timeline]: One bucket:", bucketDuration)
-	log.Println("[Timeline]:", timeline.String())
-	return header, samples, nil
+	p.Batch(&SimpleBatchProcessingStep{
+		Description: fmt.Sprintf("Print timeline (len %v)", numBuckets),
+		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+			var from, to time.Time
+			for _, sample := range samples {
+				t := sample.Time
+				if from.IsZero() || to.IsZero() {
+					from = t
+					to = t
+				} else if t.Before(from) {
+					from = t
+				} else if t.After(to) {
+					to = t
+				}
+			}
+
+			duration := to.Sub(from)
+			bucketDuration := duration / time.Duration(numBuckets)
+			buckets := make([]int, numBuckets)
+			bucketEnds := make([]time.Time, numBuckets)
+
+			for i := uint64(0); i < numBuckets-1; i++ {
+				bucketEnds[i] = from.Add(time.Duration(i+1) * bucketDuration)
+			}
+			bucketEnds[numBuckets-1] = to // No rounding error
+			for _, sample := range samples {
+				index := sort.Search(len(buckets), func(n int) bool {
+					return !sample.Time.After(bucketEnds[n])
+				})
+				buckets[index]++
+			}
+			largestBuffer := 0
+			for _, num := range buckets {
+				if num > largestBuffer {
+					largestBuffer = num
+				}
+			}
+			var timeline bytes.Buffer
+			for _, bucketSize := range buckets {
+				if bucketSize == 0 {
+					timeline.WriteRune('-')
+				} else {
+					num := int(math.Ceil(float64(bucketSize)/float64(largestBuffer)*10)) - 1 // [0..9]
+					timeline.WriteString(strconv.Itoa(num))
+				}
+			}
+
+			log.Println("[Timeline]: Start:", from)
+			log.Println("[Timeline]: End:", to)
+			log.Println("[Timeline]: Duration:", duration)
+			log.Println("[Timeline]: One bucket:", bucketDuration)
+			log.Println("[Timeline]:", timeline.String())
+			return header, samples, nil
+		},
+	})
+	return nil
 }
 
-func print_timeline(p *SamplePipeline, param string) {
-	buckets, err := strconv.ParseUint(param, 10, 64)
-	if err != nil {
-		log.Warnln("Failed to parse parameter for -e print_timeline:", err)
-		buckets = 10
-	}
-	if buckets == 0 {
-		buckets = 1
-	}
-	p.Batch(&TimelinePrinter{NumBuckets: buckets})
-}
-
-func count_invalid(p *SamplePipeline) {
+func count_invalid(p *Pipeline) {
 	var (
 		invalidSamples int
 		totalSamples   int
@@ -263,7 +259,7 @@ func count_invalid(p *SamplePipeline) {
 	})
 }
 
-func print_common_metrics(p *SamplePipeline) {
+func print_common_metrics(p *Pipeline) {
 	var (
 		checker bitflow.HeaderChecker
 		common  map[string]bool

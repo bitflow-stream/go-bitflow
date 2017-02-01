@@ -10,19 +10,21 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-func NewHttpPlotter(endpoint string, windowSize int) *HttpPlotter {
+func NewHttpPlotter(endpoint string, windowSize int, useLocalStatic bool) *HttpPlotter {
 	return &HttpPlotter{
-		data:       make(map[string]*pipeline.MetricWindow),
-		Endpoint:   endpoint,
-		WindowSize: windowSize,
+		data:           make(map[string]*pipeline.MetricWindow),
+		Endpoint:       endpoint,
+		WindowSize:     windowSize,
+		UseLocalStatic: useLocalStatic,
 	}
 }
 
 type HttpPlotter struct {
 	bitflow.AbstractProcessor
 
-	Endpoint   string
-	WindowSize int
+	Endpoint       string
+	WindowSize     int
+	UseLocalStatic bool
 
 	data  map[string]*pipeline.MetricWindow
 	names []string
@@ -30,6 +32,7 @@ type HttpPlotter struct {
 
 func (p *HttpPlotter) Start(wg *sync.WaitGroup) golib.StopChan {
 	go func() {
+		// This routine cannot be interrupted gracefully
 		if err := p.serve(); err != nil {
 			p.Error(err)
 		}
