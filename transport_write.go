@@ -3,6 +3,7 @@ package bitflow
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"sync"
 
@@ -117,11 +118,18 @@ func (stream *SampleOutputStream) Sample(sample *Sample, header *Header) error {
 		sample:   sample,
 		doneCond: sync.NewCond(new(sync.Mutex)),
 	}
-	stream.closed.IfNotEnabled(func() {
-		stream.incoming <- bufferedSample
-		stream.outgoing <- bufferedSample
-	})
-	return nil
+	var err error
+	stream.closed.IfElseEnabled(
+		func() {
+			err = stream.err
+			if err == nil {
+				err = errors.New("Sample written to closed output stream")
+			}
+		}, func() {
+			stream.incoming <- bufferedSample
+			stream.outgoing <- bufferedSample
+		})
+	return err
 }
 
 // Close closes the receiving SampleOutputStream. After calling this, neither
