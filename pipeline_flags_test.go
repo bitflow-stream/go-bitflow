@@ -262,7 +262,7 @@ func (suite *PipelineTestSuite) Test_input_std() {
 	source, err := factory.CreateInput(endpoint)
 	source.SetSampleHandler(handler)
 	suite.NoError(err)
-	expected := &ConsoleSource{}
+	expected := NewConsoleSource()
 	expected.Reader.Handler = handler
 	expected.Reader.ParallelSampleHandler = parallel_handler
 	suite.Equal(expected, source)
@@ -349,7 +349,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 	}
 
 	std := func(format string) MetricSink {
-		s := &ConsoleSink{}
+		s := NewConsoleSink()
 		setup(&s.AbstractMarshallingMetricSink, format)
 		return s
 	}

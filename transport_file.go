@@ -348,7 +348,7 @@ func (source *FileSource) Stop() {
 	source.closed.Enable(func() {
 		if source.stream != nil {
 			if err := source.stream.Close(); err != nil && !isFileClosedError(err) {
-				log.Errorln("Error closing file:", err)
+				log.Errorln("Error closing input file:", err)
 			}
 		}
 	})
@@ -499,7 +499,7 @@ func (sink *FileSink) flush() error {
 func (sink *FileSink) Close() {
 	sink.closed.Enable(func() {
 		if err := sink.flush(); err != nil {
-			log.Errorln("Error closing file:", err)
+			log.Errorln("Error closing otuput file:", err)
 		}
 	})
 }

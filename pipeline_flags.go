@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -125,6 +126,14 @@ func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
 	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
 }
 
+// Writer returns an instance of SampleReader, configured by the values stored in the EndpointFactory.
+func (p *EndpointFactory) Reader(um Unmarshaller) SampleReader {
+	return SampleReader{
+		ParallelSampleHandler: p.FlagParallelHandler,
+		Unmarshaller:          um,
+	}
+}
+
 // CreateInput creates a MetricSource object based on the given input endpoint descriptions
 // and the configuration flags in the EndpointFactory.
 func (p *EndpointFactory) CreateInput(inputs ...string) (UnmarshallingMetricSource, error) {
@@ -139,14 +148,11 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (UnmarshallingMetricSour
 			return nil, fmt.Errorf("Format cannot be specified for data input: %v", input)
 		}
 		if result == nil {
-			reader := SampleReader{
-				ParallelSampleHandler: p.FlagParallelHandler,
-				Unmarshaller:          endpoint.Unmarshaller(),
-			}
+			reader := p.Reader(endpoint.Unmarshaller())
 			inputType = endpoint.Type
 			switch endpoint.Type {
 			case StdEndpoint:
-				source := new(ConsoleSource)
+				source := NewConsoleSource()
 				source.Reader = reader
 				result = source
 			case TcpEndpoint:
@@ -200,6 +206,11 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (UnmarshallingMetricSour
 	return result, nil
 }
 
+// Writer returns an instance of SampleWriter, configured by the values stored in the EndpointFactory.
+func (p *EndpointFactory) Writer() SampleWriter {
+	return SampleWriter{p.FlagParallelHandler}
+}
+
 // CreateInput creates a MetricSink object based on the given output endpoint description
 // and the configuration flags in the EndpointFactory.
 func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
@@ -212,7 +223,7 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 	marshaller := endpoint.OutputFormat().Marshaller()
 	switch endpoint.Type {
 	case StdEndpoint:
-		sink := new(ConsoleSink)
+		sink := NewConsoleSink()
 		marshallingSink = &sink.AbstractMarshallingMetricSink
 		if txt, ok := marshaller.(TextMarshaller); ok {
 			txt.AssumeStdout = true
@@ -260,15 +271,15 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 	}
 	if marshallingSink != nil {
 		marshallingSink.SetMarshaller(marshaller)
-		marshallingSink.Writer = SampleWriter{p.FlagParallelHandler}
+		marshallingSink.Writer = p.Writer()
 	}
 	return resultSink, nil
 }
 
 func IsConsoleOutput(sink MetricSink) bool {
-	_, ok1 := sink.(*ConsoleSink)
+	writer, ok1 := sink.(*WriterSink)
 	_, ok2 := sink.(*ConsoleBoxSink)
-	return ok1 || ok2
+	return (ok1 && writer.Output == os.Stdout) || ok2
 }
 
 // EndpointDescription describes a data endpoint, regardless of the data direction
