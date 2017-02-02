@@ -23,6 +23,8 @@ func init() {
 	RegisterAnalysisParams("split_files", split_files, "Split the samples into multiple files, one file per value of the given tag. Must be used as last step before a file output", []string{"tag"})
 	RegisterAnalysisParamsErr("do", general_expression, "Execute the given expression on every sample", []string{"expr"})
 
+	RegisterAnalysisParamsErr("subprocess", run_subprocess, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary).", []string{"cmd"}, "format")
+
 	// Set metadata
 	RegisterAnalysisParams("tags", set_tags, "Set the given tags on every sample", nil)
 	RegisterAnalysis("set_time", set_time_processor, "Set the timestamp on every processed sample to the current time")
@@ -304,4 +306,21 @@ func generic_batch(p *Pipeline, params map[string]string) {
 	p.Add(&BatchProcessor{
 		FlushTag: params["tag"],
 	})
+}
+
+func run_subprocess(p *Pipeline, params map[string]string) error {
+	cmd := SplitShellCommand(params["cmd"])
+	format, ok := params["format"]
+	if !ok {
+		format = "bin"
+	}
+	runner := &SubprocessRunner{
+		Cmd:  cmd[0],
+		Args: cmd[1:],
+	}
+	if err := runner.Configure(format, &builder.Endpoints); err != nil {
+		return err
+	}
+	p.Add(runner)
+	return nil
 }
