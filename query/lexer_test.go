@@ -42,7 +42,7 @@ func (suite *lexerTestSuite) testErr(input string, tokens []Token, errIndex int,
 		}
 		expectedTok.Start = pos
 		if tok.Lit != string(eof) {
-			pos += len(tok.Lit)
+			pos += len(expectedTok.Lit)
 		}
 		expectedTok.End = pos
 		suite.Equal(expectedTok, tok, fmt.Sprintf("Wrong token %v", i))
@@ -105,9 +105,13 @@ func (suite *lexerTestSuite) TestOperators() {
 }
 
 func (suite *lexerTestSuite) TestStr() {
-	suite.test("xx \"c =,(){}'`c v\" ` \" =,(){} a '`a\"d\"`c`'=,(){}t'",
+	suite.test("xx- - a-b \"c =,(){}'`c v\" ` \" =,(){} a '`a\"d\"`c`'=,(){}t'",
 		[]Token{
-			{Type: STR, Lit: "xx"},
+			{Type: STR, Lit: "xx-"},
+			{Type: WS, Lit: " "},
+			{Type: STR, Lit: "-"},
+			{Type: WS, Lit: " "},
+			{Type: STR, Lit: "a-b"},
 			{Type: WS, Lit: " "},
 			{Type: QUOT_STR, Lit: "\"c =,(){}'`c v\""},
 			{Type: WS, Lit: " "},
@@ -116,6 +120,14 @@ func (suite *lexerTestSuite) TestStr() {
 			{Type: QUOT_STR, Lit: "\"d\""},
 			{Type: QUOT_STR, Lit: "`c`"},
 			{Type: QUOT_STR, Lit: "'=,(){}t'"},
+			{Type: EOF, Lit: string(eof)},
+		})
+
+	suite.test("- -",
+		[]Token{
+			{Type: STR, Lit: "-"},
+			{Type: WS, Lit: " "},
+			{Type: STR, Lit: "-"},
 			{Type: EOF, Lit: string(eof)},
 		})
 }
@@ -228,13 +240,6 @@ func (suite *lexerTestSuite) TestExample() {
 }
 
 func (suite *lexerTestSuite) TestErrors() {
-	suite.testErr("x- (", []Token{
-		{Type: STR, Lit: "x"},
-		{Type: NEXT, Lit: "- "},
-		{Type: PARAM_OPEN, Lit: "("}, // Continue lexing normally after this error
-		{Type: EOF, Lit: string(eof)},
-	}, 1, ErrorMissingNext)
-
 	suite.testErr("x\"XX", []Token{
 		{Type: STR, Lit: "x"},
 		{Type: QUOT_STR, Lit: "\"XX"},

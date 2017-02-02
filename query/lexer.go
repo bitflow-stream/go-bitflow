@@ -3,7 +3,6 @@ package query
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 )
@@ -37,15 +36,14 @@ const (
 
 var (
 	ErrorMissingQuote = "Unexpected EOF, missing closing %v quote"
-	ErrorMissingNext  = errors.New("Expected '->'")
 )
 
 // These runes interrupt a non-quoted string
+// The '-' rune is handled specially because it is part of the two-rune token '->'
 var specialRunes = map[rune]bool{
 	';':  true,
 	'{':  true,
 	'}':  true,
-	'-':  true,
 	'"':  true,
 	'\'': true,
 	'`':  true,
@@ -129,6 +127,10 @@ func isSpecial(ch rune) bool {
 type Scanner struct {
 	r   *bufio.Reader
 	pos int
+
+	// For allowing two consecutive unread() operations to support the '->' token
+	buf  [2]rune
+	nbuf int
 }
 
 func NewScanner(r io.Reader) *Scanner {
@@ -136,17 +138,31 @@ func NewScanner(r io.Reader) *Scanner {
 }
 
 func (s *Scanner) read() rune {
-	ch, _, err := s.r.ReadRune()
-	if err != nil {
+	switch s.nbuf {
+	case 0:
+		ch, _, err := s.r.ReadRune()
+		s.buf[0], s.buf[1] = ch, s.buf[0]
+		if err != nil {
+			return eof
+		}
+		s.pos++
+		return ch
+	case 1, 2:
+		s.pos++
+		s.nbuf--
+		return s.buf[s.nbuf]
+	default:
+		panic("Too many Scanner.unread() operations have been made")
 		return eof
 	}
-	s.pos++
-	return ch
 }
 
 func (s *Scanner) unread() {
+	if s.nbuf >= 2 {
+		panic("Cannot perform more than 2 Scanner.unread() operations")
+	}
 	s.pos--
-	_ = s.r.UnreadRune()
+	s.nbuf++
 }
 
 func (s *Scanner) Scan() (Token, error) {
@@ -189,16 +205,6 @@ func (s *Scanner) Scan() (Token, error) {
 	case ',':
 		tok.Type = PARAM_SEP
 		return tok, nil
-	case '-':
-		ch2 := s.read()
-		tok.Type = NEXT
-		tok.End = s.pos
-		tok.Lit += string(ch2)
-		if ch2 == '>' {
-			return tok, nil
-		} else {
-			return tok, ErrorMissingNext
-		}
 	case '"', '`', '\'':
 		s.unread()
 		return s.scanQuotedStr(ch)
@@ -257,17 +263,32 @@ func (s *Scanner) scanDirectStr() Token {
 		Type:  STR,
 		Start: s.pos,
 	}
-
 	var buf bytes.Buffer
 	for {
-		if ch := s.read(); ch == eof {
+		ch := s.read()
+		if ch == eof {
 			break
+		} else if ch == '-' {
+			ch2 := s.read()
+			if ch2 == '>' {
+				if buf.Len() == 0 {
+					tok.Type = NEXT
+					buf.WriteRune(ch)
+					buf.WriteRune(ch2)
+				} else {
+					// Direct string is interrupted by a complete '->' token
+					s.unread()
+					s.unread()
+				}
+				break
+			} else {
+				s.unread()
+			}
 		} else if isSpecial(ch) {
 			s.unread()
 			break
-		} else {
-			buf.WriteRune(ch)
 		}
+		buf.WriteRune(ch)
 	}
 	tok.End = s.pos
 	tok.Lit = buf.String()

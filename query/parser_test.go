@@ -55,9 +55,9 @@ func (suite *parserTestSuite) TestErrorString() {
 }
 
 func (suite *parserTestSuite) TestLexerError() {
-	suite.testErr("-X", Pipeline(nil), ParserError{
-		Pos:     Token{Type: NEXT, Start: 0, End: 2, Lit: "-X"},
-		Message: "Expected '->'",
+	suite.testErr("'X", Pipeline(nil), ParserError{
+		Pos:     Token{Type: QUOT_STR, Start: 0, End: 2, Lit: "'X"},
+		Message: "Unexpected EOF, missing closing ' quote",
 	})
 }
 
@@ -284,6 +284,14 @@ func (suite *parserTestSuite) TestExamples() {
 					Step{Name: Token{Type: STR, Lit: "a", Start: 18, End: 19}}}},
 				Output{Type: STR, Lit: "x", Start: 27, End: 28}}}},
 		Output{Type: STR, Lit: "b", Start: 32, End: 33}})
+	suite.test(" - -> bin://-", Pipeline{
+		Input{{Type: STR, Lit: "-", Start: 1, End: 2}},
+		Output{Type: STR, Lit: "bin://-", Start: 6, End: 13},
+	})
+	suite.test(" - -> bin://-", Pipeline{
+		Input{{Type: STR, Lit: "-", Start: 1, End: 2}},
+		Output{Type: STR, Lit: "bin://-", Start: 6, End: 13},
+	})
 }
 
 func (suite *parserTestSuite) TestBigExample() {
