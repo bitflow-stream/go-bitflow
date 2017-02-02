@@ -117,8 +117,10 @@ func (stream *SampleOutputStream) Sample(sample *Sample, header *Header) error {
 		sample:   sample,
 		doneCond: sync.NewCond(new(sync.Mutex)),
 	}
-	stream.incoming <- bufferedSample
-	stream.outgoing <- bufferedSample
+	stream.closed.IfNotEnabled(func() {
+		stream.incoming <- bufferedSample
+		stream.outgoing <- bufferedSample
+	})
 	return nil
 }
 
