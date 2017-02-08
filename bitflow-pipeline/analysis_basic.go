@@ -192,6 +192,7 @@ func set_tags(pipe *Pipeline, params map[string]string) {
 			for key, value := range params {
 				sample.SetTag(key, value)
 			}
+			header.HasTags = true
 			return sample, header, nil
 		},
 	})
