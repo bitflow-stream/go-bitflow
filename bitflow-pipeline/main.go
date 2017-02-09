@@ -68,6 +68,10 @@ func RegisterAnalysisParamsErr(name string, setupPipeline func(pipeline *Pipelin
 }
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s <flags> <bitflow script>\nAll flags must be defined before the first non-flag parameter.\nFlags:\n", os.Args[0])
+		flag.PrintDefaults()
+	}
 	os.Exit(do_main())
 }
 
