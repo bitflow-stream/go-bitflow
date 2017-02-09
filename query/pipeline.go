@@ -167,8 +167,10 @@ func (builder PipelineBuilder) addMultiplex(pipe *pipeline.SamplePipeline, pipes
 	// TODO control/configure parallelism of the Fork
 
 	pipe.Add(&fork.MetricFork{
-		MultiPipeline: fork.MultiPipeline{
-			ParallelClose: true,
+		AbstractMetricFork: fork.AbstractMetricFork{
+			MultiPipeline: fork.MultiPipeline{
+				ParallelClose: true,
+			},
 		},
 		Distributor: fork.NewMultiplexDistributor(num),
 		Builder:     subpipelines,

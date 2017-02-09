@@ -8,6 +8,41 @@ import (
 	"github.com/antongulenko/go-bitflow"
 )
 
+type SimplePipelineBuilder struct {
+	Build           func() []bitflow.SampleProcessor
+	examplePipeline []fmt.Stringer
+}
+
+func (b *SimplePipelineBuilder) ContainedStringers() []fmt.Stringer {
+	if b.examplePipeline == nil {
+		if b.Build == nil {
+			b.examplePipeline = make([]fmt.Stringer, 0)
+		} else {
+			pipeline := b.Build()
+			b.examplePipeline = make([]fmt.Stringer, len(pipeline))
+			for i, step := range pipeline {
+				b.examplePipeline[i] = step
+			}
+		}
+	}
+	return b.examplePipeline
+}
+
+func (b *SimplePipelineBuilder) String() string {
+	return fmt.Sprintf("Simple Pipeline Builder len %v", len(b.ContainedStringers()))
+}
+
+func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
+	var res bitflow.SamplePipeline
+	res.Sink = output
+	if b.Build != nil {
+		for _, processor := range b.Build() {
+			res.Add(processor)
+		}
+	}
+	return &res
+}
+
 type MultiFilePipelineBuilder struct {
 	SimplePipelineBuilder
 	NewFile     func(originalFile string, key interface{}) string

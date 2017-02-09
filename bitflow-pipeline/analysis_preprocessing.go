@@ -71,8 +71,10 @@ func injection_directory_structure(p *Pipeline) {
 	}
 	builder := MultiFileDirectoryBuilder(false, nil)
 	p.Add(&MetricFork{
-		MultiPipeline: MultiPipeline{
-			ParallelClose: true,
+		AbstractMetricFork: AbstractMetricFork{
+			MultiPipeline: MultiPipeline{
+				ParallelClose: true,
+			},
 		},
 		Distributor: distributor,
 		Builder:     builder},
@@ -105,8 +107,10 @@ func split_experiments(p *Pipeline, params map[string]string) error {
 		err = parameterError("min_duration", err)
 	} else {
 		p.Add(&MetricFork{
-			MultiPipeline: MultiPipeline{
-				ParallelClose: true,
+			AbstractMetricFork: AbstractMetricFork{
+				MultiPipeline: MultiPipeline{
+					ParallelClose: true,
+				},
 			},
 			Distributor: &TimeDistributor{MinimumPause: duration},
 			Builder:     MultiFileSuffixBuilder(nil),
