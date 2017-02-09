@@ -13,6 +13,8 @@ type MultiMetricSource struct {
 	MultiPipeline
 	bitflow.AbstractMetricSource
 
+	ParallelClose bool
+
 	pipelines        []*pipeline.SamplePipeline
 	stoppedPipelines int
 }
@@ -28,6 +30,7 @@ func (in *MultiMetricSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		stopChan <- nil
 	}
 
+	in.parallelClose = in.ParallelClose
 	in.MultiPipeline.Init(in.OutgoingSink, signalClose, wg)
 	for i, pipe := range in.pipelines {
 		in.start(i, pipe)

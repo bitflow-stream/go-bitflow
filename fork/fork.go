@@ -2,8 +2,10 @@ package fork
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/golib"
 )
 
 type ForkDistributor interface {
@@ -14,8 +16,14 @@ type ForkDistributor interface {
 type MetricFork struct {
 	AbstractMetricFork
 
-	Distributor ForkDistributor
-	Builder     PipelineBuilder
+	ParallelClose bool
+	Distributor   ForkDistributor
+	Builder       PipelineBuilder
+}
+
+func (f *MetricFork) Start(wg *sync.WaitGroup) golib.StopChan {
+	f.parallelClose = f.ParallelClose
+	return f.AbstractMetricFork.Start(wg)
 }
 
 func (f *MetricFork) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

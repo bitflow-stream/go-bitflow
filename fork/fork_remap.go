@@ -16,11 +16,13 @@ type RemapDistributor interface {
 type ForkRemapper struct {
 	AbstractMetricFork
 
-	Distributor RemapDistributor
-	Builder     PipelineBuilder
+	ParallelClose bool
+	Distributor   RemapDistributor
+	Builder       PipelineBuilder
 }
 
 func (f *ForkRemapper) Start(wg *sync.WaitGroup) golib.StopChan {
+	f.parallelClose = f.ParallelClose
 	f.newPipelineHandler = func(sink bitflow.MetricSink) bitflow.MetricSink {
 		// Synchronize writing, because multiple incoming pipelines can write to one pipeline
 		return &ForkMerger{outgoing: sink}

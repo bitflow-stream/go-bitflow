@@ -167,13 +167,9 @@ func (builder PipelineBuilder) addMultiplex(pipe *pipeline.SamplePipeline, pipes
 	// TODO control/configure parallelism of the Fork
 
 	pipe.Add(&fork.MetricFork{
-		AbstractMetricFork: fork.AbstractMetricFork{
-			MultiPipeline: fork.MultiPipeline{
-				ParallelClose: true,
-			},
-		},
-		Distributor: fork.NewMultiplexDistributor(num),
-		Builder:     subpipelines,
+		ParallelClose: true,
+		Distributor:   fork.NewMultiplexDistributor(num),
+		Builder:       subpipelines,
 	})
 	return nil
 }
@@ -183,9 +179,7 @@ func (builder PipelineBuilder) createMultiInput(pipes Pipelines) (bitflow.Metric
 	// TODO control/configure parallelism of the Fork
 
 	subpipelines := &fork.MultiMetricSource{
-		MultiPipeline: fork.MultiPipeline{
-			ParallelClose: true,
-		},
+		ParallelClose: true,
 	}
 	for _, subpipe := range pipes {
 		subpipe, err := builder.makePipeline(subpipe, true)

@@ -9,7 +9,7 @@ import (
 )
 
 type MultiPipeline struct {
-	ParallelClose bool
+	parallelClose bool
 
 	pipelines        []*runningSubpipeline
 	runningPipelines int
@@ -86,7 +86,7 @@ func (m *MultiPipeline) stopPipelines() {
 				defer wg.Done()
 				pipeline.stop()
 			}(pipeline)
-			if !m.ParallelClose {
+			if !m.parallelClose {
 				wg.Wait()
 			}
 		}

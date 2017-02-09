@@ -206,13 +206,9 @@ func split_files(p *Pipeline, params map[string]string) {
 		Replacement: "_empty_",
 	}
 	p.Add(&MetricFork{
-		AbstractMetricFork: AbstractMetricFork{
-			MultiPipeline: MultiPipeline{
-				ParallelClose: true,
-			},
-		},
-		Distributor: distributor,
-		Builder:     MultiFileSuffixBuilder(nil),
+		ParallelClose: true,
+		Distributor:   distributor,
+		Builder:       MultiFileSuffixBuilder(nil),
 	})
 }
 
