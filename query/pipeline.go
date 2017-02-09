@@ -7,6 +7,7 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/fork"
 )
 
 type AnalysisFunc func(pipeline *pipeline.SamplePipeline, params map[string]string) error
@@ -165,11 +166,11 @@ func (builder PipelineBuilder) addMultiplex(pipe *pipeline.SamplePipeline, pipes
 
 	// TODO control/configure parallelism of the Fork
 
-	pipe.Add(&pipeline.MetricFork{
-		MultiPipeline: pipeline.MultiPipeline{
+	pipe.Add(&fork.MetricFork{
+		MultiPipeline: fork.MultiPipeline{
 			ParallelClose: true,
 		},
-		Distributor: pipeline.NewMultiplexDistributor(num),
+		Distributor: fork.NewMultiplexDistributor(num),
 		Builder:     subpipelines,
 	})
 	return nil
@@ -179,8 +180,8 @@ func (builder PipelineBuilder) createMultiInput(pipes Pipelines) (bitflow.Metric
 
 	// TODO control/configure parallelism of the Fork
 
-	subpipelines := &pipeline.MultiMetricSource{
-		MultiPipeline: pipeline.MultiPipeline{
+	subpipelines := &fork.MultiMetricSource{
+		MultiPipeline: fork.MultiPipeline{
 			ParallelClose: true,
 		},
 	}
@@ -233,7 +234,7 @@ func (slice SortedAnalyses) Swap(i, j int) {
 
 type MultiplexPipelineBuilder []*pipeline.SamplePipeline
 
-func (b MultiplexPipelineBuilder) BuildPipeline(key interface{}, output *pipeline.ForkMerger) *bitflow.SamplePipeline {
+func (b MultiplexPipelineBuilder) BuildPipeline(key interface{}, output *fork.ForkMerger) *bitflow.SamplePipeline {
 	pipe := &(b[key.(int)].SamplePipeline) // Type of key must be int, and index must be in range
 	if pipe.Sink == nil {
 		pipe.Sink = output

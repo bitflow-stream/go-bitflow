@@ -1,10 +1,11 @@
-package pipeline
+package fork
 
 import (
 	"fmt"
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/golib"
 )
 
@@ -12,11 +13,11 @@ type MultiMetricSource struct {
 	MultiPipeline
 	bitflow.AbstractMetricSource
 
-	pipelines        []*SamplePipeline
+	pipelines        []*pipeline.SamplePipeline
 	stoppedPipelines int
 }
 
-func (in *MultiMetricSource) Add(subpipeline *SamplePipeline) {
+func (in *MultiMetricSource) Add(subpipeline *pipeline.SamplePipeline) {
 	in.pipelines = append(in.pipelines, subpipeline)
 }
 
@@ -34,7 +35,7 @@ func (in *MultiMetricSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	return stopChan
 }
 
-func (in *MultiMetricSource) start(index int, pipe *SamplePipeline) {
+func (in *MultiMetricSource) start(index int, pipe *pipeline.SamplePipeline) {
 	in.StartPipeline(&pipe.SamplePipeline, func(isPassive bool, err error) {
 		in.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Multi-input pipeline %v", in, index))
 

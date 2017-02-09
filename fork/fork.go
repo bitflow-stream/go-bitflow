@@ -1,4 +1,4 @@
-package pipeline
+package fork
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/golib"
 )
 
@@ -89,7 +90,7 @@ func (f *MetricFork) String() string {
 }
 
 func (f *MetricFork) ContainedStringers() []fmt.Stringer {
-	if builder, ok := f.Builder.(StringerContainer); ok {
+	if builder, ok := f.Builder.(pipeline.StringerContainer); ok {
 		return builder.ContainedStringers()
 	} else {
 		return []fmt.Stringer{f.Builder}
