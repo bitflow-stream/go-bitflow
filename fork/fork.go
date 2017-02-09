@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/golib"
 )
 
 type ForkDistributor interface {
@@ -24,14 +23,8 @@ func (f *MetricFork) Sample(sample *bitflow.Sample, header *bitflow.Header) erro
 		return err
 	}
 	keys := f.Distributor.Distribute(sample, header)
-	var errors golib.MultiError
-	for _, key := range keys {
-		pipeline := f.getPipeline(f.Builder, key, f)
-		if pipeline != nil {
-			errors.Add(pipeline.Sample(sample, header))
-		}
-	}
-	return errors.NilOrError()
+	sink := f.getPipelines(f.Builder, keys, f)
+	return sink.Sample(sample, header)
 }
 
 func (f *MetricFork) String() string {
