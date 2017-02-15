@@ -26,6 +26,11 @@ func init() {
 
 	RegisterAnalysisParamsErr("subprocess", run_subprocess, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary).", []string{"cmd"}, "format")
 
+	// Forks
+	RegisterFork("multiplex", fork_multiplex, "Multiplex fork copies each incoming sample to a fixed number of forked sub-pipelines", []string{"num"})
+	RegisterFork("rr", fork_round_robin, "The round-robin fork distributes the samples equally to a fixed number of sub-pipelines", []string{"num"})
+	RegisterFork("remap", fork_remap, "The remap-fork can be used after another fork to remap the incoming sub-pipelines to new outgoing sub-pipelines", nil)
+
 	// Set metadata
 	RegisterAnalysisParams("tags", set_tags, "Set the given tags on every sample", nil)
 	RegisterAnalysis("set_time", set_time_processor, "Set the timestamp on every processed sample to the current time")
@@ -323,4 +328,28 @@ func run_subprocess(p *Pipeline, params map[string]string) error {
 	}
 	p.Add(runner)
 	return nil
+}
+
+func fork_multiplex(params map[string]string) (fmt.Stringer, error) {
+	num, err := strconv.Atoi(params["num"])
+	if err != nil {
+		return nil, err
+	}
+	return NewMultiplexDistributor(num), nil
+}
+
+func fork_round_robin(params map[string]string) (fmt.Stringer, error) {
+	num, err := strconv.Atoi(params["num"])
+	if err != nil {
+		return nil, err
+	}
+	return &RoundRobinDistributor{
+		NumSubpipelines: num,
+	}, nil
+}
+
+func fork_remap(params map[string]string) (fmt.Stringer, error) {
+	return &StringRemapDistributor{
+		Mapping: params,
+	}, nil
 }

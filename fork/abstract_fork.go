@@ -70,9 +70,7 @@ func (f *AbstractMetricFork) newPipeline(builder PipelineBuilder, key interface{
 	}
 	if pipeline.Sink == nil {
 		// Special handling of ForkRemapper: automatically connect mapped pipelines
-		if remapper, ok := f.OutgoingSink.(*ForkRemapper); ok {
-			pipeline.Sink = remapper.GetMappedSink(path)
-		}
+		pipeline.Sink = f.getRemappedSink(pipeline, path)
 	}
 	f.StartPipeline(pipeline, func(isPassive bool, err error) {
 		f.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Subpipeline %v", description, path))
@@ -103,6 +101,31 @@ func (f *AbstractMetricFork) setForkPaths(pipeline *bitflow.SamplePipeline, key 
 		}
 	}
 	return path
+}
+
+func (f *AbstractMetricFork) getRemappedSink(pipeline *bitflow.SamplePipeline, forkPath []interface{}) bitflow.MetricSink {
+	if len(pipeline.Processors) > 0 {
+		last := pipeline.Processors[len(pipeline.Processors)-1]
+		if _, isFork := last.(abstractForkContainer); isFork {
+			// If the last step is a fork, it will handle remapping on its own
+			return nil
+		}
+	}
+	return f.getRemappedSinkRecursive(f.OutgoingSink, forkPath)
+}
+
+func (f *AbstractMetricFork) getRemappedSinkRecursive(outgoing bitflow.MetricSink, forkPath []interface{}) bitflow.MetricSink {
+	switch outgoing := outgoing.(type) {
+	case *ForkRemapper:
+		// Ask follow-up ForkRemapper for the pipeline we should connect to
+		return outgoing.GetMappedSink(forkPath)
+	case *ForkMerger:
+		// If there are multiple layers of forks, we have to resolve the ForkMergers until we get the actual outgoing sink
+		return f.getRemappedSinkRecursive(outgoing.GetOriginalSink(), forkPath)
+	default:
+		// No follow-up ForkRemapper could be found
+		return nil
+	}
 }
 
 type abstractForkContainer interface {

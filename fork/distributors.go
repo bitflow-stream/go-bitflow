@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 )
 
@@ -69,4 +70,29 @@ func (d *TagsDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) 
 
 func (d *TagsDistributor) String() string {
 	return fmt.Sprintf("tags %v, separated by %v", d.Tags, d.Separator)
+}
+
+type StringRemapDistributor struct {
+	Mapping map[string]string
+}
+
+func (d *StringRemapDistributor) Distribute(forkPath []interface{}) []interface{} {
+	input := ""
+	for i, path := range forkPath {
+		if i > 0 {
+			input += " "
+		}
+		input += fmt.Sprintf("%v", path)
+	}
+	result, ok := d.Mapping[input]
+	if !ok {
+		result = ""
+		d.Mapping[input] = result
+		log.Warnf("[%v]: No mapping found for fork path '%v', mapping to default output", d, input)
+	}
+	return []interface{}{result}
+}
+
+func (d *StringRemapDistributor) String() string {
+	return fmt.Sprintf("String remapper (len %v)", len(d.Mapping))
 }

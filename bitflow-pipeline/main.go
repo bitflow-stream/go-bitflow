@@ -15,58 +15,6 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-type Pipeline struct {
-	*pipeline.SamplePipeline
-}
-
-var builder query.PipelineBuilder
-
-func RegisterAnalysis(name string, setupPipeline func(pipeline *Pipeline), description string) {
-	builder.RegisterAnalysis(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
-		if len(params) > 0 {
-			return errors.New("No parmeters expected")
-		}
-		setupPipeline(&Pipeline{pipeline})
-		return nil
-	}, description)
-}
-
-func RegisterAnalysisErr(name string, setupPipeline func(pipeline *Pipeline) error, description string) {
-	builder.RegisterAnalysis(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
-		if len(params) > 0 {
-			return errors.New("No parmeters expected")
-		}
-		return setupPipeline(&Pipeline{pipeline})
-	}, description)
-}
-
-func RegisterAnalysisParams(name string, setupPipeline func(pipeline *Pipeline, params map[string]string), description string, requiredParams []string, optionalParams ...string) {
-	RegisterAnalysisParamsErr(name, func(pipeline *Pipeline, params map[string]string) error {
-		setupPipeline(pipeline, params)
-		return nil
-	}, description, requiredParams, optionalParams...)
-}
-
-func RegisterAnalysisParamsErr(name string, setupPipeline func(pipeline *Pipeline, params map[string]string) error, description string, requiredParams []string, optionalParams ...string) {
-	if len(requiredParams) > 0 {
-		description += fmt.Sprintf(". Required parameters: %v", requiredParams)
-	} else if requiredParams == nil {
-		description += ". Variable parameters"
-	}
-	if len(optionalParams) > 0 {
-		description += fmt.Sprintf(". Optional parameters: %v", optionalParams)
-	}
-
-	builder.RegisterAnalysis(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
-		if requiredParams != nil {
-			if err := query.CheckParameters(params, optionalParams, requiredParams); err != nil {
-				return err
-			}
-		}
-		return setupPipeline(&Pipeline{pipeline}, params)
-	}, description)
-}
-
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <flags> <bitflow script>\nAll flags must be defined before the first non-flag parameter.\nFlags:\n", os.Args[0])
