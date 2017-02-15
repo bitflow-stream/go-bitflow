@@ -139,6 +139,9 @@ func (builder PipelineBuilder) makePipeline(pipe Pipeline, isInput bool) (*pipel
 				Message: fmt.Sprintf("Unsupported pipeline step type: %T", step),
 			}
 		}
+		if err != nil {
+			break
+		}
 	}
 	return res, err
 }
@@ -190,8 +193,6 @@ func (builder PipelineBuilder) addMultiplex(pipe *pipeline.SamplePipeline, pipes
 		subpipelines[i] = subpipe
 	}
 
-	// TODO control/configure parallelism of the Fork
-
 	pipe.Add(&fork.MetricFork{
 		ParallelClose: true,
 		Distributor:   fork.NewMultiplexDistributor(num),
@@ -201,9 +202,6 @@ func (builder PipelineBuilder) addMultiplex(pipe *pipeline.SamplePipeline, pipes
 }
 
 func (builder PipelineBuilder) createMultiInput(pipes Pipelines) (bitflow.MetricSource, error) {
-
-	// TODO control/configure parallelism of the Fork
-
 	subpipelines := &fork.MultiMetricSource{
 		ParallelClose: true,
 	}
@@ -372,9 +370,15 @@ func (b *CustomPipelineBuilder) String() string {
 func (b *CustomPipelineBuilder) ContainedStringers() []fmt.Stringer {
 	res := make([]fmt.Stringer, 0, len(b.pipelines))
 	for key, pipe := range b.pipelines {
+		var title string
+		if key == "" {
+			title = fmt.Sprintf("Default pipeline")
+		} else {
+			title = fmt.Sprintf("Pipeline %v", key)
+		}
 		res = append(res, &titledSubpipeline{
 			SamplePipeline: pipe,
-			title:          fmt.Sprintf("Pipeline %v", key),
+			title:          title,
 		})
 	}
 	sort.Sort(sortedStringers(res))

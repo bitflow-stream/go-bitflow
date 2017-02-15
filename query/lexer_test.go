@@ -75,19 +75,22 @@ func (suite *lexerTestSuite) TestWhitespace() {
 }
 
 func (suite *lexerTestSuite) TestOperators() {
-	suite.test("  ;{ \n;\n }}\t}{{  ;-> {->->}  {->",
+	suite.test("  ;{ \n[;\n ]}}\t}{]{  ;-> {->->}  []{->",
 		[]Token{
 			{Type: WS, Lit: "  "},
 			{Type: SEP, Lit: ";"},
 			{Type: OPEN, Lit: "{"},
 			{Type: WS, Lit: " \n"},
+			{Type: BRACKET_OPEN, Lit: "["},
 			{Type: SEP, Lit: ";"},
 			{Type: WS, Lit: "\n "},
+			{Type: BRACKET_CLOSE, Lit: "]"},
 			{Type: CLOSE, Lit: "}"},
 			{Type: CLOSE, Lit: "}"},
 			{Type: WS, Lit: "\t"},
 			{Type: CLOSE, Lit: "}"},
 			{Type: OPEN, Lit: "{"},
+			{Type: BRACKET_CLOSE, Lit: "]"},
 			{Type: OPEN, Lit: "{"},
 			{Type: WS, Lit: "  "},
 			{Type: SEP, Lit: ";"},
@@ -98,6 +101,8 @@ func (suite *lexerTestSuite) TestOperators() {
 			{Type: NEXT, Lit: "->"},
 			{Type: CLOSE, Lit: "}"},
 			{Type: WS, Lit: "  "},
+			{Type: BRACKET_OPEN, Lit: "["},
+			{Type: BRACKET_CLOSE, Lit: "]"},
 			{Type: OPEN, Lit: "{"},
 			{Type: NEXT, Lit: "->"},
 			{Type: EOF, Lit: string(eof)},
@@ -105,7 +110,7 @@ func (suite *lexerTestSuite) TestOperators() {
 }
 
 func (suite *lexerTestSuite) TestStr() {
-	suite.test("xx- - a-b \"c =,(){}'`c v\" ` \" =,(){} a '`a\"d\"`c`'=,(){}t'",
+	suite.test("xx- - a-b \"c =,(){}[]'`c v\" ` \" =,(){}[] a '`a\"d\"`c`'=,(){}[]t'",
 		[]Token{
 			{Type: STR, Lit: "xx-"},
 			{Type: WS, Lit: " "},
@@ -113,13 +118,13 @@ func (suite *lexerTestSuite) TestStr() {
 			{Type: WS, Lit: " "},
 			{Type: STR, Lit: "a-b"},
 			{Type: WS, Lit: " "},
-			{Type: QUOT_STR, Lit: "\"c =,(){}'`c v\""},
+			{Type: QUOT_STR, Lit: "\"c =,(){}[]'`c v\""},
 			{Type: WS, Lit: " "},
-			{Type: QUOT_STR, Lit: "` \" =,(){} a '`"},
+			{Type: QUOT_STR, Lit: "` \" =,(){}[] a '`"},
 			{Type: STR, Lit: "a"},
 			{Type: QUOT_STR, Lit: "\"d\""},
 			{Type: QUOT_STR, Lit: "`c`"},
-			{Type: QUOT_STR, Lit: "'=,(){}t'"},
+			{Type: QUOT_STR, Lit: "'=,(){}[]t'"},
 			{Type: EOF, Lit: string(eof)},
 		})
 

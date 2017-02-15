@@ -26,10 +26,12 @@ const (
 	PARAM_EQ    // =
 
 	// Misc & operators
-	SEP   // ;
-	NEXT  // ->
-	OPEN  // {
-	CLOSE // }
+	SEP           // ;
+	NEXT          // ->
+	OPEN          // {
+	CLOSE         // }
+	BRACKET_OPEN  // [
+	BRACKET_CLOSE // ]
 
 	eof = rune(0)
 )
@@ -44,6 +46,8 @@ var specialRunes = map[rune]bool{
 	';':  true,
 	'{':  true,
 	'}':  true,
+	'[':  true,
+	']':  true,
 	'"':  true,
 	'\'': true,
 	'`':  true,
@@ -110,6 +114,10 @@ func (t TokenType) String() (s string) {
 		s = "{"
 	case CLOSE:
 		s = "}"
+	case BRACKET_OPEN:
+		s = "["
+	case BRACKET_CLOSE:
+		s = "]"
 	default:
 		s = fmt.Sprintf("UNKNOWN_TOKEN_TYPE(%v)", t)
 	}
@@ -189,6 +197,12 @@ func (s *Scanner) Scan() (Token, error) {
 		return tok, nil
 	case '}':
 		tok.Type = CLOSE
+		return tok, nil
+	case '[':
+		tok.Type = BRACKET_OPEN
+		return tok, nil
+	case ']':
+		tok.Type = BRACKET_CLOSE
 		return tok, nil
 	case ';':
 		tok.Type = SEP

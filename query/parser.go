@@ -1,8 +1,10 @@
 package query
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"hash/adler32"
 	"io"
 )
 
@@ -68,9 +70,15 @@ func (p *Parser) scan() (Token, error) {
 	return tok, err
 }
 
-func (p *Parser) scanOptional(expected TokenType) (Token, bool, error) {
+func (p *Parser) scanOptional(expected ...TokenType) (Token, bool, error) {
 	tok, err := p.scan()
-	ok := tok.Type == expected
+	ok := false
+	for _, exp := range expected {
+		if tok.Type == exp {
+			ok = true
+			break
+		}
+	}
 	if !ok && err == nil {
 		p.unscan()
 	}
@@ -153,8 +161,8 @@ func (p *Parser) parseStep(isInput, isFork, firstStep bool) (PipelineStep, error
 		return nil, err
 	}
 	switch tok.Type {
-	case OPEN:
-		return p.parseOpenedPipelines(isInput, false)
+	case OPEN, BRACKET_OPEN:
+		return p.parseOpenedPipelines(tok, isInput, false)
 	case STR, QUOT_STR:
 		_, haveParams, err := p.scanOptional(PARAM_OPEN)
 		if err != nil {
@@ -168,12 +176,12 @@ func (p *Parser) parseStep(isInput, isFork, firstStep bool) (PipelineStep, error
 		if err != nil {
 			return nil, err
 		}
-		_, haveOpen, err := p.scanOptional(OPEN)
+		openTok, haveOpen, err := p.scanOptional(OPEN, BRACKET_OPEN)
 		if err != nil {
 			return nil, err
 		}
 		if haveOpen {
-			pipes, err := p.parseOpenedPipelines(isInput, true)
+			pipes, err := p.parseOpenedPipelines(openTok, isInput, true)
 			return Fork{
 				Step: Step{
 					Name:   tok,
@@ -281,12 +289,116 @@ func (p *Parser) parseInOutStep(firstStep Token, isInputStep bool) (PipelineStep
 	return result, nil
 }
 
-func (p *Parser) parseOpenedPipelines(isInput bool, isFork bool) (Pipelines, error) {
-	pipes, err := p.parsePipelines(isInput, isFork)
-	if err == nil {
-		_, err = p.scanRequired("}", CLOSE)
+func (p *Parser) parseOpenedPipelines(openToken Token, isInput bool, isFork bool) (Pipelines, error) {
+	fragments, err := p.parseOpenedPipelineFragments(openToken, isInput, isFork)
+	if err != nil {
+		return nil, err
 	}
-	return pipes, err
+
+	pipeIndices := make(map[uint32]int) // Indices inside the pipes slice
+	var defaultPipe Pipeline
+	var pipes Pipelines
+
+	for _, fragment := range fragments {
+		switch fragment := fragment.(type) {
+		case Pipeline:
+			defaultPipe = append(defaultPipe, fragment...)
+			for i := range pipes {
+				pipes[i] = append(pipes[i], fragment...)
+			}
+		case Pipelines:
+			for i, newPipe := range fragment {
+				if input, hasInput := newPipe[0].(Input); hasInput {
+					hash := hashInput(input)
+					if pipeIndex, havePipe := pipeIndices[hash]; havePipe {
+						pipes[pipeIndex] = append(pipes[pipeIndex], newPipe[1:]...) // The input is already there and should be the same as this one
+					} else {
+						if len(defaultPipe) > 0 {
+							// Prepend the default pipe, but keep the input in front
+							extendedPipe := make(Pipeline, 0, len(newPipe)+len(defaultPipe))
+							extendedPipe = append(extendedPipe, newPipe[0])
+							extendedPipe = append(extendedPipe, defaultPipe...)
+							extendedPipe = append(extendedPipe, newPipe[1:]...)
+							newPipe = extendedPipe
+						}
+						pipeIndices[hash] = len(pipes)
+						pipes = append(pipes, newPipe)
+					}
+				} else {
+					if i < len(pipes) {
+						pipes[i] = append(pipes[i], newPipe...)
+					} else {
+						newPipe = append(defaultPipe, newPipe...)
+						pipes = append(pipes, newPipe)
+					}
+				}
+			}
+		default:
+			panic(fmt.Sprintf("parseOpenedPipelineFragments returned unexpected PipelineStep: %T %v", fragment, fragment))
+		}
+	}
+
+	// If there are separate pipeline fragments intermixed in a forked pieline, the separate fragments should also act as the default pipeline.
+	// This requires constructing an artificial pipeline with an artificial input token.
+	defaultInput := Input{Token{Type: STR, Lit: ""}}
+	defaultHash := hashInput(defaultInput)
+	needDefault := len(defaultPipe) > 0 && isFork && !isInput
+	if _, haveDefault := pipeIndices[defaultHash]; needDefault && !haveDefault {
+		defaultPipe = append(Pipeline{defaultInput}, defaultPipe...)
+		pipes = append(pipes, defaultPipe)
+	}
+
+	return pipes, nil
+}
+
+func hashInput(input Input) uint32 {
+	var buf bytes.Buffer
+	for _, inputTok := range input {
+		buf.WriteString(inputTok.Content())
+		buf.WriteByte(0)
+	}
+	return adler32.Checksum(buf.Bytes())
+}
+
+func (p *Parser) parseOpenedPipelineFragments(openToken Token, isInput bool, isFork bool) ([]PipelineStep, error) {
+	var result []PipelineStep
+	for {
+		fragment, err := p.parseOpenedPipelineFragment(openToken, isInput, isFork)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, fragment)
+
+		var haveOpen bool
+		openToken, haveOpen, err = p.scanOptional(OPEN, BRACKET_OPEN)
+		if err != nil {
+			return nil, err
+		}
+		if !haveOpen {
+			break
+		}
+	}
+	return result, nil
+}
+
+func (p *Parser) parseOpenedPipelineFragment(openToken Token, isInput bool, isFork bool) (PipelineStep, error) {
+	switch openToken.Type {
+	case OPEN:
+		pipes, err := p.parsePipelines(isInput, isFork)
+		if err == nil {
+			_, err = p.scanRequired("}", CLOSE)
+		}
+		return pipes, err
+	case BRACKET_OPEN:
+		pipe, err := p.parsePipeline(isInput, false)
+		if err == nil {
+			_, err = p.scanRequired("]", BRACKET_CLOSE)
+		}
+		return pipe, err
+	default:
+		panic("parseOpenedPipelineFragments can only be called with OPEN or BRACKET_OPEN as openToken")
+		return nil, nil
+	}
 }
 
 func (p Pipeline) Validate(isInput bool, isFork bool) error {
