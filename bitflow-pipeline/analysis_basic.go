@@ -65,7 +65,7 @@ func parameterError(name string, err error) error {
 }
 
 func noop_processor(p *Pipeline) {
-	p.Add(new(bitflow.AbstractProcessor))
+	p.Add(new(NoopProcessor))
 }
 
 func shuffle_data(p *Pipeline) {

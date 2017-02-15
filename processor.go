@@ -17,6 +17,14 @@ type MergableProcessor interface {
 	MergeProcessor(other bitflow.SampleProcessor) bool
 }
 
+type NoopProcessor struct {
+	bitflow.AbstractProcessor
+}
+
+func (*NoopProcessor) String() string {
+	return "noop"
+}
+
 // ==================== DecouplingProcessor ====================
 // Decouple the incoming samples from the MetricSink through a
 // looping goroutine and a channel. Creates potential parallelism in the pipeline.
