@@ -442,8 +442,7 @@ func GuessEndpointType(target string) (EndpointType, error) {
 				typ = TcpEndpoint
 			}
 		} else {
-			// TODO query if target would be a valid file name
-			if strings.Contains(target, ":") {
+			if strings.Contains(target, ":") || !IsValidFilename(target) {
 				return UndefinedEndpoint, fmt.Errorf("Not a filename and not a valid TCP endpoint: %v", target)
 			}
 			typ = FileEndpoint
@@ -451,4 +450,14 @@ func GuessEndpointType(target string) (EndpointType, error) {
 	}
 	log.Debugf("Guessed transport type of %v: %v", target, typ)
 	return typ, nil
+}
+
+func IsValidFilename(path string) bool {
+	_, err := os.Stat(path)
+	switch err := err.(type) {
+	case *os.PathError:
+		return err == nil || err.Err == nil || err.Err.Error() != "invalid argument"
+	default:
+		return true
+	}
 }
