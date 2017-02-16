@@ -50,14 +50,19 @@ func (m *MultiPipeline) StartPipeline(pipeline *bitflow.SamplePipeline, finished
 	go func() {
 		defer m.subpipelineWg.Done()
 
-		idx, err := golib.WaitForAny(channels)
-		_ = golib.PrintErrors(channels, waitingTasks, golib.DefaultPrintTaskStopWait)
+		// Wait for all tasks to finish and collect their errors
+		idx, firstError := golib.WaitForAny(channels)
+		var errors golib.MultiError
+		errors.Add(firstError)
+		_ = golib.CollectErrors(channels, waitingTasks, golib.DefaultPrintTaskStopWait, func(err error) {
+			errors.Add(err)
+		})
 
 		// A passive pipeline can occur when all processors, source and sink return nil from Start().
 		// This means that none of the elements of the subpipeline spawned any extra goroutines.
 		// They only react on Sample() and wait for the final Close() call.
 		isPassive := idx == -1
-		finishedHook(isPassive, err)
+		finishedHook(isPassive, errors.NilOrError())
 
 		m.stoppedCond.L.Lock()
 		defer m.stoppedCond.L.Unlock()
