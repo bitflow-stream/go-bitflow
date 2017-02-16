@@ -3,6 +3,7 @@ package bitflow
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -270,6 +271,12 @@ type FileSource struct {
 	// Instead, it will stay open without producing any more data.
 	KeepAlive bool
 
+	// UnsynchronizedFileAccess can be set to true to disable synchronizing Read() and Close()
+	// methods of files through a sync.RWMutex. Tests shows no measurable performance difference
+	// from the additional Lock/Unlock operations, but they prevent potential race conditions
+	// when accessing the underlying fd (file descriptor) field, as reported by the Go race detector.
+	UnsynchronizedFileAccess bool
+
 	stream *SampleInputStream
 	closed *golib.OneshotCondition
 }
@@ -361,7 +368,11 @@ func (source *FileSource) readFile(filename string) error {
 	}
 	var stream *SampleInputStream
 	source.closed.IfNotEnabled(func() {
-		stream = source.Reader.OpenBuffered(file, source.OutgoingSink, source.IoBuffer)
+		var rc io.ReadCloser = file
+		if !source.UnsynchronizedFileAccess {
+			rc = &SynchronizedReadCloser{ReadCloser: file}
+		}
+		stream = source.Reader.OpenBuffered(rc, source.OutgoingSink, source.IoBuffer)
 		source.stream = stream
 	})
 	if stream == nil {
@@ -426,6 +437,28 @@ func ListMatchingFiles(dir string, regexStr string) ([]string, error) {
 	})
 	finishedReading = true
 	return result, walkErr
+}
+
+// SynchronizedReadCloser is a helper type to wrap *os.File and synchronize calls
+// to Read() and Close(). This prevents race condition warnings from the Go race detector
+// due to parallel access to the fd field of the internal os.file type. The performance
+// overhead is not measurable, but this can be deactivated by setting the UnsynchronizedFileAccess
+// flag in FileSource.
+type SynchronizedReadCloser struct {
+	ReadCloser io.ReadCloser
+	lock       sync.RWMutex
+}
+
+func (s *SynchronizedReadCloser) Read(b []byte) (int, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	return s.ReadCloser.Read(b)
+}
+
+func (s *SynchronizedReadCloser) Close() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.ReadCloser.Close()
 }
 
 // ==================== File data sink ====================
