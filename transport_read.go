@@ -128,10 +128,7 @@ func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 
 	stream.readData(source)
 	stream.wg.Wait()
-	if stream.err == io.EOF {
-		stream.err = nil // io.EOF is expected
-	}
-	return stream.num_samples, stream.err
+	return stream.num_samples, stream.getErrorNoEOF()
 }
 
 // ReadNamedSamples calls ReadSamples with the given source string, and prints
@@ -171,13 +168,13 @@ func (stream *SampleInputStream) ReadTcpSamples(conn *net.TCPConn, checkClosed f
 	l.Debugln("Received", num_samples, "samples")
 }
 
-// Close clses the receiving SampleInputStream. Close should be called even if the
+// Close closes the receiving SampleInputStream. Close should be called even if the
 // Read* method, that started the stream, returns an error. Close() might return the
 // same error as the Read* method.
 func (stream *SampleInputStream) Close() error {
 	if stream != nil {
 		stream.closeUnderlyingReader()
-		return stream.err
+		return stream.getErrorNoEOF()
 	}
 	return nil
 }
@@ -185,9 +182,7 @@ func (stream *SampleInputStream) Close() error {
 func (stream *SampleInputStream) closeUnderlyingReader() {
 	stream.closed.Enable(func() {
 		err := stream.underlyingReader.Close()
-		if !stream.hasError() {
-			stream.err = err
-		}
+		stream.addError(err)
 	})
 }
 
@@ -227,7 +222,7 @@ func (stream *SampleInputStream) readData(source string) {
 
 		header, data, err := stream.um.Read(stream.reader, stream.header)
 		if err != nil {
-			stream.err = err
+			stream.addError(err)
 			if err != io.EOF || (len(data) == 0 && header == nil) {
 				return
 			}
@@ -288,9 +283,7 @@ func (stream *SampleInputStream) parseSamples(source string) {
 func (stream *SampleInputStream) parseOne(source string, sample *bufferedIncomingSample) {
 	defer sample.notifyDone()
 	if parsedSample, err := stream.um.ParseSample(sample.header, sample.data); err != nil {
-		if !stream.hasError() {
-			stream.err = err
-		}
+		stream.addError(err)
 		sample.ParserError = true
 		return
 	} else {
@@ -310,7 +303,7 @@ func (stream *SampleInputStream) sinkSamples() {
 			return
 		}
 		if err := stream.sink.Sample(sample.sample, sample.outHeader); err != nil {
-			stream.err = err
+			stream.addError(err)
 			return
 		}
 		stream.num_samples++

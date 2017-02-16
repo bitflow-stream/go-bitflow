@@ -273,13 +273,48 @@ type ParallelSampleHandler struct {
 // ==================== Internal types ====================
 
 type parallelSampleStream struct {
-	err    error
+	err     golib.MultiError
+	errLock sync.Mutex
+
 	wg     sync.WaitGroup
 	closed *golib.OneshotCondition
 }
 
+func (state *parallelSampleStream) addError(err error) bool {
+	if err != nil {
+		state.errLock.Lock()
+		defer state.errLock.Unlock()
+		state.err.Add(err)
+		return true
+	}
+	return false
+}
+
 func (state *parallelSampleStream) hasError() bool {
-	return state.err != nil && state.err != io.EOF
+	state.errLock.Lock()
+	defer state.errLock.Unlock()
+	if len(state.err) > 0 {
+		for _, err := range state.err {
+			if err != io.EOF {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (state *parallelSampleStream) getErrorNoEOF() error {
+	state.errLock.Lock()
+	defer state.errLock.Unlock()
+	var result golib.MultiError
+	if len(state.err) > 0 {
+		for _, err := range state.err {
+			if err != io.EOF {
+				result.Add(err)
+			}
+		}
+	}
+	return result.NilOrError()
 }
 
 type bufferedSample struct {

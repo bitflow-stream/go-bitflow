@@ -110,7 +110,7 @@ func (stream *SampleOutputStream) flushBuffered() error {
 // the stream should not be used any further, but still must be closed externally.
 func (stream *SampleOutputStream) Sample(sample *Sample, header *Header) error {
 	if stream.hasError() {
-		return stream.err
+		return stream.getErrorNoEOF()
 	}
 	bufferedSample := &bufferedSample{
 		stream:   &stream.parallelSampleStream,
@@ -121,7 +121,7 @@ func (stream *SampleOutputStream) Sample(sample *Sample, header *Header) error {
 	var err error
 	stream.closed.IfElseEnabled(
 		func() {
-			err = stream.err
+			err = stream.getErrorNoEOF()
 			if err == nil {
 				err = errors.New("Sample written to closed output stream")
 			}
@@ -143,14 +143,10 @@ func (stream *SampleOutputStream) Close() error {
 		close(stream.incoming)
 		close(stream.outgoing)
 		stream.wg.Wait()
-		if err := stream.flushBuffered(); !stream.hasError() {
-			stream.err = err
-		}
-		if err := stream.writer.Close(); !stream.hasError() {
-			stream.err = err
-		}
+		stream.addError(stream.flushBuffered())
+		stream.addError(stream.writer.Close())
 	})
-	return stream.err
+	return stream.getErrorNoEOF()
 }
 
 func (stream *SampleOutputStream) marshall() {
@@ -192,17 +188,14 @@ func (stream *SampleOutputStream) flush() {
 			break
 		}
 		if checker.HeaderChanged(sample.header) {
-			if err := stream.marshaller.WriteHeader(sample.header, stream.writer); err != nil {
-				stream.err = err
+			if err := stream.marshaller.WriteHeader(sample.header, stream.writer); stream.addError(err) {
 				break
 			}
-			if err := stream.flushBuffered(); err != nil {
-				stream.err = err
+			if err := stream.flushBuffered(); stream.addError(err) {
 				break
 			}
 		}
-		if _, err := stream.writer.Write(sample.data); err != nil {
-			stream.err = err
+		if _, err := stream.writer.Write(sample.data); stream.addError(err) {
 			break
 		}
 	}
