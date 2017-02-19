@@ -184,7 +184,7 @@ func (builder PipelineBuilder) getAnalysis(name_tok Token) (AnalysisFunc, error)
 
 func (builder PipelineBuilder) addMultiplex(pipe *pipeline.SamplePipeline, pipes Pipelines) error {
 	num := len(pipes) // Must be the same for the builder and the distributor
-	subpipelines := make(MultiplexPipelineBuilder, num)
+	subpipelines := make(fork.MultiplexPipelineBuilder, num)
 	for i, subpipe := range pipes {
 		subpipe, err := builder.makePipeline(subpipe, false)
 		if err != nil {
@@ -318,28 +318,6 @@ func (slice SortedAnalyses) Less(i, j int) bool {
 
 func (slice SortedAnalyses) Swap(i, j int) {
 	slice[i], slice[j] = slice[j], slice[i]
-}
-
-type MultiplexPipelineBuilder []*pipeline.SamplePipeline
-
-func (b MultiplexPipelineBuilder) BuildPipeline(key interface{}, output *fork.ForkMerger) *bitflow.SamplePipeline {
-	pipe := &(b[key.(int)].SamplePipeline) // Type of key must be int, and index must be in range
-	if pipe.Sink == nil {
-		pipe.Sink = output
-	}
-	return pipe
-}
-
-func (b MultiplexPipelineBuilder) String() string {
-	return fmt.Sprintf("Multiplex builder, %v subpipelines", len(b))
-}
-
-func (b MultiplexPipelineBuilder) ContainedStringers() []fmt.Stringer {
-	res := make([]fmt.Stringer, len(b))
-	for i, pipe := range b {
-		res[i] = pipe
-	}
-	return res
 }
 
 type CustomPipelineBuilder struct {

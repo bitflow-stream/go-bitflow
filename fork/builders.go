@@ -6,6 +6,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 )
 
 type SimplePipelineBuilder struct {
@@ -41,6 +42,29 @@ func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerge
 		}
 	}
 	return &res
+}
+
+type MultiplexPipelineBuilder []*pipeline.SamplePipeline
+
+func (b MultiplexPipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
+	// Type of key must be int, and index must be in range. Otherwise panic!
+	pipe := &(b[key.(int)].SamplePipeline)
+	if pipe.Sink == nil {
+		pipe.Sink = output
+	}
+	return pipe
+}
+
+func (b MultiplexPipelineBuilder) String() string {
+	return fmt.Sprintf("Multiplex builder, %v subpipelines", len(b))
+}
+
+func (b MultiplexPipelineBuilder) ContainedStringers() []fmt.Stringer {
+	res := make([]fmt.Stringer, len(b))
+	for i, pipe := range b {
+		res[i] = pipe
+	}
+	return res
 }
 
 type MultiFilePipelineBuilder struct {

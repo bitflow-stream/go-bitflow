@@ -50,3 +50,13 @@ func (p *SamplePipeline) ContainedStringers() []fmt.Stringer {
 	}
 	return res
 }
+
+func (p *SamplePipeline) Format() []string {
+	printer := IndentPrinter{
+		OuterIndent:  "│ ",
+		InnerIndent:  "├─",
+		CornerIndent: "└─",
+		FillerIndent: "  ",
+	}
+	return printer.PrintLines(p)
+}

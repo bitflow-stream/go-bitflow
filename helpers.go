@@ -35,6 +35,13 @@ func IsValidNumber(val float64) bool {
 	return !math.IsNaN(val) && !math.IsInf(val, 0)
 }
 
+// String is a trivial implementation of the fmt.Sringer interface
+type String string
+
+func (s String) String() string {
+	return string(s)
+}
+
 // ====================== Printing ======================
 
 type IndentPrinter struct {

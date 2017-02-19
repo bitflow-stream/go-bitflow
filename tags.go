@@ -1,25 +1,22 @@
 package pipeline
 
-import "strconv"
+import (
+	"fmt"
 
-const (
-	ClassTag  = "cls"
-	SourceTag = "src"
-
-	ClusterTag    = "cluster"
-	ClusterPrefix = "Cluster-"
-
-	ClusterUnclassified = 0
-	ClusterNoise        = -1
+	"github.com/antongulenko/go-bitflow"
 )
 
-func ClusterName(clusterNum int) string {
-	return ClusterPrefix + strconv.Itoa(clusterNum)
-}
-
-// String is a trivial implementation of the fmt.Sringer interface
-type String string
-
-func (s String) String() string {
-	return string(s)
+func NewTaggingProcessor(tags map[string]string) bitflow.SampleProcessor {
+	return &SimpleProcessor{
+		Description: fmt.Sprintf("Set tags %v", tags),
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			if len(tags) > 0 {
+				header.HasTags = true
+			}
+			for key, value := range tags {
+				sample.SetTag(key, value)
+			}
+			return sample, header, nil
+		},
+	}
 }

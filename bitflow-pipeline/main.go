@@ -42,7 +42,9 @@ func do_main() int {
 		log.Fatalln("Use -print-analyses to print all available analysis steps.")
 	}
 	defer golib.ProfileCpu()()
-	print_pipeline(pipeline)
+	for _, str := range pipe.Format() {
+		log.Println(str)
+	}
 	if *printPipeline {
 		return 0
 	}
@@ -60,17 +62,4 @@ func make_pipeline() (*pipeline.SamplePipeline, error) {
 		return nil, err
 	}
 	return builder.MakePipeline(pipe)
-}
-
-func print_pipeline(pipe *pipeline.SamplePipeline) {
-	printer := pipeline.IndentPrinter{
-		OuterIndent:  "│ ",
-		InnerIndent:  "├─",
-		CornerIndent: "└─",
-		FillerIndent: "  ",
-	}
-	lines := printer.PrintLines(pipe)
-	for _, str := range lines {
-		log.Println(str)
-	}
 }

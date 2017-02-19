@@ -32,6 +32,7 @@ func init() {
 	RegisterFork("remap", fork_remap, "The remap-fork can be used after another fork to remap the incoming sub-pipelines to new outgoing sub-pipelines", nil)
 
 	// Set metadata
+	RegisterAnalysisParamsErr("listen_tags", add_listen_tags, "Listen for HTTP requests on the given port at /tag to configure tags. URL parameters are tag key-value pairs. URL parameter 'timeout' is in seconds.", []string{"port"})
 	RegisterAnalysisParams("tags", set_tags, "Set the given tags on every sample", nil)
 	RegisterAnalysis("set_time", set_time_processor, "Set the timestamp on every processed sample to the current time")
 
@@ -191,17 +192,17 @@ func pick_head(pipe *Pipeline, params map[string]string) error {
 	return err
 }
 
+func add_listen_tags(pipe *Pipeline, params map[string]string) error {
+	port, err := strconv.Atoi(params["port"])
+	if err != nil {
+		return parameterError("port", err)
+	}
+	pipe.Add(&HttpTagger{Port: port})
+	return nil
+}
+
 func set_tags(pipe *Pipeline, params map[string]string) {
-	pipe.Add(&SimpleProcessor{
-		Description: fmt.Sprintf("Set tags %v", params),
-		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
-			for key, value := range params {
-				sample.SetTag(key, value)
-			}
-			header.HasTags = true
-			return sample, header, nil
-		},
-	})
+	pipe.Add(NewTaggingProcessor(params))
 }
 
 func split_files(p *Pipeline, params map[string]string) {
