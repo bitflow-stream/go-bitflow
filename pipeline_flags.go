@@ -234,8 +234,10 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 		resultSink = sink
 	case ConsoleBoxEndpoint:
 		sink := &ConsoleBoxSink{
-			CliLogBox:      ConsoleBoxSettings,
-			UpdateInterval: ConsoleBoxUpdateInterval,
+			CliLogBoxTask: gotermBox.CliLogBoxTask{
+				CliLogBox:      ConsoleBoxSettings,
+				UpdateInterval: ConsoleBoxUpdateInterval,
+			},
 		}
 		if !p.testmode {
 			sink.Init()

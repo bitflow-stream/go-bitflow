@@ -342,8 +342,10 @@ func (suite *PipelineTestSuite) Test_outputs() {
 
 	box := func() MetricSink {
 		s := &ConsoleBoxSink{
-			CliLogBox:      box_settings,
-			UpdateInterval: box_interval,
+			CliLogBoxTask: gotermBox.CliLogBoxTask{
+				UpdateInterval: box_interval,
+				CliLogBox:      box_settings,
+			},
 		}
 		return s
 	}

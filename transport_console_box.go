@@ -3,7 +3,6 @@ package bitflow
 import (
 	"io"
 	"sync"
-	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/golib"
@@ -19,23 +18,11 @@ import (
 // Multiple fields provide access to configuration options.
 type ConsoleBoxSink struct {
 	AbstractMetricSink
+	gotermBox.CliLogBoxTask
 
-	// CliLogBox provides configuration options for the command-line box
-	gotermBox.CliLogBox
-
-	// UpdateInterval gives the wait-period between screen-refresh cycles.
-	UpdateInterval time.Duration
-
-	updateTask *golib.LoopTask
 	lock       sync.Mutex
 	lastSample *Sample
 	lastHeader *Header
-}
-
-// Should be called as early as possible to intercept all log messages
-func (sink *ConsoleBoxSink) Init() {
-	sink.CliLogBox.Init()
-	sink.RegisterMessageHook()
 }
 
 // String implements the MetricSink interface.
@@ -47,45 +34,33 @@ func (sink *ConsoleBoxSink) String() string {
 // that regularly refreshes the screen to display the current sample values
 // and latest log output lines.
 func (sink *ConsoleBoxSink) Start(wg *sync.WaitGroup) golib.StopChan {
-	sink.InterceptLogger()
 	log.Println("Printing samples to table")
-	sink.updateTask = &golib.LoopTask{
-		Description: "",
-		Loop: func(stop golib.StopChan) error {
-			if err := sink.updateBox(); err != nil {
-				return err
-			}
-			stop.WaitTimeout(sink.UpdateInterval)
-			return nil
-		},
-	}
-	sink.updateTask.StopHook = func() {
-		sink.updateBox()
-		sink.RestoreLogger()
-	}
-	return sink.updateTask.Start(wg)
+	sink.CliLogBoxTask.Update = sink.updateBox
+	return sink.CliLogBoxTask.Start(wg)
 }
 
-func (sink *ConsoleBoxSink) updateBox() (err error) {
-	sink.Update(func(out io.Writer, textWidth int) {
-		sink.lock.Lock()
-		sample := sink.lastSample
-		header := sink.lastHeader
-		sink.lock.Unlock()
-		if sample != nil && header != nil {
-			marshaller := TextMarshaller{
-				TextWidth: textWidth,
-			}
-			err = marshaller.WriteSample(sample, header, out)
-		}
-	})
-	return
+func (sink *ConsoleBoxSink) updateBox(out io.Writer, textWidth int) error {
+	sink.lock.Lock()
+	sample := sink.lastSample
+	header := sink.lastHeader
+	sink.lock.Unlock()
+	if sample == nil || header == nil {
+		return nil
+	}
+	return TextMarshaller{
+		TextWidth: textWidth,
+	}.WriteSample(sample, header, out)
 }
 
 // Close implements the MetricSink interface. It stops the screen refresh
 // goroutine.
 func (sink *ConsoleBoxSink) Close() {
-	sink.updateTask.Stop()
+	sink.CliLogBoxTask.Stop()
+}
+
+// Stop shadows the Stop() method from gotermBox.CliLogBoxTask to make sure
+// that this MetricSink is actually closed in the Close() method.
+func (sink *ConsoleBoxSink) Stop() {
 }
 
 // Sample implements the MetricSink interface. The latest sample is stored
