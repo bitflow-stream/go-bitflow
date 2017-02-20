@@ -44,9 +44,8 @@ func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
 	out.Close()
 	out.Stop()
 	wg.Wait()
-	if ch != nil {
-		suite.NoError(<-ch)
-	}
+	ch.Wait()
+	suite.NoError(ch.Err())
 
 	// ========= Read file
 	testSink := suite.newFilledTestSink()
@@ -66,9 +65,8 @@ func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
 	ch = in.Start(&wg)
 	wg.Wait()
 	in.Stop()
-	if ch != nil {
-		suite.NoError(<-ch)
-	}
+	ch.Wait()
+	suite.NoError(ch.Err())
 	testSink.checkEmpty()
 }
 
@@ -99,9 +97,8 @@ func (suite *FileTestSuite) testIndividualHeaders(m Marshaller) {
 		out.Close()
 		out.Stop()
 		wg.Wait()
-		if ch != nil {
-			suite.NoError(<-ch)
-		}
+		ch.Wait()
+		suite.NoError(ch.Err())
 
 		// ========= Read file
 		testSink := suite.newTestSinkFor(i)
@@ -119,9 +116,7 @@ func (suite *FileTestSuite) testIndividualHeaders(m Marshaller) {
 		in.SetSink(testSink)
 		ch = in.Start(&wg)
 		wg.Wait()
-		if ch != nil {
-			suite.NoError(<-ch)
-		}
+		suite.NoError(ch.Err())
 		testSink.checkEmpty()
 	}
 }

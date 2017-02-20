@@ -278,7 +278,7 @@ type FileSource struct {
 	UnsynchronizedFileAccess bool
 
 	stream *SampleInputStream
-	closed *golib.OneshotCondition
+	closed golib.StopChan
 }
 
 var fileSourceClosed = errors.New("file source is closed")
@@ -297,14 +297,14 @@ func (source *FileSource) String() string {
 // of the receiving FileSource, the reading exits after the first error, or continues
 // until all configured files have been opened.
 func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	source.closed = golib.NewOneshotCondition()
+	source.closed = golib.NewStopChan()
 	var files []string
 	if source.ReadFileGroups {
 		for _, filename := range source.Filenames {
 			group := NewFileGroup(filename)
 			if groupFiles, err := group.AllFiles(); err != nil {
 				source.CloseSink(wg)
-				return golib.TaskFinishedError(err)
+				return golib.NewStoppedChan(err)
 			} else {
 				files = append(files, groupFiles...)
 			}
@@ -315,50 +315,62 @@ func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	}
 	if len(files) == 0 {
 		source.CloseSink(wg)
-		return golib.TaskFinishedError(errors.New("No files specified for FileSource"))
+		return golib.NewStoppedChan(errors.New("No files specified for FileSource"))
 	} else if len(files) > 1 {
 		log.Println("Reading", len(files), "files")
 	}
-	return source.readFilesKeepAlive(wg, files)
+	source.readFilesKeepAlive(wg, files)
+	return source.closed
 }
 
-// This is a copy of golib.WaitErrFunc, but extended to implement the FileSource.KeepAlive flag.
-// If KeepAlive is set, and in case the wait() func returns a nil-error, it will not trigger
-// the StopChan immediately, but instead wait for the source.closed condition to be triggered first.
-// In other words: after reading all files succesfully, this FileSource will wait for the Stop() call.
-// In case of an error, it will still immediately shut down.
-func (source *FileSource) readFilesKeepAlive(wg *sync.WaitGroup, files []string) golib.StopChan {
+func (source *FileSource) readFilesKeepAlive(wg *sync.WaitGroup, files []string) {
 	if wg != nil {
 		wg.Add(1)
 	}
-	finished := make(chan error, 1)
 	go func() {
 		if wg != nil {
 			defer wg.Done()
 		}
-		err := source.readFiles(wg, files)
+		err := source.readFiles(files)
 		if source.KeepAlive && err == nil {
 			source.closed.Wait()
+		} else {
+			source.closed.Stop()
 		}
 		source.CloseSink(wg)
-		source.closed.EnableOnly()
-		finished <- err
-		close(finished)
 	}()
-	return finished
 }
 
 // Stop implements the MetricSource interface. it stops all goroutines that are spawned
 // for reading files and prints any errors to the logger. Calling it after the FileSource
 // finished on its own will have no effect.
 func (source *FileSource) Stop() {
-	source.closed.Enable(func() {
+	source.closed.StopFunc(func() {
 		if source.stream != nil {
-			if err := source.stream.Close(); err != nil && !isFileClosedError(err) {
+			if err := source.stream.Close(); err != nil && !IsFileClosedError(err) {
 				log.Errorln("Error closing input file:", err)
 			}
 		}
 	})
+}
+
+func (source *FileSource) readFiles(files []string) error {
+	for _, filename := range files {
+		err := source.readFile(filename)
+		if err == fileSourceClosed {
+			return nil
+		} else if IsFileClosedError(err) {
+			continue
+		} else if err != nil {
+			if source.Robust {
+				log.WithFields(log.Fields{"file": filename}).Warnln("Error reading file:", err)
+				continue
+			} else {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (source *FileSource) readFile(filename string) error {
@@ -367,7 +379,7 @@ func (source *FileSource) readFile(filename string) error {
 		return err
 	}
 	var stream *SampleInputStream
-	source.closed.IfNotEnabled(func() {
+	source.closed.IfNotStopped(func() {
 		var rc io.ReadCloser = file
 		if !source.UnsynchronizedFileAccess {
 			rc = &SynchronizedReadCloser{ReadCloser: file}
@@ -386,27 +398,9 @@ func (source *FileSource) readFile(filename string) error {
 	return stream.ReadNamedSamples(name)
 }
 
-func (source *FileSource) readFiles(wg *sync.WaitGroup, files []string) error {
-	for _, filename := range files {
-		err := source.readFile(filename)
-		if err == fileSourceClosed {
-			return nil
-		} else if isFileClosedError(err) {
-			continue
-		} else if err != nil {
-			if source.Robust {
-				log.WithFields(log.Fields{"file": filename}).Warnln("Error reading file:", err)
-				continue
-			} else {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func isFileClosedError(err error) bool {
-	// The file was most likely intentionally closed
+// IsFileClosedError returns true, if the given error likely originates from intentionally
+// closing a file, while it is still being read concurrently.
+func IsFileClosedError(err error) bool {
 	patherr, ok := err.(*os.PathError)
 	return ok && patherr.Err == syscall.EBADF
 }
@@ -496,7 +490,7 @@ type FileSink struct {
 	group    FileGroup
 	file_num int
 	stream   *SampleOutputStream
-	closed   *golib.OneshotCondition
+	closed   golib.StopChan
 }
 
 // String implements the MetricSink interface.
@@ -507,17 +501,17 @@ func (sink *FileSink) String() string {
 // Start implements the MetricSink interface. It does not start any goroutines.
 // It initialized the FileSink, prints some log messages, and depending on the
 // CleanFiles flag tries to delete existing files that would conflict with the output file.
-func (sink *FileSink) Start(wg *sync.WaitGroup) golib.StopChan {
+func (sink *FileSink) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 	log.WithFields(log.Fields{"file": sink.Filename, "format": sink.Marshaller}).Println("Writing samples")
-	sink.closed = golib.NewOneshotCondition()
+	sink.closed = golib.NewStopChan()
 	sink.group = NewFileGroup(sink.Filename)
 	if sink.CleanFiles {
 		if err := sink.group.DeleteFiles(); err != nil {
-			return golib.TaskFinishedError(fmt.Errorf("Failed to clean result files: %v", err))
+			return golib.NewStoppedChan(fmt.Errorf("Failed to clean result files: %v", err))
 		}
 	}
 	sink.file_num = 0
-	return nil
+	return
 }
 
 func (sink *FileSink) flush() error {
@@ -530,7 +524,7 @@ func (sink *FileSink) flush() error {
 // Close implements the MetricSink interface. It flushes and closes the currently open file.
 // No more data should be written to Sample/Header after calling Close.
 func (sink *FileSink) Close() {
-	sink.closed.Enable(func() {
+	sink.closed.StopFunc(func() {
 		if err := sink.flush(); err != nil {
 			log.Errorln("Error closing otuput file:", err)
 		}
@@ -538,7 +532,7 @@ func (sink *FileSink) Close() {
 }
 
 func (sink *FileSink) openNextFile() (err error) {
-	sink.closed.IfElseEnabled(func() {
+	sink.closed.IfElseStopped(func() {
 		err = errors.New(sink.String() + " is closed")
 	}, func() {
 		if err = sink.flush(); err != nil {

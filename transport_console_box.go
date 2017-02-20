@@ -49,16 +49,16 @@ func (sink *ConsoleBoxSink) String() string {
 func (sink *ConsoleBoxSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	sink.InterceptLogger()
 	log.Println("Printing samples to table")
-	sink.updateTask = golib.NewErrLoopTask("", func(stop golib.StopChan) error {
-		if err := sink.updateBox(); err != nil {
-			return err
-		}
-		select {
-		case <-time.After(sink.UpdateInterval):
-		case <-stop:
-		}
-		return nil
-	})
+	sink.updateTask = &golib.LoopTask{
+		Description: "",
+		Loop: func(stop golib.StopChan) error {
+			if err := sink.updateBox(); err != nil {
+				return err
+			}
+			stop.WaitTimeout(sink.UpdateInterval)
+			return nil
+		},
+	}
 	sink.updateTask.StopHook = func() {
 		sink.updateBox()
 		sink.RestoreLogger()

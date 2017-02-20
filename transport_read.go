@@ -96,7 +96,7 @@ func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink MetricSinkBase, bu
 		incoming:         make(chan *bufferedIncomingSample, r.BufferedSamples),
 		outgoing:         make(chan *bufferedIncomingSample, r.BufferedSamples),
 		parallelSampleStream: parallelSampleStream{
-			closed: golib.NewOneshotCondition(),
+			closed: golib.NewStopChan(),
 		},
 	}
 }
@@ -180,7 +180,7 @@ func (stream *SampleInputStream) Close() error {
 }
 
 func (stream *SampleInputStream) closeUnderlyingReader() {
-	stream.closed.Enable(func() {
+	stream.closed.StopFunc(func() {
 		err := stream.underlyingReader.Close()
 		stream.addError(err)
 	})
@@ -214,7 +214,7 @@ func (stream *SampleInputStream) readData(source string) {
 		close(stream.incoming)
 		close(stream.outgoing)
 	}()
-	closedChan := stream.closed.Start(nil)
+	closedChan := stream.closed.WaitChan()
 	for {
 		if stream.hasError() {
 			return

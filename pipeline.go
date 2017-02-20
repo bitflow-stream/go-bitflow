@@ -56,20 +56,6 @@ func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 	return p
 }
 
-// ConfigureStandalone prints a warning if the sink or source of the pipeline
-// are not set, and sets them to non-nil values. This can optionally be called after
-// p.Configure().
-func (p *SamplePipeline) ConfigureStandalone() {
-	if p.Sink == nil {
-		log.Warnln("No data sinks selected, data will not be output anywhere.")
-		p.Sink = new(EmptyMetricSink)
-	}
-	if p.Source == nil {
-		log.Warnln("No data source provided, no data will be received or generated.")
-		p.Source = new(EmptyMetricSource)
-	}
-}
-
 // StartAndWait constructs the pipeline and starts it. It blocks until the pipeline
 // is finished. The Sink and Source fields must be set to non-nil values, for example
 // using Configure* methods or setting the fields directly.
@@ -84,7 +70,6 @@ func (p *SamplePipeline) ConfigureStandalone() {
 //   defer golib.ProfileCpu()() // (Optional)
 //   // ... Set p.Processors (Optional)
 //   // ... Set p.Source and p.Sink using f.CreateSource() and f.CreateSink()
-//   // p.ConfigureStandalone // (Optional)
 //   os.Exit(p.StartAndWait()) // os.Exit() should be called in an outer method if 'defer' is used here
 //
 // An additional golib.Task is started along with the pipeline, which listens
@@ -93,8 +78,8 @@ func (p *SamplePipeline) ConfigureStandalone() {
 //
 // StartAndWait returns the number of errors that occured in the pipeline.
 func (p *SamplePipeline) StartAndWait() int {
-	tasks := golib.NewTaskGroup()
-	p.Construct(tasks)
+	var tasks golib.TaskGroup
+	p.Construct(&tasks)
 	log.Debugln("Press Ctrl-C to interrupt")
 	tasks.Add(&golib.NoopTask{
 		Chan:        golib.ExternalInterrupt(),

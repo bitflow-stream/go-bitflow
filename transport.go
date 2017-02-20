@@ -180,9 +180,9 @@ type EmptyMetricSource struct {
 }
 
 // Start implements the golib.Task interface.
-func (s *EmptyMetricSource) Start(wg *sync.WaitGroup) golib.StopChan {
+func (s *EmptyMetricSource) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 	s.wg = wg
-	return nil
+	return
 }
 
 // Stop implements the golib.Task interface.
@@ -207,8 +207,8 @@ type EmptyMetricSink struct {
 }
 
 // Start implements the golib.Task interface.
-func (s *EmptyMetricSink) Start(wg *sync.WaitGroup) golib.StopChan {
-	return nil
+func (s *EmptyMetricSink) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
+	return
 }
 
 // String implements the MetricSink interface.
@@ -277,7 +277,7 @@ type parallelSampleStream struct {
 	errLock sync.Mutex
 
 	wg     sync.WaitGroup
-	closed *golib.OneshotCondition
+	closed golib.StopChan
 }
 
 func (state *parallelSampleStream) addError(err error) bool {

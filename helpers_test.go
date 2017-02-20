@@ -256,9 +256,9 @@ func (s *testSampleSink) checkClosed() {
 	s.suite.True(s.closed, "test sink closed")
 }
 
-func (s *testSampleSink) Start(_ *sync.WaitGroup) golib.StopChan {
+func (s *testSampleSink) Start(_ *sync.WaitGroup) (_ golib.StopChan) {
 	s.suite.Fail("testSampleSink.Start() called")
-	return nil
+	return
 }
 
 func (s *testSampleSink) Stop() {

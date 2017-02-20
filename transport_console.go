@@ -11,7 +11,7 @@ import (
 )
 
 // WriterSink implements MetricSink by writing all Headers and Samples to a single
-// io.WriteCloser instance. An instance of SampleReader is used to write the data in parallel.
+// io.WriteCloser instance. An instance of SampleWriter is used to write the data in parallel.
 type WriterSink struct {
 	AbstractMarshallingMetricSink
 	Output      io.WriteCloser
@@ -35,23 +35,22 @@ func (sink *WriterSink) String() string {
 
 // Start implements the MetricSink interface. No additional goroutines are
 // spawned, only a log message is printed.
-func (sink *WriterSink) Start(wg *sync.WaitGroup) golib.StopChan {
+func (sink *WriterSink) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 	log.WithField("format", sink.Marshaller).Println("Printing samples to " + sink.Description)
 	sink.stream = sink.Writer.Open(sink.Output, sink.Marshaller)
-	return nil
+	return
 }
 
 // Close implements the MetricSink interface. It flushes the remaining data
-// to stdout and marks the stream as closed, but does not actually close the
-// stdout.
+// to the underlying io.WriteCloser and closes it.
 func (sink *WriterSink) Close() {
 	if err := sink.stream.Close(); err != nil {
 		log.Errorf("%v: Error closing output: %v", sink, err)
 	}
 }
 
-// Header implements the MetricSink interface by using a SampleStream to
-// write the given Sample to the standard output.
+// Header implements the MetricSink interface by using a SampleOutputStream to
+// write the given Sample to the configured io.WriteCloser.
 func (sink *WriterSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
@@ -83,13 +82,14 @@ func (source *ReaderSource) String() string {
 	return source.Description + " reader"
 }
 
-// Start implements the MetricSource interface.
+// Start implements the MetricSource interface by starting a SampleInputStream
+// instance that reads from the given io.ReadCloser.
 func (source *ReaderSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	source.stream = source.Reader.Open(source.Input, source.OutgoingSink)
 	return golib.WaitErrFunc(wg, func() error {
 		defer source.CloseSink(wg)
 		err := source.stream.ReadNamedSamples(source.Description)
-		if isFileClosedError(err) {
+		if IsFileClosedError(err) {
 			err = nil
 		}
 		return err
@@ -103,17 +103,7 @@ func (source *ReaderSource) Stop() {
 	// invokation to return... This data source will hang until stdin is closed
 	// from the outside, or the program is stopped forcefully.
 	err := source.stream.Close()
-	if err != nil && !isFileClosedError(err) {
+	if err != nil && !IsFileClosedError(err) {
 		log.Errorf("%v: error closing output: %v", source, err)
 	}
-}
-
-// ====== Helper type
-
-type nopWriteCloser struct {
-	io.WriteCloser
-}
-
-func (n nopWriteCloser) Close() error {
-	return nil
 }

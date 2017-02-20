@@ -49,8 +49,8 @@ func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 		l.Stop()
 	}()
 
-	group := golib.NewTaskGroup(l, s, sender)
-	_, numErrs := group.WaitAndStop(1*time.Second, true)
+	group := golib.TaskGroup{l, s, sender}
+	_, numErrs := group.WaitAndStop(1 * time.Second)
 	suite.Equal(0, numErrs, "number of errors")
 }
 
@@ -89,8 +89,8 @@ func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 			l.Stop()
 		}()
 
-		group := golib.NewTaskGroup(l, s, sender)
-		_, numErrs := group.WaitAndStop(1*time.Second, true)
+		group := golib.TaskGroup{l, s, sender}
+		_, numErrs := group.WaitAndStop(1 * time.Second)
 		suite.Equal(0, numErrs, "number of errors")
 	}
 }
@@ -141,8 +141,8 @@ func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 		s.Stop()
 	}()
 
-	group := golib.NewTaskGroup(l, s, sender)
-	_, numErrs := group.WaitAndStop(1*time.Second, true)
+	group := golib.TaskGroup{l, s, sender}
+	_, numErrs := group.WaitAndStop(1 * time.Second)
 	suite.Equal(0, numErrs, "number of errors")
 }
 
@@ -177,8 +177,8 @@ func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller
 			s.Stop()
 		}()
 
-		group := golib.NewTaskGroup(l, s, sender)
-		_, numErrs := group.WaitAndStop(1*time.Second, true)
+		group := golib.TaskGroup{l, s, sender}
+		_, numErrs := group.WaitAndStop(1 * time.Second)
 		suite.Equal(0, numErrs, "number of errors")
 	}
 }
@@ -187,9 +187,9 @@ type oneshotTask struct {
 	do func()
 }
 
-func (t *oneshotTask) Start(wg *sync.WaitGroup) golib.StopChan {
+func (t *oneshotTask) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 	t.do()
-	return nil
+	return
 }
 
 func (t *oneshotTask) Stop() {

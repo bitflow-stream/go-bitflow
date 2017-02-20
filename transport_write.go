@@ -30,7 +30,6 @@ type SampleOutputStream struct {
 	parallelSampleStream
 	incoming       chan *bufferedSample
 	outgoing       chan *bufferedSample
-	closed         *golib.OneshotCondition
 	writer         io.WriteCloser
 	marshaller     Marshaller
 	marshallBuffer int
@@ -83,9 +82,11 @@ func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *Sampl
 	stream := &SampleOutputStream{
 		writer:     writer,
 		marshaller: marshaller,
-		closed:     golib.NewOneshotCondition(),
 		incoming:   make(chan *bufferedSample, w.BufferedSamples),
 		outgoing:   make(chan *bufferedSample, w.BufferedSamples),
+		parallelSampleStream: parallelSampleStream{
+			closed: golib.NewStopChan(),
+		},
 	}
 
 	for i := 0; i < w.ParallelParsers || i < 1; i++ {
@@ -119,7 +120,7 @@ func (stream *SampleOutputStream) Sample(sample *Sample, header *Header) error {
 		doneCond: sync.NewCond(new(sync.Mutex)),
 	}
 	var err error
-	stream.closed.IfElseEnabled(
+	stream.closed.IfElseStopped(
 		func() {
 			err = stream.getErrorNoEOF()
 			if err == nil {
@@ -139,7 +140,7 @@ func (stream *SampleOutputStream) Close() error {
 	if stream == nil {
 		return nil
 	}
-	stream.closed.Enable(func() {
+	stream.closed.StopFunc(func() {
 		close(stream.incoming)
 		close(stream.outgoing)
 		stream.wg.Wait()
@@ -162,10 +163,11 @@ func (stream *SampleOutputStream) marshallOne(sample *bufferedSample) {
 		return
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, stream.marshallBuffer))
-	stream.marshaller.WriteSample(sample.sample, sample.header, buf)
+	err := stream.marshaller.WriteSample(sample.sample, sample.header, buf)
+	stream.addError(err)
 	if l := buf.Len(); l > stream.marshallBuffer {
 		// Avoid buffer copies for future samples
-		// TODO could reuse allocated buffers
+		// TODO should reuse allocated buffers
 		stream.marshallBuffer = l
 	}
 	sample.data = buf.Bytes()
