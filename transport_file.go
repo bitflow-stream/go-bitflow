@@ -405,34 +405,6 @@ func IsFileClosedError(err error) bool {
 	return ok && patherr.Err == syscall.EBADF
 }
 
-// ListMatchingFiles is a convenience function that traverses a directory recursively
-// and returnes all files that match a given regular expression. It prints a warning in the logger,
-// if traversing the directory takes too long, see the ReadingDirWarnDuration constant.
-func ListMatchingFiles(dir string, regexStr string) ([]string, error) {
-	regex, err := regexp.Compile(regexStr)
-	if err != nil {
-		return nil, err
-	}
-	finishedReading := false
-	time.AfterFunc(ReadingDirWarnDuration, func() {
-		if !finishedReading {
-			log.Warnf("Reading directory \"%v\"...", dir)
-		}
-	})
-	var result []string
-	walkErr := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && regex.MatchString(path) {
-			result = append(result, path)
-		}
-		return nil
-	})
-	finishedReading = true
-	return result, walkErr
-}
-
 // SynchronizedReadCloser is a helper type to wrap *os.File and synchronize calls
 // to Read() and Close(). This prevents race condition warnings from the Go race detector
 // due to parallel access to the fd field of the internal os.file type. The performance
