@@ -335,7 +335,7 @@ func (source *FileSource) readFilesKeepAlive(wg *sync.WaitGroup, files []string)
 		if source.KeepAlive && err == nil {
 			source.closed.Wait()
 		} else {
-			source.closed.Stop()
+			source.closed.StopErr(err)
 		}
 		source.CloseSink(wg)
 	}()
