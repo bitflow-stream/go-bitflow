@@ -42,7 +42,7 @@ func do_main() int {
 		log.Fatalln("Use -print-analyses to print all available analysis steps.")
 	}
 	defer golib.ProfileCpu()()
-	for _, str := range pipe.Format() {
+	for _, str := range pipeline.FormatLines() {
 		log.Println(str)
 	}
 	if *printPipeline {

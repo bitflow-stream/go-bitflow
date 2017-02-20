@@ -57,19 +57,19 @@ type PlotProcessor struct {
 
 func (p *PlotProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	if p.Type >= InvalidPlotType {
-		return golib.TaskFinishedError(fmt.Errorf("Invalid PlotType: %v", p.Type))
+		return golib.NewStoppedChan(fmt.Errorf("Invalid PlotType: %v", p.Type))
 	}
 	if p.OutputFile == "" {
-		return golib.TaskFinishedError(errors.New("Plotter.OutputFile must be configured"))
+		return golib.NewStoppedChan(errors.New("Plotter.OutputFile must be configured"))
 	}
 	if p.AxisX < minAxis || p.AxisY < minAxis {
-		return golib.TaskFinishedError(fmt.Errorf("Invalid plot axis values: X=%v Y=%v", p.AxisX, p.AxisY))
+		return golib.NewStoppedChan(fmt.Errorf("Invalid plot axis values: X=%v Y=%v", p.AxisX, p.AxisY))
 	}
 	p.data = make(map[string]plotter.XYs)
 
 	if file, err := os.Create(p.OutputFile); err != nil {
 		// Check if file can be created to quickly fail
-		return golib.TaskFinishedError(err)
+		return golib.NewStoppedChan(err)
 	} else {
 		_ = file.Close() // Drop error
 	}

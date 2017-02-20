@@ -42,19 +42,22 @@ func (r *SubprocessRunner) Configure(marshallingFormat string, f *bitflow.Endpoi
 
 func (r *SubprocessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
 	if err := r.createProcess(); err != nil {
-		return golib.TaskFinishedError(err)
+		return golib.NewStoppedChan(err)
 	}
 
-	var channels []golib.StopChan
+	var tasks golib.TaskGroup
 	if r.input != nil {
 		// (Optionally) start the input first
-		channels = append(channels, r.input.Start(wg))
+		tasks.Add(r.input)
 	}
-	channels = append(channels,
-		golib.WaitErrFunc(wg, r.runProcess),
-		r.output.Start(wg))
+	tasks.Add(&golib.NoopTask{
+		Description: "",
+		Chan:        golib.WaitErrFunc(wg, r.runProcess),
+	}, r.output)
+
+	channels := tasks.StartTasks(wg)
 	return golib.WaitErrFunc(wg, func() error {
-		index, err := golib.WaitForAny(channels)
+		golib.WaitForAny(channels)
 
 		// Try to stop everything
 		if r.input != nil {
@@ -62,18 +65,11 @@ func (r *SubprocessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
 		}
 		r.Close()
 
-		channels[index] = nil
-		var multiErr golib.MultiError
-		multiErr.Add(err)
-		for _, ch := range channels {
-			if ch != nil {
-				multiErr.Add(<-ch)
-			}
-		}
+		err := tasks.CollectMultiError(channels)
 
 		// After everything is shut down: forward the close call
 		r.CloseSink()
-		return multiErr.NilOrError()
+		return err.NilOrError()
 	})
 }
 

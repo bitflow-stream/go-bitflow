@@ -142,9 +142,6 @@ type multiPipelineSink struct {
 }
 
 func (s *multiPipelineSink) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-
-	// TODO implement optional parallelism
-
 	var errors golib.MultiError
 	for _, sink := range s.sinks {
 		if sink != nil {

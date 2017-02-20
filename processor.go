@@ -50,22 +50,23 @@ func (p *DecouplingProcessor) Sample(sample *bitflow.Sample, header *bitflow.Hea
 
 func (p *DecouplingProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	p.samples = make(chan TaggedSample, p.ChannelBuffer)
-	p.loopTask = golib.NewErrLoopTask(p.String(), func(stop golib.StopChan) error {
-		select {
-		case sample, open := <-p.samples:
-			if open {
-				if err := p.forward(sample); err != nil {
-					return fmt.Errorf("Error forwarding sample from %v to %v: %v", p, p.OutgoingSink, err)
+	p.loopTask = &golib.LoopTask{
+		Description: p.String(),
+		StopHook:    p.CloseSink,
+		Loop: func(stop golib.StopChan) error {
+			select {
+			case sample, open := <-p.samples:
+				if open {
+					if err := p.forward(sample); err != nil {
+						return fmt.Errorf("Error forwarding sample from %v to %v: %v", p, p.OutgoingSink, err)
+					}
+				} else {
+					p.loopTask.Stop()
 				}
-			} else {
-				p.loopTask.EnableOnly()
+			case <-stop.WaitChan():
 			}
-		case <-stop:
-		}
-		return nil
-	})
-	p.loopTask.StopHook = func() {
-		p.CloseSink()
+			return nil
+		},
 	}
 	return p.loopTask.Start(wg)
 }

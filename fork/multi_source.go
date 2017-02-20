@@ -24,10 +24,10 @@ func (in *MultiMetricSource) Add(subpipeline *pipeline.SamplePipeline) {
 }
 
 func (in *MultiMetricSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	stopChan := make(chan error, 2)
+	stopChan := golib.NewStopChan()
 	signalClose := func() {
 		in.CloseSink(wg)
-		stopChan <- nil
+		stopChan.Stop()
 	}
 
 	in.parallelClose = in.ParallelClose

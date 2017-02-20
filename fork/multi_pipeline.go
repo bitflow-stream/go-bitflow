@@ -44,19 +44,15 @@ func (m *MultiPipeline) StartPipeline(pipeline *bitflow.SamplePipeline, finished
 		pipeline: pipeline,
 	}
 	m.pipelines = append(m.pipelines, &running)
-	waitingTasks, channels := running.init(&m.subpipelineWg)
+	tasks, channels := running.init(&m.subpipelineWg)
 
 	m.subpipelineWg.Add(1)
 	go func() {
 		defer m.subpipelineWg.Done()
 
 		// Wait for all tasks to finish and collect their errors
-		idx, firstError := golib.WaitForAny(channels)
-		var errors golib.MultiError
-		errors.Add(firstError)
-		_ = golib.CollectErrors(channels, waitingTasks, golib.DefaultPrintTaskStopWait, func(err error) {
-			errors.Add(err)
-		})
+		idx := golib.WaitForAny(channels)
+		errors := tasks.CollectMultiError(channels)
 
 		// A passive pipeline can occur when all processors, source and sink return nil from Start().
 		// This means that none of the elements of the subpipeline spawned any extra goroutines.
@@ -123,17 +119,16 @@ func (m *MultiPipeline) LogFinishedPipeline(isPassive bool, err error, prefix st
 
 type runningSubpipeline struct {
 	pipeline *bitflow.SamplePipeline
-	group    *golib.TaskGroup
+	group    golib.TaskGroup
 }
 
-func (r *runningSubpipeline) init(wg *sync.WaitGroup) ([]golib.Task, []golib.StopChan) {
-	r.group = golib.NewTaskGroup()
-	r.pipeline.Construct(r.group)
-	return r.group.StartTasks(wg)
+func (r *runningSubpipeline) init(wg *sync.WaitGroup) (golib.TaskGroup, []golib.StopChan) {
+	r.pipeline.Construct(&r.group)
+	return r.group, r.group.StartTasks(wg)
 }
 
 func (r *runningSubpipeline) stop() {
-	r.group.ReverseStop(golib.DefaultPrintTaskStopWait)
+	r.group.Stop()
 }
 
 type ForkMerger struct {
@@ -146,8 +141,8 @@ func (sink *ForkMerger) String() string {
 	return "Fork merger for " + sink.outgoing.String()
 }
 
-func (sink *ForkMerger) Start(wg *sync.WaitGroup) golib.StopChan {
-	return nil
+func (sink *ForkMerger) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
+	return
 }
 
 func (sink *ForkMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
