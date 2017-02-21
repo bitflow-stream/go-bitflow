@@ -39,7 +39,7 @@ func do_main() int {
 	pipeline, err := make_pipeline()
 	if err != nil {
 		log.Errorln(err)
-		log.Fatalln("Use -print-analyses to print all available analysis steps.")
+		golib.Fatalln("Use -print-analyses to print all available analysis steps.")
 	}
 	defer golib.ProfileCpu()()
 	for _, str := range pipeline.FormatLines() {
