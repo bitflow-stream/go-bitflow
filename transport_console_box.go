@@ -15,7 +15,10 @@ import (
 // the last lines of log output at the bottom. ConsoleBoxSink does not implement
 // MarshallingMetricSink, because it uses its own, fixed marshaller.
 //
-// Multiple fields provide access to configuration options.
+// Multiple embedded fields provide access to configuration options.
+//
+// Init() must be called as early as possible when using ConsoleBoxSink, to make
+// sure that all log messages are capture and none are overwritten by the box.
 type ConsoleBoxSink struct {
 	AbstractMetricSink
 	gotermBox.CliLogBoxTask

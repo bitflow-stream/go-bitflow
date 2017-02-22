@@ -57,6 +57,7 @@ func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	source.connCounterDescription = source
 	source.task.Handler = source.handleConnection
 	source.task.StopHook = func() {
+		source.closeAllConnections()
 		source.CloseSink(wg)
 	}
 	if source.SimultaneousConnections == 1 {
@@ -80,27 +81,46 @@ func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.
 	}
 	log.WithField("remote", conn.RemoteAddr()).Debugln("Accepted connection")
 	listenerConn := &tcpListenerConnection{
-		source: source,
-		stream: source.Reader.Open(conn, source.synchronizedSink),
+		source:   source,
+		stream:   source.Reader.Open(conn, source.synchronizedSink),
+		finished: golib.NewStopChan(),
 	}
 	source.connections[listenerConn] = true
 	wg.Add(1)
 	go listenerConn.readSamples(wg, conn)
 }
 
-// Stop implements the MetricSource interface. It close sall active TCP connections
+func (source *TCPListenerSource) closeAllConnections() {
+	for {
+		var conn *tcpListenerConnection
+		// Pick an arbitray running connection, if there is any
+		// Use Execute() to synchronize this with tcpListenerConnection.readSamples()
+		source.task.Execute(func() {
+			for key := range source.connections {
+				conn = key
+				break
+			}
+		})
+		if conn == nil {
+			break
+		}
+		conn.finished.Execute(conn.closeStream)
+		conn.finished.Wait()
+	}
+}
+
+// Stop implements the MetricSource interface. It closes all active TCP connections
 // and closes the listening socket.
 func (source *TCPListenerSource) Stop() {
-	source.task.ExtendedStop(func() {
-		for conn := range source.connections {
-			conn.closeStream()
-		}
-	})
+	source.task.Stop()
 }
 
 type tcpListenerConnection struct {
 	source *TCPListenerSource
 	stream *SampleInputStream
+
+	// This StopChan is only used as a condition that can be waited on
+	finished golib.StopChan
 }
 
 func (conn *tcpListenerConnection) isConnectionClosed() bool {
@@ -113,14 +133,19 @@ func (conn *tcpListenerConnection) readSamples(wg *sync.WaitGroup, connection *n
 	if !conn.source.countConnectionClosed() {
 		conn.source.Stop()
 	}
-	conn.source.task.IfRunning(conn.closeStream)
+
+	conn.finished.StopFunc(conn.closeStream)
+	// The Execute() method makes sure to synchronize the access to the sonn.source.connections map
+	conn.source.task.Execute(func() {
+		delete(conn.source.connections, conn)
+	})
 }
 
+// This is always executed while the conn.finished StopChan is locked to avoid closing the stream twice
 func (conn *tcpListenerConnection) closeStream() {
 	if stream := conn.stream; stream != nil {
 		conn.stream = nil  // Make isConnectionClosed() return true
 		_ = stream.Close() // Drop error
-		delete(conn.source.connections, conn)
 	}
 }
 
@@ -169,6 +194,7 @@ func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	}
 	sink.task = &golib.TCPListenerTask{
 		ListenEndpoint: sink.Endpoint,
+		StopHook:       sink.buf.close,
 		Handler:        sink.handleConnection,
 	}
 	return sink.task.ExtendedStart(func(addr net.Addr) {
@@ -179,9 +205,7 @@ func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 // Close implements the MetricSink interface. It closes any existing connection
 // and closes the TCP socket.
 func (sink *TCPListenerSink) Close() {
-	sink.task.ExtendedStop(func() {
-		sink.buf.close()
-	})
+	sink.task.Stop()
 }
 
 func (sink *TCPListenerSink) handleConnection(wg *sync.WaitGroup, conn *net.TCPConn) {
