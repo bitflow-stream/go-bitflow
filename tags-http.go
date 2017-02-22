@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"bytes"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -139,23 +138,8 @@ func (tagger *HttpTagger) CurrentTagsStr() string {
 	} else if len(tags) == 0 {
 		return "No tags set"
 	} else {
-		return "Tags set to " + tagger.PrintMap(tags)
+		return "Tags set to " + golib.FormatMap(tags)
 	}
-}
-
-func (tagger *HttpTagger) PrintMap(values map[string]string) string {
-	var buf bytes.Buffer
-	started := false
-	for key, val := range values {
-		if started {
-			buf.WriteString(", ")
-		}
-		buf.WriteString(key)
-		buf.WriteString("=")
-		buf.WriteString(val)
-		started = true
-	}
-	return buf.String()
 }
 
 func (tagger *HttpTagger) HttpTagsSet() bool {
