@@ -140,7 +140,7 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (UnmarshallingMetricSour
 	var result UnmarshallingMetricSource
 	inputType := UndefinedEndpoint
 	for _, input := range inputs {
-		endpoint, err := ParseEndpointDescription(input)
+		endpoint, err := ParseEndpointDescription(input, false)
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +215,7 @@ func (p *EndpointFactory) Writer() SampleWriter {
 // and the configuration flags in the EndpointFactory.
 func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 	var resultSink MetricSink
-	endpoint, err := ParseEndpointDescription(output)
+	endpoint, err := ParseEndpointDescription(output, true)
 	if err != nil {
 		return nil, err
 	}
@@ -278,6 +278,7 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 	return resultSink, nil
 }
 
+// IsConsoleOutput returns true if the given MetricSink will output to the standard output when started.
 func IsConsoleOutput(sink MetricSink) bool {
 	writer, ok1 := sink.(*WriterSink)
 	_, ok2 := sink.(*ConsoleBoxSink)
@@ -348,11 +349,18 @@ func (format MarshallingFormat) Marshaller() Marshaller {
 // ParseEndpointDescription parses the given string to an EndpointDescription object.
 // The string can be one of two forms: the URL-style description will be parsed by
 // ParseUrlEndpointDescription, other descriptions will be parsed by GuessEndpointDescription.
-func ParseEndpointDescription(endpoint string) (EndpointDescription, error) {
+func ParseEndpointDescription(endpoint string, isOutput bool) (EndpointDescription, error) {
 	if strings.Contains(endpoint, "://") {
 		return ParseUrlEndpointDescription(endpoint)
 	} else {
-		return GuessEndpointDescription(endpoint)
+		guessed, err := GuessEndpointDescription(endpoint)
+		//qs Correct the default output transport type for standard output to ConsoleBoxEndpoint
+		if err == nil && isOutput {
+			if guessed.Target == "-" && guessed.Format == UndefinedFormat {
+				guessed.Type = ConsoleBoxEndpoint
+			}
+		}
+		return guessed, err
 	}
 }
 
@@ -427,7 +435,8 @@ func GuessEndpointDescription(endpoint string) (res EndpointDescription, err err
 // Three forms of are recognized for the target:
 //  - A host:port pair indicates an active TCP endpoint
 //  - A :port pair (without the host part, but with the colon) indicates a passive TCP endpoint listening on the given port.
-//  - All other targets are treated as file names
+//  - The hyphen '-' is interpreted as standard input/output.
+//  - All other targets are treated as file names.
 func GuessEndpointType(target string) (EndpointType, error) {
 	var typ EndpointType
 	if target == "" {
@@ -454,6 +463,7 @@ func GuessEndpointType(target string) (EndpointType, error) {
 	return typ, nil
 }
 
+// IsValidFilename tries to infer in a system-independent way, if the given path is a valid file name.
 func IsValidFilename(path string) bool {
 	_, err := os.Stat(path)
 	switch err := err.(type) {

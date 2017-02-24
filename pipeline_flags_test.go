@@ -29,14 +29,17 @@ func TestPipelineTestSuite(t *testing.T) {
 }
 
 func (suite *PipelineTestSuite) TestGuessEndpoint() {
-	compare := func(endpoint string, format MarshallingFormat, typ EndpointType) {
-		desc, err := ParseEndpointDescription(endpoint)
+	compareX := func(endpoint string, format MarshallingFormat, typ EndpointType, isOutput bool) {
+		desc, err := ParseEndpointDescription(endpoint, isOutput)
 		suite.NoError(err)
 		suite.Equal(EndpointDescription{Format: UndefinedFormat, Type: typ, Target: endpoint}, desc)
 		suite.Equal(format, desc.OutputFormat())
 	}
+	compare := func(endpoint string, format MarshallingFormat, typ EndpointType) {
+		compareX(endpoint, format, typ, false)
+	}
 	compareErr2 := func(endpoint string, errStr string) {
-		desc, err := ParseEndpointDescription(endpoint)
+		desc, err := ParseEndpointDescription(endpoint, false)
 		suite.Error(err)
 		suite.Contains(err.Error(), errStr)
 		suite.Equal(EndpointDescription{Format: UndefinedFormat, Type: UndefinedEndpoint, Target: endpoint}, desc)
@@ -48,7 +51,8 @@ func (suite *PipelineTestSuite) TestGuessEndpoint() {
 		compareErr2(endpoint, "Not a filename and not a valid TCP endpoint")
 	}
 
-	compare("-", TextFormat, StdEndpoint)
+	compareX("-", UndefinedFormat, ConsoleBoxEndpoint, true)
+	compareX("-", TextFormat, StdEndpoint, false)
 
 	// File names
 	compare("xxx", CsvFormat, FileEndpoint)
@@ -79,7 +83,7 @@ func (suite *PipelineTestSuite) TestGuessEndpoint() {
 
 func (suite *PipelineTestSuite) TestUrlEndpoint() {
 	compare := func(endpoint string, format MarshallingFormat, outputFormat MarshallingFormat, typ EndpointType, target string) {
-		desc, err := ParseEndpointDescription(endpoint)
+		desc, err := ParseEndpointDescription(endpoint, false)
 		suite.NoError(err)
 		suite.Equal(EndpointDescription{Format: format, Type: typ, Target: target}, desc)
 		suite.Equal(outputFormat, desc.OutputFormat())
@@ -147,7 +151,7 @@ func (suite *PipelineTestSuite) TestUrlEndpoint() {
 
 func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 	err := func(endpoint string, errStr string) {
-		_, err := ParseEndpointDescription(endpoint)
+		_, err := ParseEndpointDescription(endpoint, false)
 		suite.Error(err)
 		suite.Contains(err.Error(), errStr)
 	}
@@ -260,8 +264,8 @@ func (suite *PipelineTestSuite) Test_input_std() {
 	endpoint := "-"
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(endpoint)
-	source.SetSampleHandler(handler)
 	suite.NoError(err)
+	source.SetSampleHandler(handler)
 	expected := NewConsoleSource()
 	expected.Reader.Handler = handler
 	expected.Reader.ParallelSampleHandler = parallel_handler
@@ -386,7 +390,11 @@ func (suite *PipelineTestSuite) Test_outputs() {
 
 	// Individual outputs
 	test("box://-", box())
-	test("-", std("text"))
+	test("-", box())
+	test("std://-", std("text"))
+	test("text+std://-", std("text"))
+	test("std+csv://-", std("csv"))
+	test("bin+std://-", std("bin"))
 	test("csv://-", std("csv"))
 	test("bin://-", std("bin"))
 	test("text://-", std("text"))
