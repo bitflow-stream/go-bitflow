@@ -51,8 +51,13 @@ type PCAModel struct {
 
 func (model *PCAModel) ComputeModel(samples []*bitflow.Sample) error {
 	matrix := SamplesToMatrix(samples)
-	var ok bool
-	model.Vectors, model.RawVariances, ok = stat.PrincipalComponents(matrix, nil)
+	pc := new(stat.PC)
+	ok := pc.PrincipalComponents(matrix, nil)
+	if !ok {
+		return errors.New("PCA model could not be computed")
+	}
+	model.Vectors, model.RawVariances = pc.Vectors(nil), pc.Vars(nil)
+
 	model.ContainedVariances = make([]float64, len(model.RawVariances))
 	var sum float64
 	for _, variance := range model.RawVariances {
@@ -60,9 +65,6 @@ func (model *PCAModel) ComputeModel(samples []*bitflow.Sample) error {
 	}
 	for i, variance := range model.RawVariances {
 		model.ContainedVariances[i] = variance / sum
-	}
-	if !ok {
-		return errors.New("PCA model could not be computed")
 	}
 	return nil
 }
