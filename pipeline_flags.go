@@ -80,6 +80,10 @@ type EndpointFactory struct {
 
 	FlagParallelHandler ParallelSampleHandler
 
+	// Console box flags
+
+	ConsoleBoxNoImmediateScreenUpdate bool
+
 	// testmode is a flag used by tests to suppress initialization routines
 	// that are not testable. It is a hack to keep the EndpointFactory easy to use
 	// while making it testable.
@@ -124,6 +128,7 @@ func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
 // RegisterOutputConfigFlagsTo registers flags that configure data outputs.
 func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
 	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
+	f.BoolVar(&p.ConsoleBoxNoImmediateScreenUpdate, "slow-screen-updates", false, fmt.Sprintf("For console box output, don't update the screen on every sample, but only in intervals of %v", ConsoleBoxUpdateInterval))
 }
 
 // Writer returns an instance of SampleReader, configured by the values stored in the EndpointFactory.
@@ -238,6 +243,7 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 				CliLogBox:      ConsoleBoxSettings,
 				UpdateInterval: ConsoleBoxUpdateInterval,
 			},
+			ImmediateScreenUpdate: !p.ConsoleBoxNoImmediateScreenUpdate,
 		}
 		if !p.testmode {
 			sink.Init()

@@ -23,6 +23,11 @@ type ConsoleBoxSink struct {
 	AbstractMetricSink
 	gotermBox.CliLogBoxTask
 
+	// ImmediateScreenUpdate causes the console box to be updated immediately
+	// whenever a sample is received by this ConsoleBoxSink. Otherwise, the screen
+	// will be updated in regular intervals based on the settings in CliLogBoxTask.
+	ImmediateScreenUpdate bool
+
 	lock       sync.Mutex
 	lastSample *Sample
 	lastHeader *Header
@@ -76,7 +81,9 @@ func (sink *ConsoleBoxSink) Sample(sample *Sample, header *Header) error {
 	sink.lock.Lock()
 	sink.lastSample = sample
 	sink.lastHeader = header
-	sink.TriggerUpdate() // Update directly on every incoming sample
+	if sink.ImmediateScreenUpdate {
+		sink.TriggerUpdate()
+	}
 	sink.lock.Unlock()
 	return nil
 }
