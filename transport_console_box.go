@@ -76,6 +76,7 @@ func (sink *ConsoleBoxSink) Sample(sample *Sample, header *Header) error {
 	sink.lock.Lock()
 	sink.lastSample = sample
 	sink.lastHeader = header
+	sink.TriggerUpdate() // Update directly on every incoming sample
 	sink.lock.Unlock()
 	return nil
 }
