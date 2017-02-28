@@ -50,7 +50,8 @@ var (
 		LogLines:      10,
 		MessageBuffer: 500,
 	}
-	ConsoleBoxUpdateInterval = 500 * time.Millisecond
+	ConsoleBoxUpdateInterval    = 500 * time.Millisecond
+	ConsoleBoxMinUpdateInterval = 50 * time.Millisecond
 
 	stdTransportTarget = "-"
 	binaryFileSuffix   = ".bin"
@@ -240,8 +241,9 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 	case ConsoleBoxEndpoint:
 		sink := &ConsoleBoxSink{
 			CliLogBoxTask: gotermBox.CliLogBoxTask{
-				CliLogBox:      ConsoleBoxSettings,
-				UpdateInterval: ConsoleBoxUpdateInterval,
+				CliLogBox:         ConsoleBoxSettings,
+				UpdateInterval:    ConsoleBoxUpdateInterval,
+				MinUpdateInterval: ConsoleBoxMinUpdateInterval,
 			},
 			ImmediateScreenUpdate: !p.ConsoleBoxNoImmediateScreenUpdate,
 		}

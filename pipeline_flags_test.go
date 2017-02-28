@@ -343,13 +343,16 @@ func (suite *PipelineTestSuite) Test_outputs() {
 	// Bad test: sets global configuration state
 	ConsoleBoxSettings = box_settings
 	ConsoleBoxUpdateInterval = box_interval
+	ConsoleBoxMinUpdateInterval = box_interval / 5
 
 	box := func() MetricSink {
 		s := &ConsoleBoxSink{
 			CliLogBoxTask: gotermBox.CliLogBoxTask{
-				UpdateInterval: box_interval,
-				CliLogBox:      box_settings,
+				UpdateInterval:    box_interval,
+				MinUpdateInterval: box_interval / 5,
+				CliLogBox:         box_settings,
 			},
+			ImmediateScreenUpdate: true,
 		}
 		return s
 	}
