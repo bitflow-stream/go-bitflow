@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/golib"
 	"github.com/stretchr/testify/suite"
 )
@@ -213,4 +214,22 @@ func (suite *TcpListenerTestSuite) TestListenerSourceAllCsv() {
 
 func (suite *TcpListenerTestSuite) TestListenerSourceAllBinary() {
 	suite.testListenerSourceAll(new(BinaryMarshaller))
+}
+
+func (suite *TcpListenerTestSuite) TestTcpListenerSourceError() {
+	// Suppress error output
+	level := log.GetLevel()
+	defer log.SetLevel(level)
+	log.SetLevel(log.PanicLevel)
+
+	l := NewTcpListenerSource("8.8.8.8:7777") // The IP should not be valid for the current host -> give error
+	l.Reader = SampleReader{
+		ParallelSampleHandler: parallel_handler,
+	}
+	l.SetSink(new(EmptyMetricSink))
+
+	group := golib.TaskGroup{l}
+	task, numErrs := group.WaitAndStop(1 * time.Second)
+	suite.Equal(1, numErrs, "number of errors")
+	suite.Equal(l, task)
 }

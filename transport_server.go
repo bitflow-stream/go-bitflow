@@ -95,6 +95,7 @@ func (source *TCPListenerSource) closeAllConnections() {
 		var conn *tcpListenerConnection
 		// Pick an arbitray running connection, if there is any
 		// Use Execute() to synchronize this with tcpListenerConnection.readSamples()
+
 		source.task.Execute(func() {
 			for key := range source.connections {
 				conn = key
