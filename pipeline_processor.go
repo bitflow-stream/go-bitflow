@@ -19,6 +19,7 @@ type SampleProcessor interface {
 	golib.Task
 	Sample(sample *Sample, header *Header) error
 	SetSink(sink MetricSink)
+	GetSink() MetricSink
 	Close()
 }
 

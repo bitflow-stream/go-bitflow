@@ -215,7 +215,7 @@ func (BinaryMarshaller) readSampleData(header *Header, input *bufio.Reader) ([]b
 
 // ParseSample implements the Unmarshaller interface by parsing the byte buffer
 // to a new Sample instance. See the godoc for BinaryMarshaller for details on the format.
-func (BinaryMarshaller) ParseSample(header *Header, data []byte) (sample *Sample, err error) {
+func (BinaryMarshaller) ParseSample(header *Header, minValueCapacity int, data []byte) (sample *Sample, err error) {
 	// Required size
 	size := timeBytes + len(header.Fields)*valBytes
 	if len(data) < size {
@@ -226,8 +226,14 @@ func (BinaryMarshaller) ParseSample(header *Header, data []byte) (sample *Sample
 	// Time
 	timeVal := binary.BigEndian.Uint64(data[:timeBytes])
 	data = data[timeBytes:]
-	sample = new(Sample)
-	sample.Time = time.Unix(0, int64(timeVal))
+	var values []Value
+	if minValueCapacity > 0 {
+		values = make([]Value, 0, minValueCapacity)
+	}
+	sample = &Sample{
+		Values: values,
+		Time:   time.Unix(0, int64(timeVal)),
+	}
 
 	// Tags
 	if header.HasTags {

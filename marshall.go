@@ -63,16 +63,16 @@ type Unmarshaller interface {
 	Read(input *bufio.Reader, previousHeader *Header) (newHeader *Header, sampleData []byte, err error)
 
 	// ParseSample uses a header and a byte buffer to parse it to a newly
-	// allocated Sample instance. A non-nil error indicates that the
-	// data was in the wrong format.
-	ParseSample(header *Header, data []byte) (*Sample, error)
+	// allocated Sample instance. The resulting Sample must have a Value slice with at least the capacity
+	// of minValueCapacity. A non-nil error indicates that the data was in the wrong format.
+	ParseSample(header *Header, minValueCapacity int, data []byte) (*Sample, error)
 }
 
 // BidiMarshaller is a bidirectional marshaller that combines the
 // Marshaller and Unmarshaller interfaces.
 type BidiMarshaller interface {
 	Read(input *bufio.Reader, previousHeader *Header) (newHeader *Header, sampleData []byte, err error)
-	ParseSample(header *Header, data []byte) (*Sample, error)
+	ParseSample(header *Header, minValueCapacity int, data []byte) (*Sample, error)
 	WriteHeader(header *Header, output io.Writer) error
 	WriteSample(sample *Sample, header *Header, output io.Writer) error
 	String() string

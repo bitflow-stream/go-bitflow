@@ -29,9 +29,13 @@ func (suite *MarshallerTestSuite) testRead(m BidiMarshaller, rdr *bufio.Reader, 
 		suite.NoError(err)
 		suite.NotNil(data)
 		suite.Nil(nilHeader)
-		sample, err := m.ParseSample(header, data)
+		capacity := 0
+		if len(expectedSample.Values) > 0 {
+			capacity = len(expectedSample.Values) + 3
+		}
+		sample, err := m.ParseSample(header, capacity, data)
 		suite.NoError(err)
-		suite.compareSamples(expectedSample, sample)
+		suite.compareSamples(expectedSample, sample, capacity)
 	}
 }
 

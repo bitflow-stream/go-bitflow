@@ -157,12 +157,20 @@ func (CsvMarshaller) parseHeader(line []byte) *Header {
 }
 
 // ParseSample implements the Unmarshaller interface by parsing a CSV line.
-func (CsvMarshaller) ParseSample(header *Header, data []byte) (sample *Sample, err error) {
+func (CsvMarshaller) ParseSample(header *Header, minValueCapacity int, data []byte) (sample *Sample, err error) {
 	fields := splitCsvLine(data)
-	sample = new(Sample)
-	sample.Time, err = time.Parse(CsvDateFormat, fields[0])
+	var t time.Time
+	t, err = time.Parse(CsvDateFormat, fields[0])
 	if err != nil {
 		return
+	}
+	var values []Value
+	if minValueCapacity > 0 {
+		values = make([]Value, 0, minValueCapacity)
+	}
+	sample = &Sample{
+		Values: values,
+		Time:   t,
 	}
 
 	start := 1

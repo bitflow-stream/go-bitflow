@@ -2,8 +2,10 @@ package bitflow
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
+	"github.com/antongulenko/golib"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -119,4 +121,46 @@ func (suite *TransportStreamTestSuite) TestTransport_BinaryMarshallerSingle() {
 
 func (suite *TransportStreamTestSuite) TestTransport_BinaryMarshallerMulti() {
 	suite.testAllHeaders(new(BinaryMarshaller))
+}
+
+func (suite *TransportStreamTestSuite) TestAllocateSample() {
+	var pipe SamplePipeline
+	pipe.
+		Add(&resizingTestSink{mul: 1, plus: 2}).
+		Add(new(AbstractProcessor)).
+		Add(&resizingTestSink{mul: 1, plus: -100}).
+		Add(&resizingTestSink{mul: 3, plus: 1}). // does not change
+		Add(&resizingTestSink{mul: 0, plus: 0}). // does not change
+		Add(new(AbstractProcessor))
+	pipe.Source = new(EmptyMetricSource)
+	pipe.Sink = new(EmptyMetricSink)
+	sink := pipe.Processors[0]
+
+	var group golib.TaskGroup
+	pipe.Construct(&group)
+
+	size := RequiredValues(0, sink)
+	suite.Equal(7, size)
+
+	size = RequiredValues(1, sink)
+	suite.Equal(10, size)
+
+	size = RequiredValues(5, sink)
+	suite.Equal(22, size)
+}
+
+var _ ResizingMetricSink = new(resizingTestSink)
+
+type resizingTestSink struct {
+	AbstractProcessor
+	plus int
+	mul  int
+}
+
+func (r *resizingTestSink) OutputSampleSize(size int) int {
+	return size*r.mul + r.plus
+}
+
+func (r *resizingTestSink) String() string {
+	return fmt.Sprintf("ResizingTestSink(* %v + %v)", r.mul, r.plus)
 }

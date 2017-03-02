@@ -96,6 +96,19 @@ func (sink *AbstractMarshallingMetricSink) SetMarshaller(marshaller Marshaller) 
 	sink.Marshaller = marshaller
 }
 
+// ResizingMetricSink is a helper interface that can be implemented by SampleProcessors
+// in order to make AbstractSampleSource.AllocateSample() more reliable. The result of
+// the OutputSampleSize() method should give a worst-case estimation of the number of values
+// that will be present in Samples after this SampleProcessor is done processing a sample.
+// This allows the optimization of pre-allocating a value array large enough to hold the final
+// amount of metrics.
+// The optimization works best when all samples are processed in a one-to-one fashion,
+// i.e. no samples are split into multiple samples.
+type ResizingMetricSink interface {
+	MetricSink
+	OutputSampleSize(sampleSize int) int
+}
+
 // MetricSource is the interface used for producing Headers and Samples.
 // It should start producing samples in a separate goroutine when Start() is
 // called, and should stop all goroutines when Stop() is called. Before Start()
@@ -109,6 +122,7 @@ func (sink *AbstractMarshallingMetricSink) SetMarshaller(marshaller Marshaller) 
 type MetricSource interface {
 	golib.Task
 	SetSink(sink MetricSink)
+	GetSink() MetricSink
 }
 
 // AbstractMetricSource is a partial implementation of MetricSource that stores
@@ -122,6 +136,11 @@ type AbstractMetricSource struct {
 // SetSink implements the MetricSource interface.
 func (s *AbstractMetricSource) SetSink(sink MetricSink) {
 	s.OutgoingSink = sink
+}
+
+// GetSink implements the MetricSource interface.
+func (s *AbstractMetricSource) GetSink() MetricSink {
+	return s.OutgoingSink
 }
 
 // CheckSink is a helper method that returns an error if the SetSink() has
@@ -149,6 +168,31 @@ func (s *AbstractMetricSource) CloseSink(wg *sync.WaitGroup) {
 			}()
 		}
 	}
+}
+
+// RequiredValues the number of Values that should be large enough to hold
+// the end-result after processing a Sample by all intermediate SampleProcessors.
+// The result is based on ResizingMetricSink.OutputSampleSize(). MetricSink instances
+// that do not implement the ResizingMetricSink interface are assumed to not increase the
+// number metrics.
+func RequiredValues(numFields int, sink MetricSinkBase) int {
+	for {
+		if sink == nil {
+			break
+		}
+		if sink, ok := sink.(ResizingMetricSink); ok {
+			newSize := sink.OutputSampleSize(numFields)
+			if newSize > numFields {
+				numFields = newSize
+			}
+		}
+		if source, ok := sink.(MetricSource); ok {
+			sink = source.GetSink()
+		} else {
+			break
+		}
+	}
+	return numFields
 }
 
 // UnmarshallingMetricSource extends MetricSource and adds a configuration setter

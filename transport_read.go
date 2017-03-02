@@ -282,7 +282,8 @@ func (stream *SampleInputStream) parseSamples(source string) {
 
 func (stream *SampleInputStream) parseOne(source string, sample *bufferedIncomingSample) {
 	defer sample.notifyDone()
-	if parsedSample, err := stream.um.ParseSample(sample.header, sample.data); err != nil {
+	numValues := RequiredValues(len(sample.header.Fields), stream.sink)
+	if parsedSample, err := stream.um.ParseSample(sample.header, numValues, sample.data); err != nil {
 		stream.addError(err)
 		sample.ParserError = true
 		return

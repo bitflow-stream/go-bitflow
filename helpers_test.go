@@ -91,10 +91,11 @@ func (suite *testSuiteWithSamples) SetupTest() {
 	}
 }
 
-func (suite *testSuiteWithSamples) compareSamples(expected *Sample, sample *Sample) {
+func (suite *testSuiteWithSamples) compareSamples(expected *Sample, sample *Sample, capacity int) {
 	suite.Equal(expected.tags, sample.tags, "Sample.tags")
 	suite.Equal(expected.orderedTags, sample.orderedTags, "Sample.orderedTags")
 	suite.Equal(expected.Values, sample.Values, "Sample.Values")
+	suite.Equal(capacity, cap(sample.Values), "Sample.Values capacity")
 	suite.True(expected.Time.Equal(sample.Time), fmt.Sprintf("Times differ: expected %v, but was %v", expected.Time, sample.Time))
 }
 
@@ -231,7 +232,7 @@ func (s *testSampleSink) Sample(sample *Sample, header *Header) error {
 	expectedHeader := s.headers[s.received]
 	s.received++
 	s.suite.compareHeaders(expectedHeader, header)
-	s.suite.compareSamples(expectedSample, sample)
+	s.suite.compareSamples(expectedSample, sample, len(expectedSample.Values))
 	s.emptyCond.Broadcast()
 	return nil
 }
