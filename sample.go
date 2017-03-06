@@ -251,12 +251,37 @@ func (sample *Sample) CopyMetadataFrom(other *Sample) {
 // is copied deeply, but values are referencing the old values. After using this,
 // the old Sample should either not be used anymore, or the Values slice in the new
 // Sample should be replaced by a new slice.
-func (sample *Sample) Clone() (result *Sample) {
-	result = &Sample{
+func (sample *Sample) Clone() *Sample {
+	result := &Sample{
 		Values: sample.Values,
 	}
 	result.CopyMetadataFrom(sample)
-	return
+	return result
+}
+
+// DeepClone returns a deep copy of the receiving sample, including the timestamp,
+// tags and actual metric values.
+func (sample *Sample) DeepClone() *Sample {
+	result := &Sample{
+		Values: make([]Value, len(sample.Values), cap(sample.Values)),
+	}
+	result.CopyMetadataFrom(sample)
+	copy(result.Values, sample.Values)
+	return result
+}
+
+// Resize ensures that the Values slice of the sample has the given length.
+// If possible, the current Values slice will be reused (shrinking or growing within the limits
+// if its capacity). Otherwise, a new slice will be allocated, without copying any values.
+// The result value will be true, if the current slice was reused, and false if a new slice was allocated.
+func (sample *Sample) Resize(newSize int) bool {
+	if cap(sample.Values) >= newSize {
+		sample.Values = sample.Values[:newSize] // Grow or shrink, if possible
+		return true
+	} else {
+		sample.Values = make([]Value, newSize)
+		return false
+	}
 }
 
 // Equals compares the receiving header with the argument header and returns true,
