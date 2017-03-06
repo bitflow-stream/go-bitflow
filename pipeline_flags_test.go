@@ -328,8 +328,17 @@ func (suite *PipelineTestSuite) Test_outputs() {
 		suite.Equal(expected, sink)
 	}
 
-	setup := func(sink *AbstractMarshallingMetricSink, format string) {
-		sink.Marshaller = MarshallingFormat(format).Marshaller()
+	setup := func(sink *AbstractMarshallingMetricSink, format string, isConsole bool) {
+		switch format {
+		case "bin":
+			sink.Marshaller = BinaryMarshaller{}
+		case "csv":
+			sink.Marshaller = CsvMarshaller{}
+		case "text":
+			sink.Marshaller = TextMarshaller{AssumeStdout: isConsole}
+		default:
+			panic("Illegal format: " + format)
+		}
 		sink.Writer.ParallelSampleHandler = parallel_handler
 	}
 
@@ -359,7 +368,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 
 	std := func(format string) MetricSink {
 		s := NewConsoleSink()
-		setup(&s.AbstractMarshallingMetricSink, format)
+		setup(&s.AbstractMarshallingMetricSink, format, true)
 		return s
 	}
 	file := func(filename string, format string) MetricSink {
@@ -368,7 +377,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 			IoBuffer:   666,
 			CleanFiles: true,
 		}
-		setup(&s.AbstractMarshallingMetricSink, format)
+		setup(&s.AbstractMarshallingMetricSink, format, false)
 		return s
 	}
 	tcp := func(endpoint string, format string) MetricSink {
@@ -378,7 +387,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 			DialTimeout: tcp_dial_timeout,
 		}
 		s.TcpConnLimit = 10
-		setup(&s.AbstractMarshallingMetricSink, format)
+		setup(&s.AbstractMarshallingMetricSink, format, false)
 		return s
 	}
 	listen := func(endpoint string, format string) MetricSink {
@@ -387,7 +396,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 			BufferedSamples: 777,
 		}
 		s.TcpConnLimit = 10
-		setup(&s.AbstractMarshallingMetricSink, format)
+		setup(&s.AbstractMarshallingMetricSink, format, false)
 		return s
 	}
 

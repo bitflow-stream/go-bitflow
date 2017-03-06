@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/golib"
 )
 
@@ -19,17 +17,10 @@ const (
 	// printed by TextMarshaller.
 	TextMarshallerDefaultSpacing = 3
 
-	// TextMarshallerDefaultWidth is used as the line width for TextMarshaller
-	// if no TextWidth is configured explicitely, and if the width cannot be
-	// determined automatically from the operating system.
-	TextMarshallerDefaultWidth = 200
-
 	// TextMarshallerHeaderChar is used as fill-character in the header line
 	// preceding each sample marshalled by TextMarshaller.
 	TextMarshallerHeaderChar = '='
 )
-
-var warn_terminal_size_once sync.Once
 
 // TextMarshaller marshalls Headers and Samples to a human readable test format.
 // It is mainly intended for easily readable output on the console. Headers are
@@ -43,8 +34,8 @@ type TextMarshaller struct {
 	// If Columns > 0, this value is ignored as the width is determined by the
 	// number of columns. If this is 0, the width will be determined automatically:
 	// If the output is a TTY (or if AssumeStdout is true), the width of the terminal
-	// will be used. If it cannot be obtained, the default value
-	// TextMarshallerDefaultWidth will be used.
+	// will be used. If it cannot be obtained, golib.GetTerminalSize() will return
+	// a default value.
 	TextWidth int
 
 	// Columns can be set to > 0 to override TextWidth and set a fixed number of
@@ -129,21 +120,10 @@ func (m TextMarshaller) fixedColumnWidths(lines []string, columns int, spacing i
 
 func (m TextMarshaller) defaultTextWidth(writer io.Writer) int {
 	if m.AssumeStdout || writer == os.Stdout {
-		if size, err := golib.GetTerminalSize(); err != nil {
-			warn_terminal_size_once.Do(func() {
-				log.Warnln("Failed to get terminal size, using default:", TextMarshallerDefaultWidth, "-", err)
-			})
-			return TextMarshallerDefaultWidth
-		} else if size.Col == 0 {
-			warn_terminal_size_once.Do(func() {
-				log.Warnln("Terminal size returned as 0, using default:", TextMarshallerDefaultWidth)
-			})
-			return TextMarshallerDefaultWidth
-		} else {
-			return int(size.Col)
-		}
+		size := golib.GetTerminalSize()
+		return int(size.Col)
 	} else {
-		return TextMarshallerDefaultWidth
+		return int(golib.DefaultTerminalWindowSize.Col)
 	}
 }
 

@@ -233,8 +233,8 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 		marshallingSink = &sink.AbstractMarshallingMetricSink
 		if txt, ok := marshaller.(TextMarshaller); ok {
 			txt.AssumeStdout = true
-		}
-		if txt, ok := marshaller.(*TextMarshaller); ok {
+			marshaller = txt
+		} else if txt, ok := marshaller.(*TextMarshaller); ok {
 			txt.AssumeStdout = true
 		}
 		resultSink = sink
