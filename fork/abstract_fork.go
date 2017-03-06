@@ -145,7 +145,10 @@ func (s *multiPipelineSink) Sample(sample *bitflow.Sample, header *bitflow.Heade
 	var errors golib.MultiError
 	for _, sink := range s.sinks {
 		if sink != nil {
-			errors.Add(sink.Sample(sample, header))
+			// The DeepClone() is necessary since the forks might change the sample
+			// values independently. In some cases it might not be necessary, but that
+			// would be a rather complex optimization.
+			errors.Add(sink.Sample(sample.DeepClone(), header))
 		}
 	}
 	return errors.NilOrError()
