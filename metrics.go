@@ -34,17 +34,20 @@ func (helper *MetricMapperHelper) incomingHeader(header *bitflow.Header, descrip
 	return nil
 }
 
-func (helper *MetricMapperHelper) convertValues(sample *bitflow.Sample) []bitflow.Value {
-	outValues := make([]bitflow.Value, len(helper.outIndices))
+func (helper *MetricMapperHelper) convertValues(sample *bitflow.Sample) {
+	// Temporary copy to avoid overwriting values. Can be allocated on the stack.
+	inValues := make([]bitflow.Value, len(sample.Values))
+	copy(inValues, sample.Values)
+
+	sample.Resize(len(helper.outIndices))
 	for i, index := range helper.outIndices {
-		outValues[i] = sample.Values[index]
+		sample.Values[i] = inValues[index]
 	}
-	return outValues
 }
 
 func (helper *MetricMapperHelper) convertSample(sample *bitflow.Sample) *bitflow.Sample {
 	outSample := sample.Clone()
-	outSample.Values = helper.convertValues(sample)
+	helper.convertValues(outSample)
 	return outSample
 }
 
@@ -241,7 +244,7 @@ func (mapper *AbstractBatchMetricMapper) ProcessBatch(header *bitflow.Header, sa
 		return nil, nil, err
 	}
 	for _, sample := range samples {
-		sample.Values = helper.convertValues(sample)
+		helper.convertValues(sample)
 	}
 	return helper.outHeader, samples, nil
 }

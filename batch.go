@@ -25,6 +25,20 @@ type BatchProcessingStep interface {
 	String() string
 }
 
+type ResizingBatchProcessingStep interface {
+	BatchProcessingStep
+	OutputSampleSize(sampleSize int) int
+}
+
+func (p *BatchProcessor) OutputSampleSize(sampleSize int) int {
+	for _, step := range p.Steps {
+		if step, ok := step.(ResizingBatchProcessingStep); ok {
+			sampleSize = step.OutputSampleSize(sampleSize)
+		}
+	}
+	return sampleSize
+}
+
 func (p *BatchProcessor) Add(step BatchProcessingStep) *BatchProcessor {
 	p.Steps = append(p.Steps, step)
 	return p
@@ -130,8 +144,9 @@ func (p *BatchProcessor) MergeProcessor(other bitflow.SampleProcessor) bool {
 // ==================== Simple implementation ====================
 
 type SimpleBatchProcessingStep struct {
-	Description string
-	Process     func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error)
+	Description          string
+	Process              func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error)
+	OutputSampleSizeFunc func(sampleSize int) int
 }
 
 func (s *SimpleBatchProcessingStep) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
@@ -148,6 +163,13 @@ func (s *SimpleBatchProcessingStep) String() string {
 	} else {
 		return s.Description
 	}
+}
+
+func (s *SimpleBatchProcessingStep) OutputSampleSize(sampleSize int) int {
+	if f := s.OutputSampleSizeFunc; f != nil {
+		return f(sampleSize)
+	}
+	return sampleSize
 }
 
 // ==================== Tag & Timestamp sort ====================
@@ -278,6 +300,13 @@ func (p *MultiHeaderMerger) Close() {
 			return
 		}
 	}
+}
+
+func (p *MultiHeaderMerger) OutputSampleSize(sampleSize int) int {
+	if len(p.metrics) > sampleSize {
+		sampleSize = len(p.metrics)
+	}
+	return sampleSize
 }
 
 func (p *MultiHeaderMerger) reconstructHeader() *bitflow.Header {

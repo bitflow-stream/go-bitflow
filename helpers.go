@@ -21,11 +21,7 @@ func SampleToVector(sample *bitflow.Sample) []float64 {
 }
 
 func FillSample(s *bitflow.Sample, values []float64) {
-	if len(s.Values) >= len(values) {
-		s.Values = s.Values[:len(values)]
-	} else {
-		s.Values = make([]bitflow.Value, len(values))
-	}
+	s.Resize(len(values))
 	for i, val := range values {
 		s.Values[i] = bitflow.Value(val)
 	}

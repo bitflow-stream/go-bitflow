@@ -56,6 +56,10 @@ func (agg *FeatureAggregator) MergeProcessor(other bitflow.SampleProcessor) bool
 	}
 }
 
+func (agg *FeatureAggregator) OutputSampleSize(sampleSize int) int {
+	return sampleSize * (1 + len(agg.aggregators))
+}
+
 func (agg *FeatureAggregator) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if err := agg.Check(sample, header); err != nil {
 		return err
@@ -64,10 +68,12 @@ func (agg *FeatureAggregator) Sample(sample *bitflow.Sample, header *bitflow.Hea
 		agg.newHeader(header)
 	}
 
-	outValues := make([]bitflow.Value, 0, len(agg.outHeader.Fields))
+	inValues := sample.Values
+	sample.Resize(len(agg.outHeader.Fields))
+	outValues := sample.Values[0:0] // Reuse the capacity
 	for i := range header.Fields {
 		stats := agg.currentHeaderStats[i]
-		inValue := sample.Values[i]
+		inValue := inValues[i]
 		outValues = append(outValues, inValue)
 		stats.Push(inValue, sample.Time)
 		agg.flushWindow(stats)
@@ -75,13 +81,12 @@ func (agg *FeatureAggregator) Sample(sample *bitflow.Sample, header *bitflow.Hea
 			outValues = append(outValues, operation(stats))
 		}
 	}
-	sample = sample.Clone()
 	sample.Values = outValues
 	return agg.OutgoingSink.Sample(sample, agg.outHeader)
 }
 
 func (agg *FeatureAggregator) newHeader(header *bitflow.Header) {
-	outFields := make([]string, 0, len(header.Fields)*(1+len(agg.suffixes)))
+	outFields := make([]string, 0, agg.OutputSampleSize(len(header.Fields)))
 	agg.currentHeaderStats = agg.currentHeaderStats[0:0]
 	for _, field := range header.Fields {
 		outFields = append(outFields, field)

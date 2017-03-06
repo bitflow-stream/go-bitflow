@@ -87,9 +87,10 @@ func (p *DecouplingProcessor) String() string {
 
 type SimpleProcessor struct {
 	bitflow.AbstractProcessor
-	Description string
-	Process     func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error)
-	OnClose     func()
+	Description          string
+	Process              func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error)
+	OnClose              func()
+	OutputSampleSizeFunc func(sampleSize int) int
 }
 
 func (p *SimpleProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -112,6 +113,13 @@ func (p *SimpleProcessor) Close() {
 		c()
 	}
 	p.AbstractProcessor.Close()
+}
+
+func (p *SimpleProcessor) OutputSampleSize(sampleSize int) int {
+	if f := p.OutputSampleSizeFunc; f != nil {
+		return f(sampleSize)
+	}
+	return sampleSize
 }
 
 func (p *SimpleProcessor) String() string {
