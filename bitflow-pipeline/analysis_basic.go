@@ -17,7 +17,7 @@ import (
 func init() {
 	// Control execution
 	RegisterAnalysis("noop", noop_processor, "Pass samples through without modification")
-	RegisterAnalysis("sleep", sleep_samples, "Between every two samples, sleep the time difference between their timestamps")
+	RegisterAnalysisParamsErr("sleep", sleep_samples, "Between every two samples, sleep the time difference between their timestamps", []string{}, "time")
 	RegisterAnalysisParams("batch", generic_batch, "Collect samples and flush them when the given tag changes its value. Affects the follow-up analysis step, if it is also a batch analysis", []string{"tag"})
 	RegisterAnalysisParamsErr("decouple", decouple_samples, "Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples", []string{"batch"})
 
@@ -246,22 +246,47 @@ func strip_metrics(p *Pipeline) {
 	})
 }
 
-func sleep_samples(p *Pipeline) {
+func sleep_samples(p *Pipeline, params map[string]string) error {
+	var timeout time.Duration
+	hasTimeout := false
+	if timeoutStr, ok := params["time"]; ok {
+		hasTimeout = true
+		var err error
+		timeout, err = time.ParseDuration(timeoutStr)
+		if err != nil {
+			return parameterError("time", err)
+		}
+	}
+
+	desc := "sleep between samples"
+	if hasTimeout {
+		desc += fmt.Sprintf(" (%v)", timeout)
+	} else {
+		desc += " (timestamp difference)"
+	}
+
+	// TODO make this sleep interruptible
+
 	var lastTimestamp time.Time
 	p.Add(&SimpleProcessor{
-		Description: "sleep between samples",
+		Description: desc,
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
-			last := lastTimestamp
-			if !last.IsZero() {
-				diff := sample.Time.Sub(last)
-				if diff > 0 {
-					time.Sleep(diff)
+			if hasTimeout {
+				time.Sleep(timeout)
+			} else {
+				last := lastTimestamp
+				if !last.IsZero() {
+					diff := sample.Time.Sub(last)
+					if diff > 0 {
+						time.Sleep(diff)
+					}
 				}
+				lastTimestamp = sample.Time
 			}
-			lastTimestamp = sample.Time
 			return sample, header, nil
 		},
 	})
+	return nil
 }
 
 func set_time_processor(p *Pipeline) {
