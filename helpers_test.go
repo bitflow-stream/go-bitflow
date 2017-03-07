@@ -55,16 +55,16 @@ func (suite *testSuiteWithSamples) SetupTest() {
 	suite.timestamp = time.Now()
 	suite.rand = rand.New(rand.NewSource(123)) // deterministic
 	headers := []*Header{
-		&Header{
+		{
 			Fields: []string{"a", "b", "c"},
 		},
-		&Header{
+		{
 			Fields: []string{" ", "_", "="},
 		},
-		&Header{
+		{
 			Fields: []string{"x"},
 		},
-		&Header{
+		{
 			Fields: nil,
 		},
 	}
@@ -118,7 +118,7 @@ func (suite *testSuiteWithSamples) makeSamples(header *Header, num int) (res []*
 
 func (suite *testSuiteWithSamples) makeValues(header *Header) []Value {
 	var res []Value
-	for _ = range header.Fields {
+	for range header.Fields {
 		res = append(res, Value(suite.rand.Float64()))
 	}
 	return res
@@ -216,7 +216,7 @@ type testSampleSink struct {
 
 func (s *testSampleSink) add(samples []*Sample, header *Header) {
 	s.samples = append(s.samples, samples...)
-	for _ = range samples {
+	for range samples {
 		s.headers = append(s.headers, header)
 	}
 }

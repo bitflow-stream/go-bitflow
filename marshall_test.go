@@ -96,7 +96,7 @@ type failingBuf struct {
 	err error
 }
 
-func (c *failingBuf) Read(b []byte) (num int, err error) {
+func (c *failingBuf) Read(b []byte) (int, error) {
 	return copy(b, []byte{'x'}), c.err
 }
 

@@ -39,7 +39,7 @@ type ReadSampleHandler interface {
 	// HandleHeader allows modifying received Headers. The main purpose is to set
 	// or unset the HasTags flags. The source string is not really useful here,
 	// as it is more useful in the HandleSample method. In special cases
-	// it might be usedfull to change the Header fields here, but that should rather
+	// it might be useful to change the Header fields here, but that should rather
 	// be done in a later processing step.
 	HandleHeader(header *Header, source string)
 
@@ -145,9 +145,9 @@ func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error)
 
 // ReadTcpSamples reads Samples from the given net.TCPConn and blocks until the connection
 // is closed by the remote host, or Close() is called on the input stream. Any error is logged
-// instead of being returned. The checkClosed() function parameter is used when a read error occurrs:
+// instead of being returned. The checkClosed() function parameter is used when a read error occurs:
 // if it returns true, ReadTcpSamples assumes that the connection was closed by the local host,
-// because of a call to Close() or some other external reason. If checkClosed() returnes false,
+// because of a call to Close() or some other external reason. If checkClosed() returns false,
 // it is assumed that a network error or timeout caused the connection to be closed.
 func (stream *SampleInputStream) ReadTcpSamples(conn *net.TCPConn, checkClosed func() bool) {
 	remote := conn.RemoteAddr()
@@ -252,7 +252,7 @@ func (stream *SampleInputStream) readData(source string) {
 	}
 }
 
-func (stream *SampleInputStream) updateHeader(header *Header, source string) (err error) {
+func (stream *SampleInputStream) updateHeader(header *Header, source string) error {
 	logger := log.WithFields(log.Fields{"format": stream.um, "source": source})
 	if stream.header == nil {
 		logger.Println("Reading", len(header.Fields), "metrics")
@@ -270,7 +270,7 @@ func (stream *SampleInputStream) updateHeader(header *Header, source string) (er
 	if handler := stream.sampleReader.Handler; handler != nil {
 		handler.HandleHeader(stream.outHeader, source)
 	}
-	return
+	return nil
 }
 
 func (stream *SampleInputStream) parseSamples(source string) {

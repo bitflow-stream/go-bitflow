@@ -18,7 +18,7 @@ type SamplePipeline struct {
 
 // Construct connects the MetricSource, all SampleProcessors and the MetricSink
 // inside the receiving SamplePipeline. It adds all these golib.Task instances
-// to the given golib.TaskGroup. Afterwards, tasks.WaitAndStop() cann be called
+// to the given golib.TaskGroup. Afterwards, tasks.WaitAndStop() can be called
 // to start the entire pipeline. At least the Source and the Sink field
 // must be set in the pipeline. The Construct method will not fail without them,
 // but starting the resulting pipeline will usually not work.
@@ -47,7 +47,7 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 // Add adds the SampleProcessor parameter to the list of SampleProcessors in the
 // receiving SamplePipeline. The Source and Sink fields must be accessed directly.
 // The Processors field can also be accessed directly, but the Add method allows
-// chaining multiple Add invokations like so:
+// chaining multiple Add invocations like so:
 //   pipeline.Add(processor1).Add(processor2)
 func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 	if processor != nil {
@@ -76,7 +76,7 @@ func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 // for the Ctrl-C user external interrupt and makes the pipeline stoppable cleanly
 // by the user.
 //
-// StartAndWait returns the number of errors that occured in the pipeline.
+// StartAndWait returns the number of errors that occurred in the pipeline.
 func (p *SamplePipeline) StartAndWait() int {
 	var tasks golib.TaskGroup
 	p.Construct(&tasks)

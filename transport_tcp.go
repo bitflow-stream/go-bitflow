@@ -72,7 +72,7 @@ type AbstractTcpSink struct {
 // TcpWriteConn is a helper type for TCP-base MetricSink implementations.
 // It can send Headers and Samples over an opened TCP connection.
 // It is created from AbstractTcpSink.OpenWriteConn() and can be used until
-// Sample() returns an error or Close() is called explicitely.
+// Sample() returns an error or Close() is called explicitly.
 type TcpWriteConn struct {
 	checker   HeaderChecker
 	stream    *SampleOutputStream
@@ -100,7 +100,7 @@ func (conn *TcpWriteConn) Sample(sample *Sample, header *Header) {
 	}
 }
 
-// Close explicitely closes the underlying TCP connection of the receiving TcpWriteConn.
+// Close explicitly closes the underlying TCP connection of the receiving TcpWriteConn.
 func (conn *TcpWriteConn) Close() {
 	if conn != nil {
 		conn.doClose(nil)
@@ -126,12 +126,12 @@ func (conn *TcpWriteConn) IsRunning() bool {
 }
 
 func (conn *TcpWriteConn) printErr(err error) {
-	if operr, ok := err.(*net.OpError); ok {
-		if operr.Err == syscall.EPIPE {
+	if opErr, ok := err.(*net.OpError); ok {
+		if opErr.Err == syscall.EPIPE {
 			conn.log.Debugln("Connection closed by remote")
 			return
 		} else {
-			if syscallerr, ok := operr.Err.(*os.SyscallError); ok && syscallerr.Err == syscall.EPIPE {
+			if syscallErr, ok := opErr.Err.(*os.SyscallError); ok && syscallErr.Err == syscall.EPIPE {
 				conn.log.Debugln("Connection closed by remote")
 				return
 			}
@@ -143,7 +143,7 @@ func (conn *TcpWriteConn) printErr(err error) {
 }
 
 // TCPSink implements MetricSink by sending the received Headers and Samples
-// to a given remote TCP endpoint. Everytime it receives a Header or a Sample,
+// to a given remote TCP endpoint. Every time it receives a Header or a Sample,
 // it checks whether a TCP connection is already established. If so, it sends
 // the data on the existing connection. Otherwise, it tries to connect to the
 // configured endpoint and sends the data there, if the connection is successful.
@@ -227,7 +227,7 @@ func (sink *TCPSink) getOutputConnection() (conn *TcpWriteConn, err error) {
 		err = fmt.Errorf("TCP sink to %v already closed", sink.Endpoint)
 	}, func() {
 		if !sink.conn.IsRunning() {
-			// Cleanup errored connection or stop existing connection to negotiate new header
+			// Cleanup failed connection or stop existing connection to negotiate new header
 			if sink.conn != nil {
 				if !sink.countConnectionClosed() {
 					closeSink = true
@@ -260,7 +260,7 @@ func (sink *TCPSink) assertConnection() error {
 // TCPSource implements the MetricSource interface by connecting to a list of remote TCP
 // endpoints and downloading Header and Sample data from there. A background goroutine continuously
 // tries to establish the required TCP connections and reads data from it whenever a connection
-// succeeds. The contained AbstractMetricSource and TCPConnCounter fields provide various parmaeters
+// succeeds. The contained AbstractMetricSource and TCPConnCounter fields provide various parameters
 // for configuring different aspects of the TCP connections and reading of data from them.
 type TCPSource struct {
 	AbstractUnmarshallingMetricSource
@@ -286,8 +286,8 @@ type TCPSource struct {
 	// DialTimeout can be set to time out automatically when connecting to a remote TCP endpoint
 	DialTimeout time.Duration
 
-	downloaders  []*tcpDownloadTask
-	downloadSink MetricSinkBase
+	downloadTasks []*tcpDownloadTask
+	downloadSink  MetricSinkBase
 }
 
 // String implements the MetricSource interface.
@@ -322,7 +322,7 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 			source: source,
 			remote: remote,
 		}
-		source.downloaders = append(source.downloaders, task)
+		source.downloadTasks = append(source.downloadTasks, task)
 		tasks.Add(task)
 	}
 	channels := tasks.StartTasks(wg)
@@ -337,7 +337,7 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 // Stop implements the MetricSource interface. It stops all background goroutines and tries
 // to gracefully close all established TCP connections.
 func (source *TCPSource) Stop() {
-	for _, downloader := range source.downloaders {
+	for _, downloader := range source.downloadTasks {
 		downloader.Stop()
 	}
 }

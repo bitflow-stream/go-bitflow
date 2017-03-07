@@ -20,7 +20,7 @@ const (
 	binary_sample_start = "X"
 
 	// BinarySeparator is the character separating fields in the marshalled output
-	// of Binarymarshaller. Every field is marshalled on a separate line.
+	// of BinaryMarshaller. Every field is marshalled on a separate line.
 	BinarySeparator = '\n'
 )
 
@@ -180,9 +180,9 @@ func (BinaryMarshaller) readHeader(reader *bufio.Reader) (*Header, []byte, error
 }
 
 func (BinaryMarshaller) readSampleData(header *Header, input *bufio.Reader) ([]byte, error) {
-	valuelen := valBytes * len(header.Fields)
-	minlen := timeBytes + valuelen
-	data := make([]byte, minlen)
+	valueLen := valBytes * len(header.Fields)
+	minLen := timeBytes + valueLen
+	data := make([]byte, minLen)
 	_, err := io.ReadFull(input, data) // Can be io.EOF
 	if err != nil {
 		return nil, err
@@ -192,22 +192,22 @@ func (BinaryMarshaller) readSampleData(header *Header, input *bufio.Reader) ([]b
 	} else {
 		index := bytes.IndexByte(data[timeBytes:], BinarySeparator)
 		if index >= 0 {
-			result := make([]byte, minlen+index+1)
+			result := make([]byte, minLen+index+1)
 			copy(result, data)
-			_, err := io.ReadFull(input, result[minlen:])
+			_, err := io.ReadFull(input, result[minLen:])
 			return result, unexpectedEOF(err)
 		} else {
 			tagRest, err := readUntil(input, BinarySeparator)
 			if err != nil {
 				return nil, unexpectedEOF(err)
 			}
-			result := make([]byte, minlen+len(tagRest)+valuelen)
-			_, err = io.ReadFull(input, result[minlen+len(tagRest):])
+			result := make([]byte, minLen+len(tagRest)+valueLen)
+			_, err = io.ReadFull(input, result[minLen+len(tagRest):])
 			if err != nil {
 				return nil, unexpectedEOF(err)
 			}
 			copy(result, data)
-			copy(result[minlen:], tagRest)
+			copy(result[minLen:], tagRest)
 			return result, nil
 		}
 	}

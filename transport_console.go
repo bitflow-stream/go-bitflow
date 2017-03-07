@@ -100,7 +100,7 @@ func (source *ReaderSource) Start(wg *sync.WaitGroup) golib.StopChan {
 // and prints any errors to the logger.
 func (source *ReaderSource) Stop() {
 	// TODO closing the os.Stdin stream does not cause the current Read()
-	// invokation to return... This data source will hang until stdin is closed
+	// invocation to return... This data source will hang until stdin is closed
 	// from the outside, or the program is stopped forcefully.
 	err := source.stream.Close()
 	if err != nil && !IsFileClosedError(err) {

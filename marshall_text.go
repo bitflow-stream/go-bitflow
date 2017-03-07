@@ -22,7 +22,7 @@ const (
 	TextMarshallerHeaderChar = '='
 )
 
-// TextMarshaller marshalls Headers and Samples to a human readable test format.
+// TextMarshaller marshals Headers and Samples to a human readable test format.
 // It is mainly intended for easily readable output on the console. Headers are
 // not printed separately. Every Sample is preceded by a header line containing
 // the timestamp and tags. Afterwards, all values are printed in a aligned table

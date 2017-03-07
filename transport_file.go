@@ -72,7 +72,7 @@ func (group *FileGroup) BuildFilenameStr(suffix string) string {
 	filename := group.prefix
 	if suffix == "" {
 		if filename == "" {
-			// Avoid filenames starting with dot and empty filenames.
+			// Avoid file names starting with dot and empty file names.
 			// This does not collide with FileSink.openNextNewFile and is also matched by FileRegex().
 			filename = "0"
 		}
@@ -83,7 +83,7 @@ func (group *FileGroup) BuildFilenameStr(suffix string) string {
 	return filepath.Join(group.dir, filename)
 }
 
-// FileRegex returns a regular expresion that matches filenames belonging to the receiving group.
+// FileRegex returns a regular expression that matches file names belonging to the receiving group.
 // Only files with an optional numeric suffix are matched, e.g.:
 //   dir1/dir2/filePrefix(-[0-9]+)?.ext
 // For empty 'filePrefix':
@@ -101,12 +101,12 @@ func (group *FileGroup) FileRegex() *regexp.Regexp {
 // that the tree should not be walked any further down the current directory.
 var StopWalking = errors.New("stop walking")
 
-// WalkFiles walks all files that belong to the receiving FileGroup. It returnes the number
+// WalkFiles walks all files that belong to the receiving FileGroup. It returns the number
 // of walked files and a non-nil error if there was an error while walking.
 // The walk function parameter is called for every file, providing the file name and the
 // respective os.FileInfo.
 //
-// WalkFiles walks all files that match the regular expression returnes by FileRegex().
+// WalkFiles walks all files that match the regular expression returns by FileRegex().
 //
 // The files are walked in lexical order, which does not represent the order the files
 // would be written by FileSink.
@@ -148,11 +148,11 @@ func (group *FileGroup) WalkFiles(walk func(string, os.FileInfo) error) (num int
 // The files are returned sorted in the order they would be written out by
 // FileSink.
 func (group *FileGroup) AllFiles() (all []string, err error) {
-	basefile := group.BuildFilenameStr("")
-	basefileFound := false
+	baseFile := group.BuildFilenameStr("")
+	baseFileFound := false
 	_, err = group.WalkFiles(func(path string, _ os.FileInfo) error {
-		if path == basefile {
-			basefileFound = true
+		if path == baseFile {
+			baseFileFound = true
 		} else {
 			all = append(all, path)
 		}
@@ -162,9 +162,9 @@ func (group *FileGroup) AllFiles() (all []string, err error) {
 	// Natural sort: treat numbers as a human would
 	sort.Sort(sortorder.Natural(all))
 
-	if basefileFound {
+	if baseFileFound {
 		// Treat the first file specially, otherwise it is sorted wrong.
-		all = append([]string{basefile}, all...)
+		all = append([]string{baseFile}, all...)
 	}
 	if err == nil && len(all) == 0 {
 		err = errors.New(os.ErrNotExist.Error() + ": " + group.filename)
@@ -234,11 +234,11 @@ func (group *FileGroup) OpenNewFile(counter *int) (file *os.File, err error) {
 type FileSource struct {
 	AbstractUnmarshallingMetricSource
 
-	// Filenames is a slice of all files that will be read by the FileSource in sequence.
+	// File names is a slice of all files that will be read by the FileSource in sequence.
 	// For every Filename, the FileSource will not only read the file itself,
 	// but also for all files that belong to the same FileGroup, as returned by:
 	//   NewFileGroup(filename).AllFiles()
-	Filenames []string
+	FileNames []string
 
 	// ReadFileGroups can be set to true to extend the input files to the associated
 	// file groups. For an input file named 'data.bin', all files named 'data-[0-9]+.bin'
@@ -278,10 +278,10 @@ var fileSourceClosed = errors.New("file source is closed")
 
 // String implements the MetricSource interface.
 func (source *FileSource) String() string {
-	if len(source.Filenames) == 1 {
-		return fmt.Sprintf("FileSource(%v)", source.Filenames[0])
+	if len(source.FileNames) == 1 {
+		return fmt.Sprintf("FileSource(%v)", source.FileNames[0])
 	} else {
-		return fmt.Sprintf("FileSource(%v files)", len(source.Filenames))
+		return fmt.Sprintf("FileSource(%v files)", len(source.FileNames))
 	}
 }
 
@@ -293,7 +293,7 @@ func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	source.closed = golib.NewStopChan()
 	var files []string
 	if source.ReadFileGroups {
-		for _, filename := range source.Filenames {
+		for _, filename := range source.FileNames {
 			group := NewFileGroup(filename)
 			if groupFiles, err := group.AllFiles(); err != nil {
 				source.CloseSink(wg)
@@ -303,8 +303,8 @@ func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 			}
 		}
 	} else {
-		files = make([]string, len(source.Filenames))
-		copy(files, source.Filenames)
+		files = make([]string, len(source.FileNames))
+		copy(files, source.FileNames)
 	}
 	if len(files) == 0 {
 		source.CloseSink(wg)
@@ -394,8 +394,8 @@ func (source *FileSource) readFile(filename string) error {
 // IsFileClosedError returns true, if the given error likely originates from intentionally
 // closing a file, while it is still being read concurrently.
 func IsFileClosedError(err error) bool {
-	patherr, ok := err.(*os.PathError)
-	return ok && patherr.Err == syscall.EBADF
+	pathErr, ok := err.(*os.PathError)
+	return ok && pathErr.Err == syscall.EBADF
 }
 
 // SynchronizedReadCloser is a helper type to wrap *os.File and synchronize calls
@@ -432,17 +432,17 @@ type FileSink struct {
 	AbstractMarshallingMetricSink
 
 	// Filename defines the file that will be used for writing Samples. Each time a new Header
-	// is received be FileSink, a new file will be opened automatically. The filenames are built
+	// is received be FileSink, a new file will be opened automatically. The file names are built
 	// by FileGroup.BuildFilename(), using an automatically incrementing integer suffix. The first
 	// filename will not have any suffix, the second file will have suffix "-0", the second "-1", and so on.
 	// If one of those files already exists, the suffix keeps incrementing, until a free slot is found.
-	// If errors occurr while opening output files, a number of retries is attempted while incrementing
+	// If errors occur while opening output files, a number of retries is attempted while incrementing
 	// the suffix, until the number of error exceeds MaxOutputFileErrors. After this, the FileSink stops
 	// and reports the last error. All intermediate errors are logged as warnings.
 	Filename string
 
 	// IoBuffer defines the output buffer when writing samples to a file. It should be large
-	// enough to minize the number of write() calls in the operating system.
+	// enough to minimize the number of write() calls in the operating system.
 	IoBuffer int
 
 	// CleanFiles can be set to true to delete all files that would potentially collide with output files.

@@ -37,7 +37,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 	s.Reader.ParallelSampleHandler = parallel_handler
 	s.SetSink(testSink)
 
-	sender := &oneshotTask{
+	sender := &oneShotTask{
 		do: func() {
 			suite.sendAllSamples(l)
 		},
@@ -77,7 +77,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 		s.Reader.ParallelSampleHandler = parallel_handler
 		s.SetSink(testSink)
 
-		sender := &oneshotTask{
+		sender := &oneShotTask{
 			do: func() {
 				suite.sendSamples(l, i)
 			},
@@ -129,7 +129,7 @@ func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 	s.Writer.ParallelSampleHandler = parallel_handler
 	s.SetMarshaller(m)
 
-	sender := &oneshotTask{
+	sender := &oneShotTask{
 		do: func() {
 			suite.sendAllSamples(s)
 		},
@@ -165,7 +165,7 @@ func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller
 		s.Writer.ParallelSampleHandler = parallel_handler
 		s.SetMarshaller(m)
 
-		sender := &oneshotTask{
+		sender := &oneShotTask{
 			do: func() {
 				suite.sendSamples(s, i)
 			},
@@ -184,19 +184,19 @@ func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller
 	}
 }
 
-type oneshotTask struct {
+type oneShotTask struct {
 	do func()
 }
 
-func (t *oneshotTask) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
+func (t *oneShotTask) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 	t.do()
 	return
 }
 
-func (t *oneshotTask) Stop() {
+func (t *oneShotTask) Stop() {
 }
 
-func (t *oneshotTask) String() string {
+func (t *oneShotTask) String() string {
 	return "oneshot"
 }
 

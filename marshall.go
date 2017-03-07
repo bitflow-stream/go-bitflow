@@ -146,14 +146,14 @@ func DetectFormatFrom(start string) (Unmarshaller, error) {
 }
 
 // WriteCascade is a helper type for more concise Write code by avoiding error
-// checks on every Write() invokation. Multiple Write calls can be cascaded
-// without intermediate checks for errors. The tradeoff/overhead are additional
+// checks on every Write() invocation. Multiple Write calls can be cascaded
+// without intermediate checks for errors. The trade-off/overhead are additional
 // no-op Write()/WriteStr() calls after an error has occurred (which is the exception).
 type WriteCascade struct {
 	// Writer must be set before calling Write. It will receive the Write calls.
 	Writer io.Writer
 
-	// Err stores the error that occrred in one of the write calls.
+	// Err stores the error that occurred in one of the write calls.
 	Err error
 }
 

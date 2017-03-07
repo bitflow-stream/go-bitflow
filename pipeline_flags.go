@@ -86,10 +86,10 @@ type EndpointFactory struct {
 
 	ConsoleBoxNoImmediateScreenUpdate bool
 
-	// testmode is a flag used by tests to suppress initialization routines
+	// testMode is a flag used by tests to suppress initialization routines
 	// that are not testable. It is a hack to keep the EndpointFactory easy to use
 	// while making it testable.
-	testmode bool
+	testMode bool
 }
 
 func RegisterGolibFlags() {
@@ -131,7 +131,7 @@ func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
 func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
 	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
 	f.BoolVar(&p.ConsoleBoxNoImmediateScreenUpdate, "slow-screen-updates", false, fmt.Sprintf("For console box output, don't update the screen on every sample, but only in intervals of %v", ConsoleBoxUpdateInterval))
-	f.BoolVar(&p.FlagFilesAppend, "files-append", false, fmt.Sprintf("For file output, do no create new files by incrementing the suffix and append to existing files."))
+	f.BoolVar(&p.FlagFilesAppend, "files-append", false, "For file output, do no create new files by incrementing the suffix and append to existing files.")
 }
 
 // Writer returns an instance of SampleReader, configured by the values stored in the EndpointFactory.
@@ -181,7 +181,7 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (UnmarshallingMetricSour
 				result = source
 			case FileEndpoint:
 				source := &FileSource{
-					Filenames: []string{endpoint.Target},
+					FileNames: []string{endpoint.Target},
 					IoBuffer:  p.FlagIoBuffer,
 					Robust:    p.FlagInputFilesRobust,
 					KeepAlive: p.FlagFilesKeepAlive,
@@ -205,7 +205,7 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (UnmarshallingMetricSour
 				source.RemoteAddrs = append(source.RemoteAddrs, endpoint.Target)
 			case FileEndpoint:
 				source := result.(*FileSource)
-				source.Filenames = append(source.Filenames, endpoint.Target)
+				source.FileNames = append(source.FileNames, endpoint.Target)
 			default:
 				return nil, errors.New("Unknown endpoint type: " + string(endpoint.Type))
 			}
@@ -249,7 +249,7 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 			},
 			ImmediateScreenUpdate: !p.ConsoleBoxNoImmediateScreenUpdate,
 		}
-		if !p.testmode {
+		if !p.testMode {
 			sink.Init()
 		}
 		resultSink = sink
@@ -352,7 +352,7 @@ func (format MarshallingFormat) Marshaller() Marshaller {
 	case BinaryFormat:
 		return BinaryMarshaller{}
 	default:
-		// This can occurr with ConsoleBoxEndpoint, where the Format is parsed as UndefinedFormat
+		// This can occur with ConsoleBoxEndpoint, where the Format is parsed as UndefinedFormat
 		return nil
 	}
 }

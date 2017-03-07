@@ -20,19 +20,19 @@ func TestFileTransport(t *testing.T) {
 
 func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
 	basename := "bitflow-test-file"
-	newname := "TEST-123123"
-	testfileFile, err := ioutil.TempFile("", basename+"."+m.String()+".")
-	testfile := testfileFile.Name()
+	newName := "TEST-123123"
+	testFileFile, err := ioutil.TempFile("", basename+"."+m.String()+".")
+	testFile := testFileFile.Name()
 	suite.NoError(err)
-	log.Debugln("TEST FILE for", m, ":", testfile)
+	log.Debugln("TEST FILE for", m, ":", testFile)
 	defer func() {
-		g := NewFileGroup(testfile)
+		g := NewFileGroup(testFile)
 		suite.NoError(g.DeleteFiles())
 	}()
 
 	// ========= Write file
 	out := &FileSink{
-		Filename:   testfile,
+		Filename:   testFile,
 		IoBuffer:   1024,
 		CleanFiles: true,
 	}
@@ -50,17 +50,17 @@ func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
 	// ========= Read file
 	testSink := suite.newFilledTestSink()
 	in := &FileSource{
-		Filenames:      []string{testfile},
+		FileNames:      []string{testFile},
 		ReadFileGroups: true,
 		Robust:         false,
 		IoBuffer:       1024,
 		ConvertFilename: func(name string) string {
 			suite.True(strings.Contains(name, basename))
-			return newname
+			return newName
 		},
 	}
 	in.Reader.ParallelSampleHandler = parallel_handler
-	in.Reader.Handler = suite.newHandler(newname)
+	in.Reader.Handler = suite.newHandler(newName)
 	in.SetSink(testSink)
 	ch = in.Start(&wg)
 	wg.Wait()
@@ -71,21 +71,25 @@ func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
 }
 
 func (suite *FileTestSuite) testIndividualHeaders(m Marshaller) {
+	var testFiles []string
+	defer func() {
+		for _, testFile := range testFiles {
+			g := NewFileGroup(testFile)
+			suite.NoError(g.DeleteFiles())
+		}
+	}()
 	for i := range suite.headers {
 		basename := "bitflow-test-file"
-		newname := "TEST-123123"
-		testfileFile, err := ioutil.TempFile("", basename+"."+m.String()+".")
-		testfile := testfileFile.Name()
+		newName := "TEST-123123"
+		testFileFile, err := ioutil.TempFile("", basename+"."+m.String()+".")
+		testFile := testFileFile.Name()
+		testFiles = append(testFiles, testFile)
 		suite.NoError(err)
-		log.Debugln("TEST FILE for", m, ":", testfile)
-		defer func() {
-			g := NewFileGroup(testfile)
-			suite.NoError(g.DeleteFiles())
-		}()
+		log.Debugln("TEST FILE for", m, ":", testFile)
 
 		// ========= Write file
 		out := &FileSink{
-			Filename:   testfile,
+			Filename:   testFile,
 			IoBuffer:   1024,
 			CleanFiles: true,
 		}
@@ -103,16 +107,16 @@ func (suite *FileTestSuite) testIndividualHeaders(m Marshaller) {
 		// ========= Read file
 		testSink := suite.newTestSinkFor(i)
 		in := &FileSource{
-			Filenames: []string{testfile},
+			FileNames: []string{testFile},
 			Robust:    false,
 			IoBuffer:  1024,
 			ConvertFilename: func(name string) string {
 				suite.True(strings.Contains(name, basename))
-				return newname
+				return newName
 			},
 		}
 		in.Reader.ParallelSampleHandler = parallel_handler
-		in.Reader.Handler = suite.newHandler(newname)
+		in.Reader.Handler = suite.newHandler(newName)
 		in.SetSink(testSink)
 		ch = in.Start(&wg)
 		wg.Wait()

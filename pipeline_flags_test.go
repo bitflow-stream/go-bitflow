@@ -189,7 +189,7 @@ func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 
 func (suite *PipelineTestSuite) make_factory() EndpointFactory {
 	return EndpointFactory{
-		testmode:                  true,
+		testMode:                  true,
 		FlagInputFilesRobust:      true,
 		FlagOutputFilesClean:      true,
 		FlagIoBuffer:              666,
@@ -216,7 +216,7 @@ func (suite *PipelineTestSuite) Test_input_file() {
 	source.SetSampleHandler(handler)
 	suite.NoError(err)
 	expected := &FileSource{
-		Filenames: files,
+		FileNames: files,
 		Robust:    true,
 		IoBuffer:  666,
 	}
@@ -308,7 +308,7 @@ func (suite *PipelineTestSuite) Test_input_multiple_listener() {
 	factory := suite.make_factory()
 	source, err := factory.CreateInput(":123", ":456")
 	suite.Error(err)
-	suite.Equal(err.Error(), fmt.Sprintf("Cannot listen for input on multiple TCP ports"))
+	suite.Equal(err.Error(), fmt.Sprint("Cannot listen for input on multiple TCP ports"))
 	suite.Nil(source)
 }
 
@@ -316,7 +316,7 @@ func (suite *PipelineTestSuite) Test_input_multiple_std() {
 	factory := suite.make_factory()
 	source, err := factory.CreateInput("-", "-")
 	suite.Error(err)
-	suite.Equal(err.Error(), fmt.Sprintf("Cannot read from stdin multiple times"))
+	suite.Equal(err.Error(), fmt.Sprint("Cannot read from stdin multiple times"))
 	suite.Nil(source)
 }
 

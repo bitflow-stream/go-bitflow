@@ -29,7 +29,7 @@ const (
 	CsvDateFormat = "2006-01-02 15:04:05.999999999"
 )
 
-// CsvMarshaller marshalls Headers and Samples to a CSV format.
+// CsvMarshaller marshals Headers and Samples to a CSV format.
 //
 // Every header is marshalled as a comma-separated CSV header line.
 // The first field is 'time', the second field is 'tags' (if the following samples
@@ -100,7 +100,7 @@ func splitCsvLine(line []byte) []string {
 // Read implements the Unmarshaller interface by reading CSV line from the input stream.
 // Based on the first field, Read decides whether the line represents a header or a Sample.
 // In case of a header, the CSV fields are split and parsed to a Header instance.
-// In case of a Sample, the data for the line is returned unparsed.
+// In case of a Sample, the data for the line is returned without parsing it.
 func (c CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Header, []byte, error) {
 	line, err := readUntil(reader, CsvNewline)
 	if err == io.EOF {

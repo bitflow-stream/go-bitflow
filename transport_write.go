@@ -21,7 +21,7 @@ type SampleWriter struct {
 	ParallelSampleHandler
 }
 
-// SampleOutputStream represents one open output stream that marshalls and writes
+// SampleOutputStream represents one open output stream that marshals and writes
 // Headers and Samples in parallel. It is created by using SampleWriter.Open or
 // SampleWriter.OpenBuffered. The Sample() method can be used
 // to output data on this stream, and the Close() method must be called when no
@@ -54,7 +54,7 @@ func NewBufferedWriteCloser(writer io.WriteCloser, io_buffer int) *BufferedWrite
 	}
 }
 
-// Close implements the Close method in io.WriteCloser by flusing its bufio.Writer and
+// Close implements the Close method in io.WriteCloser by flushing its bufio.Writer and
 // forwarding the Close call to the io.WriteCloser used to create it.
 func (writer *BufferedWriteCloser) Close() (err error) {
 	err = writer.Writer.Flush()
@@ -64,7 +64,7 @@ func (writer *BufferedWriteCloser) Close() (err error) {
 	return
 }
 
-// OpenBufferd returns a buffered output stream with a buffer of the size io_buffer.
+// OpenBuffered returns a buffered output stream with a buffer of the size io_buffer.
 // Samples coming into that stream are marshalled using marshaller and finally written
 // the given writer.
 func (w *SampleWriter) OpenBuffered(writer io.WriteCloser, marshaller Marshaller, io_buffer int) *SampleOutputStream {
@@ -106,7 +106,7 @@ func (stream *SampleOutputStream) flushBuffered() error {
 	return nil
 }
 
-// Sample marshalles the given Sample and writes the resulting byte buffer into the
+// Sample marshals the given Sample and writes the resulting byte buffer into the
 // writer behind the stream receiver. If a non-nil error is returned here,
 // the stream should not be used any further, but still must be closed externally.
 func (stream *SampleOutputStream) Sample(sample *Sample, header *Header) error {
@@ -135,7 +135,7 @@ func (stream *SampleOutputStream) Sample(sample *Sample, header *Header) error {
 
 // Close closes the receiving SampleOutputStream. After calling this, neither
 // Sample nor Header can be called anymore! The returned error is the first error
-// that ever ocurred in any of the Sample/Header/Close calls on this stream.
+// that ever occurred in any of the Sample/Header/Close calls on this stream.
 func (stream *SampleOutputStream) Close() error {
 	if stream == nil {
 		return nil

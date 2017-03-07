@@ -93,7 +93,7 @@ func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.
 func (source *TCPListenerSource) closeAllConnections() {
 	for {
 		var conn *tcpListenerConnection
-		// Pick an arbitray running connection, if there is any
+		// Pick an arbitrary running connection, if there is any
 		// Use Execute() to synchronize this with tcpListenerConnection.readSamples()
 
 		source.task.Execute(func() {
@@ -136,7 +136,7 @@ func (conn *tcpListenerConnection) readSamples(wg *sync.WaitGroup, connection *n
 	}
 
 	conn.finished.StopFunc(conn.closeStream)
-	// The Execute() method makes sure to synchronize the access to the sonn.source.connections map
+	// The Execute() method makes sure to synchronize the access to the conn.source.connections map
 	conn.source.task.Execute(func() {
 		delete(conn.source.connections, conn)
 	})
@@ -175,7 +175,7 @@ type TCPListenerSink struct {
 	task *golib.TCPListenerTask
 }
 
-// String implements the MetrincSink interface.
+// String implements the MetricSink interface.
 func (sink *TCPListenerSink) String() string {
 	return "TCP sink on " + sink.Endpoint
 }
@@ -195,7 +195,7 @@ func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	}
 	sink.task = &golib.TCPListenerTask{
 		ListenEndpoint: sink.Endpoint,
-		StopHook:       sink.buf.close,
+		StopHook:       sink.buf.closeBuffer,
 		Handler:        sink.handleConnection,
 	}
 	return sink.task.ExtendedStart(func(addr net.Addr) {
@@ -322,7 +322,7 @@ func (b *outputSampleBuffer) next(l *sampleListLink) *sampleListLink {
 	return l.next
 }
 
-func (b *outputSampleBuffer) close() {
+func (b *outputSampleBuffer) closeBuffer() {
 	b.cond.L.Lock()
 	defer b.cond.L.Unlock()
 	b.closed = true

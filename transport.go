@@ -48,7 +48,7 @@ func (h *HeaderChecker) InitializedHeaderChanged(newHeader *Header) bool {
 // after Start() is called. The Stop() method should be ignored, a call to the Close()
 // method means that no more header or samples will be coming in, and that all goroutines
 // should be stopped. This is to ensure an ordered shutdown of multiple chained
-// MetricSinks - the Close() invokation is propagated down the pipeline.
+// MetricSinks - the Close() invocation is propagated down the pipeline.
 // See the golib.Task interface for info about the Start()/Stop() methods.
 type MetricSink interface {
 	golib.Task
@@ -59,7 +59,7 @@ type MetricSink interface {
 	Close()
 }
 
-// MarshallingMethicSink extends the MetricSink and allows to set a Marshaller for
+// MarshallingMetricSink extends the MetricSink and allows to set a Marshaller for
 // marshalling incoming samples.
 type MarshallingMetricSink interface {
 	MetricSink
@@ -296,7 +296,7 @@ type ParallelSampleHandler struct {
 	// The purpose of the buffer is, for example, to allow the routine reading a file
 	// to read the data for multiple Samples in one read operation, which then
 	// allows the parallel parsing routines to parse all the read Samples at the same time.
-	// Setting BufferedSamples is a tradeoff between memory consumption and
+	// Setting BufferedSamples is a trade-off between memory consumption and
 	// parallelism, but most of the time a value of around 1000 or so should be enough.
 	// If this value is not set, no parallelism will be possible because
 	// the channel between the cooperating routines will block on each operation.

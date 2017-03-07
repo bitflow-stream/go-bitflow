@@ -67,7 +67,7 @@ func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 // CloseSink reports that this AbstractProcessor is finished processing.
 // All goroutines must be stopped, and all Headers and Samples must be already
 // forwarded to the outgoing sink, when this is called. CloseSink forwards
-// the Close() invokation to the outgoing sink.
+// the Close() invocation to the outgoing sink.
 func (p *AbstractProcessor) CloseSink() {
 	// If there was no error, make sure to signal that this task is done.
 	p.stopChan.Stop()

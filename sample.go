@@ -31,7 +31,7 @@ var (
 type Value float64
 
 // Header defines the structure of samples that belong to this header.
-// When unmarshalling headers and sample, usually one header preceds a number of
+// When unmarshalling headers and sample, usually one header precedes a number of
 // samples. Those samples are defined by the header.
 type Header struct {
 	// Fields defines the names of the metrics of samples belonging to this header.
@@ -149,7 +149,7 @@ func (sample *Sample) NumTags() (l int) {
 	return
 }
 
-// TagString returns a string representationg of all the tags and tag values
+// TagString returns a string representation of all the tags and tag values
 // in the receiving Sample. This representation is used for marshalling by the
 // CsvMarshaller and BinaryMarshaller. The format is a space-separated string
 // of key-value pairs separated by '=' characters.
@@ -299,12 +299,10 @@ func (header *Header) Equals(other *Header) bool {
 		return false
 	case header.HasTags != other.HasTags:
 		return false
-	case header.Fields == nil && other.Fields == nil:
-		return true
-	case header.Fields == nil || other.Fields == nil:
-		return false
 	case len(header.Fields) != len(other.Fields):
 		return false
+	case len(header.Fields) == 0:
+		return true
 	}
 	if len(header.Fields) >= 1 {
 		// Compare the array backing the Fields slices
