@@ -119,7 +119,7 @@ func (t TokenType) String() (s string) {
 	case BRACKET_CLOSE:
 		s = "]"
 	default:
-		s = fmt.Sprintf("UNKNOWN_TOKEN_TYPE(%v)", t)
+		s = fmt.Sprintf("UNKNOWN_TOKEN_TYPE(%v)", int(t))
 	}
 	return s
 }
@@ -161,7 +161,6 @@ func (s *Scanner) read() rune {
 		return s.buf[s.nbuf]
 	default:
 		panic("Too many Scanner.unread() operations have been made")
-		return eof
 	}
 }
 

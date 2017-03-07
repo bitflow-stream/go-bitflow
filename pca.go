@@ -107,7 +107,7 @@ func (model *PCAModel) Report(reportVariance float64) string {
 	return buf.String()
 }
 
-func (model *PCAModel) WriteTo(writer io.Writer) error {
+func (model *PCAModel) WriteModel(writer io.Writer) error {
 	err := gob.NewEncoder(writer).Encode(model)
 	if err != nil {
 		err = fmt.Errorf("Failed to marshal *PCAModel to binary gob: %v", err)
@@ -191,7 +191,7 @@ func StorePCAModel(filename string) BatchProcessingStep {
 				if err == nil {
 					defer file.Close() // Drop error
 					log.Println("Storing PCA model to", file.Name())
-					err = model.WriteTo(file)
+					err = model.WriteModel(file)
 				}
 			}
 			return header, samples, err

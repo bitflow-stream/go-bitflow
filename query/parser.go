@@ -397,7 +397,6 @@ func (p *Parser) parseOpenedPipelineFragment(openToken Token, isInput bool, isFo
 		return pipe, err
 	default:
 		panic("parseOpenedPipelineFragments can only be called with OPEN or BRACKET_OPEN as openToken")
-		return nil, nil
 	}
 }
 
