@@ -184,7 +184,7 @@ func (group *FileGroup) DeleteFiles() error {
 	return err
 }
 
-// OpenNewFile attempts to open a new file that will belong to the file group.
+// OpenFile attempts to open a new file that will belong to the file group.
 // An integer suffix is counted up to find a non-existing file. A small number
 // of errors is tolerated before giving up.
 func (group *FileGroup) OpenNewFile(counter *int) (file *os.File, err error) {
@@ -458,6 +458,10 @@ type FileSink struct {
 	// When deleting these files fails, the FileSink stops and reports an error.
 	CleanFiles bool
 
+	// Append can be set to true to make the FileSink append data to a file, if it exists.
+
+	Append bool
+
 	checker  HeaderChecker
 	group    FileGroup
 	file_num int
@@ -521,6 +525,14 @@ func (sink *FileSink) openNextFile() (err error) {
 }
 
 func (sink *FileSink) openNextNewFile() (file *os.File, err error) {
+	if sink.Append {
+		file, err := os.OpenFile(sink.Filename, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
+		if err == nil {
+			return file, nil
+		} else if !os.IsNotExist(err) {
+			log.WithField("file", file.Name()).Warnln("Failed to append to file:", err)
+		}
+	}
 	return sink.group.OpenNewFile(&sink.file_num)
 }
 
@@ -529,7 +541,7 @@ func (sink *FileSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	if sink.checker.HeaderChanged(header) {
+	if sink.checker.HeaderChanged(header) || sink.stream == nil {
 		if err := sink.openNextFile(); err != nil {
 			return err
 		}

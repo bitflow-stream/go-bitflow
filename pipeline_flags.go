@@ -69,6 +69,7 @@ type EndpointFactory struct {
 	FlagOutputFilesClean bool
 	FlagIoBuffer         int
 	FlagFilesKeepAlive   bool
+	FlagFilesAppend      bool
 
 	// TCP input/output flags
 
@@ -130,6 +131,7 @@ func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
 func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
 	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
 	f.BoolVar(&p.ConsoleBoxNoImmediateScreenUpdate, "slow-screen-updates", false, fmt.Sprintf("For console box output, don't update the screen on every sample, but only in intervals of %v", ConsoleBoxUpdateInterval))
+	f.BoolVar(&p.FlagFilesAppend, "files-append", false, fmt.Sprintf("For file output, do no create new files by incrementing the suffix and append to existing files."))
 }
 
 // Writer returns an instance of SampleReader, configured by the values stored in the EndpointFactory.
@@ -256,6 +258,7 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 			Filename:   endpoint.Target,
 			IoBuffer:   p.FlagIoBuffer,
 			CleanFiles: p.FlagOutputFilesClean,
+			Append:     p.FlagFilesAppend,
 		}
 		marshallingSink = &sink.AbstractMarshallingMetricSink
 		resultSink = sink
