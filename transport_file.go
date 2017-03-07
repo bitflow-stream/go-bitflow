@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/golib"
@@ -228,12 +227,6 @@ func (group *FileGroup) OpenNewFile(counter *int) (file *os.File, err error) {
 }
 
 // ==================== File data source ====================
-
-// ReadingDirWarnDuration defines a timeout that triggers a warning printed to
-// the logger when listing files using ListMatchingFiles takes too long.
-// The warning will be printed only once per ListMatchingFiles invokation,
-// and will not be printed if ListMatchingFiles returns in time.
-const ReadingDirWarnDuration = 2000 * time.Millisecond
 
 // FileSource is an implementation of UnmarshallingMetricSource that reads samples
 // from one or more files. Various parameters control the behavior and performance
@@ -524,13 +517,13 @@ func (sink *FileSink) openNextFile() (err error) {
 	return
 }
 
-func (sink *FileSink) openNextNewFile() (file *os.File, err error) {
+func (sink *FileSink) openNextNewFile() (*os.File, error) {
 	if sink.Append {
 		file, err := os.OpenFile(sink.Filename, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
 		if err == nil {
 			return file, nil
 		} else if !os.IsNotExist(err) {
-			log.WithField("file", file.Name()).Warnln("Failed to append to file:", err)
+			log.WithField("file", sink.Filename).Warnln("Failed to append to file:", err)
 		}
 	}
 	return sink.group.OpenNewFile(&sink.file_num)
