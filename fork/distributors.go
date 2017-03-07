@@ -9,31 +9,31 @@ import (
 )
 
 type RoundRobinDistributor struct {
-	NumSubpipelines int
+	NumSubPipelines int
 	current         int
 }
 
 func (rr *RoundRobinDistributor) Distribute(_ *bitflow.Sample, _ *bitflow.Header) []interface{} {
-	cur := rr.current % rr.NumSubpipelines
+	cur := rr.current % rr.NumSubPipelines
 	rr.current++
 	return []interface{}{cur}
 }
 
 func (rr *RoundRobinDistributor) String() string {
-	return fmt.Sprintf("round robin (%v)", rr.NumSubpipelines)
+	return fmt.Sprintf("round robin (%v)", rr.NumSubPipelines)
 }
 
 type MultiplexDistributor struct {
-	numSubpipelines int
+	numSubPipelines int
 	keys            []interface{}
 }
 
-func NewMultiplexDistributor(numSubpipelines int) *MultiplexDistributor {
+func NewMultiplexDistributor(numSubPipelines int) *MultiplexDistributor {
 	multi := &MultiplexDistributor{
-		numSubpipelines: numSubpipelines,
-		keys:            make([]interface{}, numSubpipelines),
+		numSubPipelines: numSubPipelines,
+		keys:            make([]interface{}, numSubPipelines),
 	}
-	for i := 0; i < numSubpipelines; i++ {
+	for i := 0; i < numSubPipelines; i++ {
 		multi.keys[i] = i
 	}
 	return multi
@@ -44,7 +44,7 @@ func (d *MultiplexDistributor) Distribute(_ *bitflow.Sample, _ *bitflow.Header) 
 }
 
 func (d *MultiplexDistributor) String() string {
-	return fmt.Sprintf("multiplex (%v)", d.numSubpipelines)
+	return fmt.Sprintf("multiplex (%v)", d.numSubPipelines)
 }
 
 type TagsDistributor struct {

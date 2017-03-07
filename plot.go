@@ -10,7 +10,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
-	"github.com/gonum/plot"
+	plotLib "github.com/gonum/plot"
 	"github.com/gonum/plot/plotter"
 	"github.com/gonum/plot/plotutil"
 	"github.com/gonum/plot/vg"
@@ -131,7 +131,7 @@ func (p *PlotProcessor) headerChanged(header *bitflow.Header) error {
 		p.xName = xName
 		p.yName = yName
 	} else if p.xName != xName || p.yName != yName {
-		return fmt.Errorf("%v: Header updated and changed the X/Y metric names from %v, %v -> %v, %v", p.xName, p.yName, xName, yName)
+		return fmt.Errorf("%v: Header updated and changed the X/Y metric names from %v, %v -> %v, %v", p, p.xName, p.yName, xName, yName)
 	}
 	return nil
 }
@@ -189,9 +189,9 @@ func (p *PlotProcessor) Close() {
 }
 
 func (p *PlotProcessor) String() string {
-	color := "not colored"
+	colorTag := "not colored"
 	if p.ColorTag != "" {
-		color = "color: " + p.ColorTag
+		colorTag = "color: " + p.ColorTag
 	}
 	file := p.OutputFile
 	if p.SeparatePlots {
@@ -199,7 +199,7 @@ func (p *PlotProcessor) String() string {
 	} else {
 		file = "file: " + file
 	}
-	return fmt.Sprintf("Plotter (%s)(%s)", color, file)
+	return fmt.Sprintf("Plotter (%s)(%s)", colorTag, file)
 }
 
 // ================================= Plot =================================
@@ -226,7 +226,7 @@ func (p *Plot) saveSeparatePlots(plotData map[string]plotter.XYs, targetFile str
 	return nil
 }
 
-func (p *Plot) savePlot(plotData map[string]plotter.XYs, copyBounds *plot.Plot, targetFile string) error {
+func (p *Plot) savePlot(plotData map[string]plotter.XYs, copyBounds *plotLib.Plot, targetFile string) error {
 	plot, err := p.createPlot(plotData, copyBounds)
 	if err != nil {
 		return err
@@ -238,8 +238,8 @@ func (p *Plot) savePlot(plotData map[string]plotter.XYs, copyBounds *plot.Plot, 
 	return err
 }
 
-func (p *Plot) createPlot(plotData map[string]plotter.XYs, copyBounds *plot.Plot) (*plot.Plot, error) {
-	plot, err := plot.New()
+func (p *Plot) createPlot(plotData map[string]plotter.XYs, copyBounds *plotLib.Plot) (*plotLib.Plot, error) {
+	plot, err := plotLib.New()
 	if err != nil {
 		return nil, errors.New("Error creating new plot: " + err.Error())
 	}
@@ -253,18 +253,18 @@ func (p *Plot) createPlot(plotData map[string]plotter.XYs, copyBounds *plot.Plot
 	return plot, p.fillPlot(plot, plotData)
 }
 
-func (p *Plot) configureAxes(plt *plot.Plot) {
+func (p *Plot) configureAxes(plt *plotLib.Plot) {
 	plt.X.Label.Text = p.LabelX
 	plt.Y.Label.Text = p.LabelY
 	if p.LabelX == plotTimeLabel {
-		plt.X.Tick.Marker = plot.TimeTicks{Format: plotTimeFormat}
+		plt.X.Tick.Marker = plotLib.TimeTicks{Format: plotTimeFormat}
 	}
 	if p.LabelY == plotTimeLabel {
-		plt.Y.Tick.Marker = plot.TimeTicks{Format: plotTimeFormat}
+		plt.Y.Tick.Marker = plotLib.TimeTicks{Format: plotTimeFormat}
 	}
 }
 
-func (p *Plot) fillPlot(plot *plot.Plot, plotData map[string]plotter.XYs) error {
+func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs) error {
 	shape, err := NewPlotShapeGenerator(numColors)
 	if err != nil {
 		return err
@@ -288,10 +288,10 @@ func (p *Plot) fillPlot(plot *plot.Plot, plotData map[string]plotter.XYs) error 
 		if err != nil {
 			return fmt.Errorf("Error creating plot (type %v): %v", p.Type, err)
 		}
-		color := shape.Colors.Next()
+		plotColor := shape.Colors.Next()
 		legend := name != "" && !p.NoLegend
 		if line != nil {
-			line.Color = color
+			line.Color = plotColor
 			line.Dashes = shape.Dashes.Next()
 			plot.Add(line)
 			if legend {
@@ -300,7 +300,7 @@ func (p *Plot) fillPlot(plot *plot.Plot, plotData map[string]plotter.XYs) error 
 			}
 		}
 		if scatter != nil {
-			scatter.Color = color
+			scatter.Color = plotColor
 			scatter.Shape = shape.Glyphs.Next()
 			plot.Add(scatter)
 			if legend && line == nil {
@@ -358,9 +358,9 @@ func (g *ColorGenerator) Next() color.Color {
 	if g.next >= len(g.palette) {
 		g.next = 0
 	}
-	color := g.palette[g.next]
+	result := g.palette[g.next]
 	g.next++
-	return color
+	return result
 }
 
 type GlyphGenerator struct {

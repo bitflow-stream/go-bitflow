@@ -19,8 +19,8 @@ type MultiMetricSource struct {
 	stoppedPipelines int
 }
 
-func (in *MultiMetricSource) Add(subpipeline *pipeline.SamplePipeline) {
-	in.pipelines = append(in.pipelines, subpipeline)
+func (in *MultiMetricSource) Add(subPipeline *pipeline.SamplePipeline) {
+	in.pipelines = append(in.pipelines, subPipeline)
 }
 
 func (in *MultiMetricSource) Start(wg *sync.WaitGroup) golib.StopChan {

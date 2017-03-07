@@ -27,34 +27,34 @@ func (c *compare) compare(name string, actual []bitflow.Value, expected []float6
 	}
 }
 
-func (c *compare) do(vals ...float64) {
-	empty := len(vals) == 0
+func (c *compare) do(values ...float64) {
+	empty := len(values) == 0
 	if actual := c.win.Empty(); empty != actual {
 		c.err("Wrong Empty()-state", empty, actual)
 	}
-	if actual := c.win.Size(); len(vals) != actual {
-		c.err("Wrong Size()", len(vals), actual)
+	if actual := c.win.Size(); len(values) != actual {
+		c.err("Wrong Size()", len(values), actual)
 	}
 	winLen := len(c.win.data)
-	expectedFull := winLen == len(vals)
+	expectedFull := winLen == len(values)
 	if actual := c.win.Full(); actual != expectedFull {
 		c.err("Wrong Full()-state", expectedFull, actual)
 	}
 
-	winVals := c.win.Data()
-	winFastVals := c.win.FastData()
-	c.compare("Data()", winVals, vals)
-	c.compare("FastData()", winFastVals, vals)
+	winValues := c.win.Data()
+	winFastValues := c.win.FastData()
+	c.compare("Data()", winValues, values)
+	c.compare("FastData()", winFastValues, values)
 
 	filled := make([]bitflow.Value, 3)
 	expected := make([]float64, 3)
-	copy(expected, vals)
+	copy(expected, values)
 	c.win.FillData(filled)
 	c.compare("FillData() [short]", filled, expected)
 
 	filled = make([]bitflow.Value, winLen+5)
 	expected = make([]float64, len(filled))
-	copy(expected, vals)
+	copy(expected, values)
 	c.win.FillData(filled)
 	c.compare("FillData() [long]", filled, expected)
 

@@ -17,7 +17,7 @@ func init() {
 	RegisterAnalysis("print_header", print_header, "Print every changing header to the log")
 	RegisterAnalysisParams("print_tags", print_tags, "When done processing, print every encountered value of the given tag", []string{"tag"})
 	RegisterAnalysisParams("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", []string{"tag"})
-	RegisterAnalysis("print_timerange", print_timerange, "When done processing, print the first and last encountered timestamp")
+	RegisterAnalysis("print_timerange", print_time_range, "When done processing, print the first and last encountered timestamp")
 	RegisterAnalysisParamsErr("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", []string{}, "buckets")
 	RegisterAnalysis("count_invalid", count_invalid, "When done processing, print the number of invalid metric values and samples containing such values (NaN, -/+ infinity, ...)")
 	RegisterAnalysis("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
@@ -127,7 +127,7 @@ func count_tags(p *Pipeline, params map[string]string) {
 	p.Add(NewUniqueTagCounter(params["tag"]))
 }
 
-func print_timerange(p *Pipeline) {
+func print_time_range(p *Pipeline) {
 	var (
 		from  time.Time
 		to    time.Time

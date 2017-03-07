@@ -225,13 +225,13 @@ func rename_metrics(p *Pipeline, params map[string]string) error {
 
 	var regexes []*regexp.Regexp
 	var replacements []string
-	for regex, repl := range params {
+	for regex, replacement := range params {
 		r, err := regexp.Compile(regex)
 		if err != nil {
 			return parameterError(regex, err)
 		}
 		regexes = append(regexes, r)
-		replacements = append(replacements, repl)
+		replacements = append(replacements, replacement)
 	}
 	p.Add(NewMetricRenamer(regexes, replacements))
 	return nil
@@ -370,7 +370,7 @@ func fork_round_robin(params map[string]string) (fmt.Stringer, error) {
 		return nil, err
 	}
 	return &RoundRobinDistributor{
-		NumSubpipelines: num,
+		NumSubPipelines: num,
 	}, nil
 }
 

@@ -151,7 +151,7 @@ type SimpleBatchProcessingStep struct {
 
 func (s *SimpleBatchProcessingStep) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	if process := s.Process; process == nil {
-		return nil, nil, fmt.Errorf("%s: Process function is not set")
+		return nil, nil, fmt.Errorf("%v: Process function is not set", s)
 	} else {
 		return process(header, samples)
 	}

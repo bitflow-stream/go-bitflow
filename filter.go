@@ -9,7 +9,7 @@ import (
 type SampleFilter struct {
 	bitflow.AbstractProcessor
 	Description   fmt.Stringer
-	IncludeFilter func(sample *bitflow.Sample, header *bitflow.Header) (bool, error) // Return true if sample should be INcluded
+	IncludeFilter func(sample *bitflow.Sample, header *bitflow.Header) (bool, error) // Return true if sample should be included
 }
 
 func (p *SampleFilter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

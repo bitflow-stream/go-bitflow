@@ -143,13 +143,13 @@ func (model *PCAModel) ProjectHeader(variance float64, header *bitflow.Header) (
 	}
 	comp, variance := model.ComponentsContainingVariance(variance)
 	log.Printf("Projecting data into %v components (variance %.4f)...", comp, variance)
-	proj := model.Project(comp)
+	projection := model.Project(comp)
 
 	outFields := make([]string, comp)
 	for i := 0; i < comp; i++ {
 		outFields[i] = "component" + strconv.Itoa(i)
 	}
-	return proj, header.Clone(outFields), nil
+	return projection, header.Clone(outFields), nil
 }
 
 type PCAProjection struct {
@@ -208,14 +208,14 @@ func LoadBatchPCAModel(filename string, containedVariance float64) (BatchProcess
 	return &SimpleBatchProcessingStep{
 		Description: fmt.Sprintf("Project PCA (model loaded from %v)", filename),
 		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
-			proj, header, err := model.ProjectHeader(containedVariance, header)
+			projection, header, err := model.ProjectHeader(containedVariance, header)
 			if err != nil {
 				return nil, nil, err
 			}
 
 			// Convert sample slice to matrix, do the projection, then fill the new values back into the same sample slice
 			// Should minimize allocations, since the value slices have the same length before and after projection
-			matrix := proj.Matrix(SamplesToMatrix(samples))
+			matrix := projection.Matrix(SamplesToMatrix(samples))
 			FillSamplesFromMatrix(samples, matrix)
 			return header, samples, nil
 		},
@@ -259,14 +259,14 @@ func ComputeAndProjectPCA(containedVariance float64) BatchProcessingStep {
 			if err := model.ComputeAndReport(samples); err != nil {
 				return nil, nil, err
 			}
-			proj, header, err := model.ProjectHeader(containedVariance, header)
+			projection, header, err := model.ProjectHeader(containedVariance, header)
 			if err != nil {
 				return nil, nil, err
 			}
 
 			// Convert sample slice to matrix, do the projection, then fill the new values back into the same sample slice
 			// Should minimize allocations, since the value slices have the same length before and after projection
-			matrix := proj.Matrix(SamplesToMatrix(samples))
+			matrix := projection.Matrix(SamplesToMatrix(samples))
 			FillSamplesFromMatrix(samples, matrix)
 			return header, samples, nil
 		},

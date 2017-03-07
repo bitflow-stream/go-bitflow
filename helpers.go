@@ -31,7 +31,7 @@ func IsValidNumber(val float64) bool {
 	return !math.IsNaN(val) && !math.IsInf(val, 0)
 }
 
-// String is a trivial implementation of the fmt.Sringer interface
+// String is a trivial implementation of the fmt.Stringer interface
 type String string
 
 func (s String) String() string {

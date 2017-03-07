@@ -19,14 +19,14 @@ type LinearRegression struct {
 }
 
 func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearRegression, error) {
-	fieldNums := make([]int, len(fieldNames))
+	fieldNumbers := make([]int, len(fieldNames))
 	var reg LinearRegression
 	for i, searching := range fieldNames {
 		found := false
 		for j, field := range header.Fields {
 			if field == searching {
 				found = true
-				fieldNums[i] = j
+				fieldNumbers[i] = j
 			}
 		}
 		if !found {
@@ -34,16 +34,16 @@ func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearReg
 		}
 	}
 	reg.Header = header
-	reg.Vars = fieldNums
+	reg.Vars = fieldNumbers
 	return reg, nil
 }
 
 func (reg *LinearRegression) FormulaString() string {
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%v = %g", reg.Model.Cls.GetName(), reg.Model.Disturbance)
-	coeff := reg.Model.RegressionCoefficients
+	coefficients := reg.Model.RegressionCoefficients
 	for i, attr := range reg.Model.Attrs {
-		fmt.Fprintf(&buf, " + %g %v", coeff[i], attr.GetName())
+		fmt.Fprintf(&buf, " + %g %v", coefficients[i], attr.GetName())
 	}
 	return buf.String()
 }
@@ -107,11 +107,11 @@ func (reg *LinearRegression) IsValid() bool {
 	if reg.Model.Disturbance == 0 {
 		non_zero--
 	}
-	for _, coeff := range reg.Model.RegressionCoefficients {
-		if !pipeline.IsValidNumber(coeff) {
+	for _, coefficients := range reg.Model.RegressionCoefficients {
+		if !pipeline.IsValidNumber(coefficients) {
 			return false
 		}
-		if coeff == 0 {
+		if coefficients == 0 {
 			non_zero--
 		}
 	}

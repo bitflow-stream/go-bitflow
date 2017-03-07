@@ -175,9 +175,9 @@ func (p *Expression) currentHeader() *bitflow.Header {
 	return header
 }
 
-func printParamStrings(vals []interface{}) string {
+func printParamStrings(values []interface{}) string {
 	var buf bytes.Buffer
-	for _, val := range vals {
+	for _, val := range values {
 		if buf.Len() > 0 {
 			buf.WriteString(", ")
 		}

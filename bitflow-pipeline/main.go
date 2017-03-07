@@ -36,19 +36,19 @@ func do_main() int {
 		return 0
 	}
 
-	pipeline, err := make_pipeline()
+	pipe, err := make_pipeline()
 	if err != nil {
 		log.Errorln(err)
 		golib.Fatalln("Use -print-analyses to print all available analysis steps.")
 	}
 	defer golib.ProfileCpu()()
-	for _, str := range pipeline.FormatLines() {
+	for _, str := range pipe.FormatLines() {
 		log.Println(str)
 	}
 	if *printPipeline {
 		return 0
 	}
-	return pipeline.StartAndWait()
+	return pipe.StartAndWait()
 }
 
 func make_pipeline() (*pipeline.SamplePipeline, error) {

@@ -76,14 +76,14 @@ func (p *SpherePoints) randomSpherePoint(radius float64, center []bitflow.Value)
 	// Calculate point for a sphere around the point (0, 0, 0, ...)
 	result := make([]bitflow.Value, len(center), cap(center))
 	for i := range center {
-		coord := radius
+		coordinate := radius
 		for j := 0; j < i; j++ {
-			coord *= sinValues[j]
+			coordinate *= sinValues[j]
 		}
 		if i < len(center)-1 {
-			coord *= cosValues[i]
+			coordinate *= cosValues[i]
 		}
-		result[i] = bitflow.Value(coord)
+		result[i] = bitflow.Value(coordinate)
 	}
 
 	// Sanity check

@@ -184,35 +184,35 @@ func (builder PipelineBuilder) getAnalysis(name_tok Token) (AnalysisFunc, error)
 
 func (builder PipelineBuilder) addMultiplex(pipe *pipeline.SamplePipeline, pipes Pipelines) error {
 	num := len(pipes) // Must be the same for the builder and the distributor
-	subpipelines := make(fork.MultiplexPipelineBuilder, num)
-	for i, subpipe := range pipes {
-		subpipe, err := builder.makePipeline(subpipe, false)
+	subPipelines := make(fork.MultiplexPipelineBuilder, num)
+	for i, subPipe := range pipes {
+		subPipe, err := builder.makePipeline(subPipe, false)
 		if err != nil {
 			return err
 		}
-		subpipelines[i] = subpipe
+		subPipelines[i] = subPipe
 	}
 
 	pipe.Add(&fork.MetricFork{
 		ParallelClose: true,
 		Distributor:   fork.NewMultiplexDistributor(num),
-		Builder:       subpipelines,
+		Builder:       subPipelines,
 	})
 	return nil
 }
 
 func (builder PipelineBuilder) createMultiInput(pipes Pipelines) (bitflow.MetricSource, error) {
-	subpipelines := &fork.MultiMetricSource{
+	subPipelines := &fork.MultiMetricSource{
 		ParallelClose: true,
 	}
-	for _, subpipe := range pipes {
-		subpipe, err := builder.makePipeline(subpipe, true)
+	for _, subPipe := range pipes {
+		subPipe, err := builder.makePipeline(subPipe, true)
 		if err != nil {
 			return nil, err
 		}
-		subpipelines.Add(subpipe)
+		subPipelines.Add(subPipe)
 	}
-	return subpipelines, nil
+	return subPipelines, nil
 }
 
 func (builder PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) error {
@@ -256,9 +256,9 @@ func (builder PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) er
 
 func (builder PipelineBuilder) makeCustomBuilder(pipelines Pipelines) (*CustomPipelineBuilder, error) {
 	builderPipes := make(map[string]*pipeline.SamplePipeline)
-	for _, pipeline := range pipelines {
-		inputs := pipeline[0].(Input)
-		builtPipe, err := builder.makePipeline(pipeline[1:], false)
+	for _, pipe := range pipelines {
+		inputs := pipe[0].(Input)
+		builtPipe, err := builder.makePipeline(pipe[1:], false)
 		if err != nil {
 			return nil, err
 		}
@@ -273,8 +273,8 @@ func (builder PipelineBuilder) makeCustomBuilder(pipelines Pipelines) (*CustomPi
 
 func (builder PipelineBuilder) getFork(name_tok Token) (ForkFunc, error) {
 	name := name_tok.Content()
-	if fork, ok := builder.fork_registry[name]; ok {
-		return fork.Func, nil
+	if registeredFork, ok := builder.fork_registry[name]; ok {
+		return registeredFork.Func, nil
 	} else {
 		return nil, ParserError{
 			Pos:     name_tok,
@@ -350,11 +350,11 @@ func (b *CustomPipelineBuilder) ContainedStringers() []fmt.Stringer {
 	for key, pipe := range b.pipelines {
 		var title string
 		if key == "" {
-			title = fmt.Sprintf("Default pipeline")
+			title = "Default pipeline"
 		} else {
 			title = fmt.Sprintf("Pipeline %v", key)
 		}
-		res = append(res, &titledSubpipeline{
+		res = append(res, &titledSubPipeline{
 			SamplePipeline: pipe,
 			title:          title,
 		})
@@ -363,12 +363,12 @@ func (b *CustomPipelineBuilder) ContainedStringers() []fmt.Stringer {
 	return res
 }
 
-type titledSubpipeline struct {
+type titledSubPipeline struct {
 	*pipeline.SamplePipeline
 	title string
 }
 
-func (t *titledSubpipeline) String() string {
+func (t *titledSubPipeline) String() string {
 	return t.title
 }
 

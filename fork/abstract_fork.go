@@ -47,39 +47,39 @@ func (f *AbstractMetricFork) getPipelines(builder PipelineBuilder, keys []interf
 func (f *AbstractMetricFork) getPipeline(builder PipelineBuilder, key interface{}, description fmt.Stringer) bitflow.MetricSink {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-	pipeline, ok := f.pipelines[key]
+	pipe, ok := f.pipelines[key]
 	if !ok {
-		pipeline = f.newPipeline(builder, key, description)
+		pipe = f.newPipeline(builder, key, description)
 		if hook := f.newPipelineHandler; hook != nil {
-			pipeline = hook(pipeline)
+			pipe = hook(pipe)
 		}
-		f.pipelines[key] = pipeline
+		f.pipelines[key] = pipe
 	}
-	return pipeline
+	return pipe
 }
 
 func (f *AbstractMetricFork) newPipeline(builder PipelineBuilder, key interface{}, description fmt.Stringer) bitflow.MetricSink {
-	pipeline := builder.BuildPipeline(key, &f.merger)
-	path := f.setForkPaths(pipeline, key)
+	pipe := builder.BuildPipeline(key, &f.merger)
+	path := f.setForkPaths(pipe, key)
 	log.Debugf("[%v]: Starting forked subpipeline %v", description, path)
-	if pipeline.Source != nil {
+	if pipe.Source != nil {
 		// Forked pipelines should not have an explicit source, as they receive
-		// samples from the steps preceeding them
-		log.Warnf("[%v]: The Source field of the %v subpipeline was set and will be ignored: %v", description, path, pipeline.Source)
-		pipeline.Source = nil
+		// samples from the steps preceding them
+		log.Warnf("[%v]: The Source field of the %v subpipeline was set and will be ignored: %v", description, path, pipe.Source)
+		pipe.Source = nil
 	}
-	if pipeline.Sink == nil {
+	if pipe.Sink == nil {
 		// Special handling of ForkRemapper: automatically connect mapped pipelines
-		pipeline.Sink = f.getRemappedSink(pipeline, path)
+		pipe.Sink = f.getRemappedSink(pipe, path)
 	}
-	f.StartPipeline(pipeline, func(isPassive bool, err error) {
+	f.StartPipeline(pipe, func(isPassive bool, err error) {
 		f.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Subpipeline %v", description, path))
 	})
 
-	if len(pipeline.Processors) == 0 {
-		return pipeline.Sink
+	if len(pipe.Processors) == 0 {
+		return pipe.Sink
 	} else {
-		return pipeline.Processors[0]
+		return pipe.Processors[0]
 	}
 }
 

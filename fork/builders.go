@@ -19,9 +19,9 @@ func (b *SimplePipelineBuilder) ContainedStringers() []fmt.Stringer {
 		if b.Build == nil {
 			b.examplePipeline = make([]fmt.Stringer, 0)
 		} else {
-			pipeline := b.Build()
-			b.examplePipeline = make([]fmt.Stringer, len(pipeline))
-			for i, step := range pipeline {
+			pipe := b.Build()
+			b.examplePipeline = make([]fmt.Stringer, len(pipe))
+			for i, step := range pipe {
 				b.examplePipeline[i] = step
 			}
 		}
@@ -115,7 +115,7 @@ func MultiFileSuffixBuilder(buildPipeline func() []bitflow.SampleProcessor) *Mul
 
 func MultiFileDirectoryBuilder(replaceFilename bool, buildPipeline func() []bitflow.SampleProcessor) *MultiFilePipelineBuilder {
 	builder := &MultiFilePipelineBuilder{
-		Description: fmt.Sprintf("directory tree built from subpipeline key"),
+		Description: "directory tree built from subpipeline key",
 		NewFile: func(oldFile string, key interface{}) string {
 			path := fmt.Sprintf("%v", key)
 			if path == "" {

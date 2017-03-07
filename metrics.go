@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 
+	"errors"
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-onlinestats"
@@ -23,7 +24,7 @@ func (helper *MetricMapperHelper) incomingHeader(header *bitflow.Header, descrip
 	var outFields []string
 	helper.outIndices, outFields = constructIndices(header)
 	if len(helper.outIndices) != len(outFields) {
-		return fmt.Errorf("constructIndices() in MetricMapperHelper.incomingHeader returned non equal sized results")
+		return errors.New("constructIndices() in MetricMapperHelper.incomingHeader returned non equal sized results")
 	}
 	if len(outFields) == 0 {
 		log.Warnln(description, "removed all metrics")
@@ -80,18 +81,18 @@ func (m *AbstractMetricMapper) String() string {
 
 type AbstractMetricFilter struct {
 	AbstractMetricMapper
-	IncludeFilter func(name string) bool // Return true if metric should be INcluded
+	IncludeFilter func(name string) bool // Return true if metric should be included
 }
 
-func (self *AbstractMetricFilter) constructIndices(header *bitflow.Header) ([]int, []string) {
+func (filter *AbstractMetricFilter) constructIndices(header *bitflow.Header) ([]int, []string) {
 	outFields := make([]string, 0, len(header.Fields))
 	outIndices := make([]int, 0, len(header.Fields))
-	filter := self.IncludeFilter
-	if filter == nil {
+	include := filter.IncludeFilter
+	if include == nil {
 		return nil, nil
 	}
 	for index, field := range header.Fields {
-		if filter(field) {
+		if include(field) {
 			outFields = append(outFields, field)
 			outIndices = append(outIndices, index)
 		}
@@ -222,9 +223,9 @@ func (mapper *MetricMapper) constructIndices(header *bitflow.Header) ([]int, []s
 }
 
 func (mapper *MetricMapper) String() string {
-	maxlen := 3
-	if len(mapper.Metrics) > maxlen {
-		return fmt.Sprintf("Metric Mapper: %v ...", mapper.Metrics[:maxlen])
+	maxLen := 3
+	if len(mapper.Metrics) > maxLen {
+		return fmt.Sprintf("Metric Mapper: %v ...", mapper.Metrics[:maxLen])
 	} else {
 		return fmt.Sprintf("Metric Mapper: %v", mapper.Metrics)
 	}

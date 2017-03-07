@@ -13,7 +13,7 @@ type SamplePipeline struct {
 
 func (p *SamplePipeline) Add(step bitflow.SampleProcessor) *SamplePipeline {
 	if p.lastProcessor != nil {
-		if merger, ok := p.lastProcessor.(MergableProcessor); ok {
+		if merger, ok := p.lastProcessor.(MergeableProcessor); ok {
 			if merger.MergeProcessor(step) {
 				// Merge successful: drop the incoming step
 				return p

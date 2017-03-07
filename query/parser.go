@@ -338,7 +338,7 @@ func (p *Parser) parseOpenedPipelines(openToken Token, isInput bool, isFork bool
 		}
 	}
 
-	// If there are separate pipeline fragments intermixed in a forked pieline, the separate fragments should also act as the default pipeline.
+	// If there are separate pipeline fragments intermixed in a forked pipeline, the separate fragments should also act as the default pipeline.
 	// This requires constructing an artificial pipeline with an artificial input token.
 	defaultInput := Input{Token{Type: STR, Lit: ""}}
 	defaultHash := hashInput(defaultInput)

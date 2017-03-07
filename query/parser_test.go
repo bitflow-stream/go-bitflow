@@ -218,8 +218,8 @@ func (suite *parserTestSuite) TestExamples() {
 		Pipeline{Step{
 			Name: Token{Type: 3, Lit: "a", Start: 0, End: 1},
 			Params: map[Token]Token{
-				Token{Type: 3, Lit: "f", Start: 11, End: 12}: Token{Type: 4, Lit: "'g'", Start: 13, End: 16},
-				Token{Type: 3, Lit: "x", Start: 2, End: 3}:   Token{Type: 3, Lit: "y", Start: 7, End: 8}}}})
+				Token{Type: 3, Lit: "f", Start: 11, End: 12}: {Type: 4, Lit: "'g'", Start: 13, End: 16},
+				Token{Type: 3, Lit: "x", Start: 2, End: 3}:   {Type: 3, Lit: "y", Start: 7, End: 8}}}})
 	suite.test("a b c",
 		Pipeline{Input{
 			{Type: STR, Start: 0, End: 1, Lit: "a"},
@@ -322,7 +322,7 @@ func (suite *parserTestSuite) TestFragmentedPipelines() {
 			Fork{
 				Step: Step{
 					Name:   Token{Type: 3, Lit: "rr", Start: 0, End: 2},
-					Params: map[Token]Token{Token{Type: 3, Lit: "num", Start: 4, End: 7}: Token{Type: 3, Lit: "1", Start: 8, End: 9}}},
+					Params: map[Token]Token{Token{Type: 3, Lit: "num", Start: 4, End: 7}: {Type: 3, Lit: "1", Start: 8, End: 9}}},
 				Pipelines: Pipelines{
 					Pipeline{
 						Input{Token{Type: 3, Lit: "0", Start: 18, End: 19}},
@@ -394,7 +394,7 @@ func (suite *parserTestSuite) xxTestBigExample() {
 						Pipeline{
 							Input{{Type: STR, Lit: ":111", Start: 32, End: 36}},
 							Step{Name: Token{Type: STR, Lit: "slope", Start: 40, End: 45},
-								Params: map[Token]Token{Token{Type: STR, Lit: "t", Start: 46, End: 47}: Token{Type: STR, Lit: "2", Start: 48, End: 49}}},
+								Params: map[Token]Token{Token{Type: STR, Lit: "t", Start: 46, End: 47}: {Type: STR, Lit: "2", Start: 48, End: 49}}},
 						},
 						Pipeline{
 							Pipelines{

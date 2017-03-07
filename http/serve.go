@@ -56,8 +56,8 @@ func ginRecover(c *gin.Context) {
 	defer func() {
 		if err := recover(); err != nil {
 			stack := stack(3)
-			httprequest, _ := httputil.DumpRequest(c.Request, false)
-			log.Errorf("[Recovery] panic recovered:\n%s\n%s\n%s", string(httprequest), err, stack)
+			httpRequest, _ := httputil.DumpRequest(c.Request, false)
+			log.Errorf("[Recovery] panic recovered:\n%s\n%s\n%s", string(httpRequest), err, stack)
 			c.AbortWithStatus(500)
 		}
 	}()

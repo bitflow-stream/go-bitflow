@@ -58,9 +58,9 @@ func (c *ParallelDbscanBatchClusterer) ProcessBatch(header *bitflow.Header, samp
 	}
 	clusters := c.cluster(points)
 	c.printSummary(clusters)
-	for i, clust := range clusters {
+	for i, cluster := range clusters {
 		clusterName := pipeline.ClusterName(i)
-		for _, p := range clust {
+		for _, p := range cluster {
 			point, ok := p.(*ParallelDbscanPoint)
 			if !ok {
 				panic(fmt.Sprintf("Wrong parallel_dbscan.ClusterablePoint implementation (%T): %v", p, p))

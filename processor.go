@@ -8,11 +8,11 @@ import (
 	"github.com/antongulenko/golib"
 )
 
-// MergableProcessor is an extension of bitflow.SampleProcessor, that also allows
+// MergeableProcessor is an extension of bitflow.SampleProcessor, that also allows
 // merging two processor instances of the same time into one. Merging is only allowed
 // when the result of the merge would has exactly the same functionality as using the
 // two separate instances. This can be used as an optional optimization.
-type MergableProcessor interface {
+type MergeableProcessor interface {
 	bitflow.SampleProcessor
 	MergeProcessor(other bitflow.SampleProcessor) bool
 }

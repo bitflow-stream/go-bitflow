@@ -59,8 +59,8 @@ func set_filename_tag(p *Pipeline, params map[string]string) error {
 		return parameterError("level", err)
 	}
 
-	if filesource, ok := p.Source.(*bitflow.FileSource); ok {
-		filesource.ConvertFilename = func(filename string) string {
+	if fileSource, ok := p.Source.(*bitflow.FileSource); ok {
+		fileSource.ConvertFilename = func(filename string) string {
 			for i := uint64(0); i < num; i++ {
 				filename = filepath.Dir(filename)
 			}

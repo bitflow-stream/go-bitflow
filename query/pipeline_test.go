@@ -33,7 +33,7 @@ func (suite *pipeTestSuite) test(script string, expected *bitflow.SamplePipeline
 func (suite *pipeTestSuite) TestRegularPipeline() {
 	suite.test("in -> out", &bitflow.SamplePipeline{
 		Source: &bitflow.FileSource{
-			Filenames: []string{"in"},
+			FileNames: []string{"in"},
 		},
 		Sink: &bitflow.FileSink{
 			Filename: "out",
