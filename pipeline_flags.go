@@ -465,7 +465,10 @@ func GuessEndpointType(target string) (EndpointType, error) {
 			}
 		} else {
 			if strings.Contains(target, ":") || !IsValidFilename(target) {
-				return UndefinedEndpoint, fmt.Errorf("Not a filename and not a valid TCP endpoint: %v", target)
+				var err golib.MultiError
+				err.Add(err1)
+				err.Add(err2)
+				return UndefinedEndpoint, fmt.Errorf("Not a filename and not a valid TCP endpoint: %v (%v)", target, err.NilOrError())
 			}
 			typ = FileEndpoint
 		}

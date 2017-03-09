@@ -65,7 +65,6 @@ func (suite *PipelineTestSuite) TestGuessEndpoint() {
 	compare("localhost:8888", BinaryFormat, TcpEndpoint)
 	compare("a.b.c:8888", BinaryFormat, TcpEndpoint)
 	compare("192.168.0.0:8888", BinaryFormat, TcpEndpoint)
-	compare("host:8888/xxx", BinaryFormat, TcpEndpoint)
 
 	// Neither file names nor valid TCP endpoints
 	compareErr(":ABC")
