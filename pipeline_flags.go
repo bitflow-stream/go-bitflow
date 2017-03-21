@@ -12,19 +12,17 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/golib"
-	"github.com/antongulenko/golib/gotermBox"
 )
 
 type MarshallingFormat string
 type EndpointType string
 
 const (
-	UndefinedEndpoint  = EndpointType("")
-	TcpEndpoint        = EndpointType("tcp")
-	TcpListenEndpoint  = EndpointType("listen")
-	FileEndpoint       = EndpointType("file")
-	StdEndpoint        = EndpointType("std")
-	ConsoleBoxEndpoint = EndpointType("box")
+	UndefinedEndpoint = EndpointType("")
+	TcpEndpoint       = EndpointType("tcp")
+	TcpListenEndpoint = EndpointType("listen")
+	FileEndpoint      = EndpointType("file")
+	StdEndpoint       = EndpointType("std")
 
 	UndefinedFormat = MarshallingFormat("")
 	TextFormat      = MarshallingFormat("text")
@@ -36,22 +34,32 @@ const (
 )
 
 var (
-	OutputFormats = []MarshallingFormat{TextFormat, CsvFormat, BinaryFormat}
-	AllTransports = []EndpointType{TcpEndpoint, TcpListenEndpoint, FileEndpoint, StdEndpoint, ConsoleBoxEndpoint}
+	// CustomDataSources can be filled by client code before EndpointFactory.CreateInput or similar
+	// methods to allow creation of custom data sources. The map key is a short name of the data source
+	// that can be used in URL endpoint descriptions. The parameter for the function will be
+	// the URL path of the endpoint. Example: When registering a function with the key "http", the following
+	// URL endpoint:
+	//   http://localhost:5555/abc
+	// will invoke the factory function with the parameter "localhost:5555/abc"
+	CustomDataSources = make(map[EndpointType]func(string) (MetricSource, error))
+
+	// CustomDataSinks can be filled by client code before EndpointFactory.CreateOutput or similar
+	// methods to allow creation of custom data sinks. See CustomDataSources for the meaning of the
+	// map keys and values.
+	CustomDataSinks = make(map[EndpointType]func(string) (MetricSink, error))
+
+	// CustomGeneralFlags, CustomInputFlags and CustomOutputFlags lets client code
+	// register custom command line flags that configure aspects of endpoints created
+	// through CustomDataSources and CustomDataSinks.
+	CustomGeneralFlags []func(f *flag.FlagSet)
+	CustomInputFlags   []func(f *flag.FlagSet)
+	CustomOutputFlags  []func(f *flag.FlagSet)
 
 	allFormatsMap = map[MarshallingFormat]bool{
 		TextFormat:   true,
 		CsvFormat:    true,
 		BinaryFormat: true,
 	}
-
-	ConsoleBoxSettings = gotermBox.CliLogBox{
-		NoUtf8:        false,
-		LogLines:      10,
-		MessageBuffer: 500,
-	}
-	ConsoleBoxUpdateInterval    = 500 * time.Millisecond
-	ConsoleBoxMinUpdateInterval = 50 * time.Millisecond
 
 	stdTransportTarget = "-"
 	binaryFileSuffix   = ".bin"
@@ -81,15 +89,10 @@ type EndpointFactory struct {
 	// Parallel marshalling/unmarshalling flags
 
 	FlagParallelHandler ParallelSampleHandler
+}
 
-	// Console box flags
-
-	ConsoleBoxNoImmediateScreenUpdate bool
-
-	// testMode is a flag used by tests to suppress initialization routines
-	// that are not testable. It is a hack to keep the EndpointFactory easy to use
-	// while making it testable.
-	testMode bool
+func init() {
+	RegisterConsoleBoxOutput()
 }
 
 func RegisterGolibFlags() {
@@ -118,6 +121,11 @@ func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
 	// Parallel marshalling/unmarshalling
 	f.IntVar(&p.FlagParallelHandler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
 	f.IntVar(&p.FlagParallelHandler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling.")
+
+	// Custom
+	for _, factoryFunc := range CustomGeneralFlags {
+		factoryFunc(f)
+	}
 }
 
 // RegisterInputFlagsTo registers flags that configure aspects of data input.
@@ -125,13 +133,18 @@ func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
 	f.BoolVar(&p.FlagFilesKeepAlive, "files-keep-alive", false, "Do not shut down after all files have been read. Useful in combination with -listen-buffer.")
 	f.BoolVar(&p.FlagInputFilesRobust, "files-robust", false, "When encountering errors while reading files, print warnings instead of failing.")
 	f.UintVar(&p.FlagInputTcpAcceptLimit, "listen-limit", 0, "Limit number of simultaneous TCP connections accepted for incoming data.")
+	for _, factoryFunc := range CustomInputFlags {
+		factoryFunc(f)
+	}
 }
 
 // RegisterOutputConfigFlagsTo registers flags that configure data outputs.
 func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
 	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
-	f.BoolVar(&p.ConsoleBoxNoImmediateScreenUpdate, "slow-screen-updates", false, fmt.Sprintf("For console box output, don't update the screen on every sample, but only in intervals of %v", ConsoleBoxUpdateInterval))
 	f.BoolVar(&p.FlagFilesAppend, "files-append", false, "For file output, do no create new files by incrementing the suffix and append to existing files.")
+	for _, factoryFunc := range CustomOutputFlags {
+		factoryFunc(f)
+	}
 }
 
 // Writer returns an instance of SampleReader, configured by the values stored in the EndpointFactory.
@@ -144,8 +157,8 @@ func (p *EndpointFactory) Reader(um Unmarshaller) SampleReader {
 
 // CreateInput creates a MetricSource object based on the given input endpoint descriptions
 // and the configuration flags in the EndpointFactory.
-func (p *EndpointFactory) CreateInput(inputs ...string) (UnmarshallingMetricSource, error) {
-	var result UnmarshallingMetricSource
+func (p *EndpointFactory) CreateInput(inputs ...string) (MetricSource, error) {
+	var result MetricSource
 	inputType := UndefinedEndpoint
 	for _, input := range inputs {
 		endpoint, err := ParseEndpointDescription(input, false)
@@ -189,11 +202,22 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (UnmarshallingMetricSour
 				source.Reader = reader
 				result = source
 			default:
-				return nil, errors.New("Unknown input endpoint type: " + string(endpoint.Type))
+				if factory, ok := CustomDataSources[endpoint.Type]; ok && endpoint.IsCustomType {
+					var factoryErr error
+					result, factoryErr = factory(endpoint.Target)
+					if factoryErr != nil {
+						return nil, fmt.Errorf("Error creating '%v' input: %v", endpoint.Type, factoryErr)
+					}
+				} else {
+					return nil, errors.New("Unknown input endpoint type: " + string(endpoint.Type))
+				}
 			}
 		} else {
 			if inputType != endpoint.Type {
 				return nil, fmt.Errorf("Please provide only one data source (Provided %v and %v)", inputType, endpoint.Type)
+			}
+			if endpoint.IsCustomType {
+				return nil, fmt.Errorf("Cannot define multiple sources for custom input type '%v'", inputType)
 			}
 			switch endpoint.Type {
 			case StdEndpoint:
@@ -240,19 +264,6 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 			txt.AssumeStdout = true
 		}
 		resultSink = sink
-	case ConsoleBoxEndpoint:
-		sink := &ConsoleBoxSink{
-			CliLogBoxTask: gotermBox.CliLogBoxTask{
-				CliLogBox:         ConsoleBoxSettings,
-				UpdateInterval:    ConsoleBoxUpdateInterval,
-				MinUpdateInterval: ConsoleBoxMinUpdateInterval,
-			},
-			ImmediateScreenUpdate: !p.ConsoleBoxNoImmediateScreenUpdate,
-		}
-		if !p.testMode {
-			sink.Init()
-		}
-		resultSink = sink
 	case FileEndpoint:
 		sink := &FileSink{
 			Filename:   endpoint.Target,
@@ -280,7 +291,15 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 		marshallingSink = &sink.AbstractMarshallingMetricSink
 		resultSink = sink
 	default:
-		return nil, errors.New("Unknown output endpoint type: " + string(endpoint.Type))
+		if factory, ok := CustomDataSinks[endpoint.Type]; ok && endpoint.IsCustomType {
+			var factoryErr error
+			resultSink, factoryErr = factory(endpoint.Target)
+			if factoryErr != nil {
+				return nil, fmt.Errorf("Error creating '%v' output: %v", endpoint.Type, factoryErr)
+			}
+		} else {
+			return nil, errors.New("Unknown output endpoint type: " + string(endpoint.Type))
+		}
 	}
 	if marshallingSink != nil {
 		marshallingSink.SetMarshaller(marshaller)
@@ -299,9 +318,10 @@ func IsConsoleOutput(sink MetricSink) bool {
 // EndpointDescription describes a data endpoint, regardless of the data direction
 // (input or output).
 type EndpointDescription struct {
-	Format MarshallingFormat
-	Type   EndpointType
-	Target string
+	Format       MarshallingFormat
+	Type         EndpointType
+	IsCustomType bool
+	Target       string
 }
 
 // Unmarshaller creates an Unmarshaller object that is able to read data from the
@@ -334,10 +354,12 @@ func (e EndpointDescription) DefaultOutputFormat() MarshallingFormat {
 		return CsvFormat
 	case StdEndpoint:
 		return TextFormat
-	case ConsoleBoxEndpoint:
-		return UndefinedFormat
 	default:
-		panic("Unknown endpoint type: " + e.Type)
+		if e.IsCustomType {
+			return UndefinedFormat
+		} else {
+			panic(fmt.Sprintf("Unknown endpoint type: %v", e.Type))
+		}
 	}
 }
 
@@ -352,7 +374,7 @@ func (format MarshallingFormat) Marshaller() Marshaller {
 	case BinaryFormat:
 		return BinaryMarshaller{}
 	default:
-		// This can occur with ConsoleBoxEndpoint, where the Format is parsed as UndefinedFormat
+		// This can occur with custom endpoints, where the Format is set as UndefinedFormat
 		return nil
 	}
 }
@@ -365,10 +387,11 @@ func ParseEndpointDescription(endpoint string, isOutput bool) (EndpointDescripti
 		return ParseUrlEndpointDescription(endpoint)
 	} else {
 		guessed, err := GuessEndpointDescription(endpoint)
-		//qs Correct the default output transport type for standard output to ConsoleBoxEndpoint
+		// Special case: Correct the default output transport type for standard output to ConsoleBoxEndpoint
 		if err == nil && isOutput {
-			if guessed.Target == "-" && guessed.Format == UndefinedFormat {
+			if guessed.Target == stdTransportTarget && guessed.Format == UndefinedFormat {
 				guessed.Type = ConsoleBoxEndpoint
+				guessed.IsCustomType = true
 			}
 		}
 		return guessed, err
@@ -409,15 +432,15 @@ func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err 
 				res.Type = TcpListenEndpoint
 			case FileEndpoint:
 				res.Type = FileEndpoint
-			case StdEndpoint, ConsoleBoxEndpoint:
+			case StdEndpoint:
 				if target != stdTransportTarget {
 					err = fmt.Errorf("Transport '%v' can only be defined with target '%v'", part, stdTransportTarget)
 					return
 				}
-				res.Type = EndpointType(part)
+				res.Type = StdEndpoint
 			default:
-				err = fmt.Errorf("Illegal transport type: %v", part)
-				return
+				res.IsCustomType = true
+				res.Type = EndpointType(part)
 			}
 		}
 	}
@@ -428,8 +451,8 @@ func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err 
 			err = guessErr
 		}
 	}
-	if res.Type == ConsoleBoxEndpoint && res.Format != UndefinedFormat {
-		err = fmt.Errorf("Cannot define the format for transport '%v'", ConsoleBoxEndpoint)
+	if res.IsCustomType && res.Format != UndefinedFormat {
+		err = fmt.Errorf("Cannot define the data format for transport '%v'", res.Type)
 	}
 	return
 }

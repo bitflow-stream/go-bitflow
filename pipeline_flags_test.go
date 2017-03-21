@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"errors"
+
 	"github.com/antongulenko/golib/gotermBox"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -29,14 +31,14 @@ func TestPipelineTestSuite(t *testing.T) {
 }
 
 func (suite *PipelineTestSuite) TestGuessEndpoint() {
-	compareX := func(endpoint string, format MarshallingFormat, typ EndpointType, isOutput bool) {
+	compareX := func(endpoint string, format MarshallingFormat, typ EndpointType, isCustom bool, isOutput bool) {
 		desc, err := ParseEndpointDescription(endpoint, isOutput)
 		suite.NoError(err)
-		suite.Equal(EndpointDescription{Format: UndefinedFormat, Type: typ, Target: endpoint}, desc)
+		suite.Equal(EndpointDescription{Format: UndefinedFormat, Type: typ, Target: endpoint, IsCustomType: isCustom}, desc)
 		suite.Equal(format, desc.OutputFormat())
 	}
 	compare := func(endpoint string, format MarshallingFormat, typ EndpointType) {
-		compareX(endpoint, format, typ, false)
+		compareX(endpoint, format, typ, false, false)
 	}
 	compareErr2 := func(endpoint string, errStr string) {
 		desc, err := ParseEndpointDescription(endpoint, false)
@@ -51,8 +53,8 @@ func (suite *PipelineTestSuite) TestGuessEndpoint() {
 		compareErr2(endpoint, "Not a filename and not a valid TCP endpoint")
 	}
 
-	compareX("-", UndefinedFormat, ConsoleBoxEndpoint, true)
-	compareX("-", TextFormat, StdEndpoint, false)
+	compareX("-", UndefinedFormat, ConsoleBoxEndpoint, true, true)
+	compareX("-", TextFormat, StdEndpoint, false, false)
 
 	// File names
 	compare("xxx", CsvFormat, FileEndpoint)
@@ -84,7 +86,8 @@ func (suite *PipelineTestSuite) TestUrlEndpoint() {
 	compare := func(endpoint string, format MarshallingFormat, outputFormat MarshallingFormat, typ EndpointType, target string) {
 		desc, err := ParseEndpointDescription(endpoint, false)
 		suite.NoError(err)
-		suite.Equal(EndpointDescription{Format: format, Type: typ, Target: target}, desc)
+		isCustom := typ == ConsoleBoxEndpoint
+		suite.Equal(EndpointDescription{Format: format, Type: typ, Target: target, IsCustomType: isCustom}, desc)
 		suite.Equal(outputFormat, desc.OutputFormat())
 	}
 
@@ -159,16 +162,13 @@ func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 	err("://xxx", "Invalid URL")
 	err("file://", "Invalid URL")
 
-	err("x://xxx", "Illegal transport")
-	err("x+x+x://xxx", "Illegal transport")
-	err("csv+xx://x", "Illegal transport")
-
 	err("csv+csv://x", "Multiple formats")
 	err("bin+bin://x", "Multiple formats")
 	err("text+text://x", "Multiple formats")
 	err("bin+csv+xx://x", "Multiple formats")
 	err("csv+text+text://x", "Multiple formats")
 
+	err("xx+xx://x", "Multiple transport")
 	err("file+file://x", "Multiple transport")
 	err("tcp+tcp://x", "Multiple transport")
 	err("std+std://-", "Multiple transport")
@@ -180,15 +180,17 @@ func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 	err("csv+std://x", "Transport 'std' can only be defined with target '-'")
 	err("std+csv://x", "Transport 'std' can only be defined with target '-'")
 
-	err("box://x", "Transport 'box' can only be defined with target '-'")
-	err("box+csv://x", "Transport 'box' can only be defined with target '-'")
-	err("csv+box://-", "Cannot define the format for transport 'box'")
+	err("csv+box://-", "Cannot define the data format for transport 'box'")
 	err("box+box://-", "Multiple transport")
+}
+
+func init() {
+	console_box_testMode = true
+	RegisterConsoleBoxOutput()
 }
 
 func (suite *PipelineTestSuite) make_factory() EndpointFactory {
 	return EndpointFactory{
-		testMode:                  true,
 		FlagInputFilesRobust:      true,
 		FlagOutputFilesClean:      true,
 		FlagIoBuffer:              666,
@@ -212,8 +214,8 @@ func (suite *PipelineTestSuite) Test_input_file() {
 	files := []string{"file1", "file2", "file3"}
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(files...)
-	source.SetSampleHandler(handler)
 	suite.NoError(err)
+	source.(UnmarshallingMetricSource).SetSampleHandler(handler)
 	expected := &FileSource{
 		FileNames: files,
 		Robust:    true,
@@ -229,8 +231,8 @@ func (suite *PipelineTestSuite) Test_input_tcp() {
 	hosts := []string{"host1:123", "host2:2", "host2:5"}
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(hosts...)
-	source.SetSampleHandler(handler)
 	suite.NoError(err)
+	source.(UnmarshallingMetricSource).SetSampleHandler(handler)
 	expected := &TCPSource{
 		RemoteAddrs:   hosts,
 		PrintErrors:   false,
@@ -248,8 +250,8 @@ func (suite *PipelineTestSuite) Test_input_tcp_listen() {
 	endpoint := ":123"
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(endpoint)
-	source.SetSampleHandler(handler)
 	suite.NoError(err)
+	source.(UnmarshallingMetricSource).SetSampleHandler(handler)
 	expected := NewTcpListenerSource(endpoint)
 	expected.SimultaneousConnections = 20
 	expected.TcpConnLimit = 10
@@ -264,7 +266,7 @@ func (suite *PipelineTestSuite) Test_input_std() {
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(endpoint)
 	suite.NoError(err)
-	source.SetSampleHandler(handler)
+	source.(UnmarshallingMetricSource).SetSampleHandler(handler)
 	expected := NewConsoleSource()
 	expected.Reader.Handler = handler
 	expected.Reader.ParallelSampleHandler = parallel_handler
@@ -291,15 +293,27 @@ func (suite *PipelineTestSuite) Test_unknown_endpoint_type() {
 	factory := suite.make_factory()
 
 	source, err := factory.CreateInput("abc://x")
-	suite.Error(err, "Unknown endpoint input type 'abc'")
+	suite.EqualError(err, "Unknown input endpoint type: abc")
 	suite.Nil(source)
 
 	source, err = factory.CreateInput("box://x")
-	suite.Error(err, "Unknown endpoint input type 'box'")
+	suite.EqualError(err, "Unknown input endpoint type: box")
 	suite.Nil(source)
 
 	sink, err := factory.CreateOutput("abc://x")
-	suite.Error(err, "Unknown endpoint input type 'abc'")
+	suite.EqualError(err, "Unknown output endpoint type: abc")
+	suite.Nil(sink)
+}
+
+func (suite *PipelineTestSuite) Test_custom_endpoint_errors() {
+	factory := suite.make_factory()
+
+	sink, err := factory.CreateOutput("box://x")
+	suite.EqualError(err, "Error creating 'box' output: Transport 'box' can only be defined with target '-'")
+	suite.Nil(sink)
+
+	sink, err = factory.CreateOutput("box+csv://x")
+	suite.EqualError(err, "Cannot define the data format for transport 'box'")
 	suite.Nil(sink)
 }
 
@@ -424,4 +438,55 @@ func (suite *PipelineTestSuite) Test_outputs() {
 	test("csv://:123", listen(":123", "csv"))
 	test("bin://:123", listen(":123", "bin"))
 	test("text://:123", listen(":123", "text"))
+}
+
+func (suite *PipelineTestSuite) Test_custom_endpoints() {
+	testEndpointType := EndpointType("testendpoint")
+	testSource := NewConsoleSource()
+	testSink := NewConsoleSink()
+	var expectedTarget string
+	var injectedError error
+	CustomDataSources[testEndpointType] = func(target string) (MetricSource, error) {
+		suite.Equal(expectedTarget, target)
+		return testSource, injectedError
+	}
+	CustomDataSinks[testEndpointType] = func(target string) (MetricSink, error) {
+		suite.Equal(expectedTarget, target)
+		return testSink, injectedError
+	}
+	defer func() {
+		delete(CustomDataSources, testEndpointType)
+		delete(CustomDataSinks, testEndpointType)
+	}()
+
+	var res interface{}
+	var err error
+	factory := suite.make_factory()
+
+	expectedTarget = "xxx"
+	res, err = factory.CreateInput("testendpoint://xxx", "testendpoint://yyy")
+	suite.EqualError(err, "Cannot define multiple sources for custom input type 'testendpoint'")
+	suite.Nil(res)
+
+	expectedTarget = "xxx"
+	res, err = factory.CreateInput("testendpoint://xxx")
+	suite.NoError(err)
+	suite.Equal(res, testSource)
+
+	expectedTarget = "yyy"
+	res, err = factory.CreateOutput("testendpoint://yyy")
+	suite.NoError(err)
+	suite.Equal(res, testSink)
+
+	injectedError = errors.New("TESTERROR")
+
+	expectedTarget = "xxx"
+	res, err = factory.CreateInput("testendpoint://xxx")
+	suite.EqualError(err, "Error creating 'testendpoint' input: TESTERROR")
+	suite.Equal(res, nil)
+
+	expectedTarget = "yyy"
+	res, err = factory.CreateOutput("testendpoint://yyy")
+	suite.EqualError(err, "Error creating 'testendpoint' output: TESTERROR")
+	suite.Equal(res, nil)
 }
