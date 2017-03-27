@@ -239,7 +239,6 @@ type MultiHeaderMerger struct {
 	bitflow.AbstractProcessor
 	header *bitflow.Header
 
-	hasTags bool
 	metrics map[string][]bitflow.Value
 	samples []*bitflow.SampleMetadata
 }
@@ -275,7 +274,6 @@ func (p *MultiHeaderMerger) addSample(incomingSample *bitflow.Sample, header *bi
 	}
 
 	p.samples = append(p.samples, incomingSample.Metadata())
-	p.hasTags = p.hasTags || header.HasTags
 }
 
 func (p *MultiHeaderMerger) Close() {
@@ -315,7 +313,7 @@ func (p *MultiHeaderMerger) reconstructHeader() *bitflow.Header {
 		fields = append(fields, field)
 	}
 	sort.Strings(fields)
-	return &bitflow.Header{Fields: fields, HasTags: p.hasTags}
+	return &bitflow.Header{Fields: fields}
 }
 
 func (p *MultiHeaderMerger) reconstructSample(num int, header *bitflow.Header) *bitflow.Sample {

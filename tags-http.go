@@ -43,7 +43,6 @@ func (tagger *HttpTagger) Start(wg *sync.WaitGroup) golib.StopChan {
 func (tagger *HttpTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	// The tags map is always rebuilt from scratch, no need to lock, just take the current reference
 	if current := tagger.currentHttpTags; current != nil {
-		header.HasTags = true
 		for tag, val := range current {
 			sample.SetTag(tag, val)
 		}

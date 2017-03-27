@@ -95,7 +95,6 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 		}),
 		"set_tag": p.makeStringFunction("set_tag", 2, func(sample *bitflow.Sample, args ...string) (interface{}, error) {
 			sample.SetTag(args[0], args[1])
-			p.currentHeader().HasTags = true
 			return args[1], nil
 		}),
 		"timestamp": p.makeStringFunction("timestamp", 0, func(sample *bitflow.Sample, args ...string) (interface{}, error) {

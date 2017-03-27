@@ -30,10 +30,6 @@ type SampleTagger struct {
 	DontOverwrite bool
 }
 
-func (h *SampleTagger) HandleHeader(header *bitflow.Header, source string) {
-	header.HasTags = true
-}
-
 func (h *SampleTagger) HandleSample(sample *bitflow.Sample, source string) {
 	for _, tag := range h.SourceTags {
 		if h.DontOverwrite {
