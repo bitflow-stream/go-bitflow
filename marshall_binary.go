@@ -53,11 +53,11 @@ func (BinaryMarshaller) String() string {
 
 // WriteHeader implements the Marshaller interface by writing a newline-separated
 // list of header field strings and an additional empty line.
-func (BinaryMarshaller) WriteHeader(header *Header, writer io.Writer) error {
+func (BinaryMarshaller) WriteHeader(header *Header, withTags bool, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
 	w.WriteStr(binary_time_col)
 	w.WriteByte(BinarySeparator)
-	if header.HasTags {
+	if withTags {
 		w.WriteStr(tags_col)
 		w.WriteByte(BinarySeparator)
 	}
@@ -74,7 +74,7 @@ func (BinaryMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 
 // WriteSample implements the Marshaller interface by writing the Sample out in a
 // dense binary format. See the BinaryMarshaller godoc for information on the format.
-func (m BinaryMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
+func (m BinaryMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
 	// Special bytes preceding each sample
 	if _, err := writer.Write([]byte(binary_sample_start)); err != nil {
 		return err
@@ -88,7 +88,7 @@ func (m BinaryMarshaller) WriteSample(sample *Sample, header *Header, writer io.
 	}
 
 	// Tags
-	if header.HasTags {
+	if withTags {
 		str := sample.TagString()
 		if _, err := writer.Write([]byte(str)); err != nil {
 			return err
@@ -114,7 +114,7 @@ func (m BinaryMarshaller) WriteSample(sample *Sample, header *Header, writer io.
 // to decide if the stream contains a header or a sample. In case of a header, Read() continues
 // reading until an empty line and parse the data to a header instance. In case of a sample,
 // the size is derived from the previousHeader parameter.
-func (b BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Header, []byte, error) {
+func (b BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *UnmarshalledHeader) (*UnmarshalledHeader, []byte, error) {
 	if previousHeader == nil {
 		return b.readHeader(reader)
 	}
@@ -142,7 +142,7 @@ func (b BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*H
 	}
 }
 
-func (BinaryMarshaller) readHeader(reader *bufio.Reader) (*Header, []byte, error) {
+func (BinaryMarshaller) readHeader(reader *bufio.Reader) (*UnmarshalledHeader, []byte, error) {
 	name, err := readUntil(reader, BinarySeparator)
 	if err != nil {
 		if len(name) > 0 {
@@ -157,7 +157,7 @@ func (BinaryMarshaller) readHeader(reader *bufio.Reader) (*Header, []byte, error
 		return nil, nil, err
 	}
 
-	header := new(Header)
+	header := new(UnmarshalledHeader)
 	first := true
 	for {
 		nameBytes, err := readUntil(reader, BinarySeparator)
@@ -179,7 +179,7 @@ func (BinaryMarshaller) readHeader(reader *bufio.Reader) (*Header, []byte, error
 	}
 }
 
-func (BinaryMarshaller) readSampleData(header *Header, input *bufio.Reader) ([]byte, error) {
+func (BinaryMarshaller) readSampleData(header *UnmarshalledHeader, input *bufio.Reader) ([]byte, error) {
 	valueLen := valBytes * len(header.Fields)
 	minLen := timeBytes + valueLen
 	data := make([]byte, minLen)
@@ -215,7 +215,7 @@ func (BinaryMarshaller) readSampleData(header *Header, input *bufio.Reader) ([]b
 
 // ParseSample implements the Unmarshaller interface by parsing the byte buffer
 // to a new Sample instance. See the godoc for BinaryMarshaller for details on the format.
-func (BinaryMarshaller) ParseSample(header *Header, minValueCapacity int, data []byte) (sample *Sample, err error) {
+func (BinaryMarshaller) ParseSample(header *UnmarshalledHeader, minValueCapacity int, data []byte) (sample *Sample, err error) {
 	// Required size
 	size := timeBytes + len(header.Fields)*valBytes
 	if len(data) < size {

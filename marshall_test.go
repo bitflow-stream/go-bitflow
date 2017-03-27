@@ -17,12 +17,12 @@ func TestMarshallerTestSuite(t *testing.T) {
 	suite.Run(t, new(MarshallerTestSuite))
 }
 
-func (suite *MarshallerTestSuite) testRead(m BidiMarshaller, rdr *bufio.Reader, expectedHeader *Header, samples []*Sample) {
+func (suite *MarshallerTestSuite) testRead(m BidiMarshaller, rdr *bufio.Reader, expectedHeader *UnmarshalledHeader, samples []*Sample) {
 	header, data, err := m.Read(rdr, nil)
 	suite.NoError(err)
 	suite.Nil(data)
 	suite.NotNil(header)
-	suite.compareHeaders(expectedHeader, header)
+	suite.compareUnmarshalledHeaders(expectedHeader, header)
 
 	for _, expectedSample := range samples {
 		nilHeader, data, err := m.Read(rdr, header)
@@ -39,10 +39,10 @@ func (suite *MarshallerTestSuite) testRead(m BidiMarshaller, rdr *bufio.Reader, 
 	}
 }
 
-func (suite *MarshallerTestSuite) write(m BidiMarshaller, buf *bytes.Buffer, header *Header, samples []*Sample) {
-	suite.NoError(m.WriteHeader(header, buf))
+func (suite *MarshallerTestSuite) write(m BidiMarshaller, buf *bytes.Buffer, header *UnmarshalledHeader, samples []*Sample) {
+	suite.NoError(m.WriteHeader(&header.Header, header.HasTags, buf))
 	for _, sample := range samples {
-		suite.NoError(m.WriteSample(sample, header, buf))
+		suite.NoError(m.WriteSample(sample, &header.Header, header.HasTags, buf))
 	}
 }
 

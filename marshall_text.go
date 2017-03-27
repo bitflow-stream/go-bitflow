@@ -59,18 +59,18 @@ func (TextMarshaller) String() string {
 
 // WriteHeader implements the Marshaller interface. It is empty, because
 // TextMarshaller prints a separate header for each Sample.
-func (TextMarshaller) WriteHeader(header *Header, writer io.Writer) error {
+func (TextMarshaller) WriteHeader(header *Header, withTags bool, output io.Writer) error {
 	return nil
 }
 
 // WriteSample implements the Marshaller interface. See the TextMarshaller godoc
 // for information about the format.
-func (m TextMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
+func (m TextMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
 	headerStr := sample.Time.Format(TextMarshallerDateFormat)
-	if header.HasTags {
+	if withTags {
 		headerStr = fmt.Sprintf("%s (%s)", headerStr, sample.TagString())
 	}
 	lines := make([]string, 0, len(sample.Values))

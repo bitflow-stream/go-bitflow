@@ -22,8 +22,8 @@ const (
 // or in-memory byte buffers.
 type Marshaller interface {
 	String() string
-	WriteHeader(header *Header, output io.Writer) error
-	WriteSample(sample *Sample, header *Header, output io.Writer) error
+	WriteHeader(header *Header, withTags bool, output io.Writer) error
+	WriteSample(sample *Sample, header *Header, withTags bool, output io.Writer) error
 }
 
 // Unmarshaller is an interface for reading Samples and Headers from byte streams.
@@ -60,22 +60,29 @@ type Unmarshaller interface {
 	// case, both other return values must be nil.
 	// If io.EOF occurs in the middle of reading the stream, it must be converted to io.ErrUnexpectedEOF
 	// to indicate an actual error condition.
-	Read(input *bufio.Reader, previousHeader *Header) (newHeader *Header, sampleData []byte, err error)
+	Read(input *bufio.Reader, previousHeader *UnmarshalledHeader) (newHeader *UnmarshalledHeader, sampleData []byte, err error)
 
 	// ParseSample uses a header and a byte buffer to parse it to a newly
 	// allocated Sample instance. The resulting Sample must have a Value slice with at least the capacity
 	// of minValueCapacity. A non-nil error indicates that the data was in the wrong format.
-	ParseSample(header *Header, minValueCapacity int, data []byte) (*Sample, error)
+	ParseSample(header *UnmarshalledHeader, minValueCapacity int, data []byte) (*Sample, error)
 }
 
 // BidiMarshaller is a bidirectional marshaller that combines the
 // Marshaller and Unmarshaller interfaces.
 type BidiMarshaller interface {
-	Read(input *bufio.Reader, previousHeader *Header) (newHeader *Header, sampleData []byte, err error)
-	ParseSample(header *Header, minValueCapacity int, data []byte) (*Sample, error)
-	WriteHeader(header *Header, output io.Writer) error
-	WriteSample(sample *Sample, header *Header, output io.Writer) error
+	Read(input *bufio.Reader, previousHeader *UnmarshalledHeader) (newHeader *UnmarshalledHeader, sampleData []byte, err error)
+	ParseSample(header *UnmarshalledHeader, minValueCapacity int, data []byte) (*Sample, error)
+	WriteHeader(header *Header, withTags bool, output io.Writer) error
+	WriteSample(sample *Sample, header *Header, withTags bool, output io.Writer) error
 	String() string
+}
+
+// UnmarshalledHeader extends a Header by adding a flag that indicated whether the unmarshalled
+// samples will contain tags or not. This enables backwards-compatibility for data input without tags.
+type UnmarshalledHeader struct {
+	Header
+	HasTags bool
 }
 
 func readUntil(reader *bufio.Reader, delim byte) (data []byte, err error) {

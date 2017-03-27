@@ -57,7 +57,7 @@ func (sink *ConsoleBoxSink) updateBox(out io.Writer, textWidth int) error {
 	}
 	return TextMarshaller{
 		TextWidth: textWidth,
-	}.WriteSample(sample, header, out)
+	}.WriteSample(sample, header, sample.NumTags() > 0, out)
 }
 
 // Close implements the MetricSink interface. It stops the screen refresh

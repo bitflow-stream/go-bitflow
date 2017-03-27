@@ -28,8 +28,8 @@ type SampleWriter struct {
 // more Samples are expected. No more data can be written after calling Close().
 type SampleOutputStream struct {
 	parallelSampleStream
-	incoming       chan *bufferedSample
-	outgoing       chan *bufferedSample
+	incoming       chan *bufferedOutputSample
+	outgoing       chan *bufferedOutputSample
 	writer         io.WriteCloser
 	marshaller     Marshaller
 	marshallBuffer int
@@ -82,8 +82,8 @@ func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *Sampl
 	stream := &SampleOutputStream{
 		writer:     writer,
 		marshaller: marshaller,
-		incoming:   make(chan *bufferedSample, w.BufferedSamples),
-		outgoing:   make(chan *bufferedSample, w.BufferedSamples),
+		incoming:   make(chan *bufferedOutputSample, w.BufferedSamples),
+		outgoing:   make(chan *bufferedOutputSample, w.BufferedSamples),
 		parallelSampleStream: parallelSampleStream{
 			closed: golib.NewStopChan(),
 		},
@@ -113,11 +113,13 @@ func (stream *SampleOutputStream) Sample(sample *Sample, header *Header) error {
 	if stream.hasError() {
 		return stream.getErrorNoEOF()
 	}
-	bufferedSample := &bufferedSample{
-		stream:   &stream.parallelSampleStream,
-		header:   header,
-		sample:   sample,
-		doneCond: sync.NewCond(new(sync.Mutex)),
+	bufferedSample := &bufferedOutputSample{
+		header: header,
+		bufferedSample: bufferedSample{
+			stream:   &stream.parallelSampleStream,
+			sample:   sample,
+			doneCond: sync.NewCond(new(sync.Mutex)),
+		},
 	}
 	var err error
 	stream.closed.IfElseStopped(
@@ -157,13 +159,13 @@ func (stream *SampleOutputStream) marshall() {
 	}
 }
 
-func (stream *SampleOutputStream) marshallOne(sample *bufferedSample) {
+func (stream *SampleOutputStream) marshallOne(sample *bufferedOutputSample) {
 	defer sample.notifyDone()
 	if stream.hasError() {
 		return
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, stream.marshallBuffer))
-	err := stream.marshaller.WriteSample(sample.sample, sample.header, buf)
+	err := stream.marshaller.WriteSample(sample.sample, sample.header, true, buf)
 	stream.addError(err)
 	if l := buf.Len(); l > stream.marshallBuffer {
 		// Avoid buffer copies for future samples
@@ -190,7 +192,7 @@ func (stream *SampleOutputStream) flush() {
 			break
 		}
 		if checker.HeaderChanged(sample.header) {
-			if err := stream.marshaller.WriteHeader(sample.header, stream.writer); stream.addError(err) {
+			if err := stream.marshaller.WriteHeader(sample.header, true, stream.writer); stream.addError(err) {
 				break
 			}
 			if err := stream.flushBuffered(); stream.addError(err) {
@@ -204,4 +206,9 @@ func (stream *SampleOutputStream) flush() {
 	for range stream.outgoing {
 		// Flush the outgoing channel to avoid blocking Sample() calls in case of errors
 	}
+}
+
+type bufferedOutputSample struct {
+	bufferedSample
+	header *Header
 }

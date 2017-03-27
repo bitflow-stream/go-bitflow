@@ -58,10 +58,10 @@ func (CsvMarshaller) String() string {
 }
 
 // WriteHeader implements the Marshaller interface by printing a CSV header line.
-func (CsvMarshaller) WriteHeader(header *Header, writer io.Writer) error {
+func (CsvMarshaller) WriteHeader(header *Header, withTags bool, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
 	w.WriteStr(csv_time_col)
-	if header.HasTags {
+	if withTags {
 		w.WriteByte(CsvSeparator)
 		w.WriteStr(tags_col)
 	}
@@ -77,10 +77,10 @@ func (CsvMarshaller) WriteHeader(header *Header, writer io.Writer) error {
 }
 
 // WriteSample implements the Marshaller interface by writing a CSV line.
-func (CsvMarshaller) WriteSample(sample *Sample, header *Header, writer io.Writer) error {
+func (CsvMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
 	w.WriteStr(sample.Time.UTC().Format(CsvDateFormat))
-	if header.HasTags {
+	if withTags {
 		tags := sample.TagString()
 		w.WriteByte(CsvSeparator)
 		w.WriteStr(tags)
@@ -101,7 +101,7 @@ func splitCsvLine(line []byte) []string {
 // Based on the first field, Read decides whether the line represents a header or a Sample.
 // In case of a header, the CSV fields are split and parsed to a Header instance.
 // In case of a Sample, the data for the line is returned without parsing it.
-func (c CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Header, []byte, error) {
+func (c CsvMarshaller) Read(reader *bufio.Reader, previousHeader *UnmarshalledHeader) (*UnmarshalledHeader, []byte, error) {
 	line, err := readUntil(reader, CsvNewline)
 	if err == io.EOF {
 		if len(line) == 0 {
@@ -137,14 +137,16 @@ func (c CsvMarshaller) Read(reader *bufio.Reader, previousHeader *Header) (*Head
 	}
 }
 
-func (CsvMarshaller) parseHeader(line []byte) *Header {
+func (CsvMarshaller) parseHeader(line []byte) *UnmarshalledHeader {
 	fields := splitCsvLine(line)
 	if WarnObsoleteBinaryFormat && len(fields) == 1 {
 		log.Warnln("CSV header contains only time field. This might be the old binary format, " +
 			"use the 'old_binary_format' tag from the go-bitflow-pipeline repository.")
 	}
 	hasTags := len(fields) >= 2 && fields[1] == tags_col
-	header := &Header{HasTags: hasTags}
+	header := &UnmarshalledHeader{
+		HasTags: hasTags,
+	}
 	start := 1
 	if hasTags {
 		start++
@@ -157,7 +159,7 @@ func (CsvMarshaller) parseHeader(line []byte) *Header {
 }
 
 // ParseSample implements the Unmarshaller interface by parsing a CSV line.
-func (CsvMarshaller) ParseSample(header *Header, minValueCapacity int, data []byte) (sample *Sample, err error) {
+func (CsvMarshaller) ParseSample(header *UnmarshalledHeader, minValueCapacity int, data []byte) (sample *Sample, err error) {
 	fields := splitCsvLine(data)
 	var t time.Time
 	t, err = time.Parse(CsvDateFormat, fields[0])

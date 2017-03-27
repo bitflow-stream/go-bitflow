@@ -36,29 +36,20 @@ type Value float64
 type Header struct {
 	// Fields defines the names of the metrics of samples belonging to this header.
 	Fields []string
-
-	// HasTags is true, if the samples belonging to this header include tags.
-	// Tags are optional when marshalling/unmarshalling samples.
-	HasTags bool
 }
 
 // Clone creates a copy of the Header receiver, using a new string-array as
 // the header fields.
 func (h *Header) Clone(newFields []string) *Header {
 	return &Header{
-		HasTags: h.HasTags,
-		Fields:  newFields,
+		Fields: newFields,
 	}
 }
 
 // String returns a human-readable string-representation of the header, including
 // all meta-data and field names.
 func (h *Header) String() string {
-	hasTags := "no tags"
-	if h.HasTags {
-		hasTags = "with tags"
-	}
-	return fmt.Sprintf("Header (%s) %v field(s): %v", hasTags, len(h.Fields), strings.Join(h.Fields, " "))
+	return fmt.Sprintf("Header %v field(s): %v", len(h.Fields), strings.Join(h.Fields, " "))
 }
 
 // Sample contains an array of Values, a timestamp, and a string-to-string map of tags.
@@ -190,7 +181,7 @@ func escapeTagString(str string) string {
 // BinaryMarshaller when unmarshalling Samples from the respective format.
 func (sample *Sample) ParseTagString(tags string) (err error) {
 	sample.lockWrite(func() {
-		sample.tags = make(map[string]string)
+		sample.tags = nil
 		fields := strings.FieldsFunc(tags, func(r rune) bool {
 			return r == tag_equals_rune || r == tag_separator_rune
 		})
@@ -198,8 +189,11 @@ func (sample *Sample) ParseTagString(tags string) (err error) {
 			err = fmt.Errorf("Illegal tags string: %v", tags)
 			return
 		}
-		for i := 0; i < len(fields); i += 2 {
-			sample.setTag(fields[i], fields[i+1])
+		if len(fields) > 0 {
+			sample.tags = make(map[string]string)
+			for i := 0; i < len(fields); i += 2 {
+				sample.setTag(fields[i], fields[i+1])
+			}
 		}
 	})
 	return
@@ -286,7 +280,7 @@ func (sample *Sample) Resize(newSize int) bool {
 
 // Equals compares the receiving header with the argument header and returns true,
 // if the two represent the same header. This method tried to optimize the comparison
-// by first comparing the header pointers, values for HasTags, the length of the Fields slices,
+// by first comparing the header pointers and the length of the Fields slices,
 // and pointers to the arrays backing the Fields slices.
 // If all the checks fail, the last resort is to compare all the fields string-by-string.
 func (header *Header) Equals(other *Header) bool {
@@ -296,8 +290,6 @@ func (header *Header) Equals(other *Header) bool {
 	case header == nil && other == nil:
 		return true
 	case header == nil || other == nil:
-		return false
-	case header.HasTags != other.HasTags:
 		return false
 	case len(header.Fields) != len(other.Fields):
 		return false

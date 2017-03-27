@@ -364,7 +364,6 @@ func (state *parallelSampleStream) getErrorNoEOF() error {
 type bufferedSample struct {
 	stream   *parallelSampleStream
 	data     []byte
-	header   *Header // Used for marshalling and unmarshalling/parsing
 	sample   *Sample
 	done     bool
 	doneCond *sync.Cond

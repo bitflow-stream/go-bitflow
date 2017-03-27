@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
-
 	"github.com/antongulenko/golib"
 )
 
@@ -21,9 +20,8 @@ type SampleReader struct {
 	ParallelSampleHandler
 
 	// Handler is an optional hook for modifying Headers and Samples that were
-	// read by this SampleReader. The hook methods receive a string-representation of
-	// the data source and can use it to modify tags in the Samples. If this is done,
-	// the HasTags flag should also be set to true in incoming Headers.
+	// read by this SampleReader. The hook method receives a string-representation of
+	// the data source and can use it to modify tags in the Samples.
 	Handler ReadSampleHandler
 
 	// Unmarshaller will be used when reading and parsing Headers and Samples.
@@ -33,16 +31,8 @@ type SampleReader struct {
 	Unmarshaller Unmarshaller
 }
 
-// ReadSampleHandler defines two hooks for modifying Headers and Samples.
-//
+// ReadSampleHandler defines a hook for modifying unmarshalled Samples.
 type ReadSampleHandler interface {
-	// HandleHeader allows modifying received Headers. The main purpose is to set
-	// or unset the HasTags flags. The source string is not really useful here,
-	// as it is more useful in the HandleSample method. In special cases
-	// it might be useful to change the Header fields here, but that should rather
-	// be done in a later processing step.
-	HandleHeader(header *Header, source string)
-
 	// HandleSample allows modifying received Samples. It can be used to modify
 	// the tags of the Sample based on the source string. The source string depends on the
 	// MetricSource that is using the SampleReader that contains this ReadSampleHandler.
@@ -69,8 +59,8 @@ type SampleInputStream struct {
 	reader           *bufio.Reader
 	underlyingReader io.ReadCloser
 	num_samples      int
-	header           *Header // Header received from the input stream
-	outHeader        *Header // Header after modified by the ReadSampleHandler
+	header           *UnmarshalledHeader // Header received from the input stream
+	outHeader        *Header             // Header after modified by the ReadSampleHandler
 	sink             MetricSinkBase
 }
 
@@ -105,8 +95,7 @@ func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink MetricSinkBase, bu
 // or closed by Close(). It returns the number of successfully received samples and a
 // non-nil error, if any occurred while reading or parsing. The source string parameter
 // will be forwarded to the ReadSampleHandler, if one is set in the SampleReader that
-// created this SampleInputStream. The source string will be used for both the HandleHeader() and
-// HandleSample() methods.
+// created this SampleInputStream. The source string will be used for the HandleSample() method.
 func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 	if stream.um == nil {
 		if um, err := detectFormat(stream.reader); err != nil {
@@ -231,9 +220,9 @@ func (stream *SampleInputStream) readData(source string) {
 			stream.updateHeader(header, source)
 		} else {
 			s := &bufferedIncomingSample{
+				inHeader:  stream.header,
 				outHeader: stream.outHeader,
 				bufferedSample: bufferedSample{
-					header:   stream.header,
 					stream:   &stream.parallelSampleStream,
 					data:     data,
 					doneCond: sync.NewCond(new(sync.Mutex)),
@@ -252,7 +241,7 @@ func (stream *SampleInputStream) readData(source string) {
 	}
 }
 
-func (stream *SampleInputStream) updateHeader(header *Header, source string) error {
+func (stream *SampleInputStream) updateHeader(header *UnmarshalledHeader, source string) error {
 	logger := log.WithFields(log.Fields{"format": stream.um, "source": source})
 	if stream.header == nil {
 		logger.Println("Reading", len(header.Fields), "metrics")
@@ -260,15 +249,10 @@ func (stream *SampleInputStream) updateHeader(header *Header, source string) err
 		logger.Println("Updated header to", len(header.Fields), "metrics")
 	}
 	stream.header = header
-	stream.outHeader = &Header{
-		HasTags: header.HasTags,
-	}
+	stream.outHeader = new(Header)
 	if numFields := len(header.Fields); numFields > 0 {
 		stream.outHeader.Fields = make([]string, numFields)
 		copy(stream.outHeader.Fields, header.Fields)
-	}
-	if handler := stream.sampleReader.Handler; handler != nil {
-		handler.HandleHeader(stream.outHeader, source)
 	}
 	return nil
 }
@@ -282,8 +266,8 @@ func (stream *SampleInputStream) parseSamples(source string) {
 
 func (stream *SampleInputStream) parseOne(source string, sample *bufferedIncomingSample) {
 	defer sample.notifyDone()
-	numValues := RequiredValues(len(sample.header.Fields), stream.sink)
-	if parsedSample, err := stream.um.ParseSample(sample.header, numValues, sample.data); err != nil {
+	numValues := RequiredValues(len(sample.inHeader.Fields), stream.sink)
+	if parsedSample, err := stream.um.ParseSample(sample.inHeader, numValues, sample.data); err != nil {
 		stream.addError(err)
 		sample.ParserError = true
 		return
@@ -316,5 +300,6 @@ func (stream *SampleInputStream) sinkSamples() {
 type bufferedIncomingSample struct {
 	bufferedSample
 	ParserError bool
+	inHeader    *UnmarshalledHeader
 	outHeader   *Header
 }

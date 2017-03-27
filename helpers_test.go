@@ -38,7 +38,7 @@ type testSuiteWithSamples struct {
 	rand      *rand.Rand
 	timestamp time.Time
 
-	headers []*Header
+	headers []*UnmarshalledHeader
 	samples [][]*Sample
 }
 
@@ -54,39 +54,41 @@ func (suite *testSuiteWithSamples) SetT(t *testing.T) {
 func (suite *testSuiteWithSamples) SetupTest() {
 	suite.timestamp = time.Now()
 	suite.rand = rand.New(rand.NewSource(123)) // deterministic
-	headers := []*Header{
-		{
+	headers := []*UnmarshalledHeader{
+		{Header: Header{
 			Fields: []string{"a", "b", "c"},
-		},
-		{
+		}},
+		{Header: Header{
 			Fields: []string{" ", "_", "="},
-		},
-		{
+		}},
+		{Header: Header{
 			Fields: []string{"x"},
-		},
-		{
+		}},
+		{Header: Header{
 			Fields: nil,
-		},
+		}},
 	}
 
 	// Add a copy of every header, now with the HasTags flag enabled
 	n := len(headers)
 	for i := 0; i < n; i++ {
-		headers = append(headers, &Header{
-			Fields:  headers[i].Fields,
+		headers = append(headers, &UnmarshalledHeader{
+			Header: Header{
+				Fields: headers[i].Fields,
+			},
 			HasTags: true,
 		})
 	}
 
-	suite.headers = make([]*Header, len(headers)*3)
+	suite.headers = make([]*UnmarshalledHeader, len(headers)*3)
 	suite.samples = make([][]*Sample, len(suite.headers))
 	step := len(headers)
 	for i, header := range headers {
-		suite.headers[i+0*step] = header.Clone(header.Fields)
+		suite.headers[i+0*step] = &UnmarshalledHeader{Header: *header.Clone(header.Fields), HasTags: header.HasTags}
 		suite.samples[i+0*step] = suite.makeSamples(header, 5)
-		suite.headers[i+1*step] = header.Clone(header.Fields)
+		suite.headers[i+1*step] = &UnmarshalledHeader{Header: *header.Clone(header.Fields), HasTags: header.HasTags}
 		suite.samples[i+1*step] = suite.makeSamples(header, 3)
-		suite.headers[i+2*step] = header.Clone(header.Fields)
+		suite.headers[i+2*step] = &UnmarshalledHeader{Header: *header.Clone(header.Fields), HasTags: header.HasTags}
 		suite.samples[i+2*step] = suite.makeSamples(header, 1)
 	}
 }
@@ -100,40 +102,39 @@ func (suite *testSuiteWithSamples) compareSamples(expected *Sample, sample *Samp
 }
 
 func (suite *testSuiteWithSamples) compareHeaders(expected *Header, header *Header) {
-	suite.Equal(expected.HasTags, header.HasTags, "Header.HasTags")
 	suite.Equal(expected.Fields, header.Fields, "Header.Fields")
 }
 
-func (suite *testSuiteWithSamples) makeSamples(header *Header, num int) (res []*Sample) {
+func (suite *testSuiteWithSamples) compareUnmarshalledHeaders(expected *UnmarshalledHeader, header *UnmarshalledHeader) {
+	suite.compareHeaders(&expected.Header, &header.Header)
+	suite.Equal(expected.HasTags, header.HasTags, "UnmarshalledHeader.HasTags")
+}
+
+func (suite *testSuiteWithSamples) makeSamples(header *UnmarshalledHeader, num int) (res []*Sample) {
 	for i := 0; i < num; i++ {
 		sample := &Sample{
 			Values: suite.makeValues(header),
 			Time:   suite.nextTimestamp(),
 		}
 		res = append(res, sample)
-		suite.setTags(sample, header)
+		if header.HasTags {
+			for key, val := range map[string]string{
+				suite.randomString(): suite.randomString(),
+				suite.randomString(): suite.randomString(),
+			} {
+				sample.SetTag(key, val)
+			}
+		}
 	}
 	return
 }
 
-func (suite *testSuiteWithSamples) makeValues(header *Header) []Value {
+func (suite *testSuiteWithSamples) makeValues(header *UnmarshalledHeader) []Value {
 	var res []Value
 	for range header.Fields {
 		res = append(res, Value(suite.rand.Float64()))
 	}
 	return res
-}
-
-func (suite *testSuiteWithSamples) setTags(sample *Sample, header *Header) {
-	if !header.HasTags {
-		return
-	}
-	for key, val := range map[string]string{
-		suite.randomString(): suite.randomString(),
-		suite.randomString(): suite.randomString(),
-	} {
-		sample.SetTag(key, val)
-	}
 }
 
 func (suite *testSuiteWithSamples) randomString() string {
@@ -151,7 +152,7 @@ func (suite *testSuiteWithSamples) newTestSinkFor(headerIndex int) *testSampleSi
 		suite:     suite,
 		emptyCond: sync.NewCond(new(sync.Mutex)),
 	}
-	s.add(suite.samples[headerIndex], suite.headers[headerIndex])
+	s.add(suite.samples[headerIndex], &(suite.headers[headerIndex].Header))
 	return s
 }
 
@@ -161,14 +162,14 @@ func (suite *testSuiteWithSamples) newFilledTestSink() *testSampleSink {
 		emptyCond: sync.NewCond(new(sync.Mutex)),
 	}
 	for i, header := range suite.headers {
-		s.add(suite.samples[i], header)
+		s.add(suite.samples[i], &(header.Header))
 	}
 	return s
 }
 
 func (suite *testSuiteWithSamples) sendSamples(w MetricSinkBase, headerIndex int) (res int) {
 	for _, sample := range suite.samples[headerIndex] {
-		suite.NoError(w.Sample(sample, suite.headers[headerIndex]))
+		suite.NoError(w.Sample(sample, &suite.headers[headerIndex].Header))
 		res++
 	}
 	return
@@ -281,10 +282,6 @@ func (suite *testSuiteWithSamples) newHandler(source string) *testSampleHandler 
 		suite:  suite,
 		source: source,
 	}
-}
-
-func (h *testSampleHandler) HandleHeader(header *Header, source string) {
-	h.suite.Equal(h.source, source)
 }
 
 func (h *testSampleHandler) HandleSample(sample *Sample, source string) {
