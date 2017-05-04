@@ -96,7 +96,7 @@ func init() {
 }
 
 func RegisterGolibFlags() {
-	golib.RegisterFlags(golib.FlagsAll & ^golib.FlagsOFL)
+	golib.RegisterFlags(golib.FlagsAll)
 }
 
 // RegisterConfigFlags registers all flags to the global CommandLine object.
