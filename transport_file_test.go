@@ -1,7 +1,10 @@
 package bitflow
 
 import (
+	"fmt"
 	"io/ioutil"
+	"os"
+	"path"
 	"strings"
 	"sync"
 	"testing"
@@ -12,6 +15,9 @@ import (
 
 type FileTestSuite struct {
 	testSuiteWithSamples
+
+	dir       string
+	fileIndex int
 }
 
 const (
@@ -23,11 +29,22 @@ func TestFileTransport(t *testing.T) {
 	suite.Run(t, new(FileTestSuite))
 }
 
-func (suite *FileTestSuite) getTestFile(m Marshaller) string {
-	testFile, err := ioutil.TempFile("", baseFilename+"."+m.String()+".")
+func (suite *FileTestSuite) SetupSuite() {
+	suite.testSuiteWithSamples.SetupTest()
+	dir, err := ioutil.TempDir("", "tests")
 	suite.NoError(err)
+	suite.dir = dir
+}
+
+func (suite *FileTestSuite) TearDownSuite() {
+	suite.NoError(os.RemoveAll(suite.dir))
+}
+
+func (suite *FileTestSuite) getTestFile(m Marshaller) string {
+	suite.fileIndex++
+	testFile := path.Join(suite.dir, fmt.Sprintf("%v-%v.%v", baseFilename, suite.fileIndex, m.String()))
 	log.Debugln("TEST FILE for", m, ":", testFile)
-	return testFile.Name()
+	return testFile
 }
 
 func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
