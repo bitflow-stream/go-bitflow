@@ -14,17 +14,24 @@ type FileTestSuite struct {
 	testSuiteWithSamples
 }
 
+const (
+	baseFilename        = "bitflow-test-file"
+	replacementFilename = "TEST-123123"
+)
+
 func TestFileTransport(t *testing.T) {
 	suite.Run(t, new(FileTestSuite))
 }
 
-func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
-	basename := "bitflow-test-file"
-	newName := "TEST-123123"
-	testFileFile, err := ioutil.TempFile("", basename+"."+m.String()+".")
-	testFile := testFileFile.Name()
+func (suite *FileTestSuite) getTestFile(m Marshaller) string {
+	testFile, err := ioutil.TempFile("", baseFilename+"."+m.String()+".")
 	suite.NoError(err)
 	log.Debugln("TEST FILE for", m, ":", testFile)
+	return testFile.Name()
+}
+
+func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
+	testFile := suite.getTestFile(m)
 	defer func() {
 		g := NewFileGroup(testFile)
 		suite.NoError(g.DeleteFiles())
@@ -55,12 +62,12 @@ func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
 		Robust:         false,
 		IoBuffer:       1024,
 		ConvertFilename: func(name string) string {
-			suite.True(strings.Contains(name, basename))
-			return newName
+			suite.True(strings.Contains(name, baseFilename))
+			return replacementFilename
 		},
 	}
 	in.Reader.ParallelSampleHandler = parallel_handler
-	in.Reader.Handler = suite.newHandler(newName)
+	in.Reader.Handler = suite.newHandler(replacementFilename)
 	in.SetSink(testSink)
 	ch = in.Start(&wg)
 	wg.Wait()
@@ -79,13 +86,8 @@ func (suite *FileTestSuite) testIndividualHeaders(m Marshaller) {
 		}
 	}()
 	for i := range suite.headers {
-		basename := "bitflow-test-file"
-		newName := "TEST-123123"
-		testFileFile, err := ioutil.TempFile("", basename+"."+m.String()+".")
-		testFile := testFileFile.Name()
+		testFile := suite.getTestFile(m)
 		testFiles = append(testFiles, testFile)
-		suite.NoError(err)
-		log.Debugln("TEST FILE for", m, ":", testFile)
 
 		// ========= Write file
 		out := &FileSink{
@@ -111,12 +113,12 @@ func (suite *FileTestSuite) testIndividualHeaders(m Marshaller) {
 			Robust:    false,
 			IoBuffer:  1024,
 			ConvertFilename: func(name string) string {
-				suite.True(strings.Contains(name, basename))
-				return newName
+				suite.True(strings.Contains(name, baseFilename))
+				return replacementFilename
 			},
 		}
 		in.Reader.ParallelSampleHandler = parallel_handler
-		in.Reader.Handler = suite.newHandler(newName)
+		in.Reader.Handler = suite.newHandler(replacementFilename)
 		in.SetSink(testSink)
 		ch = in.Start(&wg)
 		wg.Wait()
