@@ -21,6 +21,14 @@ type PipelineBuilder struct {
 	fork_registry     map[string]registeredFork
 }
 
+func NewPipelineBuilder() *PipelineBuilder {
+	return &PipelineBuilder{
+		Endpoints:         *bitflow.NewEndpointFactory(),
+		analysis_registry: make(map[string]registeredAnalysis),
+		fork_registry:     make(map[string]registeredFork),
+	}
+}
+
 type registeredAnalysis struct {
 	Name        string
 	Func        AnalysisFunc
@@ -34,9 +42,6 @@ type registeredFork struct {
 }
 
 func (b *PipelineBuilder) RegisterAnalysis(name string, setupPipeline AnalysisFunc, description string) {
-	if b.analysis_registry == nil {
-		b.analysis_registry = make(map[string]registeredAnalysis)
-	}
 	if _, ok := b.analysis_registry[name]; ok {
 		panic("Analysis already registered: " + name)
 	}
@@ -44,9 +49,6 @@ func (b *PipelineBuilder) RegisterAnalysis(name string, setupPipeline AnalysisFu
 }
 
 func (b *PipelineBuilder) RegisterFork(name string, forkBuilder ForkFunc, description string) {
-	if b.fork_registry == nil {
-		b.fork_registry = make(map[string]registeredFork)
-	}
 	if _, ok := b.fork_registry[name]; ok {
 		panic("Fork already registered: " + name)
 	}

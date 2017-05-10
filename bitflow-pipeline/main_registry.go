@@ -12,7 +12,7 @@ type Pipeline struct {
 	*pipeline.SamplePipeline
 }
 
-var builder query.PipelineBuilder
+var builder = query.NewPipelineBuilder()
 
 func RegisterAnalysis(name string, setupPipeline func(pipeline *Pipeline), description string) {
 	builder.RegisterAnalysis(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
