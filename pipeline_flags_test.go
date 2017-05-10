@@ -186,20 +186,19 @@ func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 
 func init() {
 	console_box_testMode = true
-	RegisterConsoleBoxOutput()
 }
 
-func (suite *PipelineTestSuite) make_factory() EndpointFactory {
-	return EndpointFactory{
-		FlagInputFilesRobust:      true,
-		FlagOutputFilesClean:      true,
-		FlagIoBuffer:              666,
-		FlagOutputTcpListenBuffer: 777,
-		FlagTcpConnectionLimit:    10,
-		FlagInputTcpAcceptLimit:   20,
-		FlagTcpDropErrors:         true,
-		FlagParallelHandler:       parallel_handler,
-	}
+func (suite *PipelineTestSuite) make_factory() *EndpointFactory {
+	f := NewEndpointFactory()
+	f.FlagInputFilesRobust = true
+	f.FlagOutputFilesClean = true
+	f.FlagIoBuffer = 666
+	f.FlagOutputTcpListenBuffer = 777
+	f.FlagTcpConnectionLimit = 10
+	f.FlagInputTcpAcceptLimit = 20
+	f.FlagTcpDropErrors = true
+	f.FlagParallelHandler = parallel_handler
+	return f
 }
 
 func (suite *PipelineTestSuite) Test_no_inputs() {
@@ -441,27 +440,23 @@ func (suite *PipelineTestSuite) Test_outputs() {
 }
 
 func (suite *PipelineTestSuite) Test_custom_endpoints() {
+	factory := suite.make_factory()
 	testEndpointType := EndpointType("testendpoint")
 	testSource := NewConsoleSource()
 	testSink := NewConsoleSink()
 	var expectedTarget string
 	var injectedError error
-	CustomDataSources[testEndpointType] = func(target string) (MetricSource, error) {
+	factory.CustomDataSources[testEndpointType] = func(target string) (MetricSource, error) {
 		suite.Equal(expectedTarget, target)
 		return testSource, injectedError
 	}
-	CustomDataSinks[testEndpointType] = func(target string) (MetricSink, error) {
+	factory.CustomDataSinks[testEndpointType] = func(target string) (MetricSink, error) {
 		suite.Equal(expectedTarget, target)
 		return testSink, injectedError
 	}
-	defer func() {
-		delete(CustomDataSources, testEndpointType)
-		delete(CustomDataSinks, testEndpointType)
-	}()
 
 	var res interface{}
 	var err error
-	factory := suite.make_factory()
 
 	expectedTarget = "xxx"
 	res, err = factory.CreateInput("testendpoint://xxx", "testendpoint://yyy")

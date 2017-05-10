@@ -6,8 +6,6 @@ import (
 	"flag"
 	"fmt"
 
-	"sync"
-
 	"github.com/antongulenko/golib/gotermBox"
 )
 
@@ -26,16 +24,12 @@ var (
 	// that are not testable. It is a hack to keep the EndpointFactory easy to use
 	// while making it testable.
 	console_box_testMode bool
-
-	registerConsoleBoxOnce sync.Once
 )
 
-func RegisterConsoleBoxOutput() {
-	registerConsoleBoxOnce.Do(func() {
-		var factory consoleBoxFactory
-		CustomDataSinks[ConsoleBoxEndpoint] = factory.createConsoleBox
-		CustomOutputFlags = append(CustomOutputFlags, factory.registerFlags)
-	})
+func RegisterConsoleBoxOutput(e *EndpointFactory) {
+	var factory consoleBoxFactory
+	e.CustomDataSinks[ConsoleBoxEndpoint] = factory.createConsoleBox
+	e.CustomOutputFlags = append(e.CustomOutputFlags, factory.registerFlags)
 }
 
 type consoleBoxFactory struct {

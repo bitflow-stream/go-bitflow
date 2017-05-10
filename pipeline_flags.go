@@ -34,27 +34,6 @@ const (
 )
 
 var (
-	// CustomDataSources can be filled by client code before EndpointFactory.CreateInput or similar
-	// methods to allow creation of custom data sources. The map key is a short name of the data source
-	// that can be used in URL endpoint descriptions. The parameter for the function will be
-	// the URL path of the endpoint. Example: When registering a function with the key "http", the following
-	// URL endpoint:
-	//   http://localhost:5555/abc
-	// will invoke the factory function with the parameter "localhost:5555/abc"
-	CustomDataSources = make(map[EndpointType]func(string) (MetricSource, error))
-
-	// CustomDataSinks can be filled by client code before EndpointFactory.CreateOutput or similar
-	// methods to allow creation of custom data sinks. See CustomDataSources for the meaning of the
-	// map keys and values.
-	CustomDataSinks = make(map[EndpointType]func(string) (MetricSink, error))
-
-	// CustomGeneralFlags, CustomInputFlags and CustomOutputFlags lets client code
-	// register custom command line flags that configure aspects of endpoints created
-	// through CustomDataSources and CustomDataSinks.
-	CustomGeneralFlags []func(f *flag.FlagSet)
-	CustomInputFlags   []func(f *flag.FlagSet)
-	CustomOutputFlags  []func(f *flag.FlagSet)
-
 	allFormatsMap = map[MarshallingFormat]bool{
 		TextFormat:   true,
 		CsvFormat:    true,
@@ -89,10 +68,36 @@ type EndpointFactory struct {
 	// Parallel marshalling/unmarshalling flags
 
 	FlagParallelHandler ParallelSampleHandler
+
+	// CustomDataSources can be filled by client code before EndpointFactory.CreateInput or similar
+	// methods to allow creation of custom data sources. The map key is a short name of the data source
+	// that can be used in URL endpoint descriptions. The parameter for the function will be
+	// the URL path of the endpoint. Example: When registering a function with the key "http", the following
+	// URL endpoint:
+	//   http://localhost:5555/abc
+	// will invoke the factory function with the parameter "localhost:5555/abc"
+	CustomDataSources map[EndpointType]func(string) (MetricSource, error)
+
+	// CustomDataSinks can be filled by client code before EndpointFactory.CreateOutput or similar
+	// methods to allow creation of custom data sinks. See CustomDataSources for the meaning of the
+	// map keys and values.
+	CustomDataSinks map[EndpointType]func(string) (MetricSink, error)
+
+	// CustomGeneralFlags, CustomInputFlags and CustomOutputFlags lets client code
+	// register custom command line flags that configure aspects of endpoints created
+	// through CustomDataSources and CustomDataSinks.
+	CustomGeneralFlags []func(f *flag.FlagSet)
+	CustomInputFlags   []func(f *flag.FlagSet)
+	CustomOutputFlags  []func(f *flag.FlagSet)
 }
 
-func init() {
-	RegisterConsoleBoxOutput()
+func NewEndpointFactory() *EndpointFactory {
+	factory := &EndpointFactory{
+		CustomDataSources: make(map[EndpointType]func(string) (MetricSource, error)),
+		CustomDataSinks:   make(map[EndpointType]func(string) (MetricSink, error)),
+	}
+	RegisterConsoleBoxOutput(factory)
+	return factory
 }
 
 func RegisterGolibFlags() {
@@ -123,7 +128,7 @@ func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
 	f.IntVar(&p.FlagParallelHandler.BufferedSamples, "buf", 10000, "Number of samples buffered when (un)marshalling.")
 
 	// Custom
-	for _, factoryFunc := range CustomGeneralFlags {
+	for _, factoryFunc := range p.CustomGeneralFlags {
 		factoryFunc(f)
 	}
 }
@@ -133,7 +138,7 @@ func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
 	f.BoolVar(&p.FlagFilesKeepAlive, "files-keep-alive", false, "Do not shut down after all files have been read. Useful in combination with -listen-buffer.")
 	f.BoolVar(&p.FlagInputFilesRobust, "files-robust", false, "When encountering errors while reading files, print warnings instead of failing.")
 	f.UintVar(&p.FlagInputTcpAcceptLimit, "listen-limit", 0, "Limit number of simultaneous TCP connections accepted for incoming data.")
-	for _, factoryFunc := range CustomInputFlags {
+	for _, factoryFunc := range p.CustomInputFlags {
 		factoryFunc(f)
 	}
 }
@@ -142,7 +147,7 @@ func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
 func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
 	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
 	f.BoolVar(&p.FlagFilesAppend, "files-append", false, "For file output, do no create new files by incrementing the suffix and append to existing files.")
-	for _, factoryFunc := range CustomOutputFlags {
+	for _, factoryFunc := range p.CustomOutputFlags {
 		factoryFunc(f)
 	}
 }
@@ -202,7 +207,7 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (MetricSource, error) {
 				source.Reader = reader
 				result = source
 			default:
-				if factory, ok := CustomDataSources[endpoint.Type]; ok && endpoint.IsCustomType {
+				if factory, ok := p.CustomDataSources[endpoint.Type]; ok && endpoint.IsCustomType {
 					var factoryErr error
 					result, factoryErr = factory(endpoint.Target)
 					if factoryErr != nil {
@@ -291,7 +296,7 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 		marshallingSink = &sink.AbstractMarshallingMetricSink
 		resultSink = sink
 	default:
-		if factory, ok := CustomDataSinks[endpoint.Type]; ok && endpoint.IsCustomType {
+		if factory, ok := p.CustomDataSinks[endpoint.Type]; ok && endpoint.IsCustomType {
 			var factoryErr error
 			resultSink, factoryErr = factory(endpoint.Target)
 			if factoryErr != nil {
