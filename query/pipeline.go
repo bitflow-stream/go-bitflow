@@ -11,9 +11,6 @@ import (
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
 )
 
-type AnalysisFunc func(pipeline *pipeline.SamplePipeline, params map[string]string) error
-type ForkFunc func(params map[string]string) (fmt.Stringer, error) // Can return a fork.ForkDistributor or a fork.RemapDistributor
-
 type PipelineBuilder struct {
 	Endpoints bitflow.EndpointFactory
 
@@ -27,51 +24,6 @@ func NewPipelineBuilder() *PipelineBuilder {
 		analysis_registry: make(map[string]registeredAnalysis),
 		fork_registry:     make(map[string]registeredFork),
 	}
-}
-
-type registeredAnalysis struct {
-	Name        string
-	Func        AnalysisFunc
-	Description string
-}
-
-type registeredFork struct {
-	Name        string
-	Func        ForkFunc
-	Description string
-}
-
-func (b *PipelineBuilder) RegisterAnalysis(name string, setupPipeline AnalysisFunc, description string) {
-	if _, ok := b.analysis_registry[name]; ok {
-		panic("Analysis already registered: " + name)
-	}
-	b.analysis_registry[name] = registeredAnalysis{name, setupPipeline, description}
-}
-
-func (b *PipelineBuilder) RegisterFork(name string, forkBuilder ForkFunc, description string) {
-	if _, ok := b.fork_registry[name]; ok {
-		panic("Fork already registered: " + name)
-	}
-	b.fork_registry[name] = registeredFork{name, forkBuilder, description}
-}
-
-func CheckParameters(params map[string]string, optional []string, required []string) error {
-	checked := map[string]bool{}
-	for _, opt := range optional {
-		checked[opt] = true
-	}
-	for _, req := range required {
-		if _, ok := params[req]; !ok {
-			return fmt.Errorf("Missing required parameter '%v'", req)
-		}
-		checked[req] = true
-	}
-	for key := range params {
-		if _, ok := checked[key]; !ok {
-			return fmt.Errorf("Unexpected parameter '%v'", key)
-		}
-	}
-	return nil
 }
 
 func (builder PipelineBuilder) MakePipeline(pipe Pipeline) (*pipeline.SamplePipeline, error) {

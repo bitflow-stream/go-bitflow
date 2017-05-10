@@ -7,65 +7,66 @@ import (
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/dbscan"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-bitflow-pipeline/regression"
 )
 
-func init() {
-	RegisterAnalysis("dbscan", dbscan_rtree, "Perform a dbscan clustering on a batch of samples")
-	RegisterAnalysis("dbscan_parallel", dbscan_parallel, "Perform a parallelized dbscan clustering on a batch of samples")
+func RegisterMathAnalyses(b *query.PipelineBuilder) {
+	b.RegisterAnalysis("dbscan", dbscan_rtree, "Perform a dbscan clustering on a batch of samples")
+	b.RegisterAnalysis("dbscan_parallel", dbscan_parallel, "Perform a parallelized dbscan clustering on a batch of samples")
 
-	RegisterAnalysis("regression", linear_regression, "Perform a linear regression analysis on a batch of samples")
-	RegisterAnalysis("regression_brute", linear_regression_bruteforce, "In a batch of samples, perform a linear regression analysis for every possible combination of metrics")
+	b.RegisterAnalysis("regression", linear_regression, "Perform a linear regression analysis on a batch of samples")
+	b.RegisterAnalysis("regression_brute", linear_regression_bruteforce, "In a batch of samples, perform a linear regression analysis for every possible combination of metrics")
 
-	RegisterAnalysisParamsErr("pca", pca_analysis, "Create a PCA model of a batch of samples and project all samples into a number of principal components with a total contained variance given by the parameter", []string{"var"})
-	RegisterAnalysisParams("pca_store", pca_analysis_store, "Create a PCA model of a batch of samples and store it to the given file", []string{"file"})
-	RegisterAnalysisParamsErr("pca_load", pca_analysis_load, "Load a PCA model from the given file and project all samples into a number of principal components with a total contained variance given by the parameter", []string{"var", "file"})
-	RegisterAnalysisParamsErr("pca_load_stream", pca_analysis_load_stream, "Like pca_load, but process every sample individually, instead of batching them up", []string{"var", "file"})
+	b.RegisterAnalysisParamsErr("pca", pca_analysis, "Create a PCA model of a batch of samples and project all samples into a number of principal components with a total contained variance given by the parameter", []string{"var"})
+	b.RegisterAnalysisParams("pca_store", pca_analysis_store, "Create a PCA model of a batch of samples and store it to the given file", []string{"file"})
+	b.RegisterAnalysisParamsErr("pca_load", pca_analysis_load, "Load a PCA model from the given file and project all samples into a number of principal components with a total contained variance given by the parameter", []string{"var", "file"})
+	b.RegisterAnalysisParamsErr("pca_load_stream", pca_analysis_load_stream, "Like pca_load, but process every sample individually, instead of batching them up", []string{"var", "file"})
 
-	RegisterAnalysisParamsErr("sphere", add_sphere, "Treat every sample as the center of a multi-dimensional sphere, and output a number of random points on the hull of the resulting sphere. The radius can either be fixed or given as one of the metrics", []string{"points"}, "seed", "radius", "radius_metric")
-	RegisterAnalysis("convex_hull", filter_convex_hull, "Filter out the convex hull for a two-dimensional batch of samples")
-	RegisterAnalysis("convex_hull_sort", sort_convex_hull, "Sort a two-dimensional batch of samples in order around their center")
+	b.RegisterAnalysisParamsErr("sphere", add_sphere, "Treat every sample as the center of a multi-dimensional sphere, and output a number of random points on the hull of the resulting sphere. The radius can either be fixed or given as one of the metrics", []string{"points"}, "seed", "radius", "radius_metric")
+	b.RegisterAnalysis("convex_hull", filter_convex_hull, "Filter out the convex hull for a two-dimensional batch of samples")
+	b.RegisterAnalysis("convex_hull_sort", sort_convex_hull, "Sort a two-dimensional batch of samples in order around their center")
 }
 
-func linear_regression(p *Pipeline) {
+func linear_regression(p *SamplePipeline) {
 	p.Batch(&regression.LinearRegressionBatchProcessor{})
 }
 
-func linear_regression_bruteforce(p *Pipeline) {
+func linear_regression_bruteforce(p *SamplePipeline) {
 	p.Batch(&regression.LinearRegressionBruteForce{})
 }
 
-func pca_analysis(pipe *Pipeline, params map[string]string) error {
+func pca_analysis(p *SamplePipeline, params map[string]string) error {
 	variance, err := parse_pca_variance(params)
 	if err == nil {
-		pipe.Batch(ComputeAndProjectPCA(variance))
+		p.Batch(ComputeAndProjectPCA(variance))
 	}
 	return err
 }
 
-func pca_analysis_store(pipe *Pipeline, params map[string]string) {
-	pipe.Batch(StorePCAModel(params["file"]))
+func pca_analysis_store(p *SamplePipeline, params map[string]string) {
+	p.Batch(StorePCAModel(params["file"]))
 }
 
-func pca_analysis_load(pipe *Pipeline, params map[string]string) error {
+func pca_analysis_load(p *SamplePipeline, params map[string]string) error {
 	variance, err := parse_pca_variance(params)
 	if err == nil {
 		var step BatchProcessingStep
 		step, err = LoadBatchPCAModel(params["file"], variance)
 		if err == nil {
-			pipe.Batch(step)
+			p.Batch(step)
 		}
 	}
 	return err
 }
 
-func pca_analysis_load_stream(pipe *Pipeline, params map[string]string) error {
+func pca_analysis_load_stream(p *SamplePipeline, params map[string]string) error {
 	variance, err := parse_pca_variance(params)
 	if err == nil {
 		var step bitflow.SampleProcessor
 		step, err = LoadStreamingPCAModel(params["file"], variance)
 		if err == nil {
-			pipe.Add(step)
+			p.Add(step)
 		}
 	}
 	return err
@@ -79,8 +80,8 @@ func parse_pca_variance(params map[string]string) (float64, error) {
 	return variance, err
 }
 
-func dbscan_rtree(pipe *Pipeline) {
-	pipe.Batch(&dbscan.DbscanBatchClusterer{
+func dbscan_rtree(p *SamplePipeline) {
+	p.Batch(&dbscan.DbscanBatchClusterer{
 		Dbscan:          dbscan.Dbscan{Eps: 0.1, MinPts: 5},
 		TreeMinChildren: 25,
 		TreeMaxChildren: 50,
@@ -88,11 +89,11 @@ func dbscan_rtree(pipe *Pipeline) {
 	})
 }
 
-func dbscan_parallel(pipe *Pipeline) {
-	pipe.Batch(&dbscan.ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5})
+func dbscan_parallel(p *SamplePipeline) {
+	p.Batch(&dbscan.ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5})
 }
 
-func add_sphere(pipe *Pipeline, params map[string]string) error {
+func add_sphere(p *SamplePipeline, params map[string]string) error {
 	var err error
 	points, err := strconv.Atoi(params["points"])
 	if err != nil {
@@ -127,14 +128,14 @@ func add_sphere(pipe *Pipeline, params map[string]string) error {
 			return parameterError("radius_metric", err)
 		}
 	}
-	pipe.Add(sphere)
+	p.Add(sphere)
 	return nil
 }
 
-func filter_convex_hull(pipe *Pipeline) {
-	pipe.Batch(BatchConvexHull(false))
+func filter_convex_hull(p *SamplePipeline) {
+	p.Batch(BatchConvexHull(false))
 }
 
-func sort_convex_hull(pipe *Pipeline) {
-	pipe.Batch(BatchConvexHull(true))
+func sort_convex_hull(p *SamplePipeline) {
+	p.Batch(BatchConvexHull(true))
 }

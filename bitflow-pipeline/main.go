@@ -15,6 +15,8 @@ import (
 	"github.com/antongulenko/golib"
 )
 
+var builder = query.NewPipelineBuilder()
+
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <flags> <bitflow script>\nAll flags must be defined before the first non-flag parameter.\nFlags:\n", os.Args[0])
@@ -26,6 +28,13 @@ func main() {
 func do_main() int {
 	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
 	printPipeline := flag.Bool("print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
+
+	RegisterBasicAnalyses(builder)
+	RegisterMathAnalyses(builder)
+	RegisterPlots(builder)
+	RegisterPreprocessings(builder)
+	RegisterPrintAnalyses(builder)
+	RegisterTaggingAnalyses(builder)
 
 	bitflow.RegisterGolibFlags()
 	builder.Endpoints.RegisterFlags()

@@ -10,12 +10,13 @@ import (
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
 	. "github.com/antongulenko/go-bitflow-pipeline/fork"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
 
-func init() {
-	RegisterAnalysis("tag_injection_info", tag_injection_info, "Convert tags (cls, target) into (injected, measured, anomaly)")
-	RegisterAnalysis("injection_directory_structure", injection_directory_structure, "Split samples into a directory structure based on the tags provided by tag_injection_info. Must be used as last step before a file output")
-	RegisterAnalysisParamsErr("split_experiments", split_experiments, "Split samples into separate files based on their timestamps. When the difference between two (sorted) timestamps is too large, start a new file. Must be used as the last step before a file output", []string{"min_duration"})
+func RegisterPreprocessings(b *query.PipelineBuilder) {
+	b.RegisterAnalysis("tag_injection_info", tag_injection_info, "Convert tags (cls, target) into (injected, measured, anomaly)")
+	b.RegisterAnalysis("injection_directory_structure", injection_directory_structure, "Split samples into a directory structure based on the tags provided by tag_injection_info. Must be used as last step before a file output")
+	b.RegisterAnalysisParamsErr("split_experiments", split_experiments, "Split samples into separate files based on their timestamps. When the difference between two (sorted) timestamps is too large, start a new file. Must be used as the last step before a file output", []string{"min_duration"})
 }
 
 const (
@@ -26,7 +27,7 @@ const (
 	measuredTag              = "measured"
 )
 
-func tag_injection_info(p *Pipeline) {
+func tag_injection_info(p *SamplePipeline) {
 	p.Add(&SimpleProcessor{
 		Description: fmt.Sprintf("Injection info tagger (transform tags %s and %s into %s, %s and %s)", ClassTag, remoteInjectionTag, injectedTag, measuredTag, anomalyTag),
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -63,7 +64,7 @@ func tag_injection_info(p *Pipeline) {
 	})
 }
 
-func injection_directory_structure(p *Pipeline) {
+func injection_directory_structure(p *SamplePipeline) {
 	distributor := &TagsDistributor{
 		Tags:        []string{injectedTag, anomalyTag, measuredTag},
 		Separator:   string(filepath.Separator),
@@ -97,7 +98,7 @@ func (d *TimeDistributor) Distribute(sample *bitflow.Sample, header *bitflow.Hea
 	return []interface{}{d.counter}
 }
 
-func split_experiments(p *Pipeline, params map[string]string) error {
+func split_experiments(p *SamplePipeline, params map[string]string) error {
 	duration, err := time.ParseDuration(params["min_duration"])
 	if err != nil {
 		err = parameterError("min_duration", err)

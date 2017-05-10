@@ -11,19 +11,20 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
 
-func init() {
-	RegisterAnalysis("print_header", print_header, "Print every changing header to the log")
-	RegisterAnalysisParams("print_tags", print_tags, "When done processing, print every encountered value of the given tag", []string{"tag"})
-	RegisterAnalysisParams("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", []string{"tag"})
-	RegisterAnalysis("print_timerange", print_time_range, "When done processing, print the first and last encountered timestamp")
-	RegisterAnalysisParamsErr("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", []string{}, "buckets")
-	RegisterAnalysis("count_invalid", count_invalid, "When done processing, print the number of invalid metric values and samples containing such values (NaN, -/+ infinity, ...)")
-	RegisterAnalysis("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
+func RegisterPrintAnalyses(b *query.PipelineBuilder) {
+	b.RegisterAnalysis("print_header", print_header, "Print every changing header to the log")
+	b.RegisterAnalysisParams("print_tags", print_tags, "When done processing, print every encountered value of the given tag", []string{"tag"})
+	b.RegisterAnalysisParams("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", []string{"tag"})
+	b.RegisterAnalysis("print_timerange", print_time_range, "When done processing, print the first and last encountered timestamp")
+	b.RegisterAnalysisParamsErr("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", []string{}, "buckets")
+	b.RegisterAnalysis("count_invalid", count_invalid, "When done processing, print the number of invalid metric values and samples containing such values (NaN, -/+ infinity, ...)")
+	b.RegisterAnalysis("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
 }
 
-func print_header(p *Pipeline) {
+func print_header(p *SamplePipeline) {
 	var checker bitflow.HeaderChecker
 	numSamples := 0
 	p.Add(&SimpleProcessor{
@@ -119,15 +120,15 @@ func (printer *UniqueTagPrinter) String() string {
 	return res + " unique values of tag '" + printer.Tag + "'"
 }
 
-func print_tags(p *Pipeline, params map[string]string) {
+func print_tags(p *SamplePipeline, params map[string]string) {
 	p.Add(NewUniqueTagPrinter(params["tag"]))
 }
 
-func count_tags(p *Pipeline, params map[string]string) {
+func count_tags(p *SamplePipeline, params map[string]string) {
 	p.Add(NewUniqueTagCounter(params["tag"]))
 }
 
-func print_time_range(p *Pipeline) {
+func print_time_range(p *SamplePipeline) {
 	var (
 		from  time.Time
 		to    time.Time
@@ -157,7 +158,7 @@ func print_time_range(p *Pipeline) {
 	})
 }
 
-func print_timeline(p *Pipeline, params map[string]string) error {
+func print_timeline(p *SamplePipeline, params map[string]string) error {
 	numBuckets := uint64(10)
 	if bucketsStr, hasBuckets := params["buckets"]; hasBuckets {
 		var err error
@@ -228,7 +229,7 @@ func print_timeline(p *Pipeline, params map[string]string) error {
 	return nil
 }
 
-func count_invalid(p *Pipeline) {
+func count_invalid(p *SamplePipeline) {
 	var (
 		invalidSamples int
 		totalSamples   int
@@ -259,7 +260,7 @@ func count_invalid(p *Pipeline) {
 	})
 }
 
-func print_common_metrics(p *Pipeline) {
+func print_common_metrics(p *SamplePipeline) {
 	var (
 		checker bitflow.HeaderChecker
 		common  map[string]bool

@@ -8,15 +8,16 @@ import (
 
 	. "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/http"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
 
-func init() {
-	RegisterAnalysisParamsErr("plot", plot, "Plot a batch of samples to a given filename. The file ending denotes the file type", []string{"file"}, "color", "flags")
-	RegisterAnalysisParams("stats", feature_stats, "Output statistics about processed samples to a given ini-file", []string{"file"})
-	RegisterAnalysisParamsErr("http", print_http, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", []string{"endpoint"}, "window", "local_static")
+func RegisterPlots(b *query.PipelineBuilder) {
+	b.RegisterAnalysisParamsErr("plot", plot, "Plot a batch of samples to a given filename. The file ending denotes the file type", []string{"file"}, "color", "flags")
+	b.RegisterAnalysisParams("stats", feature_stats, "Output statistics about processed samples to a given ini-file", []string{"file"})
+	b.RegisterAnalysisParamsErr("http", print_http, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", []string{"endpoint"}, "window", "local_static")
 }
 
-func plot(pipe *Pipeline, params map[string]string) error {
+func plot(p *SamplePipeline, params map[string]string) error {
 	plot := &PlotProcessor{
 		AxisX:      PlotAxisAuto,
 		AxisY:      PlotAxisAuto,
@@ -51,15 +52,15 @@ func plot(pipe *Pipeline, params map[string]string) error {
 			}
 		}
 	}
-	pipe.Add(plot)
+	p.Add(plot)
 	return nil
 }
 
-func feature_stats(pipe *Pipeline, params map[string]string) {
-	pipe.Add(NewStoreStats(params["file"]))
+func feature_stats(p *SamplePipeline, params map[string]string) {
+	p.Add(NewStoreStats(params["file"]))
 }
 
-func print_http(p *Pipeline, params map[string]string) error {
+func print_http(p *SamplePipeline, params map[string]string) error {
 	windowSize := 100
 	if windowStr, ok := params["window"]; ok {
 		var err error
