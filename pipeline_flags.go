@@ -23,6 +23,7 @@ const (
 	TcpListenEndpoint = EndpointType("listen")
 	FileEndpoint      = EndpointType("file")
 	StdEndpoint       = EndpointType("std")
+	EmptyEndpoint     = EndpointType("empty")
 
 	UndefinedFormat = MarshallingFormat("")
 	TextFormat      = MarshallingFormat("text")
@@ -97,7 +98,17 @@ func NewEndpointFactory() *EndpointFactory {
 		CustomDataSinks:   make(map[EndpointType]func(string) (MetricSink, error)),
 	}
 	RegisterConsoleBoxOutput(factory)
+	RegisterEmptyInputOutput(factory)
 	return factory
+}
+
+func RegisterEmptyInputOutput(factory *EndpointFactory) {
+	factory.CustomDataSinks[EmptyEndpoint] = func(string) (MetricSink, error) {
+		return new(EmptyMetricSink), nil
+	}
+	factory.CustomDataSources[EmptyEndpoint] = func(string) (MetricSource, error) {
+		return new(EmptyMetricSource), nil
+	}
 }
 
 func RegisterGolibFlags() {
