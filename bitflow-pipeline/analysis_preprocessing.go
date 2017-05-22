@@ -13,7 +13,7 @@ import (
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
 
-func RegisterPreprocessings(b *query.PipelineBuilder) {
+func RegisterPreprocessingSteps(b *query.PipelineBuilder) {
 	b.RegisterAnalysis("tag_injection_info", tag_injection_info, "Convert tags (cls, target) into (injected, measured, anomaly)")
 	b.RegisterAnalysis("injection_directory_structure", injection_directory_structure, "Split samples into a directory structure based on the tags provided by tag_injection_info. Must be used as last step before a file output")
 	b.RegisterAnalysisParamsErr("split_experiments", split_experiments, "Split samples into separate files based on their timestamps. When the difference between two (sorted) timestamps is too large, start a new file. Must be used as the last step before a file output", []string{"min_duration"})
@@ -101,7 +101,7 @@ func (d *TimeDistributor) Distribute(sample *bitflow.Sample, header *bitflow.Hea
 func split_experiments(p *SamplePipeline, params map[string]string) error {
 	duration, err := time.ParseDuration(params["min_duration"])
 	if err != nil {
-		err = parameterError("min_duration", err)
+		err = query.ParameterError("min_duration", err)
 	} else {
 		p.Add(&MetricFork{
 			ParallelClose: true,

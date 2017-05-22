@@ -164,7 +164,7 @@ func print_timeline(p *SamplePipeline, params map[string]string) error {
 		var err error
 		numBuckets, err = strconv.ParseUint(bucketsStr, 10, 64)
 		if err != nil {
-			return parameterError("buckets", err)
+			return query.ParameterError("buckets", err)
 		}
 	}
 	if numBuckets <= 0 {

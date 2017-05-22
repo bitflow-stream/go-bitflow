@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"sort"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
@@ -131,4 +133,47 @@ func MultiFileDirectoryBuilder(replaceFilename bool, buildPipeline func() []bitf
 	}
 	builder.Build = buildPipeline
 	return builder
+}
+
+type StringPipelineBuilder struct {
+	Pipelines map[string]*pipeline.SamplePipeline
+}
+
+func (b *StringPipelineBuilder) BuildPipeline(key interface{}, _ *ForkMerger) *bitflow.SamplePipeline {
+	strKey := ""
+	if key != nil {
+		strKey = fmt.Sprintf("%v", key)
+	}
+	pipe, ok := b.Pipelines[strKey]
+	if !ok {
+		keys := make([]string, 0, len(b.Pipelines))
+		for key := range b.Pipelines {
+			keys = append(keys, key)
+		}
+		log.Warnf("No subpipeline defined for key '%v' (type %T). Using empty pipeline (Have pipelines: %v)", strKey, key, keys)
+		pipe = new(pipeline.SamplePipeline)
+	}
+	return &pipe.SamplePipeline
+}
+
+func (b *StringPipelineBuilder) String() string {
+	return fmt.Sprintf("Pipeline builder, %v subpipelines", len(b.Pipelines))
+}
+
+func (b *StringPipelineBuilder) ContainedStringers() []fmt.Stringer {
+	res := make([]fmt.Stringer, 0, len(b.Pipelines))
+	for key, pipe := range b.Pipelines {
+		var title string
+		if key == "" {
+			title = "Default pipeline"
+		} else {
+			title = fmt.Sprintf("Pipeline %v", key)
+		}
+		res = append(res, &pipeline.TitledSamplePipeline{
+			SamplePipeline: pipe,
+			Title:          title,
+		})
+	}
+	sort.Sort(pipeline.SortedStringers(res))
+	return res
 }

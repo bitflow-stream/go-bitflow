@@ -55,7 +55,7 @@ func set_sample_tagger(p *SamplePipeline, tag string, dontOverwrite bool) {
 func set_filename_tag(p *SamplePipeline, params map[string]string) error {
 	num, err := strconv.ParseUint(params["level"], 10, 64)
 	if err != nil {
-		return parameterError("level", err)
+		return query.ParameterError("level", err)
 	}
 
 	if fileSource, ok := p.Source.(*bitflow.FileSource); ok {

@@ -32,7 +32,7 @@ func do_main() int {
 	RegisterBasicAnalyses(builder)
 	RegisterMathAnalyses(builder)
 	RegisterPlots(builder)
-	RegisterPreprocessings(builder)
+	RegisterPreprocessingSteps(builder)
 	RegisterPrintAnalyses(builder)
 	RegisterTaggingAnalyses(builder)
 

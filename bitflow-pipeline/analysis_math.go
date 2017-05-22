@@ -75,7 +75,7 @@ func pca_analysis_load_stream(p *SamplePipeline, params map[string]string) error
 func parse_pca_variance(params map[string]string) (float64, error) {
 	variance, err := strconv.ParseFloat(params["var"], 64)
 	if err != nil {
-		err = parameterError("var", err)
+		err = query.ParameterError("var", err)
 	}
 	return variance, err
 }
@@ -97,13 +97,13 @@ func add_sphere(p *SamplePipeline, params map[string]string) error {
 	var err error
 	points, err := strconv.Atoi(params["points"])
 	if err != nil {
-		return parameterError("points", err)
+		return query.ParameterError("points", err)
 	}
 	seed := int64(1)
 	if seedStr, ok := params["seed"]; ok {
 		seed, err = strconv.ParseInt(seedStr, 10, 64)
 		if err != nil {
-			return parameterError("seed", err)
+			return query.ParameterError("seed", err)
 		}
 	}
 	radiusStr, hasRadius := params["radius"]
@@ -120,12 +120,12 @@ func add_sphere(p *SamplePipeline, params map[string]string) error {
 		sphere.RadiusMetric = -1
 		sphere.Radius, err = strconv.ParseFloat(radiusStr, 64)
 		if err != nil {
-			return parameterError("radius", err)
+			return query.ParameterError("radius", err)
 		}
 	} else {
 		sphere.RadiusMetric, err = strconv.Atoi(radiusMetricStr)
 		if err != nil {
-			return parameterError("radius_metric", err)
+			return query.ParameterError("radius_metric", err)
 		}
 	}
 	p.Add(sphere)

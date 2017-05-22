@@ -66,7 +66,7 @@ func print_http(p *SamplePipeline, params map[string]string) error {
 		var err error
 		windowSize, err = strconv.Atoi(windowStr)
 		if err != nil {
-			return parameterError("window", err)
+			return query.ParameterError("window", err)
 		}
 	}
 	useLocalStatic := false
@@ -75,7 +75,7 @@ func print_http(p *SamplePipeline, params map[string]string) error {
 		if static == "true" {
 			useLocalStatic = true
 		} else {
-			return parameterError("local_static", errors.New("The only accepted value is 'true'"))
+			return query.ParameterError("local_static", errors.New("The only accepted value is 'true'"))
 		}
 	}
 	p.Add(plotHttp.NewHttpPlotter(params["endpoint"], windowSize, useLocalStatic))

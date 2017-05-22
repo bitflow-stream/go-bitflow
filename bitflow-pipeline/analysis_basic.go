@@ -28,7 +28,6 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("subprocess", run_subprocess, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary).", []string{"cmd"}, "format")
 
 	// Forks
-	b.RegisterFork("multiplex", fork_multiplex, "Multiplex fork copies each incoming sample to a fixed number of forked sub-pipelines", []string{"num"})
 	b.RegisterFork("rr", fork_round_robin, "The round-robin fork distributes the samples equally to a fixed number of sub-pipelines", []string{"num"})
 	b.RegisterFork("remap", fork_remap, "The remap-fork can be used after another fork to remap the incoming sub-pipelines to new outgoing sub-pipelines", nil)
 
@@ -62,10 +61,6 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysis("strip", strip_metrics, "Remove all metrics, only keeping the timestamp and the tags of eacy sample")
 }
 
-func parameterError(name string, err error) error {
-	return fmt.Errorf("Failed to parse '%v' parameter: %v", name, err)
-}
-
 func noop_processor(p *SamplePipeline) {
 	p.Add(new(NoopProcessor))
 }
@@ -97,7 +92,7 @@ func normalize_standardize(p *SamplePipeline) {
 func pick_x_percent(p *SamplePipeline, params map[string]string) error {
 	pick_percentage, err := strconv.ParseFloat(params["percent"], 64)
 	if err != nil {
-		return parameterError("percent", err)
+		return query.ParameterError("percent", err)
 	}
 	counter := float64(0)
 	p.Add(&SampleFilter{
@@ -150,7 +145,7 @@ func add_expression(p *SamplePipeline, params map[string]string, filter bool) er
 func decouple_samples(p *SamplePipeline, params map[string]string) error {
 	buf, err := strconv.Atoi(params["batch"])
 	if err != nil {
-		err = parameterError("batch", err)
+		err = query.ParameterError("batch", err)
 	} else {
 		p.Add(&DecouplingProcessor{ChannelBuffer: buf})
 	}
@@ -165,7 +160,7 @@ func remap_metrics(p *SamplePipeline, params map[string]string) {
 func filter_variance(p *SamplePipeline, params map[string]string) error {
 	variance, err := strconv.ParseFloat(params["min"], 64)
 	if err != nil {
-		err = parameterError("min", err)
+		err = query.ParameterError("min", err)
 	} else {
 		p.Batch(NewMetricVarianceFilter(variance))
 	}
@@ -175,7 +170,7 @@ func filter_variance(p *SamplePipeline, params map[string]string) error {
 func pick_head(p *SamplePipeline, params map[string]string) error {
 	num, err := strconv.Atoi(params["num"])
 	if err != nil {
-		err = parameterError("num", err)
+		err = query.ParameterError("num", err)
 	} else {
 		processed := 0
 		p.Add(&SimpleProcessor{
@@ -196,7 +191,7 @@ func pick_head(p *SamplePipeline, params map[string]string) error {
 func add_listen_tags(p *SamplePipeline, params map[string]string) error {
 	port, err := strconv.Atoi(params["port"])
 	if err != nil {
-		return parameterError("port", err)
+		return query.ParameterError("port", err)
 	}
 	p.Add(&HttpTagger{Port: port})
 	return nil
@@ -229,7 +224,7 @@ func rename_metrics(p *SamplePipeline, params map[string]string) error {
 	for regex, replacement := range params {
 		r, err := regexp.Compile(regex)
 		if err != nil {
-			return parameterError(regex, err)
+			return query.ParameterError(regex, err)
 		}
 		regexes = append(regexes, r)
 		replacements = append(replacements, replacement)
@@ -255,7 +250,7 @@ func sleep_samples(p *SamplePipeline, params map[string]string) error {
 		var err error
 		timeout, err = time.ParseDuration(timeoutStr)
 		if err != nil {
-			return parameterError("time", err)
+			return query.ParameterError("time", err)
 		}
 	}
 
@@ -331,7 +326,7 @@ func create_aggregator(params map[string]string) (*FeatureAggregator, error) {
 	if err2 == nil {
 		return &FeatureAggregator{WindowSize: num}, nil
 	}
-	return nil, parameterError("window", golib.MultiError{err1, err2})
+	return nil, query.ParameterError("window", golib.MultiError{err1, err2})
 }
 
 func generic_batch(p *SamplePipeline, params map[string]string) {
@@ -355,14 +350,6 @@ func run_subprocess(p *SamplePipeline, params map[string]string) error {
 	}
 	p.Add(runner)
 	return nil
-}
-
-func fork_multiplex(params map[string]string) (fmt.Stringer, error) {
-	num, err := strconv.Atoi(params["num"])
-	if err != nil {
-		return nil, err
-	}
-	return NewMultiplexDistributor(num), nil
 }
 
 func fork_round_robin(params map[string]string) (fmt.Stringer, error) {

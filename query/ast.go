@@ -53,6 +53,14 @@ func (p Step) Pos() Token {
 	return p.Name
 }
 
+func (p Step) ParamsMap() map[string]string {
+	res := make(map[string]string, len(p.Params))
+	for key, value := range p.Params {
+		res[key.Content()] = value.Content()
+	}
+	return res
+}
+
 // Data input (file, console, TCP, ...)
 // Inside a Fork, this identifies the pipeline.
 type Input []Token
@@ -69,4 +77,8 @@ type Output Token
 
 func (p Output) Pos() Token {
 	return Token(p)
+}
+
+type MultiInput struct {
+	Pipelines
 }

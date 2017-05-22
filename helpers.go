@@ -38,6 +38,20 @@ func (s String) String() string {
 	return string(s)
 }
 
+type SortedStringers []fmt.Stringer
+
+func (t SortedStringers) Len() int {
+	return len(t)
+}
+
+func (t SortedStringers) Less(a, b int) bool {
+	return t[a].String() < t[b].String()
+}
+
+func (t SortedStringers) Swap(a, b int) {
+	t[a], t[b] = t[b], t[a]
+}
+
 // ====================== Printing ======================
 
 type IndentPrinter struct {
@@ -86,4 +100,13 @@ func (p IndentPrinter) printLines(obj fmt.Stringer, headerIndent, childIndent st
 		}
 	}
 	return res
+}
+
+type TitledSamplePipeline struct {
+	*SamplePipeline
+	Title string
+}
+
+func (t *TitledSamplePipeline) String() string {
+	return t.Title
 }
