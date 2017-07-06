@@ -1,0 +1,78 @@
+swagger: "2.0"
+# To re-generate all files:
+# go get -u github.com/go-swagger/go-swagger/...
+# swagger generate server -f swagger.yml -s tags_server -A tags_api
+
+info:
+  version: 0.1.0
+  title: Bitflow Tags API
+  description: REST API for controlling tags attached to Bitflow samples
+
+schemes: [ http ]
+host: example.com
+basePath: /api
+
+paths:
+  /tag/{tagname}:
+    get:
+      summary: Retrieve the current value of the given tag
+      parameters:
+        - name: tagname
+          in: path
+          required: true
+          description: The name of the tag
+          type: string
+      responses:
+        200:
+          description: Returns the value of the named tag
+          schema: { type: string }
+        404:
+          description: The key is currently not set
+          schema: { type: string }
+    delete:
+      summary: Unset the given tag
+      parameters:
+        - name: tagname
+          in: path
+          required: true
+          description: The name of the tag
+          type: string
+      responses:
+        200:
+          description: The named tag has been unset, returns the value it was holding before deletion
+          schema: { type: string }
+        404:
+          description: The key is currently not set
+          schema: { type: string }
+  /tags:
+    get:
+      summary: Retrieve all current tags
+      responses:
+        200:
+          description: Returns a map containing all current tags
+          schema: { type: object }
+    delete:
+      summary: Unset all tags
+      responses:
+        200:
+          description: All tags have been unset, returns the tags before the operation
+          schema: { type: object }
+    post:
+      summary: Delete all tags and set the tags to the given map
+      # TODO: correctly define arbitrary parameters
+      parameters:
+        - in: query
+          type: object
+      responses:
+        200:
+          description: The tags map has been set, returns the new tags map
+          schema: { type: object }
+    put:
+      summary: Add the given tags to the current map of tags
+      # TODO: correctly define arbitrary parameters
+      - in: query
+        type: object
+      responses:
+        200:
+          description: The tags map has been updated, returns the new tags map
+          schema: { type: object }

@@ -11,6 +11,7 @@ import (
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
 	. "github.com/antongulenko/go-bitflow-pipeline/fork"
+	"github.com/antongulenko/go-bitflow-pipeline/http_tags"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 )
@@ -32,7 +33,7 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	b.RegisterFork("remap", fork_remap, "The remap-fork can be used after another fork to remap the incoming sub-pipelines to new outgoing sub-pipelines", nil)
 
 	// Set metadata
-	b.RegisterAnalysisParamsErr("listen_tags", add_listen_tags, "Listen for HTTP requests on the given port at /tag to configure tags. URL parameters are tag key-value pairs. URL parameter 'timeout' is in seconds.", []string{"port"})
+	b.RegisterAnalysisParamsErr("listen_tags", add_listen_tags, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags.", []string{"listen"})
 	b.RegisterAnalysisParams("tags", set_tags, "Set the given tags on every sample", nil)
 	b.RegisterAnalysis("set_time", set_time_processor, "Set the timestamp on every processed sample to the current time")
 
@@ -189,11 +190,7 @@ func pick_head(p *SamplePipeline, params map[string]string) error {
 }
 
 func add_listen_tags(p *SamplePipeline, params map[string]string) error {
-	port, err := strconv.Atoi(params["port"])
-	if err != nil {
-		return query.ParameterError("port", err)
-	}
-	p.Add(&HttpTagger{Port: port})
+	p.Add(http_tags.NewStandaloneHttpTagger("/api", params["listen"]))
 	return nil
 }
 
