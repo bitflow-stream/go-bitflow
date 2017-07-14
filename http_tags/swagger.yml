@@ -1,7 +1,7 @@
 swagger: "2.0"
 # To re-generate all files:
-# go get -u github.com/go-swagger/go-swagger/...
-# swagger generate server -f swagger.yml -s tags_server -A tags_api
+# Install swagger-codegen-cli: https://github.com/swagger-api/swagger-codegen
+# swagger-codegen-cli
 
 info:
   version: 0.1.0
@@ -14,14 +14,14 @@ basePath: /api
 
 paths:
   /tag/{tagname}:
+    parameters:
+      - name: tagname
+        in: path
+        required: true
+        description: The name of the tag
+        type: string
     get:
       summary: Retrieve the current value of the given tag
-      parameters:
-        - name: tagname
-          in: path
-          required: true
-          description: The name of the tag
-          type: string
       responses:
         200:
           description: Returns the value of the named tag
@@ -31,12 +31,6 @@ paths:
           schema: { type: string }
     delete:
       summary: Unset the given tag
-      parameters:
-        - name: tagname
-          in: path
-          required: true
-          description: The name of the tag
-          type: string
       responses:
         200:
           description: The named tag has been unset, returns the value it was holding before deletion
@@ -59,19 +53,14 @@ paths:
           schema: { type: object }
     post:
       summary: Delete all tags and set the tags to the given map
-      # TODO: correctly define arbitrary parameters
-      parameters:
-        - in: query
-          type: object
+      # TODO: this supports arbitrary parameters, which cannot be described with swagger
       responses:
         200:
           description: The tags map has been set, returns the new tags map
           schema: { type: object }
     put:
       summary: Add the given tags to the current map of tags
-      # TODO: correctly define arbitrary parameters
-      - in: query
-        type: object
+      # TODO: this supports arbitrary parameters, which cannot be described with swagger
       responses:
         200:
           description: The tags map has been updated, returns the new tags map
