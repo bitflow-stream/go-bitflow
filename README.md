@@ -8,7 +8,7 @@ Some aspects of the pipeline can also be configured through additional command l
 Run `bitflow-pipeline --help` for a list of command line flags.
 
 ## Installation:
-* Install git and go (at least version **1.6**).
+* Install git and go (at least version **1.8**).
 * Make sure `$GOPATH` is set to some existing directory.
 * Execute the following command to make `go get` work with Gitlab. This requires a passwordless SSH connection to the Gitlab server.
 
