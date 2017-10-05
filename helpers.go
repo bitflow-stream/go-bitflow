@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 
+	"bytes"
+
 	"github.com/antongulenko/go-bitflow"
 )
 
@@ -27,6 +29,17 @@ func FillSample(s *bitflow.Sample, values []float64) {
 	}
 }
 
+func AppendToSample(s *bitflow.Sample, values []float64) {
+	oldValues := s.Values
+	l := len(s.Values)
+	if !s.Resize(l + len(values)) {
+		copy(s.Values, oldValues)
+	}
+	for i, val := range values {
+		s.Values[l+i] = bitflow.Value(val)
+	}
+}
+
 func IsValidNumber(val float64) bool {
 	return !math.IsNaN(val) && !math.IsInf(val, 0)
 }
@@ -37,6 +50,8 @@ type String string
 func (s String) String() string {
 	return string(s)
 }
+
+// ====================== Sorting ======================
 
 type SortedStringers []fmt.Stringer
 
@@ -50,6 +65,44 @@ func (t SortedStringers) Less(a, b int) bool {
 
 func (t SortedStringers) Swap(a, b int) {
 	t[a], t[b] = t[b], t[a]
+}
+
+type SortedStringPairs struct {
+	Keys   []string
+	Values []string
+}
+
+func (s *SortedStringPairs) FillFromMap(values map[string]string) {
+	s.Keys = make([]string, 0, len(values))
+	s.Values = make([]string, 0, len(values))
+	for key, value := range values {
+		s.Keys = append(s.Keys, key)
+		s.Values = append(s.Values, value)
+	}
+}
+
+func (s *SortedStringPairs) Len() int {
+	return len(s.Keys)
+}
+
+func (s *SortedStringPairs) Less(i, j int) bool {
+	return s.Keys[i] < s.Keys[j]
+}
+
+func (s *SortedStringPairs) Swap(i, j int) {
+	s.Keys[i], s.Keys[j] = s.Keys[j], s.Keys[i]
+	s.Values[i], s.Values[j] = s.Values[j], s.Values[i]
+}
+
+func (s *SortedStringPairs) String() string {
+	var buf bytes.Buffer
+	for i, key := range s.Keys {
+		if i > 0 {
+			buf.WriteString(" ")
+		}
+		fmt.Fprintf(&buf, "%v=%v", key, s.Values[i])
+	}
+	return buf.String()
 }
 
 // ====================== Printing ======================

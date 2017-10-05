@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
 	. "github.com/antongulenko/go-bitflow-pipeline/fork"
@@ -26,14 +28,14 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParams("split_files", split_files, "Split the samples into multiple files, one file per value of the given tag. Must be used as last step before a file output", []string{"tag"})
 	b.RegisterAnalysisParamsErr("do", general_expression, "Execute the given expression on every sample", []string{"expr"})
 
-	b.RegisterAnalysisParamsErr("subprocess", run_subprocess, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary).", []string{"cmd"}, "format")
+	b.RegisterAnalysisParamsErr("subprocess", run_subprocess, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", []string{"cmd"}, "format")
 
 	// Forks
 	b.RegisterFork("rr", fork_round_robin, "The round-robin fork distributes the samples equally to a fixed number of sub-pipelines", []string{"num"})
 	b.RegisterFork("remap", fork_remap, "The remap-fork can be used after another fork to remap the incoming sub-pipelines to new outgoing sub-pipelines", nil)
 
 	// Set metadata
-	b.RegisterAnalysisParamsErr("listen_tags", add_listen_tags, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags.", []string{"listen"})
+	b.RegisterAnalysisParamsErr("listen_tags", add_listen_tags, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", []string{"listen"})
 	b.RegisterAnalysisParams("tags", set_tags, "Set the given tags on every sample", nil)
 	b.RegisterAnalysis("set_time", set_time_processor, "Set the timestamp on every processed sample to the current time")
 
@@ -51,6 +53,7 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysis("standardize", normalize_standardize, "Normalize a batch of samples based on the mean and std-deviation")
 
 	// Change header/metrics
+	b.RegisterAnalysisParams("parse_tags", parse_tags_to_metrics, "Append metrics based on tag values. Keys are new metric names, values are tag names", nil)
 	b.RegisterAnalysisParams("remap", remap_metrics, "Change (reorder) the header to the given comma-separated list of metrics", []string{"header"})
 	b.RegisterAnalysisParamsErr("rename", rename_metrics, "Find the keys (regexes) in every metric name and replace the matched parts with the given values", nil)
 	b.RegisterAnalysisParamsErr("include", filter_metrics_include, "Match every metric with the given regex and only include the matched metrics", []string{"m"})
@@ -363,4 +366,41 @@ func fork_remap(params map[string]string) (fmt.Stringer, error) {
 	return &StringRemapDistributor{
 		Mapping: params,
 	}, nil
+}
+
+func parse_tags_to_metrics(p *SamplePipeline, params map[string]string) {
+	var checker bitflow.HeaderChecker
+	var outHeader *bitflow.Header
+	var sorted SortedStringPairs
+	missingTagWarned := false
+	sorted.FillFromMap(params)
+	sort.Sort(&sorted)
+
+	p.Add(&SimpleProcessor{
+		Description: "Convert tags to metrics: " + sorted.String(),
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			if checker.HeaderChanged(header) {
+				outHeader = header.Clone(append(header.Fields, sorted.Keys...))
+			}
+			values := make([]float64, len(sorted.Values))
+			for i, tag := range sorted.Values {
+				var value float64
+				if !sample.HasTag(tag) {
+					if !missingTagWarned {
+						missingTagWarned = true
+						log.Warnf("Encountered sample missing tag '%v'. Using metric value 0 instead.", tag)
+					}
+				} else {
+					var err error
+					value, err = strconv.ParseFloat(sample.Tag(tag), 64)
+					if err != nil {
+						return nil, nil, fmt.Errorf("Cloud not convert '%v' tag to float64: %v", tag, err)
+					}
+				}
+				values[i] = value
+			}
+			AppendToSample(sample, values)
+			return sample, outHeader, nil
+		},
+	})
 }
