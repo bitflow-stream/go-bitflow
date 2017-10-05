@@ -171,6 +171,7 @@ func (model *PCAProjection) Vector(vec []float64) []float64 {
 
 func (model *PCAProjection) Sample(sample *bitflow.Sample) (result *bitflow.Sample) {
 	values := model.Vector(SampleToVector(sample))
+	result = new(bitflow.Sample)
 	FillSample(result, values)
 	result.CopyMetadataFrom(sample)
 	return

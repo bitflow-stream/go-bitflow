@@ -78,9 +78,11 @@ func (params registeredParameters) Verify(input map[string]string) error {
 		}
 		checked[req] = true
 	}
-	for key := range input {
-		if _, ok := checked[key]; !ok {
-			return fmt.Errorf("Unexpected parameter '%v'", key)
+	if params.required != nil {
+		for key := range input {
+			if _, ok := checked[key]; !ok {
+				return fmt.Errorf("Unexpected parameter '%v'", key)
+			}
 		}
 	}
 	return nil

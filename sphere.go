@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"sync"
 
+	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
@@ -36,6 +38,9 @@ func (p *SpherePoints) Sample(sample *bitflow.Sample, header *bitflow.Header) er
 	if len(header.Fields) < 1 {
 		return errors.New("Cannot calculate sphere points with 0 metrics")
 	}
+	if p.RadiusMetric < 0 || p.RadiusMetric >= len(sample.Values) {
+		return fmt.Errorf("SpherePoints.RadiusMetrics = %v out of range, sample has %v metrics", p.RadiusMetric, len(sample.Values))
+	}
 
 	// If we use a metric as radius, remove it from the header
 	values := sample.Values
@@ -48,7 +53,6 @@ func (p *SpherePoints) Sample(sample *bitflow.Sample, header *bitflow.Header) er
 		fields = fields[:len(fields)-1]
 		header = header.Clone(fields)
 
-		values = values[p.RadiusMetric:]
 		copy(values[p.RadiusMetric:], values[p.RadiusMetric+1:])
 		values = values[:len(values)-1]
 	}
