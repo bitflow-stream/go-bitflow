@@ -2,11 +2,12 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
+
+	"io/ioutil"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
@@ -28,6 +29,8 @@ func main() {
 func do_main() int {
 	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
 	printPipeline := flag.Bool("print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
+	scriptFile := ""
+	flag.StringVar(&scriptFile, "f", "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 
 	RegisterBasicAnalyses(builder)
 	RegisterMathAnalyses(builder)
@@ -45,7 +48,22 @@ func do_main() int {
 		return 0
 	}
 
-	pipe, err := make_pipeline()
+	script := strings.TrimSpace(strings.Join(flag.Args(), " "))
+	if scriptFile != "" && script != "" {
+		golib.Fatalln("Please provide a bitflow pipeline script either via -f or as parameter, not both.")
+	}
+	if scriptFile != "" {
+		scriptBytes, err := ioutil.ReadFile(scriptFile)
+		if err != nil {
+			golib.Fatalf("Error reading bitflow script file $v: %v", scriptFile, err)
+		}
+		script = string(scriptBytes)
+	}
+	if script == "" {
+		golib.Fatalln("Please provide a bitflow pipeline script via -f or directly as parameter.")
+	}
+
+	pipe, err := make_pipeline(script)
 	if err != nil {
 		log.Errorln(err)
 		golib.Fatalln("Use -print-analyses to print all available analysis steps.")
@@ -60,11 +78,7 @@ func do_main() int {
 	return pipe.StartAndWait()
 }
 
-func make_pipeline() (*pipeline.SamplePipeline, error) {
-	script := strings.Join(flag.Args(), " ")
-	if strings.TrimSpace(script) == "" {
-		return nil, errors.New("Please provide a bitflow pipeline script")
-	}
+func make_pipeline(script string) (*pipeline.SamplePipeline, error) {
 	parser := query.NewParser(bytes.NewReader([]byte(script)))
 	pipe, err := parser.Parse()
 	if err != nil {
