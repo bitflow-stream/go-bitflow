@@ -16,9 +16,7 @@ func init() {
 }
 
 func (p *HttpPlotter) serve() error {
-	engine := gin.New()
-	engine.Use(ginLogHandler, ginRecover)
-
+	engine := NewGinEngine()
 	index := template.New("index")
 	indexStr, err := FSString(p.UseLocalStatic, "/index.html")
 	if err != nil {
@@ -62,4 +60,10 @@ func ginRecover(c *gin.Context) {
 		}
 	}()
 	c.Next()
+}
+
+func NewGinEngine() *gin.Engine {
+	engine := gin.New()
+	engine.Use(ginLogHandler, ginRecover)
+	return engine
 }

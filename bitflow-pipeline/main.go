@@ -29,6 +29,7 @@ func main() {
 func do_main() int {
 	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
 	printPipeline := flag.Bool("print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
+	printCapabilities := flag.Bool("capabilities", false, "Print the capablities of this pipeline in JSON form and exit.")
 	scriptFile := ""
 	flag.StringVar(&scriptFile, "f", "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 
@@ -43,6 +44,10 @@ func do_main() int {
 	builder.Endpoints.RegisterFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
+	if *printCapabilities {
+		builder.PrintJsonCapabilities(os.Stdout)
+		return 0
+	}
 	if *printAnalyses {
 		fmt.Printf("Available analysis steps:\n%v\n", builder.PrintAllAnalyses())
 		return 0

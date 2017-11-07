@@ -99,17 +99,3 @@ func (params registeredParameters) makeDescription(description string) string {
 	}
 	return description
 }
-
-type SortedAnalyses []registeredAnalysis
-
-func (slice SortedAnalyses) Len() int {
-	return len(slice)
-}
-
-func (slice SortedAnalyses) Less(i, j int) bool {
-	return slice[i].Name < slice[j].Name
-}
-
-func (slice SortedAnalyses) Swap(i, j int) {
-	slice[i], slice[j] = slice[j], slice[i]
-}

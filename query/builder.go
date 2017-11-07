@@ -1,9 +1,7 @@
 package query
 
 import (
-	"bytes"
 	"fmt"
-	"sort"
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
@@ -205,29 +203,6 @@ func (builder PipelineBuilder) makePipelineBuilder(pipelines Pipelines) (fork.Pi
 	return &fork.StringPipelineBuilder{
 		Pipelines: builderPipes,
 	}, nil
-}
-
-func (builder PipelineBuilder) PrintAllAnalyses() string {
-	all := make(SortedAnalyses, 0, len(builder.analysis_registry))
-	for _, analysis := range builder.analysis_registry {
-		all = append(all, analysis)
-	}
-	sort.Sort(all)
-	var buf bytes.Buffer
-	for i, analysis := range all {
-		if analysis.Func == nil {
-			continue
-		}
-		if i > 0 {
-			buf.WriteString("\n")
-		}
-		buf.WriteString(" - ")
-		buf.WriteString(analysis.Name)
-		buf.WriteString(":\n")
-		buf.WriteString("      ")
-		buf.WriteString(analysis.Description)
-	}
-	return buf.String()
 }
 
 // Implement the PipelineVerification interface
