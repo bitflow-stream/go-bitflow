@@ -2,6 +2,7 @@ package plotHttp
 
 import (
 	"html/template"
+	"net/http"
 	"net/http/httputil"
 
 	log "github.com/Sirupsen/logrus"
@@ -65,5 +66,9 @@ func ginRecover(c *gin.Context) {
 func NewGinEngine() *gin.Engine {
 	engine := gin.New()
 	engine.Use(ginLogHandler, ginRecover)
+	engine.NoRoute(func(c *gin.Context) {
+		c.Writer.WriteHeader(http.StatusNotFound)
+		c.Writer.WriteString("404 page not found\n")
+	})
 	return engine
 }
