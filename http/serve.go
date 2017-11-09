@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"net/http/httputil"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/gin-gonic/contrib/ginrus"
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 )
 
-var ginLogHandler = ginrus.Ginrus(log.StandardLogger(), log.DefaultTimestampFormat, false)
+var ginLogHandler = ginrus.Ginrus(log.StandardLogger(), "", false)
 
 func init() {
 	gin.SetMode(gin.ReleaseMode)
