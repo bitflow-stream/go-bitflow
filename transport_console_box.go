@@ -4,7 +4,7 @@ import (
 	"io"
 	"sync"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/golib"
 	"github.com/antongulenko/golib/gotermBox"
 )
