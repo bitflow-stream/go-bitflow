@@ -20,7 +20,7 @@ git config --global "url.git@gitlab.tubit.tu-berlin.de:anton.gulenko/go-bitflow-
 
 ```shell
 mkdir -p "$GOPATH/src/github.com/antongulenko"
-git clone https://gitlab.tubit.tu-berlin.de/CIT-Huawei/go-bitflow-pipeline.git "$GOPATH/src/github.com/antongulenko/go-bitflow-pipeline" 
+git clone https://gitlab.tubit.tu-berlin.de/CIT-Huawei/go-bitflow-pipeline "$GOPATH/src/github.com/antongulenko/go-bitflow-pipeline" 
 ```
 
 * Get and install this tool:
