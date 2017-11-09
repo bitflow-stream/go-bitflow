@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 )
 

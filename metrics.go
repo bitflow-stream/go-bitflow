@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"errors"
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-onlinestats"
 )

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/gin-gonic/contrib/ginrus"
 	"github.com/gin-gonic/gin"
 )
