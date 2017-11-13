@@ -2,22 +2,13 @@ package plotHttp
 
 import (
 	"html/template"
-	"net/http"
-	"net/http/httputil"
 
-	"github.com/gin-gonic/contrib/ginrus"
+	"github.com/antongulenko/golib"
 	"github.com/gin-gonic/gin"
-	log "github.com/sirupsen/logrus"
 )
 
-var ginLogHandler = ginrus.Ginrus(log.StandardLogger(), "", false)
-
-func init() {
-	gin.SetMode(gin.ReleaseMode)
-}
-
 func (p *HttpPlotter) serve() error {
-	engine := NewGinEngine()
+	engine := golib.NewGinEngine()
 	index := template.New("index")
 	indexStr, err := FSString(p.UseLocalStatic, "/index.html")
 	if err != nil {
@@ -49,26 +40,4 @@ func (p *HttpPlotter) serveData(c *gin.Context) {
 	} else {
 		c.JSON(200, p.metricData(name))
 	}
-}
-
-func ginRecover(c *gin.Context) {
-	defer func() {
-		if err := recover(); err != nil {
-			stack := stack(3)
-			httpRequest, _ := httputil.DumpRequest(c.Request, false)
-			log.Errorf("[Recovery] panic recovered:\n%s\n%s\n%s", string(httpRequest), err, stack)
-			c.AbortWithStatus(500)
-		}
-	}()
-	c.Next()
-}
-
-func NewGinEngine() *gin.Engine {
-	engine := gin.New()
-	engine.Use(ginLogHandler, ginRecover)
-	engine.NoRoute(func(c *gin.Context) {
-		c.Writer.WriteHeader(http.StatusNotFound)
-		c.Writer.WriteString("404 page not found\n")
-	})
-	return engine
 }
