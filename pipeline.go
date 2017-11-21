@@ -1,8 +1,8 @@
 package bitflow
 
 import (
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
 // SamplePipeline reads data from a source, pipes it through zero or more SampleProcessor
@@ -77,7 +77,7 @@ func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 // by the user.
 //
 // StartAndWait returns the number of errors that occurred in the pipeline.
-func (p *SamplePipeline) StartAndWait() int {
+func (p *SamplePipeline) StartAndWait(extraTasks ...golib.Task) int {
 	var tasks golib.TaskGroup
 	p.Construct(&tasks)
 	log.Debugln("Press Ctrl-C to interrupt")
@@ -85,5 +85,6 @@ func (p *SamplePipeline) StartAndWait() int {
 		Chan:        golib.ExternalInterrupt(),
 		Description: "external interrupt",
 	})
+	tasks.Add(extraTasks...)
 	return tasks.PrintWaitAndStop()
 }
