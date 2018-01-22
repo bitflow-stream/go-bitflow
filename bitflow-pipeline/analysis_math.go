@@ -26,6 +26,9 @@ func RegisterMathAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("sphere", add_sphere, "Treat every sample as the center of a multi-dimensional sphere, and output a number of random points on the hull of the resulting sphere. The radius can either be fixed or given as one of the metrics", []string{"points"}, "seed", "radius", "radius_metric")
 	b.RegisterAnalysis("convex_hull", filter_convex_hull, "Filter out the convex hull for a two-dimensional batch of samples")
 	b.RegisterAnalysis("convex_hull_sort", sort_convex_hull, "Sort a two-dimensional batch of samples in order around their center")
+
+	b.RegisterAnalysis("fft", create_fft, "Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result")
+	b.RegisterAnalysis("rms", create_rms, "Compute the Root Mean Square value for every metric in a data batch. Output a single sample with all values.")
 }
 
 func linear_regression(p *SamplePipeline) {
@@ -138,4 +141,12 @@ func filter_convex_hull(p *SamplePipeline) {
 
 func sort_convex_hull(p *SamplePipeline) {
 	p.Batch(BatchConvexHull(true))
+}
+
+func create_fft(p *SamplePipeline) {
+	p.Batch(new(BatchFft))
+}
+
+func create_rms(p *SamplePipeline) {
+	p.Batch(new(BatchRms))
 }
