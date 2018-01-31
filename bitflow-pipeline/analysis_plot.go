@@ -12,7 +12,7 @@ import (
 )
 
 func RegisterPlots(b *query.PipelineBuilder) {
-	b.RegisterAnalysisParamsErr("plot", plot, "Plot a batch of samples to a given filename. The file ending denotes the file type", []string{"file"}, "color", "flags")
+	b.RegisterAnalysisParamsErr("plot", plot, "Plot a batch of samples to a given filename. The file ending denotes the file type", []string{"file"}, "color", "flags", "xMin", "xMax", "yMin", "yMax")
 	b.RegisterAnalysisParams("stats", feature_stats, "Output statistics about processed samples to a given ini-file", []string{"file"})
 	b.RegisterAnalysisParamsErr("http", print_http, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", []string{"endpoint"}, "window", "local_static")
 }
@@ -26,6 +26,14 @@ func plot(p *SamplePipeline, params map[string]string) error {
 	}
 	if color, hasColor := params["color"]; hasColor {
 		plot.ColorTag = color
+	}
+	var err error
+	setPlotBoundParam(&err, params, "xMin", &plot.ForceXmin)
+	setPlotBoundParam(&err, params, "xMax", &plot.ForceXmax)
+	setPlotBoundParam(&err, params, "yMin", &plot.ForceYmin)
+	setPlotBoundParam(&err, params, "yMax", &plot.ForceYmax)
+	if err != nil {
+		return err
 	}
 
 	if flagsStr, hasFlags := params["flags"]; hasFlags {
@@ -54,6 +62,18 @@ func plot(p *SamplePipeline, params map[string]string) error {
 	}
 	p.Add(plot)
 	return nil
+}
+
+func setPlotBoundParam(outErr *error, params map[string]string, paramName string, target **float64) {
+	param, hasParam := params[paramName]
+	if *outErr == nil && hasParam {
+		val, err := strconv.ParseFloat(param, 64)
+		if err != nil {
+			*outErr = fmt.Errorf("Failed to parse argument of '%s': %v", paramName, err)
+			return
+		}
+		*target = &val
+	}
 }
 
 func feature_stats(p *SamplePipeline, params map[string]string) {

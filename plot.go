@@ -7,15 +7,15 @@ import (
 	"os"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
+	"github.com/lucasb-eyer/go-colorful"
+	log "github.com/sirupsen/logrus"
 	plotLib "gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/plotutil"
 	"gonum.org/v1/plot/vg"
 	"gonum.org/v1/plot/vg/draw"
-	"github.com/lucasb-eyer/go-colorful"
 )
 
 const (
@@ -49,6 +49,12 @@ type PlotProcessor struct {
 	OutputFile    string
 	ColorTag      string
 	SeparatePlots bool // If true, every ColorTag value will create a new plot
+
+	// If not nil, will override the automatially suggested bounds for the respective axis
+	ForceXmin *float64
+	ForceXmax *float64
+	ForceYmin *float64
+	ForceYmax *float64
 
 	data         map[string]plotter.XYs
 	x, y         int
@@ -179,9 +185,9 @@ func (p *PlotProcessor) Close() {
 	var err error
 	if p.SeparatePlots {
 		_ = os.Remove(p.OutputFile) // Delete file created in Start(), drop error.
-		err = plot.saveSeparatePlots(p.data, p.OutputFile)
+		err = plot.saveSeparatePlots(p.data, p.OutputFile, p.ForceXmin, p.ForceXmax, p.ForceYmin, p.ForceYmax)
 	} else {
-		err = plot.savePlot(p.data, nil, p.OutputFile)
+		err = plot.savePlot(p.data, p.OutputFile, p.ForceXmin, p.ForceXmax, p.ForceYmin, p.ForceYmax)
 	}
 	if err != nil {
 		p.Error(err)
@@ -210,24 +216,31 @@ type Plot struct {
 	NoLegend       bool
 }
 
-func (p *Plot) saveSeparatePlots(plotData map[string]plotter.XYs, targetFile string) error {
-	bounds, err := p.createPlot(plotData, nil)
-	if err != nil {
-		return err
+func (p *Plot) saveSeparatePlots(plotData map[string]plotter.XYs, targetFile string, xMin, xMax, yMin, yMax *float64) error {
+	if xMin == nil || xMax == nil || yMin == nil || yMax == nil {
+		bounds, err := p.createPlot(plotData, xMin, xMax, yMin, yMax)
+		if err != nil {
+			return err
+		}
+		xMin = &bounds.X.Min
+		xMax = &bounds.X.Max
+		yMin = &bounds.Y.Min
+		yMax = &bounds.Y.Max
 	}
+
 	group := bitflow.NewFileGroup(targetFile)
 	for name, data := range plotData {
 		plotData := map[string]plotter.XYs{name: data}
 		plotFile := group.BuildFilenameStr(name)
-		if err := p.savePlot(plotData, bounds, plotFile); err != nil {
+		if err := p.savePlot(plotData, plotFile, xMin, xMax, yMin, yMax); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (p *Plot) savePlot(plotData map[string]plotter.XYs, copyBounds *plotLib.Plot, targetFile string) error {
-	plot, err := p.createPlot(plotData, copyBounds)
+func (p *Plot) savePlot(plotData map[string]plotter.XYs, targetFile string, xMin, xMax, yMin, yMax *float64) error {
+	plot, err := p.createPlot(plotData, xMin, xMax, yMin, yMax)
 	if err != nil {
 		return err
 	}
@@ -238,16 +251,22 @@ func (p *Plot) savePlot(plotData map[string]plotter.XYs, copyBounds *plotLib.Plo
 	return err
 }
 
-func (p *Plot) createPlot(plotData map[string]plotter.XYs, copyBounds *plotLib.Plot) (*plotLib.Plot, error) {
+func (p *Plot) createPlot(plotData map[string]plotter.XYs, xMin, xMax, yMin, yMax *float64) (*plotLib.Plot, error) {
 	plot, err := plotLib.New()
 	if err != nil {
 		return nil, errors.New("Error creating new plot: " + err.Error())
 	}
-	if copyBounds != nil {
-		plot.X.Min = copyBounds.X.Min
-		plot.X.Max = copyBounds.X.Max
-		plot.Y.Min = copyBounds.Y.Min
-		plot.Y.Max = copyBounds.Y.Max
+	if xMin != nil {
+		plot.X.Min = *xMin
+	}
+	if xMax != nil {
+		plot.X.Max = *xMax
+	}
+	if yMin != nil {
+		plot.Y.Min = *yMin
+	}
+	if yMax != nil {
+		plot.Y.Max = *yMax
 	}
 	p.configureAxes(plot)
 	return plot, p.fillPlot(plot, plotData)
