@@ -23,6 +23,14 @@ func (in *MultiMetricSource) Add(subPipeline *pipeline.SamplePipeline) {
 	in.pipelines = append(in.pipelines, subPipeline)
 }
 
+func (in *MultiMetricSource) AddSource(source bitflow.MetricSource) {
+	in.Add(&pipeline.SamplePipeline{
+		SamplePipeline: bitflow.SamplePipeline{
+			Source: source,
+		},
+	})
+}
+
 func (in *MultiMetricSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	stopChan := golib.NewStopChan()
 	signalClose := func() {
