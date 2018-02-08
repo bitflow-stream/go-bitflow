@@ -52,6 +52,16 @@ func (h *Header) String() string {
 	return fmt.Sprintf("Header %v field(s): %v", len(h.Fields), strings.Join(h.Fields, " "))
 }
 
+// BuildIndex creates a dictionary of the header field names to their index in the header
+// for optimize access to sample values.
+func (h *Header) BuildIndex() map[string]int {
+	result := make(map[string]int, len(h.Fields))
+	for i, field := range h.Fields {
+		result[field] = i
+	}
+	return result
+}
+
 // Sample contains an array of Values, a timestamp, and a string-to-string map of tags.
 // The values are explained by the header belonging to this sample. There is no direct
 // pointer from the sample to the header, so the header must be known from the context.
