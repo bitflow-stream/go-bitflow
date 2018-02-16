@@ -1,7 +1,6 @@
 package dbscan
 
 import (
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow-pipeline"
 )
 
@@ -22,10 +21,7 @@ type Dbscan struct {
 
 func (d *Dbscan) Cluster(points SetOfPoints) {
 	clusterId := 1
-	for i, point := range points.AllPoints() {
-
-		log.Println("Checking point", i)
-
+	for _, point := range points.AllPoints() {
 		if point.GetCluster() == pipeline.ClusterUnclassified {
 			if d.expandCluster(points, point, clusterId) {
 				clusterId++

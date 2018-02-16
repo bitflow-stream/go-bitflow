@@ -3,10 +3,9 @@ package dbscan
 import (
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-onlinestats"
+	log "github.com/sirupsen/logrus"
 )
 
 type DbscanBatchClusterer struct {
@@ -29,7 +28,10 @@ func (c *DbscanBatchClusterer) ProcessBatch(header *bitflow.Header, samples []*b
 	log.Println("Building RTree...")
 
 	tree := NewRtreeSetOfPoints(len(header.Fields), c.TreeMinChildren, c.TreeMaxChildren, c.TreePointWidth)
-	for _, sample := range samples {
+	for i, sample := range samples {
+		if i%5000 == 0 {
+			log.Printf("Inserted %v out of %v samples (%.2f%%)", i, len(samples), float32(i)/float32(len(samples))*100)
+		}
 		tree.Add(sample)
 	}
 
