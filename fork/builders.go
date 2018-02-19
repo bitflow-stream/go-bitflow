@@ -6,9 +6,9 @@ import (
 
 	"sort"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	log "github.com/sirupsen/logrus"
 )
 
 type SimplePipelineBuilder struct {
@@ -136,7 +136,8 @@ func MultiFileDirectoryBuilder(replaceFilename bool, buildPipeline func() []bitf
 }
 
 type StringPipelineBuilder struct {
-	Pipelines map[string]*pipeline.SamplePipeline
+	Pipelines            map[string]*pipeline.SamplePipeline
+	BuildMissingPipeline func(string) (*pipeline.SamplePipeline, error)
 }
 
 func (b *StringPipelineBuilder) BuildPipeline(key interface{}, _ *ForkMerger) *bitflow.SamplePipeline {
@@ -150,8 +151,19 @@ func (b *StringPipelineBuilder) BuildPipeline(key interface{}, _ *ForkMerger) *b
 		for key := range b.Pipelines {
 			keys = append(keys, key)
 		}
-		log.Warnf("No subpipeline defined for key '%v' (type %T). Using empty pipeline (Have pipelines: %v)", strKey, key, keys)
-		pipe = new(pipeline.SamplePipeline)
+		if b.BuildMissingPipeline != nil {
+			var err error
+			pipe, err = b.BuildMissingPipeline(strKey)
+			log.Debugf("No subpipeline defined for key '%v' (type %T). Building default pipeline (Have pipelines: %v)", strKey, key, keys)
+			if err != nil {
+				log.Errorf("Failed to build default subpipeline for key '%v': %v", strKey, err)
+				pipe = nil
+			}
+		} else {
+			log.Warnf("No subpipeline defined for key '%v' (type %T). Using empty pipeline (Have pipelines: %v)", strKey, key, keys)
+			pipe = new(pipeline.SamplePipeline)
+		}
+		b.Pipelines[strKey] = pipe
 	}
 	return &pipe.SamplePipeline
 }
