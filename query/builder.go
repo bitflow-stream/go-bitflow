@@ -190,6 +190,7 @@ func (builder PipelineBuilder) getFork(name_tok Token) (registeredFork, error) {
 
 func (builder PipelineBuilder) makePipelineBuilder(pipelines Pipelines) (fork.PipelineBuilder, error) {
 	builderPipes := make(map[string]*pipeline.SamplePipeline)
+	var defaultTail Pipeline
 	for _, pipe := range pipelines {
 		inputs := pipe[0].(Input)
 		builtPipe, err := builder.makePipelineTail(pipe[1:])
@@ -198,10 +199,20 @@ func (builder PipelineBuilder) makePipelineBuilder(pipelines Pipelines) (fork.Pi
 		}
 		for _, input := range inputs {
 			builderPipes[input.Content()] = builtPipe
+			if input.Content() == "" {
+				defaultTail = pipe[1:]
+			}
 		}
 	}
 	return &fork.StringPipelineBuilder{
 		Pipelines: builderPipes,
+		BuildMissingPipeline: func(string) (*pipeline.SamplePipeline, error) {
+			if len(defaultTail) == 0 {
+				return new(pipeline.SamplePipeline), nil
+			} else {
+				return builder.makePipelineTail(defaultTail)
+			}
+		},
 	}, nil
 }
 

@@ -2,11 +2,15 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/dbscan"
+	"github.com/antongulenko/go-bitflow-pipeline/denstream"
+	"github.com/antongulenko/go-bitflow-pipeline/evaluation"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-bitflow-pipeline/regression"
 )
@@ -14,6 +18,18 @@ import (
 func RegisterMathAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysis("dbscan", dbscan_rtree, "Perform a dbscan clustering on a batch of samples")
 	b.RegisterAnalysis("dbscan_parallel", dbscan_parallel, "Perform a parallelized dbscan clustering on a batch of samples")
+	b.RegisterAnalysisParamsErr("denstream", add_denstream, "Perform a denstream clustering on the data stream", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay")
+
+	b.RegisterAnalysis("preprocess_tags", func(p *SamplePipeline) { p.Add(new(evaluation.TagsPreprocessor)) },
+		"Process 'host', 'cls' and 'target' tags into more useful information.")
+	b.RegisterAnalysis("cluster_tag", func(p *SamplePipeline) { p.Add(new(evaluation.ClusterTagger)) },
+		"Translate 'cluster' tag into 'predicted' = 'anomaly' or 'normal'")
+	b.RegisterAnalysis("binary_evaluation", func(p *SamplePipeline) { p.Add(new(evaluation.BinaryEvaluationProcessor)) },
+		"Evaluate 'expected' and 'predicted' tags, separate evaluation by fields in 'groups' tag")
+	b.RegisterAnalysis("fix_evaluation_tags", func(p *SamplePipeline) { p.Add(new(evaluation.EvaluationTagFixer)) },
+		"Translate 'evalTraining' and 'evalExpected' tags to appropriate values of the 'evaluate' tag")
+	b.RegisterAnalysis("event_evaluation", func(p *SamplePipeline) { p.Add(new(evaluation.EventEvaluationProcessor)) },
+		"Like binary_evaluation, but add evaluation metrics for individual anomaly events")
 
 	b.RegisterAnalysis("regression", linear_regression, "Perform a linear regression analysis on a batch of samples")
 	b.RegisterAnalysis("regression_brute", linear_regression_bruteforce, "In a batch of samples, perform a linear regression analysis for every possible combination of metrics")
@@ -94,6 +110,76 @@ func dbscan_rtree(p *SamplePipeline) {
 
 func dbscan_parallel(p *SamplePipeline) {
 	p.Batch(&dbscan.ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5})
+}
+
+func add_denstream(p *SamplePipeline, params map[string]string) (err error) {
+	eps := 0.1
+	if epsStr, ok := params["eps"]; ok {
+		eps, err = strconv.ParseFloat(epsStr, 64)
+		if err != nil {
+			err = query.ParameterError("eps", err)
+			return
+		}
+	}
+
+	lambda := 0.0000000001 // 0.0001 -> Decay check every 37 minutes
+	lambdaStr, hasLambda := params["lambda"]
+	if hasLambda {
+		lambda, err = strconv.ParseFloat(lambdaStr, 64)
+		if err != nil {
+			err = query.ParameterError("lambda", err)
+			return
+		}
+	}
+
+	maxOutlierWeight := 5.0
+	if maxOutlierWeightStr, ok := params["maxOutlierWeight"]; ok {
+		maxOutlierWeight, err = strconv.ParseFloat(maxOutlierWeightStr, 64)
+		if err != nil {
+			err = query.ParameterError("maxOutlierWeight", err)
+			return
+		}
+	}
+
+	debug := 0
+	if debugStr, ok := params["debug"]; ok {
+		debug, err = strconv.Atoi(debugStr)
+		if err != nil {
+			err = query.ParameterError("debug", err)
+			return
+		}
+	}
+
+	clust := &denstream.DenstreamClusterProcessor{
+		DenstreamClusterer: denstream.DenstreamClusterer{
+			HistoryFading:    lambda,
+			MaxOutlierWeight: maxOutlierWeight,
+			Epsilon:          eps,
+		},
+		OutputStateModulo: debug,
+		CreateClusterSpace: func(numDimensions int) denstream.ClusterSpace {
+			return denstream.NewRtreeclusterSpace(numDimensions, 25, 50)
+		},
+	}
+
+	// c.pClusters = NewRtreeClusterSpace(p.numDimensions, c.RtreeMinChildren, c.RtreeMaxChildren)
+	// c.oClusters = NewRtreeClusterSpace(p.numDimensions, c.RtreeMinChildren, c.RtreeMaxChildren)
+
+	if decayTimeStr, ok := params["decay"]; ok {
+		var decayTime time.Duration
+		decayTime, err = time.ParseDuration(decayTimeStr)
+		if err != nil {
+			err = query.ParameterError("decay", err)
+			return
+		}
+		if hasLambda {
+			return fmt.Errorf("Cannot define both 'lambda' and 'decay' parameters")
+		}
+		clust.SetDecayTimeUnit(decayTime)
+	}
+
+	p.Add(clust)
+	return nil
 }
 
 func add_sphere(p *SamplePipeline, params map[string]string) error {
