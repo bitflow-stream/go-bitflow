@@ -13,9 +13,10 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 	"vbom.ml/util/sortorder"
 )
 
@@ -452,14 +453,24 @@ type FileSink struct {
 	CleanFiles bool
 
 	// Append can be set to true to make the FileSink append data to a file, if it exists.
-
 	Append bool
 
-	checker  HeaderChecker
-	group    FileGroup
-	file_num int
-	stream   *SampleOutputStream
-	closed   golib.StopChan
+	// VanishedFileCheck can be set to > 0 to enable a periodic check, if the currently opened
+	// output file is still available under the same file path as it was opened. The check will
+	// be performed whenever a sample is to be written and the last check is older than the given
+	// duration. If the check fails, the output file is reopened, including the creation of all necessary directories.
+	// This can happen, if the output file is deleted while still being written to, and enabling
+	// the VanishedFileCheck leads to the file be recreated, which could be the more expected behavior.
+	VanishedFileCheck time.Duration
+
+	checker               HeaderChecker
+	group                 FileGroup
+	file_num              int
+	stream                *SampleOutputStream
+	closed                golib.StopChan
+	currentFile           string
+	currentIno            uint64
+	lastVanishedFileCheck time.Time
 }
 
 // String implements the MetricSink interface.
@@ -510,8 +521,18 @@ func (sink *FileSink) openNextFile() (err error) {
 		var file *os.File
 		file, err = sink.openNextNewFile()
 		if err == nil {
-			sink.stream = sink.Writer.OpenBuffered(file, sink.Marshaller, sink.IoBuffer)
-			log.WithField("file", file.Name()).Println("Opened file")
+			sink.currentFile = file.Name()
+			if sink.VanishedFileCheck > 0 {
+				stat, statErr := file.Stat()
+				if statErr != nil {
+					err = statErr
+				}
+				sink.currentIno = stat.Sys().(*syscall.Stat_t).Ino
+			}
+			if err == nil {
+				sink.stream = sink.Writer.OpenBuffered(file, sink.Marshaller, sink.IoBuffer)
+				log.WithField("file", file.Name()).Println("Opened file")
+			}
 		}
 	})
 	return
@@ -534,10 +555,36 @@ func (sink *FileSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	if sink.checker.HeaderChanged(header) || sink.stream == nil {
+	openNewFile := sink.checker.HeaderChanged(header) || sink.stream == nil
+	if !openNewFile && sink.VanishedFileCheck > 0 {
+		openNewFile = sink.checkOutputFile()
+	}
+	if openNewFile {
 		if err := sink.openNextFile(); err != nil {
 			return err
 		}
 	}
 	return sink.stream.Sample(sample, header)
+}
+
+func (sink *FileSink) checkOutputFile() (openNewFile bool) {
+	now := time.Now()
+	if now.Sub(sink.lastVanishedFileCheck) > sink.VanishedFileCheck {
+		sink.lastVanishedFileCheck = now
+		info, err := os.Stat(sink.currentFile)
+		if err != nil {
+			log.WithField("file", sink.currentFile).Warn("Error stating opened output file:", err)
+			openNewFile = true
+		} else {
+			newIno := info.Sys().(*syscall.Stat_t).Ino
+			if newIno != sink.currentIno {
+				log.WithField("file", sink.currentFile).Warnf("Output file inumber has changed, reopening file (%v -> %v)", sink.currentIno, newIno)
+				openNewFile = true
+			}
+		}
+		if openNewFile {
+			sink.file_num = 0
+		}
+	}
+	return
 }

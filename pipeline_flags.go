@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
 type MarshallingFormat string
@@ -53,11 +53,12 @@ var (
 type EndpointFactory struct {
 	// File input/output flags
 
-	FlagInputFilesRobust bool
-	FlagOutputFilesClean bool
-	FlagIoBuffer         int
-	FlagFilesKeepAlive   bool
-	FlagFilesAppend      bool
+	FlagInputFilesRobust  bool
+	FlagOutputFilesClean  bool
+	FlagIoBuffer          int
+	FlagFilesKeepAlive    bool
+	FlagFilesAppend       bool
+	FlagFileVanishedCheck time.Duration
 
 	// TCP input/output flags
 
@@ -158,6 +159,7 @@ func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
 func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
 	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", 0, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
 	f.BoolVar(&p.FlagFilesAppend, "files-append", false, "For file output, do no create new files by incrementing the suffix and append to existing files.")
+	f.DurationVar(&p.FlagFileVanishedCheck, "files-check-output", 0, "For file output, check if the output file vanished or changed in regular intervals. Reopen the file in that case.")
 	for _, factoryFunc := range p.CustomOutputFlags {
 		factoryFunc(f)
 	}
@@ -282,10 +284,11 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 		resultSink = sink
 	case FileEndpoint:
 		sink := &FileSink{
-			Filename:   endpoint.Target,
-			IoBuffer:   p.FlagIoBuffer,
-			CleanFiles: p.FlagOutputFilesClean,
-			Append:     p.FlagFilesAppend,
+			Filename:          endpoint.Target,
+			IoBuffer:          p.FlagIoBuffer,
+			CleanFiles:        p.FlagOutputFilesClean,
+			Append:            p.FlagFilesAppend,
+			VanishedFileCheck: p.FlagFileVanishedCheck,
 		}
 		marshallingSink = &sink.AbstractMarshallingMetricSink
 		resultSink = sink
