@@ -34,7 +34,6 @@ func (p *EventEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflo
 		p.anomalyState = isAnomaly
 		p.stateCounter++
 	}
-	p.lastSampleTime = sample.Time
 	return p.GroupedEvaluation.Sample(sample, header)
 }
 
@@ -51,7 +50,7 @@ func (p *EventEvaluationProcessor) flushGroups(t time.Time) {
 }
 
 func (p *EventEvaluationProcessor) Close() {
-	p.flushGroups(p.lastSampleTime)
+	p.flushGroups(time.Time{})
 	p.GroupedEvaluation.Close()
 }
 
@@ -71,6 +70,7 @@ type EventEvaluationStats struct {
 	stateHandled    bool
 	anomalyDetected bool
 	falseAlarmStart time.Time
+	lastSampleTime  time.Time
 }
 
 func (s *EventEvaluationStats) TSV() string {
@@ -95,6 +95,7 @@ func (s *EventEvaluationStats) TSV() string {
 
 func (s *EventEvaluationStats) Evaluate(sample *bitflow.Sample, header *bitflow.Header) {
 	s.BinaryEvaluationStats.Evaluate(sample, header)
+	s.lastSampleTime = sample.Time
 
 	predicted := sample.Tag(EvalPredictedTag) == EvalAnomaly
 	if predicted && s.processor.anomalyState {
@@ -125,6 +126,9 @@ func (s *EventEvaluationStats) flushState(t time.Time) {
 }
 
 func (s *EventEvaluationStats) flushFalseAlarm(t time.Time) {
+	if t.IsZero() {
+		t = s.lastSampleTime
+	}
 	if !s.falseAlarmStart.IsZero() && !t.IsZero() {
 		falseAlarmDuration := t.Sub(s.falseAlarmStart)
 		s.FalseAlarms.Push(float64(falseAlarmDuration))
