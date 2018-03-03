@@ -9,6 +9,7 @@ import (
 	bitflow "github.com/antongulenko/go-bitflow"
 	onlinestats "github.com/antongulenko/go-onlinestats"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
 const EventEvaluationTsvHeader = BinaryEvaluationTsvHeader + "\tAnomalies\tDetected\tAvg Detection Time\tFalse Alarms\tAvg False Alarm Duration"
@@ -34,8 +35,12 @@ func (p *EventEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflo
 	isNewBatch := false
 	flushTime := sample.Time
 	if p.BatchKeyTag != "" {
-		isNewBatch = p.previousKey != sample.Tag(p.BatchKeyTag)
-		p.previousKey = sample.Tag(p.BatchKeyTag)
+		newKey := sample.Tag(p.BatchKeyTag)
+		isNewBatch = p.previousKey != newKey
+		if isNewBatch {
+			log.Debugf("Flushing event evaluation batch because \"%v\" tag changed from \"%v\" to \"%v\"", p.previousKey, newKey)
+		}
+		p.previousKey = newKey
 		if isNewBatch {
 			flushTime = time.Time{} // The new sample is not related to the previous ones
 		}
@@ -153,8 +158,12 @@ func (s *EventEvaluationStats) flushFalseAlarm(t time.Time) {
 		t = s.lastSampleTime
 	}
 	if !s.falseAlarmStart.IsZero() && !t.IsZero() {
-		falseAlarmDuration := t.Sub(s.falseAlarmStart)
-		s.FalseAlarms.Push(float64(falseAlarmDuration))
+		if t.Before(s.falseAlarmStart) {
+			log.Warnf("Ignoring false alarm that ends before it starts (Start: %v, End: %v)", s.falseAlarmStart, t)
+		} else {
+			falseAlarmDuration := t.Sub(s.falseAlarmStart)
+			s.FalseAlarms.Push(float64(falseAlarmDuration))
+		}
 	}
 	s.falseAlarmStart = time.Time{}
 }
