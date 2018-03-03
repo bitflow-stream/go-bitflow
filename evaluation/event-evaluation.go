@@ -27,7 +27,7 @@ type EventEvaluationProcessor struct {
 
 func (p *EventEvaluationProcessor) String() string {
 	return fmt.Sprintf("event-based evaluation (batch-key-tag: \"%v\", evaluation: [%v], binary evaluation: [%v])",
-		p.BatchKeyTag, p.GroupedEvaluation, p.BinaryEvaluationTags)
+		p.BatchKeyTag, &p.EvaluationTags, &p.BinaryEvaluationTags)
 }
 
 func (p *EventEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

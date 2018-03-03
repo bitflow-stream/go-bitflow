@@ -33,7 +33,7 @@ type ClusterTagger struct {
 
 func (p *ClusterTagger) String() string {
 	return fmt.Sprintf("cluster tagger (normal tag value: \"%v\", binary evaluation: [%v])",
-		p.NormalTagValue, p.BinaryEvaluationTags)
+		p.NormalTagValue, &p.BinaryEvaluationTags)
 }
 
 func (p *ClusterTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -71,7 +71,7 @@ func NewTagsPreprocessor(trainingEndStr string) (*TagsPreprocessor, error) {
 
 func (p *TagsPreprocessor) String() string {
 	return fmt.Sprintf("tags preprocessor (training end: %v, normal tag value: \"%v\", evaluation: [%v], binary evaluation: [%v])",
-		p.TrainingEnd, p.NormalTagValue, p.EvaluationTags, p.BinaryEvaluationTags)
+		p.TrainingEnd, p.NormalTagValue, &p.EvaluationTags, &p.BinaryEvaluationTags)
 }
 
 func (p *TagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

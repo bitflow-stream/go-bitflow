@@ -19,7 +19,7 @@ type BinaryEvaluationProcessor struct {
 
 func (p *BinaryEvaluationProcessor) String() string {
 	return fmt.Sprintf("binary classification evaluation (evaluation: [%v], binary evaluation: [%v])",
-		p.GroupedEvaluation, p.BinaryEvaluationTags)
+		&p.EvaluationTags, &p.BinaryEvaluationTags)
 }
 
 func (p *BinaryEvaluationProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
