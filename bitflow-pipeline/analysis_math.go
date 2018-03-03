@@ -21,20 +21,10 @@ func RegisterMathAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("denstream", add_denstream_rtree, "Perform a denstream clustering on the data stream. Clusters organzied in r-tree.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay")
 	b.RegisterAnalysisParamsErr("denstream_linear", add_denstream_linear, "Perform a denstream clustering on the data stream. Clusters searched linearly.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay")
 
-	b.RegisterAnalysisParamsErr("preprocess_tags", func(p *SamplePipeline, params map[string]string) error {
-		proc, err := evaluation.NewTagsPreprocessor(params["trainingEnd"])
-		p.Add(proc)
-		return err
-	},
-		"Process 'host', 'cls' and 'target' tags into more useful information.", []string{}, "trainingEnd")
-	b.RegisterAnalysis("cluster_tag", func(p *SamplePipeline) { p.Add(new(evaluation.ClusterTagger)) },
-		"Translate 'cluster' tag into 'predicted' = 'anomaly' or 'normal'")
-	b.RegisterAnalysis("binary_evaluation", func(p *SamplePipeline) { p.Add(new(evaluation.BinaryEvaluationProcessor)) },
-		"Evaluate 'expected' and 'predicted' tags, separate evaluation by fields in 'groups' tag")
-	b.RegisterAnalysis("fix_evaluation_tags", func(p *SamplePipeline) { p.Add(new(evaluation.EvaluationTagFixer)) },
-		"Translate 'evalTraining' and 'evalExpected' tags to appropriate values of the 'evaluate' tag")
-	b.RegisterAnalysis("event_evaluation", func(p *SamplePipeline) { p.Add(new(evaluation.EventEvaluationProcessor)) },
-		"Like binary_evaluation, but add evaluation metrics for individual anomaly events")
+	b.RegisterAnalysisParams("binary_evaluation", add_binary_evaluation, "Evaluate 'expected' and 'predicted' tags, separate evaluation by |-separated fields in 'evalGroups' tag", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator")
+	b.RegisterAnalysisParams("event_evaluation", add_event_evaluation, "Like binary_evaluation, but add evaluation metrics for individual anomaly events", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "batchTag")
+	b.RegisterAnalysisParamsErr("preprocess_tags", add_preprocess_tags, "Process 'host', 'cls' and 'target' tags into more useful information.", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "trainingEnd", "normalValue")
+	b.RegisterAnalysisParams("cluster_tag", set_cluster_tag, "Translate 'cluster' tag into 'predicted' = 'anomaly' or 'normal'", []string{}, "expectedTag", "predictedTag", "anomalyValue", "normalValue")
 
 	b.RegisterAnalysis("regression", linear_regression, "Perform a linear regression analysis on a batch of samples")
 	b.RegisterAnalysis("regression_brute", linear_regression_bruteforce, "In a batch of samples, perform a linear regression analysis for every possible combination of metrics")
@@ -50,6 +40,44 @@ func RegisterMathAnalyses(b *query.PipelineBuilder) {
 
 	b.RegisterAnalysis("fft", create_fft, "Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result")
 	b.RegisterAnalysis("rms", create_rms, "Compute the Root Mean Square value for every metric in a data batch. Output a single sample with all values.")
+}
+
+func add_binary_evaluation(p *SamplePipeline, params map[string]string) {
+	eval := new(evaluation.BinaryEvaluationProcessor)
+	eval.SetBinaryEvaluationTags(params)
+	eval.SetEvaluationTags(params)
+	p.Add(eval)
+}
+
+func add_event_evaluation(p *SamplePipeline, params map[string]string) {
+	eval := &evaluation.EventEvaluationProcessor{
+		BatchKeyTag: params["batchTag"],
+	}
+	eval.SetBinaryEvaluationTags(params)
+	eval.SetEvaluationTags(params)
+	p.Add(eval)
+}
+
+func add_preprocess_tags(p *SamplePipeline, params map[string]string) error {
+	proc, err := evaluation.NewTagsPreprocessor(params["trainingEnd"])
+	proc.SetBinaryEvaluationTags(params)
+	proc.SetEvaluationTags(params)
+	proc.NormalTagValue = params["normalValue"]
+	if proc.NormalTagValue == "" {
+		proc.NormalTagValue = "normal"
+	}
+	p.Add(proc)
+	return err
+}
+
+func set_cluster_tag(p *SamplePipeline, params map[string]string) {
+	proc := new(evaluation.ClusterTagger)
+	proc.SetBinaryEvaluationTags(params)
+	proc.NormalTagValue = params["normalValue"]
+	if proc.NormalTagValue == "" {
+		proc.NormalTagValue = "normal"
+	}
+	p.Add(proc)
 }
 
 func linear_regression(p *SamplePipeline) {

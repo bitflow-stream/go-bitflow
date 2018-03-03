@@ -27,28 +27,34 @@ var (
 
 type ClusterTagger struct {
 	bitflow.AbstractProcessor
+	BinaryEvaluationTags
+	NormalTagValue string
 }
 
 func (p *ClusterTagger) String() string {
-	return "cluster tagger"
+	return fmt.Sprintf("cluster tagger (normal tag value: \"%v\", binary evaluation: [%v])",
+		p.NormalTagValue, p.BinaryEvaluationTags)
 }
 
 func (p *ClusterTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	clusterId := sample.Tag("cluster")
 	predicted := ""
 	if clusterId == denstream.OutlierStr || clusterId == denstream.NewOutlierStr {
-		predicted = EvalAnomaly
+		predicted = p.AnomalyValue
 	} else {
-		predicted = EvalNormal
+		predicted = p.NormalTagValue
 	}
-	sample.SetTag(EvalPredictedTag, predicted)
+	sample.SetTag(p.Predicted, predicted)
 	return p.OutgoingSink.Sample(sample, header)
 }
 
 type TagsPreprocessor struct {
 	bitflow.AbstractProcessor
 
-	TrainingEnd time.Time
+	EvaluationTags
+	BinaryEvaluationTags
+	NormalTagValue string
+	TrainingEnd    time.Time
 }
 
 func NewTagsPreprocessor(trainingEndStr string) (*TagsPreprocessor, error) {
@@ -64,7 +70,8 @@ func NewTagsPreprocessor(trainingEndStr string) (*TagsPreprocessor, error) {
 }
 
 func (p *TagsPreprocessor) String() string {
-	return "tags preprocessor"
+	return fmt.Sprintf("tags preprocessor (training end: %v, normal tag value: \"%v\", evaluation: [%v], binary evaluation: [%v])",
+		p.TrainingEnd, p.NormalTagValue, p.EvaluationTags, p.BinaryEvaluationTags)
 }
 
 func (p *TagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -107,10 +114,10 @@ func (p *TagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header
 			sample.DeleteTag("target")
 		}
 		if !p.TrainingEnd.IsZero() && sample.Time.Before(p.TrainingEnd) {
-			sample.SetTag(EvaluateTag, "training")
+			sample.SetTag(p.EvaluateTag, "training")
 		} else {
-			sample.SetTag(EvaluateTag, DoEvaluate)
-			sample.SetTag(EvalExpectedTag, EvalNormal)
+			sample.SetTag(p.EvaluateTag, p.DoEvaluate)
+			sample.SetTag(p.Expected, p.NormalTagValue)
 		}
 	} else if sample.HasTag("target") {
 		targetParts := strings.SplitN(target, "|", 2)
@@ -122,30 +129,11 @@ func (p *TagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header
 
 		// Only evaluate hosts that are target of the current injection
 		if targetHost == host {
-			sample.SetTag(EvaluateTag, DoEvaluate)
-			sample.SetTag(EvalExpectedTag, EvalAnomaly)
+			sample.SetTag(p.EvaluateTag, p.DoEvaluate)
+			sample.SetTag(p.Expected, p.AnomalyValue)
 		}
 	}
-	sample.SetTag(EvalGroupsTag, strings.Join(groups, "|"))
+	sample.SetTag(p.EvalGroupsTag, strings.Join(groups, p.EvalGroupSeparator))
 
-	return p.OutgoingSink.Sample(sample, header)
-}
-
-type EvaluationTagFixer struct {
-	bitflow.AbstractProcessor
-}
-
-func (p *EvaluationTagFixer) String() string {
-	return "evaluation tag fixer"
-}
-
-func (p *EvaluationTagFixer) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if sample.HasTag("evalTraining") {
-		sample.DeleteTag("evalTraining")
-		sample.SetTag(EvaluateTag, "training")
-	}
-	if sample.HasTag(EvalExpectedTag) {
-		sample.SetTag(EvaluateTag, DoEvaluate)
-	}
 	return p.OutgoingSink.Sample(sample, header)
 }

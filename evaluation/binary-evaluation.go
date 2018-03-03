@@ -9,20 +9,17 @@ import (
 )
 
 const (
-	EvalExpectedTag  = "evalExpected"
-	EvalPredictedTag = "evalPredicted"
-	EvalNormal       = "normal"
-	EvalAnomaly      = "anomaly"
-
 	BinaryEvaluationTsvHeader = "Total\tTP\tTN\tFP\tFN\tF1\tAccuracy\tPrecision\tSpecificity (TNR)\tRecall (TPR)"
 )
 
 type BinaryEvaluationProcessor struct {
 	GroupedEvaluation
+	BinaryEvaluationTags
 }
 
 func (p *BinaryEvaluationProcessor) String() string {
-	return "binary classification evaluation"
+	return fmt.Sprintf("binary classification evaluation (evaluation: [%v], binary evaluation: [%v])",
+		p.GroupedEvaluation, p.BinaryEvaluationTags)
 }
 
 func (p *BinaryEvaluationProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
@@ -32,14 +29,43 @@ func (p *BinaryEvaluationProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (p *BinaryEvaluationProcessor) newGroup(groupName string) EvaluationStats {
-	return new(BinaryEvaluationStats)
+	return &BinaryEvaluationStats{
+		Tags: &p.BinaryEvaluationTags,
+	}
+}
+
+type BinaryEvaluationTags struct {
+	Expected     string // "expected"
+	Predicted    string // "predicted"
+	AnomalyValue string // "anomaly", All other values (or missing values) considered not anomaly
+}
+
+func (e *BinaryEvaluationTags) SetBinaryEvaluationTags(params map[string]string) {
+	e.Expected = params["expectedTag"]
+	if e.Expected == "" {
+		e.Expected = "expected"
+	}
+	e.Predicted = params["predictedTag"]
+	if e.Predicted == "" {
+		e.Predicted = "predicted"
+	}
+	e.AnomalyValue = params["anomalyValue"]
+	if e.AnomalyValue == "" {
+		e.AnomalyValue = "anomaly"
+	}
+}
+
+func (e *BinaryEvaluationTags) String() string {
+	return fmt.Sprintf("expected tag: \"%v\", predicted tag: \"%v\", anomaly value: \"%v\"",
+		e.Expected, e.Predicted, e.AnomalyValue)
 }
 
 type BinaryEvaluationStats struct {
-	TP int
-	TN int
-	FP int
-	FN int
+	Tags *BinaryEvaluationTags
+	TP   int
+	TN   int
+	FP   int
+	FN   int
 }
 
 func (s *BinaryEvaluationStats) TSV() string {
@@ -51,8 +77,8 @@ func (s *BinaryEvaluationStats) TSV() string {
 }
 
 func (s *BinaryEvaluationStats) Evaluate(sample *bitflow.Sample, header *bitflow.Header) {
-	expected := sample.Tag(EvalExpectedTag) == EvalAnomaly
-	predicted := sample.Tag(EvalPredictedTag) == EvalAnomaly
+	expected := sample.Tag(s.Tags.Expected) == s.Tags.AnomalyValue
+	predicted := sample.Tag(s.Tags.Predicted) == s.Tags.AnomalyValue
 	s.EvaluateClassification(expected, predicted)
 }
 

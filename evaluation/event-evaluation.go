@@ -15,7 +15,10 @@ const EventEvaluationTsvHeader = BinaryEvaluationTsvHeader + "\tAnomalies\tDetec
 
 type EventEvaluationProcessor struct {
 	GroupedEvaluation
+	BinaryEvaluationTags
+	BatchKeyTag string
 
+	previousKey    string
 	stateStart     time.Time
 	anomalyState   bool
 	stateCounter   int // Number of times we switched between anomaly and normal
@@ -23,12 +26,18 @@ type EventEvaluationProcessor struct {
 }
 
 func (p *EventEvaluationProcessor) String() string {
-	return "event-based evaluation"
+	return fmt.Sprintf("event-based evaluation (batch-key-tag: \"%v\", evaluation: [%v], binary evaluation: [%v])",
+		p.BatchKeyTag, p.GroupedEvaluation, p.BinaryEvaluationTags)
 }
 
 func (p *EventEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	isAnomaly := sample.Tag(EvalExpectedTag) == EvalAnomaly
-	if p.anomalyState != isAnomaly || p.stateStart.IsZero() {
+	isNewBatch := false
+	if p.BatchKeyTag != "" {
+		isNewBatch = p.previousKey != sample.Tag(p.BatchKeyTag)
+		p.previousKey = sample.Tag(p.BatchKeyTag)
+	}
+	isAnomaly := sample.Tag(p.Expected) == p.AnomalyValue
+	if isNewBatch || p.stateStart.IsZero() || p.anomalyState != isAnomaly {
 		p.flushGroups(sample.Time)
 		p.stateStart = sample.Time
 		p.anomalyState = isAnomaly
@@ -56,6 +65,9 @@ func (p *EventEvaluationProcessor) Close() {
 
 func (p *EventEvaluationProcessor) newGroup(groupName string) EvaluationStats {
 	return &EventEvaluationStats{
+		BinaryEvaluationStats: BinaryEvaluationStats{
+			Tags: &p.BinaryEvaluationTags,
+		},
 		processor: p,
 	}
 }
@@ -88,11 +100,11 @@ func (s *EventEvaluationStats) TSV() string {
 
 	falseAlarmDuration := time.Duration(s.FalseAlarms.Mean()).String()
 	if s.FalseAlarms.Len() > 1 {
-		falseAlarmDuration += "± " + time.Duration(s.FalseAlarms.Stddev()).String()
+		falseAlarmDuration += " ±" + time.Duration(s.FalseAlarms.Stddev()).String()
 	}
 	detectionTime := time.Duration(s.DetectedAnomalies.Mean()).String()
 	if s.DetectedAnomalies.Len() > 1 {
-		detectionTime += "± " + time.Duration(s.DetectedAnomalies.Stddev()).String()
+		detectionTime += " ±" + time.Duration(s.DetectedAnomalies.Stddev()).String()
 	}
 
 	str += fmt.Sprintf("\t%v\t%v (%.1f%%)\t%v\t%v\t%v",
@@ -104,7 +116,7 @@ func (s *EventEvaluationStats) Evaluate(sample *bitflow.Sample, header *bitflow.
 	s.BinaryEvaluationStats.Evaluate(sample, header)
 	s.lastSampleTime = sample.Time
 
-	predicted := sample.Tag(EvalPredictedTag) == EvalAnomaly
+	predicted := sample.Tag(s.Tags.Predicted) == s.Tags.AnomalyValue
 	if predicted && s.processor.anomalyState {
 		if !s.anomalyDetected {
 			detectionTime := sample.Time.Sub(s.processor.stateStart)

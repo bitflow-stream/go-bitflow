@@ -2,6 +2,7 @@ package evaluation
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -12,20 +13,45 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	EvaluateTag        = "evaluate"
-	DoEvaluate         = "true"
-	EvalGroupsTag      = "evalGroups"
-	EvalGroupSeparator = "|"
-)
-
 type GroupedEvaluation struct {
 	bitflow.AbstractProcessor
 	groups         map[string]EvaluationStats
 	ignoredSamples map[string]int
 
+	EvaluationTags
 	TsvHeader string
 	NewGroup  func(name string) EvaluationStats
+}
+
+type EvaluationTags struct {
+	EvaluateTag        string // "evaluate"
+	DoEvaluate         string // "true"
+	EvalGroupsTag      string // "evalGroups"
+	EvalGroupSeparator string // "|"
+}
+
+func (e *EvaluationTags) SetEvaluationTags(params map[string]string) {
+	e.EvaluateTag = params["evaluateTag"]
+	if e.EvaluateTag == "" {
+		e.EvaluateTag = "evaluate"
+	}
+	e.DoEvaluate = params["evaluateValue"]
+	if e.DoEvaluate == "" {
+		e.DoEvaluate = "true"
+	}
+	e.EvalGroupsTag = params["groupsTag"]
+	if e.EvalGroupsTag == "" {
+		e.EvalGroupsTag = "evalGroups"
+	}
+	e.EvalGroupSeparator = params["groupsSeparator"]
+	if e.EvalGroupSeparator == "" {
+		e.EvalGroupSeparator = "|"
+	}
+}
+
+func (e *EvaluationTags) String() string {
+	return fmt.Sprintf("evaluate tag: \"%v\", evaluate value: \"%v\", groups tag: \"%v\", groups separator: \"%v\"",
+		e.EvaluateTag, e.DoEvaluate, e.EvalGroupsTag, e.EvalGroupSeparator)
 }
 
 type EvaluationStats interface {
@@ -74,9 +100,9 @@ func (p *GroupedEvaluation) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (p *GroupedEvaluation) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	eval := sample.Tag(EvaluateTag)
-	if eval == DoEvaluate {
-		groups := strings.Split(sample.Tag(EvalGroupsTag), EvalGroupSeparator)
+	eval := sample.Tag(p.EvaluateTag)
+	if eval == p.DoEvaluate {
+		groups := strings.Split(sample.Tag(p.EvalGroupsTag), p.EvalGroupSeparator)
 		for _, group := range groups {
 			stats, ok := p.groups[group]
 			if !ok {
@@ -88,7 +114,7 @@ func (p *GroupedEvaluation) Sample(sample *bitflow.Sample, header *bitflow.Heade
 	} else if eval == "" {
 		eval = "ignored"
 	}
-	if eval != DoEvaluate {
+	if eval != p.DoEvaluate {
 		ignoredCounter := p.ignoredSamples[eval]
 		p.ignoredSamples[eval] = ignoredCounter + 1
 	}
