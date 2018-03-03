@@ -89,7 +89,7 @@ func (s *EventEvaluationStats) TSV() string {
 		detectionRate = float64(detected) / float64(s.AnomalyEvents) * 100
 	}
 	str += fmt.Sprintf("\t%v\t%v (%.1f%%)\t%v ±%v\t%v\t%v ±%v",
-		s.AnomalyEvents, detectedStr, detectionRate, detectionTime, detectionTimeStddev, s.FalseAlarms, falseAlarmDuration, falseAlarmDurationStddev)
+		s.AnomalyEvents, detectedStr, detectionRate, detectionTime, detectionTimeStddev, s.FalseAlarms.Len(), falseAlarmDuration, falseAlarmDurationStddev)
 	return str
 }
 
@@ -125,7 +125,7 @@ func (s *EventEvaluationStats) flushState(t time.Time) {
 }
 
 func (s *EventEvaluationStats) flushFalseAlarm(t time.Time) {
-	if !s.falseAlarmStart.IsZero() {
+	if !s.falseAlarmStart.IsZero() && !t.IsZero() {
 		falseAlarmDuration := t.Sub(s.falseAlarmStart)
 		s.FalseAlarms.Push(float64(falseAlarmDuration))
 	}
