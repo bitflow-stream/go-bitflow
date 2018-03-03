@@ -95,7 +95,7 @@ func (s *EventEvaluationStats) TSV() string {
 		detectionTime += "± " + time.Duration(s.DetectedAnomalies.Stddev()).String()
 	}
 
-	str += fmt.Sprintf("\t%v\t%v (%.1f%%)\t%v ±%v\t%v\t%v ±%v",
+	str += fmt.Sprintf("\t%v\t%v (%.1f%%)\t%v\t%v\t%v",
 		s.AnomalyEvents, detectedStr, detectionRate, detectionTime, s.FalseAlarms.Len(), falseAlarmDuration)
 	return str
 }
