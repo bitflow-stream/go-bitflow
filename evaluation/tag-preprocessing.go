@@ -3,6 +3,7 @@ package evaluation
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	bitflow "github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline/denstream"
@@ -22,8 +23,6 @@ var (
 		"wally197": true,
 		"wally198": true,
 	}
-
-	trainingEnd = golib.ParseTime(golib.SimpleTimeLayout, "2018-02-06 22:26:31")
 )
 
 type ClusterTagger struct {
@@ -48,6 +47,20 @@ func (p *ClusterTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 
 type TagsPreprocessor struct {
 	bitflow.AbstractProcessor
+
+	TrainingEnd time.Time
+}
+
+func NewTagsPreprocessor(trainingEndStr string) (*TagsPreprocessor, error) {
+	result := new(TagsPreprocessor)
+	if trainingEndStr != "" {
+		trainingEnd, err := time.Parse(golib.SimpleTimeLayout, trainingEndStr)
+		if err != nil {
+			return nil, err
+		}
+		result.TrainingEnd = trainingEnd
+	}
+	return result, nil
 }
 
 func (p *TagsPreprocessor) String() string {
@@ -93,7 +106,7 @@ func (p *TagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header
 			log.Warnf("Sample has both 'cls' and 'target' tags. Removing 'target' (cls=%v, target=%v).", cls, target)
 			sample.DeleteTag("target")
 		}
-		if sample.Time.Before(trainingEnd) {
+		if !p.TrainingEnd.IsZero() && sample.Time.Before(p.TrainingEnd) {
 			sample.SetTag(EvaluateTag, "training")
 		} else {
 			sample.SetTag(EvaluateTag, DoEvaluate)

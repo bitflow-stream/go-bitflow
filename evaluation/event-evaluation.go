@@ -7,6 +7,7 @@ import (
 	"time"
 
 	bitflow "github.com/antongulenko/go-bitflow"
+	onlinestats "github.com/antongulenko/go-onlinestats"
 	"github.com/antongulenko/golib"
 )
 
@@ -15,9 +16,10 @@ const EventEvaluationTsvHeader = BinaryEvaluationTsvHeader + "\tAnomalies\tDetec
 type EventEvaluationProcessor struct {
 	GroupedEvaluation
 
-	stateStart   time.Time
-	anomalyState bool
-	stateCounter int // Number of times we switched between anomaly and normal
+	stateStart     time.Time
+	anomalyState   bool
+	stateCounter   int // Number of times we switched between anomaly and normal
+	lastSampleTime time.Time
 }
 
 func (p *EventEvaluationProcessor) String() string {
@@ -27,11 +29,12 @@ func (p *EventEvaluationProcessor) String() string {
 func (p *EventEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	isAnomaly := sample.Tag(EvalExpectedTag) == EvalAnomaly
 	if p.anomalyState != isAnomaly || p.stateStart.IsZero() {
-		p.flushGroups()
+		p.flushGroups(sample.Time)
 		p.stateStart = sample.Time
 		p.anomalyState = isAnomaly
 		p.stateCounter++
 	}
+	p.lastSampleTime = sample.Time
 	return p.GroupedEvaluation.Sample(sample, header)
 }
 
@@ -41,14 +44,14 @@ func (p *EventEvaluationProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	return p.GroupedEvaluation.Start(wg)
 }
 
-func (p *EventEvaluationProcessor) flushGroups() {
+func (p *EventEvaluationProcessor) flushGroups(t time.Time) {
 	for _, group := range p.GroupedEvaluation.groups {
-		group.(*EventEvaluationStats).flushState()
+		group.(*EventEvaluationStats).flushState(t)
 	}
 }
 
 func (p *EventEvaluationProcessor) Close() {
-	p.flushGroups()
+	p.flushGroups(p.lastSampleTime)
 	p.GroupedEvaluation.Close()
 }
 
@@ -60,38 +63,33 @@ func (p *EventEvaluationProcessor) newGroup(groupName string) EvaluationStats {
 
 type EventEvaluationStats struct {
 	BinaryEvaluationStats
-	AnomalyEvents       int
-	UndetectedAnomalies int           // Anomaly events without any detection
-	DetectionTime       time.Duration // Time from the beginning of each anomaly to the first detection. Summed up, to make an average
-	FalseAlarms         int           // FalsePositive occurrences
+	AnomalyEvents     int
+	FalseAlarms       onlinestats.Running // Count and duration of false alarms
+	DetectedAnomalies onlinestats.Running // Count of detected anomalies, duration until detection
 
-	processor                *EventEvaluationProcessor
-	stateHandled             bool
-	anomalyDetected          bool
-	previousAnomalyPredicted bool // To determine FalseAlarms
+	processor       *EventEvaluationProcessor
+	stateHandled    bool
+	anomalyDetected bool
+	falseAlarmStart time.Time
 }
 
 func (s *EventEvaluationStats) TSV() string {
 	str := s.BinaryEvaluationStats.TSV()
-	detected := s.AnomalyEvents - s.UndetectedAnomalies
+	detected := s.DetectedAnomalies.Len()
 	detectedStr := "-"
 	if s.AnomalyEvents > 0 {
 		detectedStr = strconv.Itoa(detected)
 	}
-	samplesPerFalseAlarm := "-"
-	if s.FalseAlarms > 0 {
-		samplesPerFalseAlarm = fmt.Sprintf("%v", float64(s.FP)/float64(s.FalseAlarms))
-	}
-	timePerDetection := "-"
-	if detected > 0 {
-		timePerDetection = (s.DetectionTime / time.Duration(detected)).String()
-	}
+	falseAlarmDuration := time.Duration(s.FalseAlarms.Mean())
+	falseAlarmDurationStddev := time.Duration(s.FalseAlarms.Stddev())
+	detectionTime := time.Duration(s.DetectedAnomalies.Mean())
+	detectionTimeStddev := time.Duration(s.DetectedAnomalies.Stddev())
 	detectionRate := 0.0
 	if s.AnomalyEvents > 0 {
 		detectionRate = float64(detected) / float64(s.AnomalyEvents) * 100
 	}
-	str += fmt.Sprintf("\t%v\t%v (%.1f%%)\t%v\t%v\t%v",
-		s.AnomalyEvents, detectedStr, detectionRate, timePerDetection, s.FalseAlarms, samplesPerFalseAlarm)
+	str += fmt.Sprintf("\t%v\t%v (%.1f%%)\t%v ±%v\t%v\t%v ±%v",
+		s.AnomalyEvents, detectedStr, detectionRate, detectionTime, detectionTimeStddev, s.FalseAlarms, falseAlarmDuration, falseAlarmDurationStddev)
 	return str
 }
 
@@ -101,24 +99,35 @@ func (s *EventEvaluationStats) Evaluate(sample *bitflow.Sample, header *bitflow.
 	predicted := sample.Tag(EvalPredictedTag) == EvalAnomaly
 	if predicted && s.processor.anomalyState {
 		if !s.anomalyDetected {
-			s.DetectionTime += sample.Time.Sub(s.processor.stateStart)
+			detectionTime := sample.Time.Sub(s.processor.stateStart)
+			s.DetectedAnomalies.Push(float64(detectionTime))
 		}
 		s.anomalyDetected = true
 	}
-	if !s.processor.anomalyState && predicted && !s.previousAnomalyPredicted {
-		s.FalseAlarms++
+	isFalseAlarm := predicted && !s.processor.anomalyState
+	falseAlarmRunning := !s.falseAlarmStart.IsZero()
+	if isFalseAlarm && !falseAlarmRunning {
+		s.falseAlarmStart = sample.Time
+	} else if !isFalseAlarm && falseAlarmRunning {
+		s.flushFalseAlarm(sample.Time)
 	}
-	s.previousAnomalyPredicted = predicted
+
+	if !s.stateHandled && s.processor.anomalyState {
+		s.AnomalyEvents++
+	}
 	s.stateHandled = true
 }
 
-func (s *EventEvaluationStats) flushState() {
-	if s.stateHandled && s.processor.anomalyState {
-		s.AnomalyEvents++
-		if !s.anomalyDetected {
-			s.UndetectedAnomalies++
-		}
-	}
+func (s *EventEvaluationStats) flushState(t time.Time) {
+	s.flushFalseAlarm(t)
 	s.stateHandled = false
 	s.anomalyDetected = false
+}
+
+func (s *EventEvaluationStats) flushFalseAlarm(t time.Time) {
+	if !s.falseAlarmStart.IsZero() {
+		falseAlarmDuration := t.Sub(s.falseAlarmStart)
+		s.FalseAlarms.Push(float64(falseAlarmDuration))
+	}
+	s.falseAlarmStart = time.Time{}
 }

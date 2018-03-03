@@ -21,8 +21,12 @@ func RegisterMathAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("denstream", add_denstream_rtree, "Perform a denstream clustering on the data stream. Clusters organzied in r-tree.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay")
 	b.RegisterAnalysisParamsErr("denstream_linear", add_denstream_linear, "Perform a denstream clustering on the data stream. Clusters searched linearly.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay")
 
-	b.RegisterAnalysis("preprocess_tags", func(p *SamplePipeline) { p.Add(new(evaluation.TagsPreprocessor)) },
-		"Process 'host', 'cls' and 'target' tags into more useful information.")
+	b.RegisterAnalysisParamsErr("preprocess_tags", func(p *SamplePipeline, params map[string]string) error {
+		proc, err := evaluation.NewTagsPreprocessor(params["trainingEnd"])
+		p.Add(proc)
+		return err
+	},
+		"Process 'host', 'cls' and 'target' tags into more useful information.", []string{}, "trainingEnd")
 	b.RegisterAnalysis("cluster_tag", func(p *SamplePipeline) { p.Add(new(evaluation.ClusterTagger)) },
 		"Translate 'cluster' tag into 'predicted' = 'anomaly' or 'normal'")
 	b.RegisterAnalysis("binary_evaluation", func(p *SamplePipeline) { p.Add(new(evaluation.BinaryEvaluationProcessor)) },

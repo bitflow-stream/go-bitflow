@@ -14,7 +14,7 @@ const (
 	EvalNormal       = "normal"
 	EvalAnomaly      = "anomaly"
 
-	BinaryEvaluationTsvHeader = "F1\tAccuracy\tPrecision\tRecall\tTotal\tTP\tTN\tFP\tFN"
+	BinaryEvaluationTsvHeader = "Total\tTP\tTN\tFP\tFN\tF1\tAccuracy\tPrecision\tSpecificity (TNR)\tRecall (TPR)"
 )
 
 type BinaryEvaluationProcessor struct {
@@ -42,17 +42,12 @@ type BinaryEvaluationStats struct {
 	FN int
 }
 
-func (s *BinaryEvaluationStats) String() string {
-	return fmt.Sprintf("F1 = %.2v, Accuracy = %.2v, Precision = %.2v, Recall = %.2v, Total = %v (TP = %v, TN = %v, FP = %v, FN = %v)",
-		s.F1(), s.Accuracy(), s.Precision(), s.Recall(), s.Total(), s.TP, s.TN, s.FP, s.FN)
-}
-
 func (s *BinaryEvaluationStats) TSV() string {
 	tot := s.Total()
 	totF := float64(tot) / 100.0
-	return fmt.Sprintf("%.2f%%\t%.2f%%\t%.2f%%\t%.2f%%\t%v\t%v (%.1f%%)\t%v (%.1f%%)\t%v (%.1f%%)\t%v (%.1f%%)",
-		s.F1()*100, s.Accuracy()*100, s.Precision()*100, s.Recall()*100,
-		tot, s.TP, float64(s.TP)/totF, s.TN, float64(s.TN)/totF, s.FP, float64(s.FP)/totF, s.FN, float64(s.FN)/totF)
+	return fmt.Sprintf("%v\t%v (%.1f%%)\t%v (%.1f%%)\t%v (%.1f%%)\t%v (%.1f%%)\t%.2f%%\t%.2f%%\t%.2f%%\t%.2f%%\t%.2f%%",
+		tot, s.TP, float64(s.TP)/totF, s.TN, float64(s.TN)/totF, s.FP, float64(s.FP)/totF, s.FN, float64(s.FN)/totF,
+		s.F1()*100, s.Accuracy()*100, s.Precision()*100, s.Specificity()*100, s.Recall()*100)
 }
 
 func (s *BinaryEvaluationStats) Evaluate(sample *bitflow.Sample, header *bitflow.Header) {
@@ -84,6 +79,10 @@ func (s *BinaryEvaluationStats) Precision() float64 {
 
 func (s *BinaryEvaluationStats) Recall() float64 {
 	return float64(s.TP) / float64(s.TP+s.FN)
+}
+
+func (s *BinaryEvaluationStats) Specificity() float64 {
+	return float64(s.TN) / float64(s.FP+s.TN)
 }
 
 func (s *BinaryEvaluationStats) F1() float64 {
