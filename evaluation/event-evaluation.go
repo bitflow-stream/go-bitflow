@@ -32,13 +32,17 @@ func (p *EventEvaluationProcessor) String() string {
 
 func (p *EventEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	isNewBatch := false
+	flushTime := sample.Time
 	if p.BatchKeyTag != "" {
 		isNewBatch = p.previousKey != sample.Tag(p.BatchKeyTag)
 		p.previousKey = sample.Tag(p.BatchKeyTag)
+		if isNewBatch {
+			flushTime = time.Time{} // The new sample is not related to the previous ones
+		}
 	}
 	isAnomaly := sample.Tag(p.Expected) == p.AnomalyValue
 	if isNewBatch || p.stateStart.IsZero() || p.anomalyState != isAnomaly {
-		p.flushGroups(sample.Time)
+		p.flushGroups(flushTime)
 		p.stateStart = sample.Time
 		p.anomalyState = isAnomaly
 		p.stateCounter++
