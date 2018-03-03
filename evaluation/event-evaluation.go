@@ -75,21 +75,28 @@ type EventEvaluationStats struct {
 
 func (s *EventEvaluationStats) TSV() string {
 	str := s.BinaryEvaluationStats.TSV()
+
 	detected := s.DetectedAnomalies.Len()
 	detectedStr := "-"
 	if s.AnomalyEvents > 0 {
 		detectedStr = strconv.Itoa(detected)
 	}
-	falseAlarmDuration := time.Duration(s.FalseAlarms.Mean())
-	falseAlarmDurationStddev := time.Duration(s.FalseAlarms.Stddev())
-	detectionTime := time.Duration(s.DetectedAnomalies.Mean())
-	detectionTimeStddev := time.Duration(s.DetectedAnomalies.Stddev())
 	detectionRate := 0.0
 	if s.AnomalyEvents > 0 {
 		detectionRate = float64(detected) / float64(s.AnomalyEvents) * 100
 	}
+
+	falseAlarmDuration := time.Duration(s.FalseAlarms.Mean()).String()
+	if s.FalseAlarms.Len() > 1 {
+		falseAlarmDuration += "± " + time.Duration(s.FalseAlarms.Stddev()).String()
+	}
+	detectionTime := time.Duration(s.DetectedAnomalies.Mean()).String()
+	if s.DetectedAnomalies.Len() > 1 {
+		detectionTime += "± " + time.Duration(s.DetectedAnomalies.Stddev()).String()
+	}
+
 	str += fmt.Sprintf("\t%v\t%v (%.1f%%)\t%v ±%v\t%v\t%v ±%v",
-		s.AnomalyEvents, detectedStr, detectionRate, detectionTime, detectionTimeStddev, s.FalseAlarms.Len(), falseAlarmDuration, falseAlarmDurationStddev)
+		s.AnomalyEvents, detectedStr, detectionRate, detectionTime, s.FalseAlarms.Len(), falseAlarmDuration)
 	return str
 }
 
