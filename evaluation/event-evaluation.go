@@ -14,10 +14,11 @@ import (
 
 const EventEvaluationTsvHeader = BinaryEvaluationTsvHeader + "\tAnomalies\tDetected\tAvg Detection Time\tFalse Alarms\tAvg False Alarm Duration"
 
-type EventEvaluationProcessor struct {
-	GroupedEvaluation
+type AbstractAnomalyEventProcessor struct {
 	BinaryEvaluationTags
 	BatchKeyTag string
+
+	StateChanged func(time.Time)
 
 	previousKey    string
 	stateStart     time.Time
@@ -26,19 +27,14 @@ type EventEvaluationProcessor struct {
 	lastSampleTime time.Time
 }
 
-func (p *EventEvaluationProcessor) String() string {
-	return fmt.Sprintf("event-based evaluation (batch-key-tag: \"%v\", evaluation: [%v], binary evaluation: [%v])",
-		p.BatchKeyTag, &p.EvaluationTags, &p.BinaryEvaluationTags)
-}
-
-func (p *EventEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (p *AbstractAnomalyEventProcessor) Sample(sample *bitflow.Sample) {
 	isNewBatch := false
 	flushTime := sample.Time
 	if p.BatchKeyTag != "" {
 		newKey := sample.Tag(p.BatchKeyTag)
 		isNewBatch = p.previousKey != newKey
 		if isNewBatch {
-			log.Debugf("Flushing event evaluation batch because \"%v\" tag changed from \"%v\" to \"%v\"", p.previousKey, newKey)
+			log.Debugf("Flushing event evaluation batch because \"%v\" tag changed from \"%v\" to \"%v\"", p.BatchKeyTag, p.previousKey, newKey)
 		}
 		p.previousKey = newKey
 		if isNewBatch {
@@ -47,15 +43,34 @@ func (p *EventEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflo
 	}
 	isAnomaly := sample.Tag(p.Expected) == p.AnomalyValue
 	if isNewBatch || p.stateStart.IsZero() || p.anomalyState != isAnomaly {
-		p.flushGroups(flushTime)
+		p.StateChanged(flushTime)
 		p.stateStart = sample.Time
 		p.anomalyState = isAnomaly
 		p.stateCounter++
 	}
+}
+
+func (p *AbstractAnomalyEventProcessor) Close() {
+	p.StateChanged(time.Time{})
+}
+
+type EventEvaluationProcessor struct {
+	GroupedEvaluation
+	AbstractAnomalyEventProcessor
+}
+
+func (p *EventEvaluationProcessor) String() string {
+	return fmt.Sprintf("event-based evaluation (batch-key-tag: \"%v\", evaluation: [%v], binary evaluation: [%v])",
+		p.BatchKeyTag, &p.EvaluationTags, &p.BinaryEvaluationTags)
+}
+
+func (p *EventEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+	p.AbstractAnomalyEventProcessor.Sample(sample)
 	return p.GroupedEvaluation.Sample(sample, header)
 }
 
 func (p *EventEvaluationProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
+	p.StateChanged = p.flushGroups
 	p.TsvHeader = EventEvaluationTsvHeader
 	p.NewGroup = p.newGroup
 	return p.GroupedEvaluation.Start(wg)
@@ -68,7 +83,7 @@ func (p *EventEvaluationProcessor) flushGroups(t time.Time) {
 }
 
 func (p *EventEvaluationProcessor) Close() {
-	p.flushGroups(time.Time{})
+	p.AbstractAnomalyEventProcessor.Close()
 	p.GroupedEvaluation.Close()
 }
 
@@ -166,4 +181,56 @@ func (s *EventEvaluationStats) flushFalseAlarm(t time.Time) {
 		}
 	}
 	s.falseAlarmStart = time.Time{}
+}
+
+type AnomalySmoothing struct {
+	bitflow.AbstractProcessor
+	BinaryEvaluationTags
+	AbstractAnomalyEventProcessor
+	NormalTagValue    string
+	SmoothingDuration time.Duration
+
+	stateChanged         time.Time
+	anomalyRunning       bool
+	outputAnomalyRunning bool
+	lastHost             string
+}
+
+func (p *AnomalySmoothing) String() string {
+	return fmt.Sprintf("anomaly smoothing (smoothing duration: %v, normal tag value: %v, batch key: %v, tags: [%v])", p.SmoothingDuration, p.NormalTagValue, p.BatchKeyTag, &p.BinaryEvaluationTags)
+}
+
+func (p *AnomalySmoothing) Start(wg *sync.WaitGroup) golib.StopChan {
+	p.StateChanged = p.anomalyStateChanged
+	return p.AbstractProcessor.Start(wg)
+}
+
+func (p *AnomalySmoothing) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+	p.AbstractAnomalyEventProcessor.Sample(sample)
+
+	isAnomaly := sample.Tag(p.Predicted) == p.AnomalyValue
+	if p.stateChanged.IsZero() || p.anomalyRunning != isAnomaly {
+		p.stateChanged = sample.Time
+		p.anomalyRunning = isAnomaly
+	}
+	stateDuration := sample.Time.Sub(p.stateChanged)
+	if stateDuration > p.SmoothingDuration {
+		p.outputAnomalyRunning = isAnomaly
+	}
+
+	if p.outputAnomalyRunning {
+		sample.SetTag(p.Predicted, p.AnomalyValue)
+	} else {
+		sample.SetTag(p.Predicted, p.NormalTagValue)
+	}
+	return p.AbstractProcessor.Sample(sample, header)
+}
+
+func (p *AnomalySmoothing) Close() {
+	p.AbstractAnomalyEventProcessor.Close()
+	p.AbstractProcessor.Close()
+}
+
+func (p *AnomalySmoothing) anomalyStateChanged(t time.Time) {
+	p.stateChanged = time.Time{}
 }

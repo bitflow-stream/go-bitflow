@@ -25,6 +25,7 @@ func RegisterMathAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParams("event_evaluation", add_event_evaluation, "Like binary_evaluation, but add evaluation metrics for individual anomaly events", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "batchTag")
 	b.RegisterAnalysisParamsErr("preprocess_tags", add_preprocess_tags, "Process 'host', 'cls' and 'target' tags into more useful information.", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "trainingEnd", "normalValue")
 	b.RegisterAnalysisParams("cluster_tag", set_cluster_tag, "Translate 'cluster' tag into 'predicted' = 'anomaly' or 'normal'", []string{}, "expectedTag", "predictedTag", "anomalyValue", "normalValue")
+	b.RegisterAnalysisParamsErr("smooth_anomalies", smooth_anomalies, "Smooth the switching between anomalies and non-anomalies. Switch when one state stabilizes for a given time.", []string{}, "batchTag", "interval", "expectedTag", "predictedTag", "anomalyValue") // Missing: "normalValue", ""
 
 	b.RegisterAnalysis("regression", linear_regression, "Perform a linear regression analysis on a batch of samples")
 	b.RegisterAnalysis("regression_brute", linear_regression_bruteforce, "In a batch of samples, perform a linear regression analysis for every possible combination of metrics")
@@ -50,9 +51,8 @@ func add_binary_evaluation(p *SamplePipeline, params map[string]string) {
 }
 
 func add_event_evaluation(p *SamplePipeline, params map[string]string) {
-	eval := &evaluation.EventEvaluationProcessor{
-		BatchKeyTag: params["batchTag"],
-	}
+	eval := &evaluation.EventEvaluationProcessor{}
+	eval.BatchKeyTag = params["batchTag"]
 	eval.SetBinaryEvaluationTags(params)
 	eval.SetEvaluationTags(params)
 	p.Add(eval)
@@ -78,6 +78,28 @@ func set_cluster_tag(p *SamplePipeline, params map[string]string) {
 		proc.NormalTagValue = "normal"
 	}
 	p.Add(proc)
+}
+
+func smooth_anomalies(p *SamplePipeline, params map[string]string) error {
+	proc := new(evaluation.AnomalySmoothing)
+	proc.SetBinaryEvaluationTags(params)
+	proc.NormalTagValue = params["normalValue"]
+	if proc.NormalTagValue == "" {
+		proc.NormalTagValue = "normal"
+	}
+	smoothingDuration := 5 * time.Second
+	if smoothingDurationStr, ok := params["interval"]; ok {
+		var err error
+		smoothingDuration, err = time.ParseDuration(smoothingDurationStr)
+		if err != nil {
+			return query.ParameterError("interval", err)
+		}
+	}
+	proc.SetBinaryEvaluationTags(params)
+	proc.BatchKeyTag = params["batchTag"]
+	proc.SmoothingDuration = smoothingDuration
+	p.Add(proc)
+	return nil
 }
 
 func linear_regression(p *SamplePipeline) {
