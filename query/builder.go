@@ -60,12 +60,14 @@ func (builder PipelineBuilder) makePipelineTail(pipe Pipeline) (res *pipeline.Sa
 	res = new(pipeline.SamplePipeline)
 
 	// Output
-	outputStep := pipe[len(pipe)-1]
-	if output, ok := outputStep.(Output); ok {
-		pipe = pipe[:len(pipe)-1]
-		res.Sink, err = builder.Endpoints.CreateOutput(Token(output).Content())
-		if err != nil {
-			return
+	if len(pipe) >= 1 {
+		outputStep := pipe[len(pipe)-1]
+		if output, ok := outputStep.(Output); ok {
+			pipe = pipe[:len(pipe)-1]
+			res.Sink, err = builder.Endpoints.CreateOutput(Token(output).Content())
+			if err != nil {
+				return
+			}
 		}
 	}
 
