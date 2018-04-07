@@ -30,6 +30,9 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 
 	b.RegisterAnalysisParamsErr("subprocess", run_subprocess, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", []string{"cmd"}, "format")
 
+	b.RegisterAnalysisParamsErr("synchronize", add_synchronization, "Synchronize the number of samples going through each synchronize() step with the same key parameter", []string{"key"})
+	b.RegisterAnalysisParamsErr("merge_streams", add_stream_merger, "Merge multiple streams, identified by a given tag. Output samples are generated in a given interval, all incoming metrics are averaged within that window, incoming metric names are prefixes with the respective tag value.", []string{"tag", "num", "interval"})
+
 	// Forks
 	b.RegisterFork("rr", fork_round_robin, "The round-robin fork distributes the samples equally to a fixed number of sub-pipelines", []string{"num"})
 	b.RegisterFork("remap", fork_remap, "The remap-fork can be used after another fork to remap the incoming sub-pipelines to new outgoing sub-pipelines", nil)
@@ -350,6 +353,77 @@ func run_subprocess(p *SamplePipeline, params map[string]string) error {
 		return err
 	}
 	p.Add(runner)
+	return nil
+}
+
+var synchronization_keys = make(map[string]*PipelineRateSynchronizer)
+
+func add_synchronization(p *SamplePipeline, params map[string]string) error {
+	key := params["key"]
+	synchronizer, ok := synchronization_keys[key]
+	if !ok {
+		synchronizer = &PipelineRateSynchronizer{
+			ChannelSize: 5, // TODO parameterize
+		}
+		synchronization_keys[key] = synchronizer
+	}
+	p.Add(synchronizer.NewSynchronizationStep())
+	return nil
+}
+
+func add_stream_merger(p *SamplePipeline, params map[string]string) error {
+	intervalStr := params["interval"]
+	tag := params["tag"]
+	numStr := params["num"]
+	debug := params["debug"] == "true"
+	num, err := strconv.Atoi(numStr)
+	if err != nil {
+		return query.ParameterError("num", err)
+	}
+	interval, err := time.ParseDuration(intervalStr)
+	if err != nil {
+		return query.ParameterError("interval", err)
+	}
+
+	merger := &SynchronizedSampleMerger{
+		MergeTag:           tag,
+		MergeInterval:      interval,
+		ExpectedStreams:    num,
+		Description:        fmt.Sprintf("Merge %v Streams (tag: %v, interval: %v)", num, tag, interval),
+		DebugQueueLengths:  debug,
+		DebugWaitingQueues: debug,
+		MergeSamples: func(samples []*bitflow.Sample, headers []*bitflow.Header) (*bitflow.Sample, *bitflow.Header) {
+			if len(samples) == 0 {
+				return nil, nil
+			}
+			var outHeader []string
+			var valueCounts []int
+			outSample := new(bitflow.Sample)
+			indices := make(map[string]int)
+			for sampleNum, sample := range samples {
+				header := headers[sampleNum]
+				streamTag := sample.Tag(tag)
+				for fieldNum, field := range header.Fields {
+					newField := streamTag + "/" + field
+					index, ok := indices[newField]
+					if !ok {
+						index := len(outHeader)
+						indices[newField] = index
+						outHeader = append(outHeader, newField)
+						outSample.Values = append(outSample.Values, 0)
+						valueCounts = append(valueCounts, 0)
+					}
+					outSample.Values[index] += sample.Values[fieldNum]
+					valueCounts[index]++
+				}
+			}
+			for i, value := range outSample.Values {
+				outSample.Values[i] = value / bitflow.Value(valueCounts[i])
+			}
+			return outSample, &bitflow.Header{Fields: outHeader}
+		},
+	}
+	p.Add(merger)
 	return nil
 }
 
