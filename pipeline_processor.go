@@ -31,7 +31,7 @@ type SampleProcessor interface {
 type AbstractProcessor struct {
 	AbstractMetricSource
 	AbstractMetricSink
-	stopChan golib.StopChan
+	StopChan golib.StopChan
 }
 
 // Sample implements the SampleProcessor interface. It performs a sanity check
@@ -60,8 +60,8 @@ func (p *AbstractProcessor) Check(sample *Sample, header *Header) error {
 // with a small channel buffer. Calling CloseSink() or Error() writes a value
 // to that channel to signalize that this AbstractProcessor is finished.
 func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
-	p.stopChan = golib.NewStopChan()
-	return p.stopChan
+	p.StopChan = golib.NewStopChan()
+	return p.StopChan
 }
 
 // CloseSink reports that this AbstractProcessor is finished processing.
@@ -70,7 +70,7 @@ func (p *AbstractProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 // the Close() invocation to the outgoing sink.
 func (p *AbstractProcessor) CloseSink() {
 	// If there was no error, make sure to signal that this task is done.
-	p.stopChan.Stop()
+	p.StopChan.Stop()
 	p.AbstractMetricSource.CloseSink(nil)
 }
 
@@ -78,7 +78,7 @@ func (p *AbstractProcessor) CloseSink() {
 // operation. After calling this, no more Headers and Samples can be forwarded
 // to the outgoing sink. Ultimately, p.Close() will be called for cleaning up.
 func (p *AbstractProcessor) Error(err error) {
-	p.stopChan.StopErr(err)
+	p.StopChan.StopErr(err)
 }
 
 // Close implements the SampleProcessor interface by simply closing the outgoing
