@@ -249,7 +249,7 @@ func strip_metrics(p *SamplePipeline) {
 func sleep_samples(p *SamplePipeline, params map[string]string) error {
 	var timeout time.Duration
 	timeoutStr, hasTimeout := params["time"]
-	changedTag, hasOnTagChange := params["onTagChange"]
+	changedTag, hasOnTagChange := params["onChangedTag"]
 	if hasTimeout {
 		var err error
 		timeout, err = time.ParseDuration(timeoutStr)
@@ -268,38 +268,37 @@ func sleep_samples(p *SamplePipeline, params map[string]string) error {
 		desc += " when tag " + changedTag + " changes"
 	}
 
-	// TODO make this sleep cleanly interruptible
-
 	previousTag := ""
 	var lastTimestamp time.Time
-	p.Add(&SimpleProcessor{
+	processor := &SimpleProcessor{
 		Description: desc,
-		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
-			doSleep := true
-			if hasOnTagChange {
-				newTag := sample.Tag(changedTag)
-				if newTag == previousTag {
-					doSleep = false
-				}
-				previousTag = newTag
+	}
+	processor.Process = func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+		doSleep := true
+		if hasOnTagChange {
+			newTag := sample.Tag(changedTag)
+			if newTag == previousTag {
+				doSleep = false
 			}
-			if doSleep {
-				if hasTimeout {
-					time.Sleep(timeout)
-				} else {
-					last := lastTimestamp
-					if !last.IsZero() {
-						diff := sample.Time.Sub(last)
-						if diff > 0 {
-							time.Sleep(diff)
-						}
+			previousTag = newTag
+		}
+		if doSleep {
+			if hasTimeout {
+				processor.StopChan.WaitTimeout(timeout)
+			} else {
+				last := lastTimestamp
+				if !last.IsZero() {
+					diff := sample.Time.Sub(last)
+					if diff > 0 {
+						processor.StopChan.WaitTimeout(diff)
 					}
-					lastTimestamp = sample.Time
 				}
+				lastTimestamp = sample.Time
 			}
-			return sample, header, nil
-		},
-	})
+		}
+		return sample, header, nil
+	}
+	p.Add(processor)
 	return nil
 }
 
