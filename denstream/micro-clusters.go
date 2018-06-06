@@ -145,6 +145,15 @@ func (c *BasicMicroCluster) computeCenter(center []float64) []float64 {
 	return center
 }
 
+func (c *BasicMicroCluster) reset() {
+	c.id = -1
+	c.cf1 = []float64{}
+	c.cf2 = []float64{}
+	c.w = 0
+	c.radius = 0
+	c.center = []float64{}
+	c.creationTime = time.Time{}
+}
 func vectorLength(p []float64) float64 {
 	var res float64
 	for _, v := range p {
