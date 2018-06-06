@@ -131,19 +131,69 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 	//	panic("Cluster not in cluster space during: " + reason)
 	//}
 	//delete(s.clusters, b)
+
+	var closestDistance float64
+	var nearestCluster MicroCluster
+
+	parentNode := s.root
+	nearestNode := parentNode
+	for nearestNode.isLeaf == false {
+		parentNode := nearestNode
+		for _, child := range parentNode.children {
+			childClust := child.cluster
+			//	dist can be negative, if the point is inside a cluster
+			dist := euclideanDistance(cluster.Center(), childClust.Center())
+			if nearestCluster == nil || dist < closestDistance {
+				nearestCluster = childClust
+				closestDistance = dist
+			}
+			nearestNode = child
+		}
+
+	}
+	for _, child := range parentNode.children {
+		if child.cluster.Id() == cluster.Id() {
+			child.cluster.reset()
+			return
+		}
+	}
+	panic("Cluster not in cluster space during: " + reason)
 }
 
 func (s *BirchTreeClusterSpace) TransferCluster(cluster MicroCluster, otherSpace ClusterSpace) {
-	//	s.Delete(cluster, "transfering")
-	//	otherSpace.Insert(cluster)
+	s.Delete(cluster, "transfering")
+	otherSpace.Insert(cluster)
 }
 
 func (s *BirchTreeClusterSpace) UpdateCluster(cluster MicroCluster, do func() (reinsertCluster bool)) {
-	//basic := cluster.(*BasicMicroCluster)
-	//s.Delete(basic, "update")
-	//if do() {
-	//	s.clusters[basic] = true
-	//}
+
+	var closestDistance float64
+	var nearestCluster MicroCluster
+
+	parentNode := s.root
+	nearestNode := parentNode
+	for nearestNode.isLeaf == false {
+		parentNode := nearestNode
+		for _, child := range parentNode.children {
+			childClust := child.cluster
+			//	dist can be negative, if the point is inside a cluster
+			dist := euclideanDistance(cluster.Center(), childClust.Center())
+			if nearestCluster == nil || dist < closestDistance {
+				nearestCluster = childClust
+				closestDistance = dist
+			}
+			nearestNode = child
+		}
+
+	}
+	for _, child := range parentNode.children {
+		if child.cluster.Id() == cluster.Id() {
+			child.cluster.reset()
+			if do() {
+				child.cluster = cluster.(*BasicMicroCluster)
+			}
+		}
+	}
 }
 
 // ========================================================================================================
