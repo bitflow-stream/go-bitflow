@@ -7,7 +7,7 @@ import (
 var _ ClusterSpace = new(BirchTreeClusterSpace)
 
 type BirchTreeClusterSpace struct {
-	root          BirchTreeNode
+	root          *BirchTreeNode
 	nextClusterId int
 }
 
@@ -26,6 +26,9 @@ func NewBirchTreeClusterSpace(numDimensions int) *BirchTreeClusterSpace {
 
 func (s *BirchTreeClusterSpace) Init() {
 	s.nextClusterId = 0
+	s.root = new(BirchTreeNode)
+	s.root.children = make([]BirchTreeNode, 3)
+	//s.root.cluster = new(BasicMicroCluster)
 }
 
 func (s *BirchTreeClusterSpace) NumClusters() int {
@@ -38,15 +41,16 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 	//check root, if root is empty add a child, insert and update root. If not empty, then increment root and all the nodes along the traversal
 	var closestDistance float64
 	curNode := s.root
-	var node BirchTreeNode
+	// var node BirchTreeNode
 	if curNode.numChildren == 0 {
 		//create a new leaf node and insert point
-		createEmptyBirchTreeNode(&node)
-		node.isLeaf = true
-		node.cluster.id = s.nextClusterId
-		s.nextClusterId++
-		addChild(&curNode, &node)
-		nearestCluster = node.cluster
+		// createEmptyBirchTreeNode(&node)
+		// node.isLeaf = true
+		// node.cluster.id = s.nextClusterId
+		// s.nextClusterId++
+		// addChild(&curNode, &node)
+		// nearestCluster = node.cluster
+		return nil
 	} else {
 		//while instance of leaf
 		for curNode.isLeaf == false {
@@ -66,6 +70,11 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 }
 
 func (s *BirchTreeClusterSpace) ClustersDo(do func(cluster MicroCluster)) {
+	// curNode := s.root
+	// for _, child := range curNode.children {
+	// 			childClust := child.cluster
+
+	// }
 	// for cluster := range s.clusters {
 	// 	do(cluster)
 	// }
@@ -85,24 +94,36 @@ func (s *BirchTreeClusterSpace) NewCluster(point []float64, creationTime time.Ti
 func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 
 	//create a new node and embed the cluster
-	var newNode BirchTreeNode
-	createBirchTreeNode(&newNode, cluster, s.nextClusterId)
+	basic := cluster.(*BasicMicroCluster)
+	basic.id = s.nextClusterId
+	newNode := &BirchTreeNode{
+		basic,
+		0,
+		nil,
+		true,
+	}
 	s.nextClusterId++
 	newNode.isLeaf = true
 
 	var closestDistance float64
 	var nearestCluster MicroCluster
 
-	parentNode := s.root
+	parentNode := *s.root
 	if parentNode.numChildren == 0 {
-		addCFtoParentNode(&parentNode, &newNode)
-		addChild(&parentNode, &newNode)
+		parentNode.cluster = &BasicMicroCluster{
+			cf1:          make([]float64, len(cluster.Center())),
+			cf2:          make([]float64, len(cluster.Center())),
+			creationTime: time.Time{},
+		}
+		addCFtoParentNode(&parentNode, newNode)
+		addChild(&parentNode, newNode)
+
 	} else {
 		nearestNode := parentNode
 		//identify the node where newnode can be insterted as a leaf, if the num of children is max, then split the node
 		for nearestNode.isLeaf == false {
 			parentNode := nearestNode
-			addCFtoParentNode(&parentNode, &newNode)
+			addCFtoParentNode(&parentNode, newNode)
 			for _, child := range parentNode.children {
 				childClust := child.cluster
 				//	dist can be negative, if the point is inside a cluster
@@ -116,9 +137,9 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 
 		}
 		if parentNode.numChildren < 3 {
-			addChild(&parentNode, &newNode)
+			addChild(&parentNode, newNode)
 		} else {
-			splitNode(&parentNode, &newNode)
+			splitNode(&parentNode, newNode)
 		}
 	}
 	return
@@ -126,16 +147,10 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 }
 
 func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
-	//b := cluster.(*BasicMicroCluster)
-	//if _, ok := s.clusters[b]; !ok {
-	//	panic("Cluster not in cluster space during: " + reason)
-	//}
-	//delete(s.clusters, b)
-
 	var closestDistance float64
 	var nearestCluster MicroCluster
 
-	parentNode := s.root
+	parentNode := *s.root
 	nearestNode := parentNode
 	for nearestNode.isLeaf == false {
 		parentNode := nearestNode
@@ -170,7 +185,7 @@ func (s *BirchTreeClusterSpace) UpdateCluster(cluster MicroCluster, do func() (r
 	var closestDistance float64
 	var nearestCluster MicroCluster
 
-	parentNode := s.root
+	parentNode := *s.root
 	nearestNode := parentNode
 	for nearestNode.isLeaf == false {
 		parentNode := nearestNode
@@ -254,15 +269,8 @@ func splitNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
 	}
 }
 
-func createBirchTreeNode(node *BirchTreeNode, cluster MicroCluster, clusterId int) {
-	basic := cluster.(*BasicMicroCluster)
-	basic.id = clusterId
-	node = &BirchTreeNode{
-		basic,
-		0,
-		nil,
-		true,
-	}
+func createBirchTreeNode(node *BirchTreeNode, cluster *MicroCluster, clusterId int) {
+
 }
 
 func createEmptyBirchTreeNode(node *BirchTreeNode) {
@@ -296,26 +304,31 @@ func delChildFromNode(node *BirchTreeNode, childNode *BirchTreeNode) (status boo
 	return false
 }
 
-func addCFtoParentNode(parentNode *BirchTreeNode, addNode *BirchTreeNode) {
-	clust := parentNode.cluster
-	addClust := addNode.cluster
-	for i := range clust.cf1 {
-		clust.cf1[i] += addClust.cf1[i]
-		clust.cf2[i] += addClust.cf2[i]
+func addCFtoParentNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
+
+	parentClust := parentNode.cluster
+	newClust := newNode.cluster
+	if newNode.cluster == nil {
+		parentClust.cf1[0] += newClust.cf1[0]
 	}
-	clust.w += addClust.w
-	clust.Update()
+
+	for i := range newClust.cf1 {
+		parentClust.cf1[i] += newClust.cf1[i]
+		parentClust.cf2[i] += newClust.cf2[i]
+	}
+	parentClust.w += newClust.w
+	parentClust.Update()
 }
 
 func delCFfromParentNode(parentNode *BirchTreeNode, delNode BirchTreeNode) {
-	clust := parentNode.cluster
+	parentClust := parentNode.cluster
 	delClust := delNode.cluster
-	for i := range clust.cf1 {
-		clust.cf1[i] -= delClust.cf1[i]
-		clust.cf2[i] -= delClust.cf2[i]
+	for i := range parentClust.cf1 {
+		parentClust.cf1[i] -= delClust.cf1[i]
+		parentClust.cf2[i] -= delClust.cf2[i]
 	}
-	clust.w -= delClust.w
-	clust.Update()
+	parentClust.w -= delClust.w
+	parentClust.Update()
 }
 
 func findNearestChildNode(parentNode BirchTreeNode, clust BasicMicroCluster) (childIndex int) {
