@@ -1,6 +1,7 @@
 package denstream
 
 import (
+	log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -9,6 +10,7 @@ var _ ClusterSpace = new(BirchTreeClusterSpace)
 type BirchTreeClusterSpace struct {
 	root          *BirchTreeNode
 	nextClusterId int
+	//add field totalno of clusters
 }
 
 type BirchTreeNode struct {
@@ -28,12 +30,11 @@ func (s *BirchTreeClusterSpace) Init() {
 	s.nextClusterId = 0
 	s.root = new(BirchTreeNode)
 	s.root.children = make([]BirchTreeNode, 3)
-	//s.root.cluster = new(BasicMicroCluster)
 }
 
 func (s *BirchTreeClusterSpace) NumClusters() int {
 	//return len(s.clusters)
-	return 0
+	return 5
 }
 
 func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster MicroCluster) {
@@ -43,13 +44,6 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 	curNode := s.root
 	// var node BirchTreeNode
 	if curNode.numChildren == 0 {
-		//create a new leaf node and insert point
-		// createEmptyBirchTreeNode(&node)
-		// node.isLeaf = true
-		// node.cluster.id = s.nextClusterId
-		// s.nextClusterId++
-		// addChild(&curNode, &node)
-		// nearestCluster = node.cluster
 		return nil
 	} else {
 		//while instance of leaf
@@ -92,7 +86,6 @@ func (s *BirchTreeClusterSpace) NewCluster(point []float64, creationTime time.Ti
 }
 
 func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
-
 	//create a new node and embed the cluster
 	basic := cluster.(*BasicMicroCluster)
 	basic.id = s.nextClusterId
@@ -108,22 +101,22 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	var closestDistance float64
 	var nearestCluster MicroCluster
 
-	parentNode := *s.root
+	parentNode := s.root
 	if parentNode.numChildren == 0 {
 		parentNode.cluster = &BasicMicroCluster{
 			cf1:          make([]float64, len(cluster.Center())),
 			cf2:          make([]float64, len(cluster.Center())),
 			creationTime: time.Time{},
 		}
-		addCFtoParentNode(&parentNode, newNode)
-		addChild(&parentNode, newNode)
+		addCFtoParentNode(parentNode, newNode)
+		addChild(parentNode, newNode)
 
 	} else {
 		nearestNode := parentNode
 		//identify the node where newnode can be insterted as a leaf, if the num of children is max, then split the node
 		for nearestNode.isLeaf == false {
 			parentNode := nearestNode
-			addCFtoParentNode(&parentNode, newNode)
+			addCFtoParentNode(parentNode, newNode)
 			for _, child := range parentNode.children {
 				childClust := child.cluster
 				//	dist can be negative, if the point is inside a cluster
@@ -132,14 +125,14 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 					nearestCluster = childClust
 					closestDistance = dist
 				}
-				nearestNode = child
+				nearestNode = &child
 			}
 
 		}
 		if parentNode.numChildren < 3 {
-			addChild(&parentNode, newNode)
+			addChild(parentNode, newNode)
 		} else {
-			splitNode(&parentNode, newNode)
+			splitNode(parentNode, newNode)
 		}
 	}
 	return
