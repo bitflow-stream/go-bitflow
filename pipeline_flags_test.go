@@ -1,11 +1,10 @@
 package bitflow
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
-
-	"errors"
 
 	"github.com/antongulenko/golib/gotermBox"
 	"github.com/stretchr/testify/require"
@@ -214,7 +213,7 @@ func (suite *PipelineTestSuite) Test_input_file() {
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(files...)
 	suite.NoError(err)
-	source.(UnmarshallingMetricSource).SetSampleHandler(handler)
+	source.(UnmarshallingSampleSource).SetSampleHandler(handler)
 	expected := &FileSource{
 		FileNames: files,
 		Robust:    true,
@@ -231,7 +230,7 @@ func (suite *PipelineTestSuite) Test_input_tcp() {
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(hosts...)
 	suite.NoError(err)
-	source.(UnmarshallingMetricSource).SetSampleHandler(handler)
+	source.(UnmarshallingSampleSource).SetSampleHandler(handler)
 	expected := &TCPSource{
 		RemoteAddrs:   hosts,
 		PrintErrors:   false,
@@ -250,7 +249,7 @@ func (suite *PipelineTestSuite) Test_input_tcp_listen() {
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(endpoint)
 	suite.NoError(err)
-	source.(UnmarshallingMetricSource).SetSampleHandler(handler)
+	source.(UnmarshallingSampleSource).SetSampleHandler(handler)
 	expected := NewTcpListenerSource(endpoint)
 	expected.SimultaneousConnections = 20
 	expected.TcpConnLimit = 10
@@ -265,7 +264,7 @@ func (suite *PipelineTestSuite) Test_input_std() {
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(endpoint)
 	suite.NoError(err)
-	source.(UnmarshallingMetricSource).SetSampleHandler(handler)
+	source.(UnmarshallingSampleSource).SetSampleHandler(handler)
 	expected := NewConsoleSource()
 	expected.Reader.Handler = handler
 	expected.Reader.ParallelSampleHandler = parallel_handler
@@ -333,14 +332,14 @@ func (suite *PipelineTestSuite) Test_input_multiple_std() {
 }
 
 func (suite *PipelineTestSuite) Test_outputs() {
-	test := func(output string, expected MetricSink) {
+	test := func(output string, expected SampleSink) {
 		factory := suite.make_factory()
 		sink, err := factory.CreateOutput(output)
 		suite.NoError(err)
 		suite.Equal(expected, sink)
 	}
 
-	setup := func(sink *AbstractMarshallingMetricSink, format string, isConsole bool) {
+	setup := func(sink *AbstractSampleOutput, format string, isConsole bool) {
 		switch format {
 		case "bin":
 			sink.Marshaller = BinaryMarshaller{}
@@ -366,7 +365,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 	ConsoleBoxUpdateInterval = box_interval
 	ConsoleBoxMinUpdateInterval = box_interval / 5
 
-	box := func() MetricSink {
+	box := func() SampleSink {
 		s := &ConsoleBoxSink{
 			CliLogBoxTask: gotermBox.CliLogBoxTask{
 				UpdateInterval:    box_interval,
@@ -378,37 +377,37 @@ func (suite *PipelineTestSuite) Test_outputs() {
 		return s
 	}
 
-	std := func(format string) MetricSink {
+	std := func(format string) SampleSink {
 		s := NewConsoleSink()
-		setup(&s.AbstractMarshallingMetricSink, format, true)
+		setup(&s.AbstractSampleOutput, format, true)
 		return s
 	}
-	file := func(filename string, format string) MetricSink {
+	file := func(filename string, format string) SampleSink {
 		s := &FileSink{
 			Filename:   filename,
 			IoBuffer:   666,
 			CleanFiles: true,
 		}
-		setup(&s.AbstractMarshallingMetricSink, format, false)
+		setup(&s.AbstractSampleOutput, format, false)
 		return s
 	}
-	tcp := func(endpoint string, format string) MetricSink {
+	tcp := func(endpoint string, format string) SampleSink {
 		s := &TCPSink{
 			Endpoint:    endpoint,
 			PrintErrors: false,
 			DialTimeout: tcp_dial_timeout,
 		}
 		s.TcpConnLimit = 10
-		setup(&s.AbstractMarshallingMetricSink, format, false)
+		setup(&s.AbstractSampleOutput, format, false)
 		return s
 	}
-	listen := func(endpoint string, format string) MetricSink {
+	listen := func(endpoint string, format string) SampleSink {
 		s := &TCPListenerSink{
 			Endpoint:        endpoint,
 			BufferedSamples: 777,
 		}
 		s.TcpConnLimit = 10
-		setup(&s.AbstractMarshallingMetricSink, format, false)
+		setup(&s.AbstractSampleOutput, format, false)
 		return s
 	}
 
@@ -446,11 +445,11 @@ func (suite *PipelineTestSuite) Test_custom_endpoints() {
 	testSink := NewConsoleSink()
 	var expectedTarget string
 	var injectedError error
-	factory.CustomDataSources[testEndpointType] = func(target string) (MetricSource, error) {
+	factory.CustomDataSources[testEndpointType] = func(target string) (SampleSource, error) {
 		suite.Equal(expectedTarget, target)
 		return testSource, injectedError
 	}
-	factory.CustomDataSinks[testEndpointType] = func(target string) (MetricSink, error) {
+	factory.CustomDataSinks[testEndpointType] = func(target string) (SampleProcessor, error) {
 		suite.Equal(expectedTarget, target)
 		return testSink, injectedError
 	}

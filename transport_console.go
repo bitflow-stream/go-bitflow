@@ -5,22 +5,21 @@ import (
 	"os"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
-// WriterSink implements MetricSink by writing all Headers and Samples to a single
+// WriterSink implements SampleSink by writing all Headers and Samples to a single
 // io.WriteCloser instance. An instance of SampleWriter is used to write the data in parallel.
 type WriterSink struct {
-	AbstractMarshallingMetricSink
+	AbstractSampleOutput
 	Output      io.WriteCloser
 	Description string
 
 	stream *SampleOutputStream
 }
 
-// NewConsoleSink creates a MetricSink that writes to the standard output.
+// NewConsoleSink creates a SampleSink that writes to the standard output.
 func NewConsoleSink() *WriterSink {
 	return &WriterSink{
 		Output:      os.Stdout,
@@ -28,12 +27,12 @@ func NewConsoleSink() *WriterSink {
 	}
 }
 
-// String implements the MetricSink interface.
+// String implements the SampleSink interface.
 func (sink *WriterSink) String() string {
 	return sink.Description + " printer"
 }
 
-// Start implements the MetricSink interface. No additional goroutines are
+// Start implements the SampleSink interface. No additional goroutines are
 // spawned, only a log message is printed.
 func (sink *WriterSink) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 	log.WithField("format", sink.Marshaller).Println("Printing samples to " + sink.Description)
@@ -41,7 +40,7 @@ func (sink *WriterSink) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 	return
 }
 
-// Close implements the MetricSink interface. It flushes the remaining data
+// Close implements the SampleSink interface. It flushes the remaining data
 // to the underlying io.WriteCloser and closes it.
 func (sink *WriterSink) Close() {
 	if err := sink.stream.Close(); err != nil {
@@ -49,27 +48,28 @@ func (sink *WriterSink) Close() {
 	}
 }
 
-// Header implements the MetricSink interface by using a SampleOutputStream to
+// Header implements the SampleSink interface by using a SampleOutputStream to
 // write the given Sample to the configured io.WriteCloser.
 func (sink *WriterSink) Sample(sample *Sample, header *Header) error {
 	if err := sample.Check(header); err != nil {
 		return err
 	}
-	return sink.stream.Sample(sample, header)
+	err := sink.stream.Sample(sample, header)
+	return sink.AbstractSampleOutput.Sample(err, sample, header)
 }
 
-// ReaderSource implements the MetricSource interface by reading Headers and
+// ReaderSource implements the SampleSource interface by reading Headers and
 // Samples from an arbitrary io.ReadCloser instance. An instance of SampleReader is used
 // to read the data in parallel.
 type ReaderSource struct {
-	AbstractUnmarshallingMetricSource
+	AbstractUnmarshallingSampleSource
 	Input       io.ReadCloser
 	Description string
 
 	stream *SampleInputStream
 }
 
-// NewConsoleSource creates a MetricSource that reads from the standard input.
+// NewConsoleSource creates a SampleSource that reads from the standard input.
 func NewConsoleSource() *ReaderSource {
 	return &ReaderSource{
 		Input:       os.Stdin,
@@ -77,12 +77,12 @@ func NewConsoleSource() *ReaderSource {
 	}
 }
 
-// String implements the MetricSource interface.
+// String implements the SampleSource interface.
 func (source *ReaderSource) String() string {
 	return source.Description + " reader"
 }
 
-// Start implements the MetricSource interface by starting a SampleInputStream
+// Start implements the SampleSource interface by starting a SampleInputStream
 // instance that reads from the given io.ReadCloser.
 func (source *ReaderSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	source.stream = source.Reader.Open(source.Input, source.OutgoingSink)
@@ -96,9 +96,9 @@ func (source *ReaderSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	})
 }
 
-// Stop implements the MetricSource interface. It stops the underlying stream
+// Close implements the SampleSource interface. It stops the underlying stream
 // and prints any errors to the logger.
-func (source *ReaderSource) Stop() {
+func (source *ReaderSource) Close() {
 	// TODO closing the os.Stdin stream does not cause the current Read()
 	// invocation to return... This data source will hang until stdin is closed
 	// from the outside, or the program is stopped forcefully.

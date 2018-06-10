@@ -213,7 +213,7 @@ func (sample *Sample) ParseTagString(tags string) (err error) {
 // to the header argument. The number of fields in the header are compared with
 // the number of values in the sample.
 // This is a sanity-check for ensuring correct format of files or TCP connections.
-// This check must be called in the Sample() method of every MetricSink implementation.
+// This check must be called in the Sample() method of every SampleSink implementation.
 func (sample *Sample) Check(header *Header) error {
 	if sample == nil {
 		return errors.New("The sample is nil")
@@ -360,4 +360,32 @@ func (meta *SampleMetadata) NewSample(values []Value) *Sample {
 		sample.tags[tag] = val
 	}
 	return sample
+}
+
+// HeaderChecker is a helper type for implementations of SampleSink
+// to find out, when the incoming header changes.
+type HeaderChecker struct {
+	LastHeader *Header
+}
+
+// HeaderChanged returns true, if the newHeader parameter represents a different header
+// from the last time HeaderChanged was called. The result will also be true for
+// the first time this method is called.
+func (h *HeaderChecker) HeaderChanged(newHeader *Header) bool {
+	changed := !newHeader.Equals(h.LastHeader)
+	h.LastHeader = newHeader
+	return changed
+}
+
+// InitializedHeaderChanged returns true, if the newHeader parameter represents a different header
+// from the last time HeaderChanged was called. The first call to this method
+// will return false, so this can be used in situations where the header has to be initialized.
+func (h *HeaderChecker) InitializedHeaderChanged(newHeader *Header) bool {
+	if h.LastHeader == nil {
+		h.LastHeader = newHeader
+		return false
+	}
+	changed := !newHeader.Equals(h.LastHeader)
+	h.LastHeader = newHeader
+	return changed
 }

@@ -45,7 +45,7 @@ var (
 	binaryFileSuffix   = ".bin"
 )
 
-// EndpointFactory creates MetricSink and MetricSource instances for a SamplePipeline.
+// EndpointFactory creates SampleSink and SampleSource instances for a SamplePipeline.
 // It defines command line flags for configuring the objects it creates.
 // All fields named Flag* are set by the according command line flags and evaluated in CreateInput() and CreateOutput().
 // FlagInputs is not set by command line flags automatically.
@@ -78,12 +78,12 @@ type EndpointFactory struct {
 	// URL endpoint:
 	//   http://localhost:5555/abc
 	// will invoke the factory function with the parameter "localhost:5555/abc"
-	CustomDataSources map[EndpointType]func(string) (MetricSource, error)
+	CustomDataSources map[EndpointType]func(string) (SampleSource, error)
 
 	// CustomDataSinks can be filled by client code before EndpointFactory.CreateOutput or similar
 	// methods to allow creation of custom data sinks. See CustomDataSources for the meaning of the
 	// map keys and values.
-	CustomDataSinks map[EndpointType]func(string) (MetricSink, error)
+	CustomDataSinks map[EndpointType]func(string) (SampleProcessor, error)
 
 	// CustomGeneralFlags, CustomInputFlags and CustomOutputFlags lets client code
 	// register custom command line flags that configure aspects of endpoints created
@@ -95,8 +95,8 @@ type EndpointFactory struct {
 
 func NewEndpointFactory() *EndpointFactory {
 	factory := &EndpointFactory{
-		CustomDataSources: make(map[EndpointType]func(string) (MetricSource, error)),
-		CustomDataSinks:   make(map[EndpointType]func(string) (MetricSink, error)),
+		CustomDataSources: make(map[EndpointType]func(string) (SampleSource, error)),
+		CustomDataSinks:   make(map[EndpointType]func(string) (SampleProcessor, error)),
 	}
 	RegisterConsoleBoxOutput(factory)
 	RegisterEmptyInputOutput(factory)
@@ -104,11 +104,11 @@ func NewEndpointFactory() *EndpointFactory {
 }
 
 func RegisterEmptyInputOutput(factory *EndpointFactory) {
-	factory.CustomDataSinks[EmptyEndpoint] = func(string) (MetricSink, error) {
-		return new(EmptyMetricSink), nil
+	factory.CustomDataSinks[EmptyEndpoint] = func(string) (SampleProcessor, error) {
+		return new(DroppingSampleProcessor), nil
 	}
-	factory.CustomDataSources[EmptyEndpoint] = func(string) (MetricSource, error) {
-		return new(EmptyMetricSource), nil
+	factory.CustomDataSources[EmptyEndpoint] = func(string) (SampleSource, error) {
+		return new(EmptySampleSource), nil
 	}
 }
 
@@ -173,10 +173,10 @@ func (p *EndpointFactory) Reader(um Unmarshaller) SampleReader {
 	}
 }
 
-// CreateInput creates a MetricSource object based on the given input endpoint descriptions
+// CreateInput creates a SampleSource object based on the given input endpoint descriptions
 // and the configuration flags in the EndpointFactory.
-func (p *EndpointFactory) CreateInput(inputs ...string) (MetricSource, error) {
-	var result MetricSource
+func (p *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
+	var result SampleSource
 	inputType := UndefinedEndpoint
 	for _, input := range inputs {
 		endpoint, err := ParseEndpointDescription(input, false)
@@ -261,20 +261,20 @@ func (p *EndpointFactory) Writer() SampleWriter {
 	return SampleWriter{p.FlagParallelHandler}
 }
 
-// CreateInput creates a MetricSink object based on the given output endpoint description
+// CreateInput creates a SampleSink object based on the given output endpoint description
 // and the configuration flags in the EndpointFactory.
-func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
-	var resultSink MetricSink
+func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
+	var resultSink SampleProcessor
 	endpoint, err := ParseEndpointDescription(output, true)
 	if err != nil {
 		return nil, err
 	}
-	var marshallingSink *AbstractMarshallingMetricSink
+	var marshallingSink *AbstractSampleOutput
 	marshaller := endpoint.OutputFormat().Marshaller()
 	switch endpoint.Type {
 	case StdEndpoint:
 		sink := NewConsoleSink()
-		marshallingSink = &sink.AbstractMarshallingMetricSink
+		marshallingSink = &sink.AbstractSampleOutput
 		if txt, ok := marshaller.(TextMarshaller); ok {
 			txt.AssumeStdout = true
 			marshaller = txt
@@ -290,7 +290,7 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 			Append:            p.FlagFilesAppend,
 			VanishedFileCheck: p.FlagFileVanishedCheck,
 		}
-		marshallingSink = &sink.AbstractMarshallingMetricSink
+		marshallingSink = &sink.AbstractSampleOutput
 		resultSink = sink
 	case TcpEndpoint:
 		sink := &TCPSink{
@@ -299,7 +299,7 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 			DialTimeout: tcp_dial_timeout,
 		}
 		sink.TcpConnLimit = p.FlagTcpConnectionLimit
-		marshallingSink = &sink.AbstractMarshallingMetricSink
+		marshallingSink = &sink.AbstractSampleOutput
 		resultSink = sink
 	case TcpListenEndpoint:
 		sink := &TCPListenerSink{
@@ -307,7 +307,7 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 			BufferedSamples: p.FlagOutputTcpListenBuffer,
 		}
 		sink.TcpConnLimit = p.FlagTcpConnectionLimit
-		marshallingSink = &sink.AbstractMarshallingMetricSink
+		marshallingSink = &sink.AbstractSampleOutput
 		resultSink = sink
 	default:
 		if factory, ok := p.CustomDataSinks[endpoint.Type]; ok && endpoint.IsCustomType {
@@ -327,8 +327,8 @@ func (p *EndpointFactory) CreateOutput(output string) (MetricSink, error) {
 	return resultSink, nil
 }
 
-// IsConsoleOutput returns true if the given MetricSink will output to the standard output when started.
-func IsConsoleOutput(sink MetricSink) bool {
+// IsConsoleOutput returns true if the given processor will output to the standard output when started.
+func IsConsoleOutput(sink SampleProcessor) bool {
 	writer, ok1 := sink.(*WriterSink)
 	_, ok2 := sink.(*ConsoleBoxSink)
 	return (ok1 && writer.Output == os.Stdout) || ok2
@@ -346,7 +346,7 @@ type EndpointDescription struct {
 // Unmarshaller creates an Unmarshaller object that is able to read data from the
 // described endpoint.
 func (e EndpointDescription) Unmarshaller() Unmarshaller {
-	// The nil Unmarshaller makes the MetricSource implementations auto-detect the format.
+	// The nil Unmarshaller makes the SampleSource implementations auto-detect the format.
 	return nil
 }
 

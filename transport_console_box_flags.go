@@ -1,10 +1,9 @@
 package bitflow
 
 import (
-	"time"
-
 	"flag"
 	"fmt"
+	"time"
 
 	"github.com/antongulenko/golib/gotermBox"
 )
@@ -40,7 +39,7 @@ func (factory *consoleBoxFactory) registerFlags(f *flag.FlagSet) {
 	f.BoolVar(&factory.ConsoleBoxNoImmediateScreenUpdate, "slow-screen-updates", false, fmt.Sprintf("For console box output, don't update the screen on every sample, but only in intervals of %v", ConsoleBoxUpdateInterval))
 }
 
-func (factory *consoleBoxFactory) createConsoleBox(target string) (MetricSink, error) {
+func (factory *consoleBoxFactory) createConsoleBox(target string) (SampleProcessor, error) {
 	if target != stdTransportTarget {
 		return nil, fmt.Errorf("Transport '%v' can only be defined with target '%v'", ConsoleBoxEndpoint, stdTransportTarget)
 	}

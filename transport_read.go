@@ -6,8 +6,8 @@ import (
 	"net"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
 const MinimumInputIoBuffer = 16 // Needed for auto-detecting stream format
@@ -35,7 +35,7 @@ type SampleReader struct {
 type ReadSampleHandler interface {
 	// HandleSample allows modifying received Samples. It can be used to modify
 	// the tags of the Sample based on the source string. The source string depends on the
-	// MetricSource that is using the SampleReader that contains this ReadSampleHandler.
+	// SampleSource that is using the SampleReader that contains this ReadSampleHandler.
 	// In general it represents the data source of the sample. For FileSource this will be
 	// the file name, for TCPSource it will be the remote TCP endpoint sending the data.
 	// It might also be useful to change the values or the timestamp of the Sample here,
@@ -61,22 +61,22 @@ type SampleInputStream struct {
 	num_samples      int
 	header           *UnmarshalledHeader // Header received from the input stream
 	outHeader        *Header             // Header after modified by the ReadSampleHandler
-	sink             MetricSinkBase
+	sink             SampleSink
 }
 
 // Open creates an input stream reading from the given io.ReadCloser and writing
-// the received Headers and Samples to the given MetricSinkBase. Although no buffer size
+// the received Headers and Samples to the given SampleSink. Although no buffer size
 // is given, the stream will actually have a small input buffer to enable automatically
 // detecting the format of incoming data, if no Unmarshaller was configured in the receiving
 // SampleReader.
-func (r *SampleReader) Open(input io.ReadCloser, sink MetricSinkBase) *SampleInputStream {
+func (r *SampleReader) Open(input io.ReadCloser, sink SampleSink) *SampleInputStream {
 	return r.OpenBuffered(input, sink, MinimumInputIoBuffer)
 }
 
 // OpenBuffered creates an input stream with a given buffer size. The buffer size should be at least
 // MinimumInputIoBuffer bytes to support automatically discovering the input stream format. See Open() for
 // more details.
-func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink MetricSinkBase, bufSize int) *SampleInputStream {
+func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink SampleSink, bufSize int) *SampleInputStream {
 	return &SampleInputStream{
 		um:               r.Unmarshaller,
 		reader:           bufio.NewReaderSize(input, bufSize),
@@ -122,7 +122,7 @@ func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 
 // ReadNamedSamples calls ReadSamples with the given source string, and prints
 // some additional logging information. It is a convenience function for different
-// implementations of MetricSource.
+// implementations of SampleSource.
 func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error) {
 	var num_samples int
 	l := log.WithFields(log.Fields{"source": sourceName, "format": stream.Format()})

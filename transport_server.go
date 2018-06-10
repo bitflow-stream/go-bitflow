@@ -4,17 +4,16 @@ import (
 	"net"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
-// TCPListenerSource implements the MetricSource interface as a TCP server.
+// TCPListenerSource implements the SampleSource interface as a TCP server.
 // It listens for incoming TCP connections on a port and reads Headers and Samples
 // from every accepted connection. See the doc for the different fields for options
 // affecting the TCP connections and aspects of reading and parsing.
 type TCPListenerSource struct {
-	AbstractUnmarshallingMetricSource
+	AbstractUnmarshallingSampleSource
 
 	// TCPConnCounter has a configuration for limiting the total number of
 	// accepted connections. After that number of connections were accepted, no
@@ -28,7 +27,7 @@ type TCPListenerSource struct {
 	SimultaneousConnections uint
 
 	task             *golib.TCPListenerTask
-	synchronizedSink MetricSinkBase
+	synchronizedSink SampleSink
 	connections      map[*tcpListenerConnection]bool
 }
 
@@ -45,12 +44,12 @@ func NewTcpListenerSource(endpoint string) *TCPListenerSource {
 	return source
 }
 
-// String implements the MetricSource interface.
+// String implements the SampleSource interface.
 func (source *TCPListenerSource) String() string {
 	return "TCP source on " + source.task.ListenEndpoint
 }
 
-// Start implements the MetricSource interface. It creates a socket listening
+// Start implements the SampleSource interface. It creates a socket listening
 // for incoming connections on the configured endpoint. New connections are
 // handled in separate goroutines.
 func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
@@ -63,7 +62,7 @@ func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	if source.SimultaneousConnections == 1 {
 		source.synchronizedSink = source.OutgoingSink
 	} else {
-		source.synchronizedSink = &SynchronizingMetricSink{OutgoingSink: source.OutgoingSink}
+		source.synchronizedSink = &SynchronizingSampleSink{OutgoingSink: source.OutgoingSink}
 	}
 	return source.task.ExtendedStart(func(addr net.Addr) {
 		log.WithField("format", source.Reader.Format()).Println("Listening for incoming data on", addr)
@@ -110,9 +109,9 @@ func (source *TCPListenerSource) closeAllConnections() {
 	}
 }
 
-// Stop implements the MetricSource interface. It closes all active TCP connections
+// Stop implements the SampleSource interface. It closes all active TCP connections
 // and closes the listening socket.
-func (source *TCPListenerSource) Stop() {
+func (source *TCPListenerSource) Close() {
 	source.task.Stop()
 }
 
@@ -132,7 +131,7 @@ func (conn *tcpListenerConnection) readSamples(wg *sync.WaitGroup, connection *n
 	defer wg.Done()
 	conn.stream.ReadTcpSamples(connection, conn.isConnectionClosed)
 	if !conn.source.countConnectionClosed() {
-		conn.source.Stop()
+		conn.source.Close()
 	}
 
 	conn.finished.StopFunc(conn.closeStream)
@@ -150,7 +149,7 @@ func (conn *tcpListenerConnection) closeStream() {
 	}
 }
 
-// TCPListenerSink implements the MetricSink interface through a TCP server.
+// TCPListenerSink implements the SampleSink interface through a TCP server.
 // It creates a socket listening on a local TCP endpoint and listens for incoming
 // TCP connections. Once one or more connections are established, it forwards
 // all incoming Headers and Samples to those connections. If a new header should
@@ -175,12 +174,12 @@ type TCPListenerSink struct {
 	task *golib.TCPListenerTask
 }
 
-// String implements the MetricSink interface.
+// String implements the SampleSink interface.
 func (sink *TCPListenerSink) String() string {
 	return "TCP sink on " + sink.Endpoint
 }
 
-// Start implements the MetricSink interface. It creates the TCP socket and
+// Start implements the SampleSink interface. It creates the TCP socket and
 // starts listening on it in a separate goroutine. Any incoming connection is
 // then handled in their own goroutine.
 func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
@@ -203,7 +202,7 @@ func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	}, wg)
 }
 
-// Close implements the MetricSink interface. It closes any existing connection
+// Close implements the SampleSink interface. It closes any existing connection
 // and closes the TCP socket.
 func (sink *TCPListenerSink) Close() {
 	sink.task.Stop()
@@ -218,7 +217,7 @@ func (sink *TCPListenerSink) handleConnection(wg *sync.WaitGroup, conn *net.TCPC
 	go sink.sendSamples(wg, writeConn)
 }
 
-// Sample implements the MetricSink interface. It stores the sample in a ring buffer
+// Sample implements the SampleSink interface. It stores the sample in a ring buffer
 // and sends it to all established connections. New connections will first receive
 // all samples stored in the buffer, before getting the live samples directly.
 // If the buffer is disable or full, and there are no established connections,
@@ -228,7 +227,7 @@ func (sink *TCPListenerSink) Sample(sample *Sample, header *Header) error {
 		return err
 	}
 	sink.buf.add(sample, header)
-	return nil
+	return sink.AbstractSampleOutput.Sample(nil, sample, header)
 }
 
 func (sink *TCPListenerSink) closeConn(conn *TcpWriteConn) {

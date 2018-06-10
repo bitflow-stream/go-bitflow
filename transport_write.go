@@ -15,7 +15,7 @@ import (
 // The parallel writing must be configured before using the SampleWriter. See
 // ParallelSampleHandler for the configuration variables.
 //
-// SampleWriter instances are mainly used by implementations of MetricSink that write
+// SampleWriter instances are mainly used by implementations of SampleOutput that write
 // to output streams, like FileSink or TCPSink.
 type SampleWriter struct {
 	ParallelSampleHandler

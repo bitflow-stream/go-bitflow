@@ -9,14 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
 // TCPConnCounter contains the TcpConnLimit configuration parameter that optionally
 // defines a limit for the number of TCP connection that are accepted or initiated by the
-// MetricSink and MetricSource implementations using TCP connections.
+// SampleSink and SampleSource implementations using TCP connections.
 type TCPConnCounter struct {
 	// TcpConnLimit defines a limit for the number of TCP connections that should be accepted
 	// or initiated. When this is <= 0, the number of not limited.
@@ -59,17 +58,17 @@ func (counter *TCPConnCounter) countConnectionAccepted(conn *net.TCPConn) bool {
 	return true
 }
 
-// AbstractTcpSink is a helper type for TCP-based MetricSink implementations.
-// The two fields AbstractMarshallingMetricSink and TCPConnCounter can be used
+// AbstractTcpSink is a helper type for TCP-based SampleSink implementations.
+// The two fields AbstractSampleOutput and TCPConnCounter can be used
 // to configure different aspects of the marshalling and writing of the data.
 // The purpose of AbstractTcpSink is to create instances of TcpWriteConn with the
 // configured parameters.
 type AbstractTcpSink struct {
-	AbstractMarshallingMetricSink
+	AbstractSampleOutput
 	TCPConnCounter
 }
 
-// TcpWriteConn is a helper type for TCP-base MetricSink implementations.
+// TcpWriteConn is a helper type for TCP-base SampleSink implementations.
 // It can send Headers and Samples over an opened TCP connection.
 // It is created from AbstractTcpSink.OpenWriteConn() and can be used until
 // Sample() returns an error or Close() is called explicitly.
@@ -142,7 +141,7 @@ func (conn *TcpWriteConn) printErr(err error) {
 	}
 }
 
-// TCPSink implements MetricSink by sending the received Headers and Samples
+// TCPSink implements SampleSink by sending the received Headers and Samples
 // to a given remote TCP endpoint. Every time it receives a Header or a Sample,
 // it checks whether a TCP connection is already established. If so, it sends
 // the data on the existing connection. Otherwise, it tries to connect to the
@@ -168,12 +167,12 @@ type TCPSink struct {
 	stopped golib.StopChan
 }
 
-// String implements the MetricSink interface.
+// String implements the SampleSink interface.
 func (sink *TCPSink) String() string {
 	return "TCP sink to " + sink.Endpoint
 }
 
-// Start implements the MetricSink interface. It creates a log message
+// Start implements the SampleSink interface. It creates a log message
 // and prepares the TCPSink for sending data.
 func (sink *TCPSink) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 	sink.connCounterDescription = sink
@@ -187,7 +186,7 @@ func (sink *TCPSink) closeConnection() {
 	sink.conn = nil
 }
 
-// Close implements the MetricSink interface. It stops the current TCP connection,
+// Close implements the SampleSink interface. It stops the current TCP connection,
 // if one is running, and prevents future connections from being created. No more
 // data can be sent into the TCPSink after this.
 func (sink *TCPSink) Close() {
@@ -196,7 +195,7 @@ func (sink *TCPSink) Close() {
 	})
 }
 
-// Sample implements the MetricSink interface. If a connection is already established,
+// Sample implements the SampleSink interface. If a connection is already established,
 // the Sample is directly sent through it. Otherwise, a new connection is established,
 // and the sample is sent there.
 func (sink *TCPSink) Sample(sample *Sample, header *Header) error {
@@ -211,7 +210,8 @@ func (sink *TCPSink) Sample(sample *Sample, header *Header) error {
 		return err
 	}
 	conn.Sample(sample, header)
-	return sink.checkConnRunning(conn)
+	err = sink.checkConnRunning(conn)
+	return sink.AbstractSampleOutput.Sample(err, sample, header)
 }
 
 func (sink *TCPSink) checkConnRunning(conn *TcpWriteConn) error {
@@ -257,13 +257,13 @@ func (sink *TCPSink) assertConnection() error {
 	return nil
 }
 
-// TCPSource implements the MetricSource interface by connecting to a list of remote TCP
+// TCPSource implements the SampleSource interface by connecting to a list of remote TCP
 // endpoints and downloading Header and Sample data from there. A background goroutine continuously
 // tries to establish the required TCP connections and reads data from it whenever a connection
-// succeeds. The contained AbstractMetricSource and TCPConnCounter fields provide various parameters
+// succeeds. The contained AbstractUnmarshallingSampleSource and TCPConnCounter fields provide various parameters
 // for configuring different aspects of the TCP connections and reading of data from them.
 type TCPSource struct {
-	AbstractUnmarshallingMetricSource
+	AbstractUnmarshallingSampleSource
 	TCPConnCounter
 
 	// PrintErrors controls whether TCP related errors are dropped, or treated normally.
@@ -274,9 +274,9 @@ type TCPSource struct {
 
 	// RemoteAddrs defines the list of remote TCP endpoints that the TCPSource will try to
 	// connect to. If there are more than one connection, all connections will run in parallel.
-	// In that case, an additional instance of SynchronizedMetricSink is used to synchronize all
+	// In that case, an additional instance of SynchronizedSampleSink is used to synchronize all
 	// received data. For multiple connections, all samples and headers will be pushed into the
-	// outgoing MetricSink in an interleaved fashion, so the outgoing MetricSink must be able to handle that.
+	// outgoing SampleSink in an interleaved fashion, so the outgoing SampleSink must be able to handle that.
 	RemoteAddrs []string
 
 	// RetryInterval defines the time to wait before trying to reconnect after a closed connection
@@ -287,10 +287,10 @@ type TCPSource struct {
 	DialTimeout time.Duration
 
 	downloadTasks []*tcpDownloadTask
-	downloadSink  MetricSinkBase
+	downloadSink  SampleSink
 }
 
-// String implements the MetricSource interface.
+// String implements the SampleSource interface.
 func (sink *TCPSource) String() string {
 	return "TCP download (" + sink.SourceString() + ")"
 }
@@ -305,14 +305,14 @@ func (sink *TCPSource) SourceString() string {
 	}
 }
 
-// Start implements the MetricSource interface. It starts one goroutine for every
+// Start implements the SampleSource interface. It starts one goroutine for every
 // configured TCP endpoint. The goroutines continuously try to connect to the remote
 // endpoints and download Headers and Samples as soon as a connection is established.
 func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	source.connCounterDescription = source
 	log.WithField("format", source.Reader.Format()).Println("Downloading from", source.SourceString())
 	if len(source.RemoteAddrs) > 1 {
-		source.downloadSink = &SynchronizingMetricSink{OutgoingSink: source.OutgoingSink}
+		source.downloadSink = &SynchronizingSampleSink{OutgoingSink: source.OutgoingSink}
 	} else {
 		source.downloadSink = source.OutgoingSink
 	}
@@ -329,14 +329,14 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	return golib.WaitErrFunc(wg, func() error {
 		defer source.CloseSink(wg)
 		golib.WaitForAny(channels)
-		source.Stop()
+		source.Close()
 		return tasks.CollectMultiError(channels).NilOrError()
 	})
 }
 
-// Stop implements the MetricSource interface. It stops all background goroutines and tries
+// Close implements the SampleSource interface. It stops all background goroutines and tries
 // to gracefully close all established TCP connections.
-func (source *TCPSource) Stop() {
+func (source *TCPSource) Close() {
 	for _, downloader := range source.downloadTasks {
 		downloader.Stop()
 	}
@@ -380,7 +380,7 @@ func (task *tcpDownloadTask) handleConnection(conn *net.TCPConn) {
 	if !task.loopTask.Stopped() {
 		task.stream.ReadTcpSamples(conn, task.isConnectionClosed)
 		if !task.source.countConnectionClosed() {
-			task.source.Stop()
+			task.source.Close()
 		}
 	}
 }

@@ -229,11 +229,11 @@ func (group *FileGroup) OpenNewFile(counter *int) (file *os.File, err error) {
 
 // ==================== File data source ====================
 
-// FileSource is an implementation of UnmarshallingMetricSource that reads samples
+// FileSource is an implementation of UnmarshallingSampleSource that reads samples
 // from one or more files. Various parameters control the behavior and performance
 // of the FileSource.
 type FileSource struct {
-	AbstractUnmarshallingMetricSource
+	AbstractUnmarshallingSampleSource
 
 	// File names is a slice of all files that will be read by the FileSource in sequence.
 	// For every Filename, the FileSource will not only read the file itself,
@@ -277,7 +277,7 @@ type FileSource struct {
 
 var fileSourceClosed = errors.New("file source is closed")
 
-// String implements the MetricSource interface.
+// String implements the SampleSource interface.
 func (source *FileSource) String() string {
 	if len(source.FileNames) == 1 {
 		return fmt.Sprintf("FileSource(%v)", source.FileNames[0])
@@ -286,7 +286,7 @@ func (source *FileSource) String() string {
 	}
 }
 
-// Start implements the MetricSource interface. It starts reading all configured
+// Start implements the SampleSource interface. It starts reading all configured
 // files in sequence using background goroutines. Depending on the Robust flag
 // of the receiving FileSource, the reading exits after the first error, or continues
 // until all configured files have been opened.
@@ -335,10 +335,10 @@ func (source *FileSource) readFilesKeepAlive(wg *sync.WaitGroup, files []string)
 	}()
 }
 
-// Stop implements the MetricSource interface. it stops all goroutines that are spawned
+// Close implements the SampleSource interface. it stops all goroutines that are spawned
 // for reading files and prints any errors to the logger. Calling it after the FileSource
 // finished on its own will have no effect.
-func (source *FileSource) Stop() {
+func (source *FileSource) Close() {
 	source.closed.StopFunc(func() {
 		if source.stream != nil {
 			if err := source.stream.Close(); err != nil && !IsFileClosedError(err) {
@@ -423,14 +423,14 @@ func (s *SynchronizedReadCloser) Close() error {
 
 // ==================== File data sink ====================
 
-// FileSink is an implementation of MetricSink that writes output Headers and Samples
+// FileSink is an implementation of SampleSink that writes output Headers and Samples
 // to a given file. Every time a new Header is received by the FileSink, a new file is opened
 // using an automatically incremented number as suffix (see FileGroup). Other parameters
 // define the parsing behavior of the FileSink.
 type FileSink struct {
-	// AbstractMarshallingMetricSink defines the Marshaller and SampleWriter that will
+	// AbstractSampleOutput defines the Marshaller and SampleWriter that will
 	// be used when writing Samples. See their documentation for further info.
-	AbstractMarshallingMetricSink
+	AbstractSampleOutput
 
 	// Filename defines the file that will be used for writing Samples. Each time a new Header
 	// is received be FileSink, a new file will be opened automatically. The file names are built
@@ -473,12 +473,12 @@ type FileSink struct {
 	lastVanishedFileCheck time.Time
 }
 
-// String implements the MetricSink interface.
+// String implements the SampleSink interface.
 func (sink *FileSink) String() string {
 	return fmt.Sprintf("FileSink(%v)", sink.Filename)
 }
 
-// Start implements the MetricSink interface. It does not start any goroutines.
+// Start implements the SampleSink interface. It does not start any goroutines.
 // It initialized the FileSink, prints some log messages, and depending on the
 // CleanFiles flag tries to delete existing files that would conflict with the output file.
 func (sink *FileSink) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
@@ -501,7 +501,7 @@ func (sink *FileSink) flush() error {
 	return nil
 }
 
-// Close implements the MetricSink interface. It flushes and closes the currently open file.
+// Close implements the SampleSink interface. It flushes and closes the currently open file.
 // No more data should be written to Sample/Header after calling Close.
 func (sink *FileSink) Close() {
 	sink.closed.StopFunc(func() {

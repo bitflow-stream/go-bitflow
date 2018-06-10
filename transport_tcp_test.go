@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -16,6 +16,21 @@ type TcpListenerTestSuite struct {
 
 func TestTcpListener(t *testing.T) {
 	suite.Run(t, new(TcpListenerTestSuite))
+}
+
+func (suite *TcpListenerTestSuite) runGroup(sender golib.Task, generator SampleProcessor, receiver SampleSource, sink *testSampleSink) {
+	var group golib.TaskGroup
+	(&SamplePipeline{
+		Processors: []SampleProcessor{generator},
+	}).Construct(&group)
+	(&SamplePipeline{
+		Source:     receiver,
+		Processors: []SampleProcessor{sink},
+	}).Construct(&group)
+	group.Add(sender)
+	group.Add(&golib.TimeoutTask{DumpGoroutines: false, Timeout: 1 * time.Second})
+	_, numErrs := group.WaitAndStop(1 * time.Second)
+	suite.Equal(0, numErrs, "number of errors")
 }
 
 func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
@@ -35,7 +50,6 @@ func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 		DialTimeout:   tcp_dial_timeout,
 	}
 	s.Reader.ParallelSampleHandler = parallel_handler
-	s.SetSink(testSink)
 
 	sender := &oneShotTask{
 		do: func() {
@@ -45,14 +59,11 @@ func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 
 	go func() {
 		testSink.waitEmpty()
-		s.Stop()
+		s.Close()
 		l.Close()
-		l.Stop()
 	}()
 
-	group := golib.TaskGroup{l, s, sender}
-	_, numErrs := group.WaitAndStop(1 * time.Second)
-	suite.Equal(0, numErrs, "number of errors")
+	suite.runGroup(sender, l, s, testSink)
 }
 
 func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
@@ -75,7 +86,6 @@ func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 			DialTimeout:   tcp_dial_timeout,
 		}
 		s.Reader.ParallelSampleHandler = parallel_handler
-		s.SetSink(testSink)
 
 		sender := &oneShotTask{
 			do: func() {
@@ -85,14 +95,11 @@ func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 
 		go func() {
 			testSink.waitEmpty()
-			s.Stop()
+			s.Close()
 			l.Close()
-			l.Stop()
 		}()
 
-		group := golib.TaskGroup{l, s, sender}
-		_, numErrs := group.WaitAndStop(1 * time.Second)
-		suite.Equal(0, numErrs, "number of errors")
+		suite.runGroup(sender, l, s, testSink)
 	}
 }
 
@@ -119,7 +126,6 @@ func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 	l.Reader = SampleReader{
 		ParallelSampleHandler: parallel_handler,
 	}
-	l.SetSink(testSink)
 
 	s := &TCPSink{
 		PrintErrors: true,
@@ -137,14 +143,11 @@ func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 
 	go func() {
 		testSink.waitEmpty()
-		l.Stop()
+		l.Close()
 		s.Close()
-		s.Stop()
 	}()
 
-	group := golib.TaskGroup{l, s, sender}
-	_, numErrs := group.WaitAndStop(1 * time.Second)
-	suite.Equal(0, numErrs, "number of errors")
+	suite.runGroup(sender, s, l, testSink)
 }
 
 func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller) {
@@ -155,7 +158,6 @@ func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller
 		l.Reader = SampleReader{
 			ParallelSampleHandler: parallel_handler,
 		}
-		l.SetSink(testSink)
 
 		s := &TCPSink{
 			PrintErrors: true,
@@ -173,14 +175,11 @@ func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller
 
 		go func() {
 			testSink.waitEmpty()
-			l.Stop()
+			l.Close()
 			s.Close()
-			s.Stop()
 		}()
 
-		group := golib.TaskGroup{l, s, sender}
-		_, numErrs := group.WaitAndStop(1 * time.Second)
-		suite.Equal(0, numErrs, "number of errors")
+		suite.runGroup(sender, s, l, testSink)
 	}
 }
 
@@ -226,10 +225,13 @@ func (suite *TcpListenerTestSuite) TestTcpListenerSourceError() {
 	l.Reader = SampleReader{
 		ParallelSampleHandler: parallel_handler,
 	}
-	l.SetSink(new(EmptyMetricSink))
 
-	group := golib.TaskGroup{l}
+	var group golib.TaskGroup
+	(&SamplePipeline{
+		Source: l,
+	}).Construct(&group)
 	task, numErrs := group.WaitAndStop(1 * time.Second)
 	suite.Equal(1, numErrs, "number of errors")
-	suite.Equal(l, task)
+	suite.IsType(new(SourceTaskWrapper), task)
+	suite.Equal(l, task.(*SourceTaskWrapper).SampleSource)
 }

@@ -127,13 +127,13 @@ func (suite *TransportStreamTestSuite) TestAllocateSample() {
 	var pipe SamplePipeline
 	pipe.
 		Add(&resizingTestSink{mul: 1, plus: 2}).
-		Add(new(AbstractProcessor)).
+		Add(new(NoopProcessor)).
 		Add(&resizingTestSink{mul: 1, plus: -100}).
 		Add(&resizingTestSink{mul: 3, plus: 1}). // does not change
 		Add(&resizingTestSink{mul: 0, plus: 0}). // does not change
-		Add(new(AbstractProcessor))
-	pipe.Source = new(EmptyMetricSource)
-	pipe.Sink = new(EmptyMetricSink)
+		Add(new(NoopProcessor)).
+		Add(new(DroppingSampleProcessor))
+	pipe.Source = new(EmptySampleSource)
 	sink := pipe.Processors[0]
 
 	var group golib.TaskGroup
@@ -149,10 +149,10 @@ func (suite *TransportStreamTestSuite) TestAllocateSample() {
 	suite.Equal(22, size)
 }
 
-var _ ResizingMetricSink = new(resizingTestSink)
+var _ ResizingSampleProcessor = new(resizingTestSink)
 
 type resizingTestSink struct {
-	AbstractProcessor
+	NoopProcessor
 	plus int
 	mul  int
 }

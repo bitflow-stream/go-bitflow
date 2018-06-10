@@ -167,7 +167,7 @@ func (suite *testSuiteWithSamples) newFilledTestSink() *testSampleSink {
 	return s
 }
 
-func (suite *testSuiteWithSamples) sendSamples(w MetricSinkBase, headerIndex int) (res int) {
+func (suite *testSuiteWithSamples) sendSamples(w SampleSink, headerIndex int) (res int) {
 	for _, sample := range suite.samples[headerIndex] {
 		suite.NoError(w.Sample(sample, &suite.headers[headerIndex].Header))
 		res++
@@ -175,7 +175,7 @@ func (suite *testSuiteWithSamples) sendSamples(w MetricSinkBase, headerIndex int
 	return
 }
 
-func (suite *testSuiteWithSamples) sendAllSamples(w MetricSinkBase) (res int) {
+func (suite *testSuiteWithSamples) sendAllSamples(w SampleSink) (res int) {
 	for i := range suite.headers {
 		res += suite.sendSamples(w, i)
 	}
@@ -207,6 +207,7 @@ func (c *countingBuf) checkClosed(r *require.Assertions) {
 }
 
 type testSampleSink struct {
+	AbstractSampleProcessor
 	suite     *testSuiteWithSamples
 	emptyCond *sync.Cond
 	samples   []*Sample
@@ -259,17 +260,11 @@ func (s *testSampleSink) checkClosed() {
 }
 
 func (s *testSampleSink) Start(_ *sync.WaitGroup) (_ golib.StopChan) {
-	s.suite.Fail("testSampleSink.Start() called")
 	return
 }
 
-func (s *testSampleSink) Stop() {
-	s.suite.Fail("testSampleSink.Stop() called")
-}
-
 func (s *testSampleSink) String() string {
-	s.suite.Fail("testSampleSink.String() called")
-	return ""
+	return "test-sample-sink"
 }
 
 type testSampleHandler struct {
