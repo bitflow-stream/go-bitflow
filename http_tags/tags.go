@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/gorilla/mux"
+	log "github.com/sirupsen/logrus"
 )
 
 type HttpTagger struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	lock            sync.RWMutex
 	currentHttpTags map[string]string
 }
@@ -46,7 +46,7 @@ func (tagger *HttpTagger) Sample(sample *bitflow.Sample, header *bitflow.Header)
 			sample.SetTag(tag, val)
 		}
 	}
-	return tagger.AbstractProcessor.Sample(sample, header)
+	return tagger.NoopProcessor.Sample(sample, header)
 }
 
 func (tagger *HttpTagger) String() string {

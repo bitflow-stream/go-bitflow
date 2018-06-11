@@ -3,11 +3,10 @@ package dbscan
 import (
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/dhconnelly/rtreego"
+	log "github.com/sirupsen/logrus"
 )
 
 type RtreeSetOfPoints struct {

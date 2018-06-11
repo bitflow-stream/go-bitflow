@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-
 	"strconv"
 
 	"github.com/antongulenko/go-bitflow"

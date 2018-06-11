@@ -7,15 +7,12 @@ import (
 )
 
 type SampleFilter struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	Description   fmt.Stringer
 	IncludeFilter func(sample *bitflow.Sample, header *bitflow.Header) (bool, error) // Return true if sample should be included
 }
 
 func (p *SampleFilter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
 	filter := p.IncludeFilter
 	if filter != nil {
 		res, err := filter(sample, header)
@@ -23,7 +20,7 @@ func (p *SampleFilter) Sample(sample *bitflow.Sample, header *bitflow.Header) er
 			return err
 		}
 		if res {
-			return p.OutgoingSink.Sample(sample, header)
+			return p.NoopProcessor.Sample(sample, header)
 		}
 	}
 	return nil

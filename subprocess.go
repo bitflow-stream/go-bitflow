@@ -8,13 +8,13 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
 type SubprocessRunner struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	Cmd  string
 	Args []string
 
@@ -48,12 +48,12 @@ func (r *SubprocessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
 	var tasks golib.TaskGroup
 	if r.input != nil {
 		// (Optionally) start the input first
-		tasks.Add(r.input)
+		tasks.Add(&bitflow.SourceTaskWrapper{r.input})
 	}
 	tasks.Add(&golib.NoopTask{
 		Description: "",
 		Chan:        golib.WaitErrFunc(wg, r.runProcess),
-	}, r.output)
+	}, &bitflow.ProcessorTaskWrapper{r.output})
 
 	channels := tasks.StartTasks(wg)
 	return golib.WaitErrFunc(wg, func() error {
@@ -61,7 +61,7 @@ func (r *SubprocessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
 
 		// Try to stop everything
 		if r.input != nil {
-			r.input.Stop()
+			r.input.Close()
 		}
 		r.Close()
 
@@ -89,7 +89,7 @@ func (r *SubprocessRunner) createProcess() error {
 	r.output.Writer = r.Writer
 	r.output.Marshaller = r.Marshaller
 
-	if _, isEmpty := r.OutgoingSink.(*bitflow.EmptyMetricSink); r.OutgoingSink != nil && !isEmpty {
+	if _, isEmpty := r.OutgoingSink.(*bitflow.DroppingSampleProcessor); r.OutgoingSink != nil && !isEmpty {
 		readPipe, err := r.cmd.StdoutPipe()
 		if err != nil {
 			return err

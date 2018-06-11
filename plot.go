@@ -39,7 +39,7 @@ const (
 type PlotType uint
 
 type PlotProcessor struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	checker bitflow.HeaderChecker
 
 	Type          PlotType
@@ -79,20 +79,17 @@ func (p *PlotProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	} else {
 		_ = file.Close() // Drop error
 	}
-	return p.AbstractProcessor.Start(wg)
+	return p.NoopProcessor.Start(wg)
 }
 
 func (p *PlotProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
 	if p.checker.HeaderChanged(header) {
 		if err := p.headerChanged(header); err != nil {
 			return err
 		}
 	}
 	p.storeSample(sample)
-	return p.OutgoingSink.Sample(sample, header)
+	return p.NoopProcessor.Sample(sample, header)
 }
 
 func (p *PlotProcessor) headerChanged(header *bitflow.Header) error {

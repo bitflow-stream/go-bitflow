@@ -45,9 +45,6 @@ func (p *SamplePipeline) ContainedStringers() []fmt.Stringer {
 	for _, proc := range p.Processors {
 		res = append(res, proc)
 	}
-	if p.Sink != nil {
-		res = append(res, p.Sink)
-	}
 	return res
 }
 

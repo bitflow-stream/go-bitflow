@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	parallel_dbscan "github.com/antongulenko/go-DBSCAN"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-onlinestats"
+	log "github.com/sirupsen/logrus"
 )
 
 // This files uses an external implementation of DBSCAN which is designed

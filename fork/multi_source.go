@@ -11,7 +11,7 @@ import (
 
 type MultiMetricSource struct {
 	MultiPipeline
-	bitflow.AbstractMetricSource
+	bitflow.AbstractSampleProcessor
 
 	ParallelClose bool
 
@@ -23,7 +23,7 @@ func (in *MultiMetricSource) Add(subPipeline *pipeline.SamplePipeline) {
 	in.pipelines = append(in.pipelines, subPipeline)
 }
 
-func (in *MultiMetricSource) AddSource(source bitflow.MetricSource, steps ...bitflow.SampleProcessor) {
+func (in *MultiMetricSource) AddSource(source bitflow.SampleSource, steps ...bitflow.SampleProcessor) {
 	pipe := &pipeline.SamplePipeline{
 		SamplePipeline: bitflow.SamplePipeline{
 			Source: source,
@@ -56,12 +56,12 @@ func (in *MultiMetricSource) start(index int, pipe *pipeline.SamplePipeline) {
 
 		in.stoppedPipelines++
 		if in.stoppedPipelines >= len(in.pipelines) {
-			in.Stop()
+			in.Close()
 		}
 	})
 }
 
-func (in *MultiMetricSource) Stop() {
+func (in *MultiMetricSource) Close() {
 	in.StopPipelines()
 }
 

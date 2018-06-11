@@ -1,11 +1,10 @@
 package pipeline
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"strings"
-
-	"bytes"
 
 	"github.com/antongulenko/go-bitflow"
 )

@@ -1,14 +1,14 @@
 package pipeline
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
 
-	"errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-onlinestats"
+	log "github.com/sirupsen/logrus"
 )
 
 type MetricMapperHelper struct {
@@ -53,7 +53,7 @@ func (helper *MetricMapperHelper) convertSample(sample *bitflow.Sample) *bitflow
 }
 
 type AbstractMetricMapper struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	Description      fmt.Stringer
 	ConstructIndices func(header *bitflow.Header) ([]int, []string)
 
@@ -61,14 +61,11 @@ type AbstractMetricMapper struct {
 }
 
 func (m *AbstractMetricMapper) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := m.Check(sample, header); err != nil {
-		return err
-	}
 	if err := m.helper.incomingHeader(header, m, m.ConstructIndices); err != nil {
 		return err
 	}
 	sample = m.helper.convertSample(sample)
-	return m.OutgoingSink.Sample(sample, m.helper.outHeader)
+	return m.NoopProcessor.Sample(sample, m.helper.outHeader)
 }
 
 func (m *AbstractMetricMapper) String() string {

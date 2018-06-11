@@ -64,7 +64,7 @@ type sampleAndHeader struct {
 }
 
 type synchronizationStep struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	synchronizer  *PipelineRateSynchronizer
 	queue         chan sampleAndHeader
 	running       bool
@@ -80,7 +80,7 @@ func (s *synchronizationStep) String() string {
 
 func (s *synchronizationStep) Start(wg *sync.WaitGroup) golib.StopChan {
 	s.synchronizer.start(wg)
-	return s.AbstractProcessor.Start(wg)
+	return s.NoopProcessor.Start(wg)
 }
 
 func (s *synchronizationStep) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -107,15 +107,12 @@ func (s *synchronizationStep) CloseSink() {
 		if c := s.synchronizer.ChannelCloseHook; c != nil {
 			c(s.lastSample, s.lastHeader)
 		}
-		s.AbstractProcessor.CloseSink()
+		s.NoopProcessor.CloseSink()
 	})
 }
 
 func (s *synchronizationStep) outputSample(sample sampleAndHeader) {
-	err := s.CheckSink()
-	if err == nil {
-		err = s.OutgoingSink.Sample(sample.sample, sample.header)
-	}
+	err := s.NoopProcessor.Sample(sample.sample, sample.header)
 	if err != nil && s.err == nil {
 		s.err = err
 	}

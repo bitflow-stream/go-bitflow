@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
+	log "github.com/sirupsen/logrus"
 )
 
 type RoundRobinDistributor struct {

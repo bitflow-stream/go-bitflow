@@ -5,15 +5,14 @@ import (
 	"sort"
 	"strconv"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/go-ini/ini"
+	log "github.com/sirupsen/logrus"
 )
 
 type StoreStats struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	TargetFile string
 
 	stats map[string]*FeatureStats
@@ -48,9 +47,6 @@ func (stats *FeatureStats) Push(values ...float64) {
 }
 
 func (stats *StoreStats) Sample(inSample *bitflow.Sample, header *bitflow.Header) error {
-	if err := stats.Check(inSample, header); err != nil {
-		return err
-	}
 	for index, field := range header.Fields {
 		val := inSample.Values[index]
 		feature, ok := stats.stats[field]
@@ -60,7 +56,7 @@ func (stats *StoreStats) Sample(inSample *bitflow.Sample, header *bitflow.Header
 		}
 		feature.Push(float64(val))
 	}
-	return stats.OutgoingSink.Sample(inSample, header)
+	return stats.NoopProcessor.Sample(inSample, header)
 }
 
 func (stats *StoreStats) Close() {

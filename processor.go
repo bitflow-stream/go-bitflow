@@ -18,7 +18,7 @@ type MergeableProcessor interface {
 }
 
 type NoopProcessor struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 }
 
 func (*NoopProcessor) String() string {
@@ -29,7 +29,7 @@ func (*NoopProcessor) String() string {
 // Decouple the incoming samples from the MetricSink through a
 // looping goroutine and a channel. Creates potential parallelism in the pipeline.
 type DecouplingProcessor struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	samples       chan TaggedSample
 	loopTask      *golib.LoopTask
 	ChannelBuffer int // Must be set before calling Start()
@@ -41,9 +41,6 @@ type TaggedSample struct {
 }
 
 func (p *DecouplingProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
 	p.samples <- TaggedSample{Sample: sample, Header: header}
 	return nil
 }
@@ -72,7 +69,7 @@ func (p *DecouplingProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (p *DecouplingProcessor) forward(sample TaggedSample) error {
-	return p.OutgoingSink.Sample(sample.Sample, sample.Header)
+	return p.NoopProcessor.Sample(sample.Sample, sample.Header)
 }
 
 func (p *DecouplingProcessor) Close() {
@@ -86,7 +83,7 @@ func (p *DecouplingProcessor) String() string {
 // ==================== SimpleProcessor ====================
 
 type SimpleProcessor struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	Description          string
 	Process              func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error)
 	OnClose              func()
@@ -94,15 +91,12 @@ type SimpleProcessor struct {
 }
 
 func (p *SimpleProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
 	if process := p.Process; process == nil {
 		return fmt.Errorf("%s: Process function is not set", p)
 	} else {
 		sample, header, err := process(sample, header)
 		if err == nil && sample != nil && header != nil {
-			err = p.OutgoingSink.Sample(sample, header)
+			err = p.NoopProcessor.Sample(sample, header)
 		}
 		return err
 	}
@@ -112,7 +106,7 @@ func (p *SimpleProcessor) Close() {
 	if c := p.OnClose; c != nil {
 		c()
 	}
-	p.AbstractProcessor.Close()
+	p.NoopProcessor.Close()
 }
 
 func (p *SimpleProcessor) OutputSampleSize(sampleSize int) int {

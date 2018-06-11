@@ -34,7 +34,7 @@ func (builder PipelineBuilder) MakePipeline(pipe Pipeline) (*pipeline.SamplePipe
 }
 
 func (builder PipelineBuilder) makePipeline(pipe Pipeline) (res *pipeline.SamplePipeline, err error) {
-	var source bitflow.MetricSource
+	var source bitflow.SampleSource
 
 	switch input := pipe[0].(type) {
 	case Input:
@@ -56,22 +56,24 @@ func (builder PipelineBuilder) makePipeline(pipe Pipeline) (res *pipeline.Sample
 	return
 }
 
-func (builder PipelineBuilder) makePipelineTail(pipe Pipeline) (res *pipeline.SamplePipeline, err error) {
-	res = new(pipeline.SamplePipeline)
+func (builder PipelineBuilder) makePipelineTail(pipe Pipeline) (*pipeline.SamplePipeline, error) {
+	res := new(pipeline.SamplePipeline)
 
 	// Output
 	if len(pipe) >= 1 {
 		outputStep := pipe[len(pipe)-1]
 		if output, ok := outputStep.(Output); ok {
 			pipe = pipe[:len(pipe)-1]
-			res.Sink, err = builder.Endpoints.CreateOutput(Token(output).Content())
+			out, err := builder.Endpoints.CreateOutput(Token(output).Content())
 			if err != nil {
-				return
+				return nil, err
 			}
+			res.Add(out)
 		}
 	}
 
 	// Steps
+	var err error
 	for _, step := range pipe {
 		switch step := step.(type) {
 		case Step:
@@ -122,7 +124,7 @@ func (builder PipelineBuilder) getAnalysis(name_tok Token) (registeredAnalysis, 
 	}
 }
 
-func (builder PipelineBuilder) createMultiInput(pipes MultiInput) (bitflow.MetricSource, error) {
+func (builder PipelineBuilder) createMultiInput(pipes MultiInput) (bitflow.SampleSource, error) {
 	subPipelines := &fork.MultiMetricSource{
 		ParallelClose: true,
 	}

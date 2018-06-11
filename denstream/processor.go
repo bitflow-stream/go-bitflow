@@ -11,7 +11,7 @@ import (
 var _ bitflow.SampleProcessor = new(DenstreamClusterProcessor)
 
 type DenstreamClusterProcessor struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	DenstreamClusterer
 
 	// If set to >0, will log the denstream clusterer state every OutputStateModulo samples
@@ -52,5 +52,5 @@ func (p *DenstreamClusterProcessor) Sample(sample *bitflow.Sample, header *bitfl
 	p.processedSamples++
 
 	sample.SetTag("cluster", strconv.Itoa(clusterId))
-	return p.OutgoingSink.Sample(sample, header)
+	return p.NoopProcessor.Sample(sample, header)
 }

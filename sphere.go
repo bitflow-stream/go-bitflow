@@ -2,21 +2,20 @@ package pipeline
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/rand"
 	"sync"
 
-	"fmt"
-
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
 // ====================================== Generate random points on the hull of a sphere ======================================
 
 type SpherePoints struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	RandomSeed int64
 	NumPoints  int
 
@@ -28,13 +27,10 @@ type SpherePoints struct {
 
 func (p *SpherePoints) Start(wg *sync.WaitGroup) golib.StopChan {
 	p.rand = rand.New(rand.NewSource(p.RandomSeed))
-	return p.AbstractProcessor.Start(wg)
+	return p.NoopProcessor.Start(wg)
 }
 
 func (p *SpherePoints) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
 	if len(header.Fields) < 1 {
 		return errors.New("Cannot calculate sphere points with 0 metrics")
 	}
@@ -60,7 +56,7 @@ func (p *SpherePoints) Sample(sample *bitflow.Sample, header *bitflow.Header) er
 	for i := 0; i < p.NumPoints; i++ {
 		out := sample.Clone()
 		out.Values = p.randomSpherePoint(radius, values)
-		if err := p.OutgoingSink.Sample(out, header); err != nil {
+		if err := p.NoopProcessor.Sample(out, header); err != nil {
 			return err
 		}
 	}

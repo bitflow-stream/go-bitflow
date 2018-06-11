@@ -184,7 +184,7 @@ func (s *EventEvaluationStats) flushFalseAlarm(t time.Time) {
 }
 
 type AnomalySmoothing struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	BinaryEvaluationTags
 	AbstractAnomalyEventProcessor
 	NormalTagValue    string
@@ -202,7 +202,7 @@ func (p *AnomalySmoothing) String() string {
 
 func (p *AnomalySmoothing) Start(wg *sync.WaitGroup) golib.StopChan {
 	p.StateChanged = p.anomalyStateChanged
-	return p.AbstractProcessor.Start(wg)
+	return p.NoopProcessor.Start(wg)
 }
 
 func (p *AnomalySmoothing) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -223,12 +223,12 @@ func (p *AnomalySmoothing) Sample(sample *bitflow.Sample, header *bitflow.Header
 	} else {
 		sample.SetTag(p.Predicted, p.NormalTagValue)
 	}
-	return p.AbstractProcessor.Sample(sample, header)
+	return p.NoopProcessor.Sample(sample, header)
 }
 
 func (p *AnomalySmoothing) Close() {
 	p.AbstractAnomalyEventProcessor.Close()
-	p.AbstractProcessor.Close()
+	p.NoopProcessor.Close()
 }
 
 func (p *AnomalySmoothing) anomalyStateChanged(t time.Time) {

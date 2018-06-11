@@ -23,23 +23,20 @@ type ForkRemapper struct {
 
 func (f *ForkRemapper) Start(wg *sync.WaitGroup) golib.StopChan {
 	f.parallelClose = f.ParallelClose
-	f.newPipelineHandler = func(sink bitflow.MetricSink) bitflow.MetricSink {
+	f.newPipelineHandler = func(sink bitflow.SampleProcessor) bitflow.SampleProcessor {
 		// Synchronize writing, because multiple incoming pipelines can write to one pipeline
 		return &ForkMerger{outgoing: sink}
 	}
 	return f.AbstractMetricFork.Start(wg)
 }
 
-func (f *ForkRemapper) GetMappedSink(forkPath []interface{}) bitflow.MetricSink {
+func (f *ForkRemapper) GetMappedSink(forkPath []interface{}) bitflow.SampleProcessor {
 	keys := f.Distributor.Distribute(forkPath)
 	return f.getPipelines(f.Builder, keys, f)
 }
 
 // This is just the 'default' channel if this ForkRemapper is used like a regular SampleProcessor
 func (f *ForkRemapper) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := f.Check(sample, header); err != nil {
-		return err
-	}
 	return f.GetMappedSink(nil).Sample(sample, header)
 }
 

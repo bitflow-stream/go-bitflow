@@ -26,7 +26,7 @@ var (
 )
 
 type ClusterTagger struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	BinaryEvaluationTags
 	NormalTagValue string
 }
@@ -45,11 +45,11 @@ func (p *ClusterTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 		predicted = p.NormalTagValue
 	}
 	sample.SetTag(p.Predicted, predicted)
-	return p.OutgoingSink.Sample(sample, header)
+	return p.NoopProcessor.Sample(sample, header)
 }
 
 type TagsPreprocessor struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 
 	EvaluationTags
 	BinaryEvaluationTags
@@ -135,5 +135,5 @@ func (p *TagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header
 	}
 	sample.SetTag(p.EvalGroupsTag, strings.Join(groups, p.EvalGroupSeparator))
 
-	return p.OutgoingSink.Sample(sample, header)
+	return p.NoopProcessor.Sample(sample, header)
 }

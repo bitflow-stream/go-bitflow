@@ -3,7 +3,6 @@ package fork
 import (
 	"fmt"
 	"path/filepath"
-
 	"sort"
 
 	"github.com/antongulenko/go-bitflow"
@@ -37,12 +36,12 @@ func (b *SimplePipelineBuilder) String() string {
 
 func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
 	var res bitflow.SamplePipeline
-	res.Sink = output
 	if b.Build != nil {
 		for _, processor := range b.Build() {
 			res.Add(processor)
 		}
 	}
+	res.Add(output)
 	return &res
 }
 
@@ -51,9 +50,7 @@ type MultiplexPipelineBuilder []*pipeline.SamplePipeline
 func (b MultiplexPipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
 	// Type of key must be int, and index must be in range. Otherwise panic!
 	pipe := &(b[key.(int)].SamplePipeline)
-	if pipe.Sink == nil {
-		pipe.Sink = output
-	}
+	pipe.Add(output)
 	return pipe
 }
 
@@ -90,12 +87,12 @@ func (b *MultiFilePipelineBuilder) BuildPipeline(key interface{}, output *ForkMe
 	if ok {
 		newFilename := b.NewFile(files.Filename, key)
 		newFiles := &bitflow.FileSink{
-			AbstractMarshallingMetricSink: files.AbstractMarshallingMetricSink,
-			Filename:                      newFilename,
-			CleanFiles:                    files.CleanFiles,
-			IoBuffer:                      files.IoBuffer,
+			AbstractSampleOutput: files.AbstractSampleOutput,
+			Filename:             newFilename,
+			CleanFiles:           files.CleanFiles,
+			IoBuffer:             files.IoBuffer,
 		}
-		simple.Sink = newFiles
+		simple.Add(newFiles)
 	} else {
 		log.Warnf("[%v]: Cannot assign new files, did not find *bitflow.FileSink as my direct output", b)
 	}

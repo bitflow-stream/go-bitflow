@@ -4,16 +4,15 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 
-	"io/ioutil"
-
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
 var builder = query.NewPipelineBuilder()
