@@ -11,6 +11,7 @@ type BirchTreeClusterSpace struct {
 	root          *BirchTreeNode
 	nextClusterId int
 	totalClusters int
+	numDimensions int
 }
 
 type BirchTreeNode struct {
@@ -22,14 +23,21 @@ type BirchTreeNode struct {
 
 func NewBirchTreeClusterSpace(numDimensions int) *BirchTreeClusterSpace {
 	res := new(BirchTreeClusterSpace)
-	res.Init()
+	res.Init(numDimensions)
 	return res
 }
 
-func (s *BirchTreeClusterSpace) Init() {
+func (s *BirchTreeClusterSpace) Init(numDimensions int) {
 	s.nextClusterId = 0
+	s.numDimensions = numDimensions
 	s.root = new(BirchTreeNode)
 	s.root.children = make([]*BirchTreeNode, 3)
+	s.root.cluster = &BasicMicroCluster{
+		cf1:          make([]float64, numDimensions),
+		cf2:          make([]float64, numDimensions),
+		creationTime: time.Time{},
+	}
+	s.root.isLeaf = false
 }
 
 func (s *BirchTreeClusterSpace) NumClusters() int {
@@ -51,9 +59,8 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 			for idx := 0; idx < curNode.numChildren; idx++ {
 				childClust := curNode.children[idx].cluster
 				// dist can be negative, if the point is inside a cluster
-				dist := euclideanDistance(point, childClust.Center())
+				dist := euclideanDistance(point, childClust.Center()) - childClust.Radius()
 				if nearestCluster == nil || dist < closestDistance {
-					//nearestCluster = childClust
 					nearestNode = curNode.children[idx]
 					closestDistance = dist
 				}
@@ -106,11 +113,6 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 
 	parentNode := s.root
 	if parentNode.numChildren == 0 {
-		parentNode.cluster = &BasicMicroCluster{
-			cf1:          make([]float64, len(cluster.Center())),
-			cf2:          make([]float64, len(cluster.Center())),
-			creationTime: time.Time{},
-		}
 		addCFtoParentNode(parentNode, newNode)
 		addChild(parentNode, newNode)
 	} else {
@@ -121,7 +123,6 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 			addCFtoParentNode(parentNode, newNode)
 			for idx := 0; idx < nearestNode.numChildren; idx++ {
 				childClust := nearestNode.children[idx].cluster
-				//	dist can be negative, if the point is inside a cluster
 				dist := euclideanDistance(cluster.Center(), childClust.Center())
 				if nearestCluster == nil || dist < closestDistance {
 					nearestCluster = childClust
@@ -150,22 +151,21 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 	parentNode := s.root
 	nearestNode := parentNode
 	for nearestNode.isLeaf == false {
-		parentNode := nearestNode
-		for _, child := range parentNode.children {
-			childClust := child.cluster
-			//	dist can be negative, if the point is inside a cluster
+		parentNode = nearestNode
+		for idx := 0; idx < nearestNode.numChildren; idx++ {
+			childClust := nearestNode.children[idx].cluster
 			dist := euclideanDistance(cluster.Center(), childClust.Center())
 			if nearestCluster == nil || dist < closestDistance {
 				nearestCluster = childClust
 				closestDistance = dist
 			}
-			nearestNode = child
+			nearestNode = nearestNode.children[idx]
 		}
 
 	}
-	for _, child := range parentNode.children {
-		if child.cluster.Id() == cluster.Id() {
-			child.cluster.reset()
+	for i := 0; i < parentNode.numChildren; i++ {
+		if parentNode.children[i].cluster.Id() == cluster.Id() {
+			parentNode.children[i].cluster.reset()
 			return
 		}
 	}
@@ -185,23 +185,24 @@ func (s *BirchTreeClusterSpace) UpdateCluster(cluster MicroCluster, do func() (r
 	parentNode := s.root
 	nearestNode := parentNode
 	for nearestNode.isLeaf == false {
-		parentNode := nearestNode
-		for _, child := range parentNode.children {
-			childClust := child.cluster
+		parentNode = nearestNode
+		for idx := 0; idx < nearestNode.numChildren; idx++ {
+			childClust := nearestNode.children[idx].cluster
 			dist := euclideanDistance(cluster.Center(), childClust.Center())
 			if nearestCluster == nil || dist < closestDistance {
 				nearestCluster = childClust
 				closestDistance = dist
 			}
-			nearestNode = child
+			nearestNode = nearestNode.children[idx]
 		}
 
 	}
-	for _, child := range parentNode.children {
-		if child.cluster.Id() == cluster.Id() {
-			child.cluster.reset()
+	for i := 0; i < parentNode.numChildren; i++ {
+
+		if parentNode.children[i].cluster.Id() == cluster.Id() {
+			parentNode.children[i].cluster.reset()
 			if do() {
-				child.cluster = cluster.(*BasicMicroCluster)
+				parentNode.children[i].cluster = cluster.(*BasicMicroCluster)
 			}
 		}
 	}
