@@ -56,7 +56,7 @@ type BatchFft struct {
 
 func getFft(num int) (*fft.FFT, error) {
 	fftCacheLock.Lock()
-	fftCacheLock.Unlock()
+	defer fftCacheLock.Unlock()
 	res, ok := fftCache[num]
 	if !ok {
 		newFft, err := fft.New(num)
