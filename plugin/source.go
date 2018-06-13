@@ -24,32 +24,39 @@ type PluginSampleSource struct {
 
 func RegisterPluginDataSource(endpoints *bitflow.EndpointFactory) {
 	endpoints.CustomDataSources["plugin"] = func(urlStr string) (bitflow.SampleSource, error) {
-		parsedUrl, err := url.Parse(urlStr)
+		endpoint, fullPath, params, err := ParseUrl(urlStr)
+		if err == nil && endpoint != "" {
+			return nil, fmt.Errorf("URL for plugin may not contain hostname: %v", urlStr)
+		}
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse plugin URL: %v", err)
+			return nil, err
 		}
-		if parsedUrl.Hostname() != "" {
-			return nil, fmt.Errorf("URL for plugin may not contain hostname: %v", parsedUrl)
-		}
-		urlParams := parsedUrl.Query()
-		params := make(map[string]string, len(urlParams))
-		for key, value := range urlParams {
-			paramVal := ""
-			if len(value) == 1 {
-				paramVal = value[0]
-			} else if len(value) > 1 {
-				return nil, fmt.Errorf("Multiple values for URL query key '%v': %v", key, value)
-			}
-			params[key] = paramVal
-		}
-		path := parsedUrl.Path
-		path, symbol := filepath.Split(path)
+		path, symbol := filepath.Split(fullPath)
 		if path == "" || symbol == "" {
-			return nil, fmt.Errorf("URL for plugin must have path with at least two components: %v", parsedUrl)
+			return nil, fmt.Errorf("URL for plugin must have path with at least two components: %v", urlStr)
 		}
 		path = path[:len(path)-1] // Strip trailing slash
 		return NewPluginSource(path, symbol, params)
 	}
+}
+
+func ParseUrl(urlStr string) (string, string, map[string]string, error) {
+	parsedUrl, err := url.Parse(urlStr)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("Failed to parse plugin URL: %v", err)
+	}
+	urlParams := parsedUrl.Query()
+	params := make(map[string]string, len(urlParams))
+	for key, value := range urlParams {
+		paramVal := ""
+		if len(value) == 1 {
+			paramVal = value[0]
+		} else if len(value) > 1 {
+			return "", "", nil, fmt.Errorf("Multiple values for URL query key '%v': %v", key, value)
+		}
+		params[key] = paramVal
+	}
+	return parsedUrl.Host, parsedUrl.Path, params, nil
 }
 
 func NewPluginSource(path, symbol string, params map[string]string) (*PluginSampleSource, error) {
