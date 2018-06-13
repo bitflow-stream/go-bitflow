@@ -389,3 +389,9 @@ func (h *HeaderChecker) InitializedHeaderChanged(newHeader *Header) bool {
 	h.LastHeader = newHeader
 	return changed
 }
+
+// SampleAndHeader is a convenience type combining pointers to a Sample and a Header.
+type SampleAndHeader struct {
+	*Sample
+	*Header
+}
