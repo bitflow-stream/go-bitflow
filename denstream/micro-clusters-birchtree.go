@@ -15,10 +15,10 @@ type BirchTreeClusterSpace struct {
 }
 
 type BirchTreeNode struct {
-	cluster     *BasicMicroCluster
-	numChildren int
-	children    []*BirchTreeNode
 	isLeaf      bool
+	numChildren int
+	cluster     *BasicMicroCluster
+	children    []*BirchTreeNode
 	parent      *BirchTreeNode
 }
 
@@ -57,11 +57,10 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 	if curNode.numChildren == 0 {
 		return nil
 	} else {
-		//while instance of leaf
+		//do this until you reach a leaf
 		for curNode.isLeaf == false {
 			for idx := 0; idx < curNode.numChildren; idx++ {
 				childClust := curNode.children[idx].cluster
-				// dist can be negative, if the point is inside a cluster
 				dist := euclideanDistance(point, childClust.Center())
 				if nearestCluster == nil || dist < closestDistance {
 					nearestNode = curNode.children[idx]
@@ -89,10 +88,10 @@ func (s *BirchTreeClusterSpace) ClustersDo(do func(cluster MicroCluster)) {
 
 func (s *BirchTreeClusterSpace) NewCluster(point []float64, creationTime time.Time) MicroCluster {
 	clust := &BasicMicroCluster{
-		cf1:          make([]float64, len(point)),
-		cf2:          make([]float64, len(point)),
+		cf1:          make([]float64, s.numDimensions),
+		cf2:          make([]float64, s.numDimensions),
 		creationTime: creationTime,
-		center:       make([]float64, len(point)),
+		center:       make([]float64, s.numDimensions),
 	}
 	clust.Merge(point)
 	s.Insert(clust)
@@ -104,10 +103,10 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	basic := cluster.(*BasicMicroCluster)
 	basic.id = s.nextClusterId
 	newNode := &BirchTreeNode{
-		basic,
-		0,
-		nil,
 		true,
+		0,
+		basic,
+		nil,
 		nil,
 	}
 	s.nextClusterId++
@@ -138,7 +137,6 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 		}
 		if parentNode.numChildren < 3 {
 			addChild(parentNode, newNode)
-
 		} else {
 			splitNode(parentNode, newNode)
 		}
@@ -153,10 +151,10 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 	var nearestCluster MicroCluster
 
 	parentNode := s.root
-	if s.root.numChildren == 0 {
-		panic("Cluster not in cluster space during: " + reason)
-		return
-	}
+	// if s.root.numChildren == 0 {
+	// 	panic("Cluster not in cluster space during: " + reason)
+	// 	return
+	// }
 	nearestNode := parentNode
 	for nearestNode.isLeaf == false {
 		parentNode = nearestNode
