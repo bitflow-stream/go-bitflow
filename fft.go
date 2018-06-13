@@ -52,6 +52,10 @@ type BatchFft struct {
 	// If SamplingFrequency > 0, it will be used as the total sampling frequency when computing the frequency metric.
 	// If this is <= 0, the sampling frequency will be computed automatically from the timestamps of the first and last input sample, and the total number of samples.
 	SamplingFrequency float64
+
+	// FatalErrors can be set to true to return errors that occurr when processing a batch.
+	// Otherwise, the error will be printed as a warning and an empty result batch will be produced.
+	FatalErrors bool
 }
 
 func getFft(num int) (*fft.FFT, error) {
@@ -96,6 +100,21 @@ func (s *BatchFft) samplingFrequency(samples []*bitflow.Sample) (float64, error)
 }
 
 func (s *BatchFft) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+	header, sample, err := s.processBatch(header, samples)
+	if err != nil && !s.FatalErrors {
+		tagStr := ""
+		if len(samples) > 0 {
+			tagStr = "tags of first received sample:" + samples[0].TagString()
+		}
+		log.Warnln("Error processing FFT:", err, tagStr)
+		err = nil
+		header = nil
+		sample = nil
+	}
+	return header, sample, err
+}
+
+func (s *BatchFft) processBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	// Get an FFT instance and change the number of samples to a power of 2, if necessary
 	f, err := getFft(len(samples))
 	if err != nil {
