@@ -89,7 +89,7 @@ func (r *SubprocessRunner) createProcess() error {
 	r.output.Writer = r.Writer
 	r.output.Marshaller = r.Marshaller
 
-	if _, isEmpty := r.OutgoingSink.(*bitflow.DroppingSampleProcessor); r.OutgoingSink != nil && !isEmpty {
+	if _, isEmpty := r.GetSink().(*bitflow.DroppingSampleProcessor); r.GetSink() != nil && !isEmpty {
 		readPipe, err := r.cmd.StdoutPipe()
 		if err != nil {
 			return err
@@ -99,7 +99,7 @@ func (r *SubprocessRunner) createProcess() error {
 			Description: desc,
 		}
 		r.input.Reader = r.Reader
-		r.input.SetSink(r.OutgoingSink)
+		r.input.SetSink(r.GetSink())
 	} else {
 		log.Printf("%v: Not parsing subprocess output", r)
 	}

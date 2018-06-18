@@ -58,24 +58,11 @@ func (builder PipelineBuilder) makePipeline(pipe Pipeline) (res *pipeline.Sample
 
 func (builder PipelineBuilder) makePipelineTail(pipe Pipeline) (*pipeline.SamplePipeline, error) {
 	res := new(pipeline.SamplePipeline)
-
-	// Output
-	if len(pipe) >= 1 {
-		outputStep := pipe[len(pipe)-1]
-		if output, ok := outputStep.(Output); ok {
-			pipe = pipe[:len(pipe)-1]
-			out, err := builder.Endpoints.CreateOutput(Token(output).Content())
-			if err != nil {
-				return nil, err
-			}
-			res.Add(out)
-		}
-	}
-
-	// Steps
 	var err error
 	for _, step := range pipe {
 		switch step := step.(type) {
+		case Output:
+			err = builder.addOutputStep(res, step)
 		case Step:
 			err = builder.addStep(res, step)
 		case Fork:
@@ -91,6 +78,14 @@ func (builder PipelineBuilder) makePipelineTail(pipe Pipeline) (*pipeline.Sample
 		}
 	}
 	return res, err
+}
+
+func (builder PipelineBuilder) addOutputStep(pipe *pipeline.SamplePipeline, output Output) error {
+	endpoint, err := builder.Endpoints.CreateOutput(Token(output).Content())
+	if err == nil {
+		pipe.Add(endpoint)
+	}
+	return err
 }
 
 func (builder PipelineBuilder) addStep(pipe *pipeline.SamplePipeline, step Step) error {

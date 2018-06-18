@@ -27,9 +27,6 @@ func (p *DenstreamClusterProcessor) String() string {
 }
 
 func (p *DenstreamClusterProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := sample.Check(header); err != nil {
-		return err
-	}
 	if p.numDimensions == 0 {
 		p.numDimensions = len(sample.Values)
 		log.Printf("Initializaing denstream processor to %v dimensions", p.numDimensions)

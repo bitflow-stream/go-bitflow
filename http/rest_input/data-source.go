@@ -84,6 +84,7 @@ type RestDataSource struct {
 	outgoing chan bitflow.SampleAndHeader
 	stop     golib.StopChan
 	endpoint *RestEndpoint
+	wg       *sync.WaitGroup
 }
 
 func (source *RestDataSource) Endpoint() string {
@@ -99,6 +100,7 @@ func (source *RestDataSource) EmitSample(sample *bitflow.Sample, header *bitflow
 }
 
 func (source *RestDataSource) Start(wg *sync.WaitGroup) golib.StopChan {
+	source.wg = wg
 	wg.Add(1)
 	go source.sinkSamples(wg)
 	source.endpoint.start()
@@ -108,14 +110,14 @@ func (source *RestDataSource) Start(wg *sync.WaitGroup) golib.StopChan {
 func (source *RestDataSource) Close() {
 	source.stop.StopFunc(func() {
 		close(source.outgoing)
-		source.AbstractSampleSource.CloseSink(nil)
+		source.AbstractSampleSource.CloseSinkParallel(source.wg)
 	})
 }
 
 func (source *RestDataSource) sinkSamples(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for sample := range source.outgoing {
-		if err := source.OutgoingSink.Sample(sample.Sample, sample.Header); err != nil {
+		if err := source.GetSink().Sample(sample.Sample, sample.Header); err != nil {
 			log.Errorln("Error sinking sample:", err)
 		}
 	}

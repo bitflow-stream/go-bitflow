@@ -87,10 +87,10 @@ func (b *MultiFilePipelineBuilder) BuildPipeline(key interface{}, output *ForkMe
 	if ok {
 		newFilename := b.NewFile(files.Filename, key)
 		newFiles := &bitflow.FileSink{
-			AbstractSampleOutput: files.AbstractSampleOutput,
-			Filename:             newFilename,
-			CleanFiles:           files.CleanFiles,
-			IoBuffer:             files.IoBuffer,
+			AbstractMarshallingSampleOutput: files.AbstractMarshallingSampleOutput,
+			Filename:                        newFilename,
+			CleanFiles:                      files.CleanFiles,
+			IoBuffer:                        files.IoBuffer,
 		}
 		simple.Add(newFiles)
 	} else {

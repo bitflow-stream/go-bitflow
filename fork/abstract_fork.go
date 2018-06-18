@@ -27,7 +27,7 @@ type AbstractMetricFork struct {
 
 func (f *AbstractMetricFork) Start(wg *sync.WaitGroup) golib.StopChan {
 	result := f.NoopProcessor.Start(wg)
-	f.MultiPipeline.Init(f.OutgoingSink, f.CloseSink, wg)
+	f.MultiPipeline.Init(f.GetSink(), f.CloseSink, wg)
 	f.pipelines = make(map[interface{}]bitflow.SampleProcessor)
 	return result
 }
@@ -104,7 +104,7 @@ func (f *AbstractMetricFork) getRemappedSink(pipeline *bitflow.SamplePipeline, f
 			return nil
 		}
 	}
-	return f.getRemappedSinkRecursive(f.OutgoingSink, forkPath)
+	return f.getRemappedSinkRecursive(f.GetSink(), forkPath)
 }
 
 func (f *AbstractMetricFork) getRemappedSinkRecursive(outgoing bitflow.SampleProcessor, forkPath []interface{}) bitflow.SampleProcessor {

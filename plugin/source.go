@@ -20,6 +20,7 @@ type PluginSampleSource struct {
 	params  map[string]string
 	plugin  SampleSourcePlugin
 	stopper golib.StopChan
+	wg      *sync.WaitGroup
 }
 
 func RegisterPluginDataSource(endpoints *bitflow.EndpointFactory) {
@@ -85,6 +86,7 @@ func NewPluginSource(path, symbol string, params map[string]string) (*PluginSamp
 func (s *PluginSampleSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	log.Println("Starting:", s.String())
 	s.stopper = golib.NewStopChan()
+	s.wg = wg
 	s.plugin.Start(s.params, &pluginDataSink{s})
 	return s.stopper
 }
@@ -110,7 +112,7 @@ func (s *pluginDataSink) Error(err error) {
 
 func (s *pluginDataSink) Close() {
 	s.source.stopper.Stop()
-	s.source.CloseSink(nil)
+	s.source.CloseSinkParallel(s.source.wg)
 }
 
 func (s *pluginDataSink) Sample(sample *bitflow.Sample, header *bitflow.Header) {

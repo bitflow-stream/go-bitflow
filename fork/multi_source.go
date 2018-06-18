@@ -38,12 +38,12 @@ func (in *MultiMetricSource) AddSource(source bitflow.SampleSource, steps ...bit
 func (in *MultiMetricSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	stopChan := golib.NewStopChan()
 	signalClose := func() {
-		in.CloseSink(wg)
+		in.CloseSinkParallel(wg)
 		stopChan.Stop()
 	}
 
 	in.parallelClose = in.ParallelClose
-	in.MultiPipeline.Init(in.OutgoingSink, signalClose, wg)
+	in.MultiPipeline.Init(in.GetSink(), signalClose, wg)
 	for i, pipe := range in.pipelines {
 		in.start(i, pipe)
 	}

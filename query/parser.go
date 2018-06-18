@@ -433,10 +433,10 @@ func (p Pipeline) Validate(isInput bool, isFork bool) error {
 		default:
 			// Intermediate pipeline step
 			switch node.(type) {
-			case Input, Output:
+			case Input:
 				return ParserError{
 					Pos:     node.Pos(),
-					Message: "Intermediate pipeline step cannot be an input or output identifier",
+					Message: "Intermediate pipeline step cannot be an input identifier",
 				}
 			}
 		}

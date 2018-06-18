@@ -55,7 +55,7 @@ func (p *DecouplingProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 			case sample, open := <-p.samples:
 				if open {
 					if err := p.forward(sample); err != nil {
-						return fmt.Errorf("Error forwarding sample from %v to %v: %v", p, p.OutgoingSink, err)
+						return fmt.Errorf("Error forwarding sample from %v to %v: %v", p, p.GetSink(), err)
 					}
 				} else {
 					p.loopTask.Stop()
