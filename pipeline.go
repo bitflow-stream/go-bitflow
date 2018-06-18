@@ -28,38 +28,35 @@ type SamplePipeline struct {
 // that ensure that the samples and headers forwarded between the processors are consistent.
 func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 	firstSource := p.Source
-	procs := p.Processors
-	procs = append(procs, new(DroppingSampleProcessor))
 	if firstSource == nil {
 		firstSource = new(EmptySampleSource)
 	}
 
 	// First connect all sources with their sinks
 	source := firstSource
-	var lastSink *sinkWrapper
-	for _, processor := range procs {
+	for _, processor := range p.Processors {
 		if processor != nil {
 			if resizingProcessor, ok := processor.(ResizingSampleProcessor); ok {
 				wrapper := &resizingProcessorWrapper{sinkWrapper{false}, resizingProcessor}
 				processor = wrapper
-				lastSink = &wrapper.sinkWrapper
 			} else {
 				wrapper := &processorWrapper{sinkWrapper{false}, processor}
 				processor = wrapper
-				lastSink = &wrapper.sinkWrapper
 			}
-			if source != nil {
-				source.SetSink(processor)
-			}
+			source.SetSink(processor)
 			source = processor
 		}
 	}
-	lastSink.dropSamples = true
+
+	// Make sure every SampleProcessor has a non-nil sink
+	lastSink := new(DroppingSampleProcessor)
+	source.SetSink(&processorWrapper{sinkWrapper{true}, lastSink})
 
 	// Then add all tasks in reverse: start the final processor first.
 	// Each processor must be started before the source can push data into it.
-	for i := len(procs) - 1; i >= 0; i-- {
-		proc := procs[i]
+	tasks.Add(&ProcessorTaskWrapper{lastSink})
+	for i := len(p.Processors) - 1; i >= 0; i-- {
+		proc := p.Processors[i]
 		if proc != nil {
 			tasks.Add(&ProcessorTaskWrapper{proc})
 		}

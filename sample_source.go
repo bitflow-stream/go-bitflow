@@ -47,6 +47,7 @@ func (s *AbstractSampleSource) GetSink() SampleProcessor {
 // receiving AbstractSampleSource is stopped. If the wg parameter is not nil,
 // The subsequent SampleProcessor is closed in a concurrent goroutine, which is registered
 // in the WaitGroup.
+// TODO Don't remember why the parallelism here is necessary, should probably be removed and specially implemented where really needed
 func (s *AbstractSampleSource) CloseSink(wg *sync.WaitGroup) {
 	if s.OutgoingSink != nil {
 		if wg == nil {
