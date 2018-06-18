@@ -67,37 +67,24 @@ func (b MultiplexPipelineBuilder) ContainedStringers() []fmt.Stringer {
 
 type MultiFilePipelineBuilder struct {
 	SimplePipelineBuilder
-	Config      bitflow.FileSink // Configuration parameters in this field will be used for file outputs
-	GetFilename func(key interface{}) string
-	Description string
+	Config bitflow.FileSink // Configuration parameters in this field will be used for file outputs
+}
+
+func (b *MultiFilePipelineBuilder) ContainedStringers() []fmt.Stringer {
+	return []fmt.Stringer{pipeline.String(b.String())}
 }
 
 func (b *MultiFilePipelineBuilder) String() string {
-	_ = b.SimplePipelineBuilder.String() // Fill the examplePipeline field
-	if len(b.examplePipeline) == 0 {
-		return fmt.Sprintf("MultiFiles %v", b.Description)
-	} else {
-		return fmt.Sprintf("MultiFiles %v (subpipeline: %v)", b.Description, b.examplePipeline)
-	}
+	return "Output to files named by fork key"
 }
 
 func (b *MultiFilePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
-	simple := b.SimplePipelineBuilder.BuildPipeline(key, output)
-	newFiles := b.Config
-	newFiles.Filename = b.GetFilename(key)
-	simple.Add(&newFiles)
-	return simple
-}
-
-func NewMultiFileBuilder(buildPipeline func() []bitflow.SampleProcessor) *MultiFilePipelineBuilder {
-	builder := &MultiFilePipelineBuilder{
-		Description: "files with subpipeline key",
-		GetFilename: func(key interface{}) string {
-			return fmt.Sprintf("%v", key)
-		},
-	}
-	builder.Build = buildPipeline
-	return builder
+	var pipe bitflow.SamplePipeline
+	fileOut := b.Config
+	fileName := fmt.Sprintf("%v", key) // TODO this could be parameterized
+	fileOut.Filename = fileName
+	pipe.Add(&fileOut).Add(output)
+	return &pipe
 }
 
 type StringPipelineBuilder struct {
