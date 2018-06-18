@@ -68,7 +68,7 @@ func injection_directory_structure(p *SamplePipeline) {
 	distributor := &TagTemplateDistributor{
 		Template: fmt.Sprintf("%s/%s/%s", injectedTag, anomalyTag, measuredTag),
 	}
-	builder := NewMultiFileBuilder(nil)
+	builder := &MultiFilePipelineBuilder{Config: multiFileOutput}
 	p.Add(&MetricFork{
 		ParallelClose: true,
 		Distributor:   distributor,
@@ -115,7 +115,7 @@ func split_experiments(p *SamplePipeline, params map[string]string) error {
 	p.Add(&MetricFork{
 		ParallelClose: true,
 		Distributor:   &TagTemplateDistributor{Template: fileTemplate},
-		Builder:       NewMultiFileBuilder(nil),
+		Builder:       &MultiFilePipelineBuilder{Config: multiFileOutput},
 	})
 	return nil
 }

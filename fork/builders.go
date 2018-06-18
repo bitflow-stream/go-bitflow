@@ -66,7 +66,6 @@ func (b MultiplexPipelineBuilder) ContainedStringers() []fmt.Stringer {
 }
 
 type MultiFilePipelineBuilder struct {
-	SimplePipelineBuilder
 	Config bitflow.FileSink // Configuration parameters in this field will be used for file outputs
 }
 

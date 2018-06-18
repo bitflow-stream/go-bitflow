@@ -69,6 +69,11 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysis("strip", strip_metrics, "Remove all metrics, only keeping the timestamp and the tags of eacy sample")
 }
 
+// TODO this is needed for MultiFilePipelineBuilder, should somehow be obtained from an EndpointFactory.
+var multiFileOutput = bitflow.FileSink{
+	CleanFiles: false,
+}
+
 func noop_processor(p *SamplePipeline) {
 	p.Add(new(NoopProcessor))
 }
@@ -212,7 +217,7 @@ func split_files(p *SamplePipeline, params map[string]string) {
 	p.Add(&MetricFork{
 		ParallelClose: true,
 		Distributor:   distributor,
-		Builder:       NewMultiFileBuilder(nil),
+		Builder:       &MultiFilePipelineBuilder{Config: multiFileOutput},
 	})
 }
 
