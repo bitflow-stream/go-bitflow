@@ -25,7 +25,7 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParams("batch", generic_batch, "Collect samples and flush them when the given tag changes its value. Affects the follow-up analysis step, if it is also a batch analysis", []string{"tag"})
 	b.RegisterAnalysisParamsErr("decouple", decouple_samples, "Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples", []string{"batch"})
 
-	b.RegisterAnalysisParams("split_files", split_files, "Split the samples into multiple files, one file per value of the given tag. Must be used as last step before a file output", []string{"tag"})
+	b.RegisterAnalysisParams("output", split_files, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values", []string{"file"})
 	b.RegisterAnalysisParamsErr("do", general_expression, "Execute the given expression on every sample", []string{"expr"})
 
 	b.RegisterAnalysisParamsErr("subprocess", run_subprocess, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", []string{"cmd"}, "format")
@@ -206,15 +206,13 @@ func set_tags(p *SamplePipeline, params map[string]string) {
 }
 
 func split_files(p *SamplePipeline, params map[string]string) {
-	distributor := &TagsDistributor{
-		Tags:        []string{params["tag"]},
-		Separator:   "-",
-		Replacement: "_empty_",
+	distributor := &TagTemplateDistributor{
+		Template: params["file"],
 	}
 	p.Add(&MetricFork{
 		ParallelClose: true,
 		Distributor:   distributor,
-		Builder:       MultiFileSuffixBuilder(nil),
+		Builder:       NewMultiFileBuilder(nil),
 	})
 }
 

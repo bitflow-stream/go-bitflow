@@ -2,7 +2,6 @@ package fork
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 
 	"github.com/antongulenko/go-bitflow"
@@ -68,7 +67,8 @@ func (b MultiplexPipelineBuilder) ContainedStringers() []fmt.Stringer {
 
 type MultiFilePipelineBuilder struct {
 	SimplePipelineBuilder
-	NewFile     func(originalFile string, key interface{}) string
+	Config      bitflow.FileSink // Configuration parameters in this field will be used for file outputs
+	GetFilename func(key interface{}) string
 	Description string
 }
 
@@ -83,49 +83,17 @@ func (b *MultiFilePipelineBuilder) String() string {
 
 func (b *MultiFilePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
 	simple := b.SimplePipelineBuilder.BuildPipeline(key, output)
-	files, ok := output.GetOriginalSink().(*bitflow.FileSink)
-	if ok {
-		newFilename := b.NewFile(files.Filename, key)
-		newFiles := &bitflow.FileSink{
-			AbstractMarshallingSampleOutput: files.AbstractMarshallingSampleOutput,
-			Filename:                        newFilename,
-			CleanFiles:                      files.CleanFiles,
-			IoBuffer:                        files.IoBuffer,
-		}
-		simple.Add(newFiles)
-	} else {
-		log.Warnf("[%v]: Cannot assign new files, did not find *bitflow.FileSink as my direct output", b)
-	}
+	newFiles := b.Config
+	newFiles.Filename = b.GetFilename(key)
+	simple.Add(&newFiles)
 	return simple
 }
 
-func MultiFileSuffixBuilder(buildPipeline func() []bitflow.SampleProcessor) *MultiFilePipelineBuilder {
+func NewMultiFileBuilder(buildPipeline func() []bitflow.SampleProcessor) *MultiFilePipelineBuilder {
 	builder := &MultiFilePipelineBuilder{
-		Description: "files suffixed with subpipeline key",
-		NewFile: func(oldFile string, key interface{}) string {
-			suffix := fmt.Sprintf("%v", key)
-			group := bitflow.NewFileGroup(oldFile)
-			return group.BuildFilenameStr(suffix)
-		},
-	}
-	builder.Build = buildPipeline
-	return builder
-}
-
-func MultiFileDirectoryBuilder(replaceFilename bool, buildPipeline func() []bitflow.SampleProcessor) *MultiFilePipelineBuilder {
-	builder := &MultiFilePipelineBuilder{
-		Description: "directory tree built from subpipeline key",
-		NewFile: func(oldFile string, key interface{}) string {
-			path := fmt.Sprintf("%v", key)
-			if path == "" {
-				return oldFile
-			}
-			if replaceFilename {
-				path += filepath.Ext(oldFile)
-			} else {
-				path = filepath.Join(path, filepath.Base(oldFile))
-			}
-			return filepath.Join(filepath.Dir(oldFile), path)
+		Description: "files with subpipeline key",
+		GetFilename: func(key interface{}) string {
+			return fmt.Sprintf("%v", key)
 		},
 	}
 	builder.Build = buildPipeline
