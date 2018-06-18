@@ -1,6 +1,7 @@
 package bitflow
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/antongulenko/golib"
@@ -154,14 +155,21 @@ type sinkWrapper struct {
 }
 
 func (w *sinkWrapper) forwardSample(p SampleProcessor, sample *Sample, header *Header) error {
-	if !w.dropSamples {
-		if p.GetSink() == nil {
-			return fmt.Errorf("No data sink set for %v", p)
-		}
-		if err := sample.Check(header); err != nil {
-			return err
-		}
-		return p.Sample(sample, header)
+	if w.dropSamples {
+		return nil
 	}
-	return nil
+	if p.GetSink() == nil {
+		return fmt.Errorf("No data sink set for %v", p)
+	}
+	if sample == nil {
+		return errors.New("The sample is nil")
+	}
+	if header == nil {
+		return errors.New("The header is nil")
+	}
+	if len(sample.Values) != len(header.Fields) {
+		return fmt.Errorf("Unexpected number of values in sample: %v, expected %v",
+			len(sample.Values), len(header.Fields))
+	}
+	return p.Sample(sample, header)
 }

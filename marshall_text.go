@@ -66,9 +66,6 @@ func (TextMarshaller) WriteHeader(header *Header, withTags bool, output io.Write
 // WriteSample implements the Marshaller interface. See the TextMarshaller godoc
 // for information about the format.
 func (m TextMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
-	if err := sample.Check(header); err != nil {
-		return err
-	}
 	headerStr := sample.Time.Format(TextMarshallerDateFormat)
 	if withTags {
 		headerStr = fmt.Sprintf("%s (%s)", headerStr, sample.TagString())

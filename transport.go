@@ -17,15 +17,15 @@ type SampleSink interface {
 // SynchronizingSampleSink is a SampleSink implementation that allows multiple
 // goroutines to write data to the same sink and synchronizes these writes through a mutex.
 type SynchronizingSampleSink struct {
-	OutgoingSink SampleProcessor
-	mutex        sync.Mutex
+	Out   SampleSink
+	mutex sync.Mutex
 }
 
 // Sample implements the SampleSink interface.
 func (s *SynchronizingSampleSink) Sample(sample *Sample, header *Header) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	return s.OutgoingSink.Sample(sample, header)
+	return s.Out.Sample(sample, header)
 }
 
 // ResizingSampleProcessor is a helper interface that can be implemented by SampleProcessors

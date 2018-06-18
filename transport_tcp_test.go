@@ -128,7 +128,6 @@ func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 	}
 
 	s := &TCPSink{
-		PrintErrors: true,
 		Endpoint:    "localhost:7878",
 		DialTimeout: tcp_dial_timeout,
 	}
@@ -160,7 +159,6 @@ func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller
 		}
 
 		s := &TCPSink{
-			PrintErrors: true,
 			Endpoint:    "localhost:7878",
 			DialTimeout: tcp_dial_timeout,
 		}

@@ -195,7 +195,7 @@ func (suite *PipelineTestSuite) make_factory() *EndpointFactory {
 	f.FlagOutputTcpListenBuffer = 777
 	f.FlagTcpConnectionLimit = 10
 	f.FlagInputTcpAcceptLimit = 20
-	f.FlagTcpDropErrors = true
+	f.FlagTcpSourceDropErrors = true
 	f.FlagParallelHandler = parallel_handler
 	return f
 }
@@ -339,7 +339,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 		suite.Equal(expected, sink)
 	}
 
-	setup := func(sink *AbstractSampleOutput, format string, isConsole bool) {
+	setup := func(sink *AbstractMarshallingSampleOutput, format string, isConsole bool) {
 		switch format {
 		case "bin":
 			sink.Marshaller = BinaryMarshaller{}
@@ -379,7 +379,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 
 	std := func(format string) SampleSink {
 		s := NewConsoleSink()
-		setup(&s.AbstractSampleOutput, format, true)
+		setup(&s.AbstractMarshallingSampleOutput, format, true)
 		return s
 	}
 	file := func(filename string, format string) SampleSink {
@@ -388,17 +388,16 @@ func (suite *PipelineTestSuite) Test_outputs() {
 			IoBuffer:   666,
 			CleanFiles: true,
 		}
-		setup(&s.AbstractSampleOutput, format, false)
+		setup(&s.AbstractMarshallingSampleOutput, format, false)
 		return s
 	}
 	tcp := func(endpoint string, format string) SampleSink {
 		s := &TCPSink{
 			Endpoint:    endpoint,
-			PrintErrors: false,
 			DialTimeout: tcp_dial_timeout,
 		}
 		s.TcpConnLimit = 10
-		setup(&s.AbstractSampleOutput, format, false)
+		setup(&s.AbstractMarshallingSampleOutput, format, false)
 		return s
 	}
 	listen := func(endpoint string, format string) SampleSink {
@@ -407,7 +406,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 			BufferedSamples: 777,
 		}
 		s.TcpConnLimit = 10
-		setup(&s.AbstractSampleOutput, format, false)
+		setup(&s.AbstractMarshallingSampleOutput, format, false)
 		return s
 	}
 

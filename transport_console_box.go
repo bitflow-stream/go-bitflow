@@ -20,16 +20,13 @@ import (
 // Init() must be called as early as possible when using ConsoleBoxSink, to make
 // sure that all log messages are capture and none are overwritten by the box.
 type ConsoleBoxSink struct {
-	AbstractSampleProcessor
+	AbstractSampleOutput
 	gotermBox.CliLogBoxTask
 
 	// ImmediateScreenUpdate causes the console box to be updated immediately
 	// whenever a sample is received by this ConsoleBoxSink. Otherwise, the screen
 	// will be updated in regular intervals based on the settings in CliLogBoxTask.
 	ImmediateScreenUpdate bool
-
-	// DontForwardSamples has the same semantics as AbstractSampleOutput.DontForwardSamples.
-	DontForwardSamples bool
 
 	lock       sync.Mutex
 	lastSample *Sample
@@ -67,6 +64,7 @@ func (sink *ConsoleBoxSink) updateBox(out io.Writer, textWidth int) error {
 // goroutine.
 func (sink *ConsoleBoxSink) Close() {
 	sink.CliLogBoxTask.Stop()
+	sink.CloseSink()
 }
 
 // Stop shadows the Stop() method from gotermBox.CliLogBoxTask to make sure
@@ -78,9 +76,6 @@ func (sink *ConsoleBoxSink) Stop() {
 // and displayed on the console on the next screen refresh. Intermediate
 // samples might get lost without being displayed.
 func (sink *ConsoleBoxSink) Sample(sample *Sample, header *Header) error {
-	if err := sample.Check(header); err != nil {
-		return err
-	}
 	sink.lock.Lock()
 	sink.lastSample = sample
 	sink.lastHeader = header
@@ -88,9 +83,5 @@ func (sink *ConsoleBoxSink) Sample(sample *Sample, header *Header) error {
 		sink.TriggerUpdate()
 	}
 	sink.lock.Unlock()
-
-	if sink.DontForwardSamples {
-		return nil
-	}
-	return sink.OutgoingSink.Sample(sample, header)
+	return sink.AbstractSampleOutput.Sample(nil, sample, header)
 }

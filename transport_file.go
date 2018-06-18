@@ -297,7 +297,7 @@ func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		for _, filename := range source.FileNames {
 			group := NewFileGroup(filename)
 			if groupFiles, err := group.AllFiles(); err != nil {
-				source.CloseSink(wg)
+				source.CloseSinkParallel(wg)
 				return golib.NewStoppedChan(err)
 			} else {
 				files = append(files, groupFiles...)
@@ -308,7 +308,7 @@ func (source *FileSource) Start(wg *sync.WaitGroup) golib.StopChan {
 		copy(files, source.FileNames)
 	}
 	if len(files) == 0 {
-		source.CloseSink(wg)
+		source.CloseSinkParallel(wg)
 		return golib.NewStoppedChan(errors.New("No files specified for FileSource"))
 	} else if len(files) > 1 {
 		log.Println("Reading", len(files), "files")
@@ -325,13 +325,13 @@ func (source *FileSource) readFilesKeepAlive(wg *sync.WaitGroup, files []string)
 		if wg != nil {
 			defer wg.Done()
 		}
+		defer source.CloseSinkParallel(wg)
 		err := source.readFiles(files)
 		if source.KeepAlive && err == nil {
 			source.closed.Wait()
 		} else {
 			source.closed.StopErr(err)
 		}
-		source.CloseSink(wg)
 	}()
 }
 
@@ -378,7 +378,7 @@ func (source *FileSource) readFile(filename string) error {
 		if !source.UnsynchronizedFileAccess {
 			rc = &SynchronizedReadCloser{ReadCloser: file}
 		}
-		stream = source.Reader.OpenBuffered(rc, source.OutgoingSink, source.IoBuffer)
+		stream = source.Reader.OpenBuffered(rc, source.GetSink(), source.IoBuffer)
 		source.stream = stream
 	})
 	if stream == nil {
@@ -430,7 +430,7 @@ func (s *SynchronizedReadCloser) Close() error {
 type FileSink struct {
 	// AbstractSampleOutput defines the Marshaller and SampleWriter that will
 	// be used when writing Samples. See their documentation for further info.
-	AbstractSampleOutput
+	AbstractMarshallingSampleOutput
 
 	// Filename defines the file that will be used for writing Samples. Each time a new Header
 	// is received be FileSink, a new file will be opened automatically. The file names are built
@@ -506,8 +506,9 @@ func (sink *FileSink) flush() error {
 func (sink *FileSink) Close() {
 	sink.closed.StopFunc(func() {
 		if err := sink.flush(); err != nil {
-			log.Errorln("Error closing otuput file:", err)
+			log.Errorln("Error closing output file:", err)
 		}
+		sink.CloseSink()
 	})
 }
 
@@ -552,9 +553,6 @@ func (sink *FileSink) openNextNewFile() (*os.File, error) {
 
 // Sample writes a Sample to the current open file.
 func (sink *FileSink) Sample(sample *Sample, header *Header) error {
-	if err := sample.Check(header); err != nil {
-		return err
-	}
 	openNewFile := sink.checker.HeaderChanged(header) || sink.stream == nil
 	if !openNewFile && sink.VanishedFileCheck > 0 {
 		openNewFile = sink.checkOutputFile()
@@ -564,7 +562,8 @@ func (sink *FileSink) Sample(sample *Sample, header *Header) error {
 			return err
 		}
 	}
-	return sink.stream.Sample(sample, header)
+	err := sink.stream.Sample(sample, header)
+	return sink.AbstractMarshallingSampleOutput.Sample(err, sample, header)
 }
 
 func (sink *FileSink) checkOutputFile() (openNewFile bool) {

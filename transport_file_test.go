@@ -61,6 +61,7 @@ func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
 		CleanFiles: true,
 	}
 	out.SetMarshaller(m)
+	out.SetSink(new(DroppingSampleProcessor))
 	out.Writer.ParallelSampleHandler = parallel_handler
 	var wg sync.WaitGroup
 	ch := out.Start(&wg)
@@ -112,6 +113,7 @@ func (suite *FileTestSuite) testIndividualHeaders(m Marshaller) {
 			CleanFiles: true,
 		}
 		out.SetMarshaller(m)
+		out.SetSink(new(DroppingSampleProcessor))
 		out.Writer.ParallelSampleHandler = parallel_handler
 		var wg sync.WaitGroup
 		ch := out.Start(&wg)

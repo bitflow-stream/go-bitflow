@@ -64,7 +64,7 @@ func (counter *TCPConnCounter) countConnectionAccepted(conn *net.TCPConn) bool {
 // The purpose of AbstractTcpSink is to create instances of TcpWriteConn with the
 // configured parameters.
 type AbstractTcpSink struct {
-	AbstractSampleOutput
+	AbstractMarshallingSampleOutput
 	TCPConnCounter
 }
 
@@ -154,12 +154,6 @@ type TCPSink struct {
 	// Endpoint is the target TCP endpoint to connect to for sending marshalled data.
 	Endpoint string
 
-	// PrintErrors controls whether TCP related errors are dropped, or treated normally.
-	// This should usually be set to true. Setting it to false results in no visible
-	// errors, even if sending data fails. It can be useful if failing TCP connections
-	// are expected, or if the errors are already printed otherwise.
-	PrintErrors bool
-
 	// DialTimeout can be set to time out automatically when connecting to a remote TCP endpoint
 	DialTimeout time.Duration
 
@@ -192,6 +186,7 @@ func (sink *TCPSink) closeConnection() {
 func (sink *TCPSink) Close() {
 	sink.stopped.StopFunc(func() {
 		sink.closeConnection()
+		sink.CloseSink()
 	})
 }
 
@@ -199,18 +194,11 @@ func (sink *TCPSink) Close() {
 // the Sample is directly sent through it. Otherwise, a new connection is established,
 // and the sample is sent there.
 func (sink *TCPSink) Sample(sample *Sample, header *Header) error {
-	if err := sample.Check(header); err != nil {
-		return err
-	}
 	conn, err := sink.getOutputConnection()
-	if err != nil {
-		if !sink.PrintErrors {
-			err = nil
-		}
-		return err
+	if err == nil {
+		conn.Sample(sample, header)
+		err = sink.checkConnRunning(conn)
 	}
-	conn.Sample(sample, header)
-	err = sink.checkConnRunning(conn)
 	return sink.AbstractSampleOutput.Sample(err, sample, header)
 }
 
@@ -266,18 +254,15 @@ type TCPSource struct {
 	AbstractUnmarshallingSampleSource
 	TCPConnCounter
 
-	// PrintErrors controls whether TCP related errors are dropped, or treated normally.
-	// This should usually be set to true. Setting it to false results in no visible
-	// errors, even if sending data fails. It can be useful if failing TCP connections
-	// are expected, or if the errors are already printed otherwise.
-	PrintErrors bool
-
 	// RemoteAddrs defines the list of remote TCP endpoints that the TCPSource will try to
 	// connect to. If there are more than one connection, all connections will run in parallel.
 	// In that case, an additional instance of SynchronizedSampleSink is used to synchronize all
 	// received data. For multiple connections, all samples and headers will be pushed into the
 	// outgoing SampleSink in an interleaved fashion, so the outgoing SampleSink must be able to handle that.
 	RemoteAddrs []string
+
+	// PrintErrors controls whether errors from establishing download TCP connections are logged or not.
+	PrintErrors bool
 
 	// RetryInterval defines the time to wait before trying to reconnect after a closed connection
 	// or failed connection attempt.
@@ -312,9 +297,9 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	source.connCounterDescription = source
 	log.WithField("format", source.Reader.Format()).Println("Downloading from", source.SourceString())
 	if len(source.RemoteAddrs) > 1 {
-		source.downloadSink = &SynchronizingSampleSink{OutgoingSink: source.OutgoingSink}
+		source.downloadSink = &SynchronizingSampleSink{Out: source.GetSink()}
 	} else {
-		source.downloadSink = source.OutgoingSink
+		source.downloadSink = source.GetSink()
 	}
 	tasks := make(golib.TaskGroup, 0, len(source.RemoteAddrs))
 	for _, remote := range source.RemoteAddrs {
@@ -327,7 +312,7 @@ func (source *TCPSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	}
 	channels := tasks.StartTasks(wg)
 	return golib.WaitErrFunc(wg, func() error {
-		defer source.CloseSink(wg)
+		defer source.CloseSinkParallel(wg)
 		golib.WaitForAny(channels)
 		source.Close()
 		return tasks.CollectMultiError(channels).NilOrError()

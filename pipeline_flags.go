@@ -65,7 +65,7 @@ type EndpointFactory struct {
 	FlagOutputTcpListenBuffer uint
 	FlagTcpConnectionLimit    uint
 	FlagInputTcpAcceptLimit   uint
-	FlagTcpDropErrors         bool
+	FlagTcpSourceDropErrors   bool
 
 	// Parallel marshalling/unmarshalling flags
 
@@ -133,7 +133,6 @@ func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
 
 	// TCP
 	f.UintVar(&p.FlagTcpConnectionLimit, "tcp-limit", 0, "Limit number of TCP connections to accept/establish. Exit afterwards")
-	f.BoolVar(&p.FlagTcpDropErrors, "tcp-drop-err", false, "Don't print errors when establishing active TCP connection (for sink/source) fails")
 
 	// Parallel marshalling/unmarshalling
 	f.IntVar(&p.FlagParallelHandler.ParallelParsers, "par", runtime.NumCPU(), "Parallel goroutines used for (un)marshalling samples")
@@ -150,6 +149,7 @@ func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
 	f.BoolVar(&p.FlagFilesKeepAlive, "files-keep-alive", false, "Do not shut down after all files have been read. Useful in combination with -listen-buffer.")
 	f.BoolVar(&p.FlagInputFilesRobust, "files-robust", false, "When encountering errors while reading files, print warnings instead of failing.")
 	f.UintVar(&p.FlagInputTcpAcceptLimit, "listen-limit", 0, "Limit number of simultaneous TCP connections accepted for incoming data.")
+	f.BoolVar(&p.FlagTcpSourceDropErrors, "tcp-drop-err", false, "Don't print errors when establishing active TCP input connection fails")
 	for _, factoryFunc := range p.CustomInputFlags {
 		factoryFunc(f)
 	}
@@ -197,7 +197,7 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 			case TcpEndpoint:
 				source := &TCPSource{
 					RemoteAddrs:   []string{endpoint.Target},
-					PrintErrors:   !p.FlagTcpDropErrors,
+					PrintErrors:   !p.FlagTcpSourceDropErrors,
 					RetryInterval: tcp_download_retry_interval,
 					DialTimeout:   tcp_dial_timeout,
 				}
@@ -269,12 +269,12 @@ func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 	if err != nil {
 		return nil, err
 	}
-	var marshallingSink *AbstractSampleOutput
+	var marshallingSink *AbstractMarshallingSampleOutput
 	marshaller := endpoint.OutputFormat().Marshaller()
 	switch endpoint.Type {
 	case StdEndpoint:
 		sink := NewConsoleSink()
-		marshallingSink = &sink.AbstractSampleOutput
+		marshallingSink = &sink.AbstractMarshallingSampleOutput
 		if txt, ok := marshaller.(TextMarshaller); ok {
 			txt.AssumeStdout = true
 			marshaller = txt
@@ -290,16 +290,15 @@ func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 			Append:            p.FlagFilesAppend,
 			VanishedFileCheck: p.FlagFileVanishedCheck,
 		}
-		marshallingSink = &sink.AbstractSampleOutput
+		marshallingSink = &sink.AbstractMarshallingSampleOutput
 		resultSink = sink
 	case TcpEndpoint:
 		sink := &TCPSink{
 			Endpoint:    endpoint.Target,
-			PrintErrors: !p.FlagTcpDropErrors,
 			DialTimeout: tcp_dial_timeout,
 		}
 		sink.TcpConnLimit = p.FlagTcpConnectionLimit
-		marshallingSink = &sink.AbstractSampleOutput
+		marshallingSink = &sink.AbstractMarshallingSampleOutput
 		resultSink = sink
 	case TcpListenEndpoint:
 		sink := &TCPListenerSink{
@@ -307,7 +306,7 @@ func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 			BufferedSamples: p.FlagOutputTcpListenBuffer,
 		}
 		sink.TcpConnLimit = p.FlagTcpConnectionLimit
-		marshallingSink = &sink.AbstractSampleOutput
+		marshallingSink = &sink.AbstractMarshallingSampleOutput
 		resultSink = sink
 	default:
 		if factory, ok := p.CustomDataSinks[endpoint.Type]; ok && endpoint.IsCustomType {

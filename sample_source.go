@@ -28,37 +28,38 @@ type SampleSource interface {
 // the SampleProcessor and closes the outgoing SampleProcessor after all samples
 // have been generated.
 type AbstractSampleSource struct {
-
-	// TODO rename
-	OutgoingSink SampleProcessor
+	out SampleProcessor
 }
 
 // SetSink implements the SampleSource interface.
 func (s *AbstractSampleSource) SetSink(sink SampleProcessor) {
-	s.OutgoingSink = sink
+	s.out = sink
 }
 
 // GetSink implements the SampleSource interface.
 func (s *AbstractSampleSource) GetSink() SampleProcessor {
-	return s.OutgoingSink
+	return s.out
 }
 
-// CloseSink closes the subsequent SampleProcessor. It must be called when the
-// receiving AbstractSampleSource is stopped. If the wg parameter is not nil,
-// The subsequent SampleProcessor is closed in a concurrent goroutine, which is registered
-// in the WaitGroup.
-// TODO Don't remember why the parallelism here is necessary, should probably be removed and specially implemented where really needed
-func (s *AbstractSampleSource) CloseSink(wg *sync.WaitGroup) {
-	if s.OutgoingSink != nil {
-		if wg == nil {
-			s.OutgoingSink.Close()
-		} else {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				s.OutgoingSink.Close()
-			}()
-		}
+// CloseSink closes the subsequent SampleProcessor. It must be called after the
+// receiving AbstractSampleSource has finished producing samples.
+func (s *AbstractSampleSource) CloseSink() {
+	if s.out != nil {
+		s.out.Close()
+	}
+}
+
+// CloseSinkParallel closes the subsequent SampleProcessor in a concurrent goroutine, which is registered
+// in the WaitGroup. This can be useful compared to CloseSink() in certain cases
+// to avoid deadlocks due to long-running Close() invokations. As a general rule of thumb,
+// Implementations of SampleSource should use CloseSinkParallel(), while SampleProcessors should simply use CloseSink().
+func (s *AbstractSampleSource) CloseSinkParallel(wg *sync.WaitGroup) {
+	if s.out != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.out.Close()
+		}()
 	}
 }
 
@@ -98,7 +99,7 @@ func (s *EmptySampleSource) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 
 // Close implements the SampleSource interface.
 func (s *EmptySampleSource) Close() {
-	s.CloseSink(s.wg)
+	s.CloseSinkParallel(s.wg)
 }
 
 // String implements the golib.Task interface.

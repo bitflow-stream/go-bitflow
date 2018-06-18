@@ -12,7 +12,7 @@ import (
 // WriterSink implements SampleSink by writing all Headers and Samples to a single
 // io.WriteCloser instance. An instance of SampleWriter is used to write the data in parallel.
 type WriterSink struct {
-	AbstractSampleOutput
+	AbstractMarshallingSampleOutput
 	Output      io.WriteCloser
 	Description string
 
@@ -46,16 +46,14 @@ func (sink *WriterSink) Close() {
 	if err := sink.stream.Close(); err != nil {
 		log.Errorf("%v: Error closing output: %v", sink, err)
 	}
+	sink.CloseSink()
 }
 
 // Header implements the SampleSink interface by using a SampleOutputStream to
 // write the given Sample to the configured io.WriteCloser.
 func (sink *WriterSink) Sample(sample *Sample, header *Header) error {
-	if err := sample.Check(header); err != nil {
-		return err
-	}
 	err := sink.stream.Sample(sample, header)
-	return sink.AbstractSampleOutput.Sample(err, sample, header)
+	return sink.AbstractMarshallingSampleOutput.Sample(err, sample, header)
 }
 
 // ReaderSource implements the SampleSource interface by reading Headers and
@@ -85,9 +83,9 @@ func (source *ReaderSource) String() string {
 // Start implements the SampleSource interface by starting a SampleInputStream
 // instance that reads from the given io.ReadCloser.
 func (source *ReaderSource) Start(wg *sync.WaitGroup) golib.StopChan {
-	source.stream = source.Reader.Open(source.Input, source.OutgoingSink)
+	source.stream = source.Reader.Open(source.Input, source.GetSink())
 	return golib.WaitErrFunc(wg, func() error {
-		defer source.CloseSink(wg)
+		defer source.CloseSinkParallel(wg)
 		err := source.stream.ReadNamedSamples(source.Description)
 		if IsFileClosedError(err) {
 			err = nil

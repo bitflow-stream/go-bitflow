@@ -57,12 +57,12 @@ func (source *TCPListenerSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	source.task.Handler = source.handleConnection
 	source.task.StopHook = func() {
 		source.closeAllConnections()
-		source.CloseSink(wg)
+		source.CloseSinkParallel(wg)
 	}
 	if source.SimultaneousConnections == 1 {
-		source.synchronizedSink = source.OutgoingSink
+		source.synchronizedSink = source.GetSink()
 	} else {
-		source.synchronizedSink = &SynchronizingSampleSink{OutgoingSink: source.OutgoingSink}
+		source.synchronizedSink = &SynchronizingSampleSink{Out: source.GetSink()}
 	}
 	return source.task.ExtendedStart(func(addr net.Addr) {
 		log.WithField("format", source.Reader.Format()).Println("Listening for incoming data on", addr)
@@ -194,8 +194,11 @@ func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	}
 	sink.task = &golib.TCPListenerTask{
 		ListenEndpoint: sink.Endpoint,
-		StopHook:       sink.buf.closeBuffer,
-		Handler:        sink.handleConnection,
+		StopHook: func() {
+			sink.buf.closeBuffer()
+			sink.CloseSink()
+		},
+		Handler: sink.handleConnection,
 	}
 	return sink.task.ExtendedStart(func(addr net.Addr) {
 		log.WithField("format", sink.Marshaller).Println("Listening for output connections on", addr)
@@ -223,9 +226,6 @@ func (sink *TCPListenerSink) handleConnection(wg *sync.WaitGroup, conn *net.TCPC
 // If the buffer is disable or full, and there are no established connections,
 // samples are dropped.
 func (sink *TCPListenerSink) Sample(sample *Sample, header *Header) error {
-	if err := sample.Check(header); err != nil {
-		return err
-	}
 	sink.buf.add(sample, header)
 	return sink.AbstractSampleOutput.Sample(nil, sample, header)
 }
