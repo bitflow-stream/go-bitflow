@@ -78,12 +78,12 @@ type TagTemplateDistributor struct {
 	Template string // Placeholders like ${xxx} will be replaced by tag values (left empty if tag missing)
 }
 
-var templateRegex = regexp.MustCompile("${[^{*]}")
+var templateRegex = regexp.MustCompile("\\$\\{[^\\{]*\\}") // Example: ${hello}
 
 func (d *TagTemplateDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) []interface{} {
 	key := templateRegex.ReplaceAllStringFunc(d.Template, func(placeholder string) string {
 		if strings.HasPrefix(placeholder, "${") && strings.HasSuffix(placeholder, "}") {
-			return sample.Tag(placeholder[2 : len(placeholder)-2])
+			return sample.Tag(placeholder[2 : len(placeholder)-1])
 		}
 		return ""
 	})

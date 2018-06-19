@@ -25,7 +25,7 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParams("batch", generic_batch, "Collect samples and flush them when the given tag changes its value. Affects the follow-up analysis step, if it is also a batch analysis", []string{"tag"})
 	b.RegisterAnalysisParamsErr("decouple", decouple_samples, "Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples", []string{"batch"})
 
-	b.RegisterAnalysisParams("output", split_files, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values", []string{"file"})
+	b.RegisterAnalysisParamsErr("output_files", split_files, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values", nil)
 	b.RegisterAnalysisParamsErr("do", general_expression, "Execute the given expression on every sample", []string{"expr"})
 
 	b.RegisterAnalysisParamsErr("subprocess", run_subprocess, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", []string{"cmd"}, "format")
@@ -67,11 +67,6 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("slope", aggregate_slope, "Add a slope metric for every incoming metric. Optional parameter: duration or number of samples", []string{}, "window")
 	b.RegisterAnalysis("merge_headers", merge_headers, "Accept any number of changing headers and merge them into one output header when flushing the results")
 	b.RegisterAnalysis("strip", strip_metrics, "Remove all metrics, only keeping the timestamp and the tags of eacy sample")
-}
-
-// TODO this is needed for MultiFilePipelineBuilder, should somehow be obtained from an EndpointFactory.
-var multiFileOutput = bitflow.FileSink{
-	CleanFiles: false,
 }
 
 func noop_processor(p *SamplePipeline) {
@@ -210,15 +205,41 @@ func set_tags(p *SamplePipeline, params map[string]string) {
 	p.Add(NewTaggingProcessor(params))
 }
 
-func split_files(p *SamplePipeline, params map[string]string) {
-	distributor := &TagTemplateDistributor{
-		Template: params["file"],
+func split_files(p *SamplePipeline, params map[string]string) error {
+	filename := params["file"]
+	if filename == "" {
+		return query.ParameterError("file", errors.New("Missing required parameter"))
 	}
-	p.Add(&MetricFork{
-		ParallelClose: true,
-		Distributor:   distributor,
-		Builder:       &MultiFilePipelineBuilder{Config: multiFileOutput},
-	})
+	delete(params, "file")
+
+	distributor := &TagTemplateDistributor{
+		Template: filename,
+	}
+	builder, err := make_multi_file_pipeline_builder(params)
+	if err == nil {
+		p.Add(&MetricFork{
+			ParallelClose: true,
+			Distributor:   distributor,
+			Builder:       builder,
+		})
+	}
+	return err
+}
+
+func make_multi_file_pipeline_builder(params map[string]string) (*MultiFilePipelineBuilder, error) {
+	var endpointFactory bitflow.EndpointFactory
+	if err := endpointFactory.ParseParameters(params); err != nil {
+		return nil, fmt.Errorf("Error parsing parameters: %v", err)
+	}
+	output, err := endpointFactory.CreateOutput("file://-") // Create empty file output, will only be used as template with configuration values
+	if err != nil {
+		return nil, fmt.Errorf("Error creating template file output: %v", err)
+	}
+	fileOutput, ok := output.(*bitflow.FileSink)
+	if !ok {
+		return nil, fmt.Errorf("Error creating template file output, received wrong type: %T", output)
+	}
+	return &MultiFilePipelineBuilder{Config: *fileOutput}, nil
 }
 
 func rename_metrics(p *SamplePipeline, params map[string]string) error {

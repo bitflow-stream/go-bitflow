@@ -15,7 +15,7 @@ import (
 
 func RegisterPreprocessingSteps(b *query.PipelineBuilder) {
 	b.RegisterAnalysis("tag_injection_info", tag_injection_info, "Convert tags (cls, target) into (injected, measured, anomaly)")
-	b.RegisterAnalysis("injection_directory_structure", injection_directory_structure, "Split samples into a directory structure based on the tags provided by tag_injection_info. Must be used as last step before a file output")
+	b.RegisterAnalysisParamsErr("injection_directory_structure", injection_directory_structure, "Split samples into a directory structure based on the tags provided by tag_injection_info. Must be used as last step before a file output", nil)
 	b.RegisterAnalysisParamsErr("split_experiments", split_experiments, "Split samples into separate files based on their timestamps. When the difference between two (sorted) timestamps is too large, start a new file. Must be used as the last step before a file output", []string{"min_duration", "file"}, "batch_tag")
 }
 
@@ -64,16 +64,19 @@ func tag_injection_info(p *SamplePipeline) {
 	})
 }
 
-func injection_directory_structure(p *SamplePipeline) {
+func injection_directory_structure(p *SamplePipeline, params map[string]string) error {
 	distributor := &TagTemplateDistributor{
 		Template: fmt.Sprintf("%s/%s/%s", injectedTag, anomalyTag, measuredTag),
 	}
-	builder := &MultiFilePipelineBuilder{Config: multiFileOutput}
-	p.Add(&MetricFork{
-		ParallelClose: true,
-		Distributor:   distributor,
-		Builder:       builder},
-	)
+	builder, err := make_multi_file_pipeline_builder(params)
+	if err == nil {
+		p.Add(&MetricFork{
+			ParallelClose: true,
+			Distributor:   distributor,
+			Builder:       builder},
+		)
+	}
+	return err
 }
 
 type PauseTagger struct {
@@ -111,11 +114,17 @@ func split_experiments(p *SamplePipeline, params map[string]string) error {
 	group := bitflow.NewFileGroup(params["file"])
 	fileTemplate := group.BuildFilenameStr("${" + tag + "}")
 
-	p.Add(&PauseTagger{MinimumPause: duration, Tag: tag})
-	p.Add(&MetricFork{
-		ParallelClose: true,
-		Distributor:   &TagTemplateDistributor{Template: fileTemplate},
-		Builder:       &MultiFilePipelineBuilder{Config: multiFileOutput},
-	})
-	return nil
+	delete(params, "batch_tag")
+	delete(params, "min_duration")
+	delete(params, "file")
+	builder, err := make_multi_file_pipeline_builder(params)
+	if err == nil {
+		p.Add(&PauseTagger{MinimumPause: duration, Tag: tag})
+		p.Add(&MetricFork{
+			ParallelClose: true,
+			Distributor:   &TagTemplateDistributor{Template: fileTemplate},
+			Builder:       builder,
+		})
+	}
+	return err
 }

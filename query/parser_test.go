@@ -151,10 +151,6 @@ func (suite *parserTestSuite) TestExpectedClosingBracket() {
 }
 
 func (suite *parserTestSuite) TestValidatePipeline() {
-	suite.testErr("a->b->c", Pipeline(nil), ParserError{
-		Pos:     Token{Type: STR, Start: 3, End: 4, Lit: "b"},
-		Message: "Intermediate pipeline step cannot be an input or output identifier",
-	})
 	suite.testErr("a->fork(){x()}", Pipeline(nil), ParserError{
 		Pos:     Token{Type: STR, Start: 10, End: 11, Lit: "x"},
 		Message: "Forked pipeline must start with a pipeline identifier (string)",
@@ -226,6 +222,12 @@ func (suite *parserTestSuite) TestExamples() {
 			{Type: STR, Start: 2, End: 3, Lit: "b"},
 			{Type: STR, Start: 4, End: 5, Lit: "c"},
 		}})
+	suite.test("a->b->c",
+		Pipeline{
+			Input{{Type: STR, Start: 0, End: 1, Lit: "a"}},
+			Output{Type: STR, Start: 3, End: 4, Lit: "b"},
+			Output{Type: STR, Start: 6, End: 7, Lit: "c"},
+		})
 	suite.test("  x  (  )  ",
 		Pipeline{Step{
 			Name: Token{Type: STR, Start: 2, End: 3, Lit: "x"}}})
