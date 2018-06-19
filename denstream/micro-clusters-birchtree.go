@@ -76,14 +76,8 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 }
 
 func (s *BirchTreeClusterSpace) ClustersDo(do func(cluster MicroCluster)) {
-	// curNode := s.root
-	// for _, child := range curNode.children {
-	// 			childClust := child.cluster
 
-	// }
-	// for cluster := range s.clusters {
-	// 	do(cluster)
-	// }
+	traverseTree(s.root, do)
 }
 
 func (s *BirchTreeClusterSpace) NewCluster(point []float64, creationTime time.Time) MicroCluster {
@@ -190,6 +184,16 @@ func (s *BirchTreeClusterSpace) UpdateCluster(cluster MicroCluster, do func() (r
 // ========================================================================================================
 // ==== Internal ====
 // ========================================================================================================
+
+func traverseTree(node *BirchTreeNode, do func(cluster MicroCluster)) {
+	if node.isLeaf == true {
+		do(node.cluster)
+		return
+	}
+	for _, child := range node.children {
+		traverseTree(child, do)
+	}
+}
 func findNearestChildNode(nearestNode *BirchTreeNode, cluster MicroCluster) (nearestChildIdx int) {
 	var closestDistance float64
 	for idx := 0; idx < nearestNode.numChildren; idx++ {
