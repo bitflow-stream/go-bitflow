@@ -54,22 +54,22 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 	curNode := s.root
 
 	// var node BirchTreeNode
-	if curNode.numChildren == 0 {
-		return nil
-	} else {
+	if curNode.numChildren != 0 {
 		//do this until you reach a leaf
 		for curNode.isLeaf == false {
 			for idx := 0; idx < curNode.numChildren; idx++ {
 				childClust := curNode.children[idx].cluster
-				dist := euclideanDistance(point, childClust.Center())
-				if nearestCluster == nil || dist < closestDistance {
+				dist := euclideanDistance(point, childClust.Center()) - childClust.Radius()
+				if nearestNode == nil || dist < closestDistance {
 					nearestNode = curNode.children[idx]
 					closestDistance = dist
 				}
 			}
 			curNode = nearestNode
+			nearestNode = nil
+
 		}
-		nearestCluster = nearestNode.cluster
+		nearestCluster = curNode.cluster
 	}
 
 	return
