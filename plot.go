@@ -33,6 +33,7 @@ const (
 	ScatterPlot = PlotType(iota)
 	LinePlot
 	LinePointPlot
+	ClusterPlot
 	InvalidPlotType
 )
 
@@ -42,13 +43,14 @@ type PlotProcessor struct {
 	bitflow.NoopProcessor
 	checker bitflow.HeaderChecker
 
-	Type          PlotType
-	NoLegend      bool
-	AxisX         int
-	AxisY         int
-	OutputFile    string
-	ColorTag      string
-	SeparatePlots bool // If true, every ColorTag value will create a new plot
+	Type            PlotType
+	NoLegend        bool
+	AxisX           int
+	AxisY           int
+	RadiusDimension int
+	OutputFile      string
+	ColorTag        string
+	SeparatePlots   bool // If true, every ColorTag value will create a new plot
 
 	// If not nil, will override the automatially suggested bounds for the respective axis
 	ForceXmin *float64
@@ -57,7 +59,8 @@ type PlotProcessor struct {
 	ForceYmax *float64
 
 	data         map[string]plotter.XYs
-	x, y         int
+	radiuses     map[string][]float64
+	x, y, radius int
 	xName, yName string
 }
 
@@ -71,7 +74,11 @@ func (p *PlotProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	if p.AxisX < minAxis || p.AxisY < minAxis {
 		return golib.NewStoppedChan(fmt.Errorf("Invalid plot axis values: X=%v Y=%v", p.AxisX, p.AxisY))
 	}
+	if p.needsRadius() && (p.RadiusDimension < 0 || p.RadiusDimension == p.AxisX || p.RadiusDimension == p.AxisY) {
+		return golib.NewStoppedChan(fmt.Errorf("Invalid cluster plot axis values: X=%v Y=%v Radius=%v", p.AxisX, p.AxisY, p.RadiusDimension))
+	}
 	p.data = make(map[string]plotter.XYs)
+	p.radiuses = make(map[string][]float64)
 
 	if file, err := os.Create(p.OutputFile); err != nil {
 		// Check if file can be created to quickly fail
@@ -95,6 +102,7 @@ func (p *PlotProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 func (p *PlotProcessor) headerChanged(header *bitflow.Header) error {
 	p.x = p.AxisX
 	p.y = p.AxisY
+	p.radius = p.RadiusDimension
 	if p.x == PlotAxisAuto {
 		if len(header.Fields) > 1 {
 			p.x = 0
@@ -117,6 +125,9 @@ func (p *PlotProcessor) headerChanged(header *bitflow.Header) error {
 	if len(header.Fields) <= max {
 		return fmt.Errorf("%v: Header has %v fields, cannot plot with X=%v and Y=%v", p, len(header.Fields), p.x, p.y)
 	}
+	if p.needsRadius() && len(header.Fields) <= p.radius {
+		return fmt.Errorf("%v: Header has %v fields, cannot plot with Radius=%v", p, len(header.Fields), p.radius)
+	}
 
 	var xName, yName string
 	if p.x < 0 {
@@ -137,6 +148,10 @@ func (p *PlotProcessor) headerChanged(header *bitflow.Header) error {
 		return fmt.Errorf("%v: Header updated and changed the X/Y metric names from %v, %v -> %v, %v", p, p.xName, p.yName, xName, yName)
 	}
 	return nil
+}
+
+func (p *PlotProcessor) needsRadius() bool {
+	return p.Type == ClusterPlot
 }
 
 func (p *PlotProcessor) storeSample(sample *bitflow.Sample) {
@@ -161,6 +176,7 @@ func (p *PlotProcessor) storeSample(sample *bitflow.Sample) {
 	}
 
 	p.data[key] = append(p.data[key], struct{ X, Y float64 }{x, y})
+	p.radiuses[key] = append(p.radiuses[key], float64(sample.Values[p.radius]))
 }
 
 func (p *PlotProcessor) Close() {
@@ -182,9 +198,9 @@ func (p *PlotProcessor) Close() {
 	var err error
 	if p.SeparatePlots {
 		_ = os.Remove(p.OutputFile) // Delete file created in Start(), drop error.
-		err = plot.saveSeparatePlots(p.data, p.OutputFile, p.ForceXmin, p.ForceXmax, p.ForceYmin, p.ForceYmax)
+		err = plot.saveSeparatePlots(p.data, p.radiuses, p.OutputFile, p.ForceXmin, p.ForceXmax, p.ForceYmin, p.ForceYmax)
 	} else {
-		err = plot.savePlot(p.data, p.OutputFile, p.ForceXmin, p.ForceXmax, p.ForceYmin, p.ForceYmax)
+		err = plot.savePlot(p.data, p.radiuses, p.OutputFile, p.ForceXmin, p.ForceXmax, p.ForceYmin, p.ForceYmax)
 	}
 	if err != nil {
 		p.Error(err)
@@ -213,9 +229,9 @@ type Plot struct {
 	NoLegend       bool
 }
 
-func (p *Plot) saveSeparatePlots(plotData map[string]plotter.XYs, targetFile string, xMin, xMax, yMin, yMax *float64) error {
+func (p *Plot) saveSeparatePlots(plotData map[string]plotter.XYs, radiuses map[string][]float64, targetFile string, xMin, xMax, yMin, yMax *float64) error {
 	if xMin == nil || xMax == nil || yMin == nil || yMax == nil {
-		bounds, err := p.createPlot(plotData, xMin, xMax, yMin, yMax)
+		bounds, err := p.createPlot(plotData, radiuses, xMin, xMax, yMin, yMax)
 		if err != nil {
 			return err
 		}
@@ -229,15 +245,15 @@ func (p *Plot) saveSeparatePlots(plotData map[string]plotter.XYs, targetFile str
 	for name, data := range plotData {
 		plotData := map[string]plotter.XYs{name: data}
 		plotFile := group.BuildFilenameStr(name)
-		if err := p.savePlot(plotData, plotFile, xMin, xMax, yMin, yMax); err != nil {
+		if err := p.savePlot(plotData, radiuses, plotFile, xMin, xMax, yMin, yMax); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (p *Plot) savePlot(plotData map[string]plotter.XYs, targetFile string, xMin, xMax, yMin, yMax *float64) error {
-	plot, err := p.createPlot(plotData, xMin, xMax, yMin, yMax)
+func (p *Plot) savePlot(plotData map[string]plotter.XYs, radiuses map[string][]float64, targetFile string, xMin, xMax, yMin, yMax *float64) error {
+	plot, err := p.createPlot(plotData, radiuses, xMin, xMax, yMin, yMax)
 	if err != nil {
 		return err
 	}
@@ -248,7 +264,7 @@ func (p *Plot) savePlot(plotData map[string]plotter.XYs, targetFile string, xMin
 	return err
 }
 
-func (p *Plot) createPlot(plotData map[string]plotter.XYs, xMin, xMax, yMin, yMax *float64) (*plotLib.Plot, error) {
+func (p *Plot) createPlot(plotData map[string]plotter.XYs, radiuses map[string][]float64, xMin, xMax, yMin, yMax *float64) (*plotLib.Plot, error) {
 	plot, err := plotLib.New()
 	if err != nil {
 		return nil, errors.New("Error creating new plot: " + err.Error())
@@ -266,7 +282,7 @@ func (p *Plot) createPlot(plotData map[string]plotter.XYs, xMin, xMax, yMin, yMa
 		plot.Y.Max = *yMax
 	}
 	p.configureAxes(plot)
-	return plot, p.fillPlot(plot, plotData)
+	return plot, p.fillPlot(plot, plotData, radiuses)
 }
 
 func (p *Plot) configureAxes(plt *plotLib.Plot) {
@@ -280,7 +296,7 @@ func (p *Plot) configureAxes(plt *plotLib.Plot) {
 	}
 }
 
-func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs) error {
+func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs, radiusData map[string][]float64) error {
 	shape, err := NewPlotShapeGenerator(numColors)
 	if err != nil {
 		return err
@@ -297,6 +313,20 @@ func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs) err
 			line, err = plotter.NewLine(data)
 		case LinePointPlot:
 			line, scatter, err = plotter.NewLinePoints(data)
+		case ClusterPlot:
+			radiuses := radiusData[name]
+			pts := plotutil.ErrorPoints{
+				XYs:     data,
+				XErrors: make(plotter.XErrors, len(data)),
+				YErrors: make(plotter.YErrors, len(data)),
+			}
+			for i, r := range radiuses {
+				pts.XErrors[i].Low = r
+				pts.XErrors[i].High = r
+				pts.YErrors[i].Low = r
+				pts.YErrors[i].High = r
+			}
+			err = plotutil.AddErrorBars(plot, pts)
 		default:
 			return fmt.Errorf("Invalid PlotType: %v", p.Type)
 		}
