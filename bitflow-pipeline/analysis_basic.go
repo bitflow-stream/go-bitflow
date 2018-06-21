@@ -46,7 +46,7 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 
 	// Select
 	b.RegisterAnalysisParamsErr("pick", pick_x_percent, "Forward only a percentage of samples, parameter is in the range 0..1", []string{"percent"})
-	b.RegisterAnalysisParamsErr("head", pick_head, "Forward only a number of the first processed samples", []string{"num"})
+	b.RegisterAnalysisParamsErr("head", pick_head, "Forward only a number of the first processed samples. If close=true is given as parameter, close the whole pipeline afterwards.", []string{"num"}, "close")
 	b.RegisterAnalysisParamsErr("filter", filter_expression, "Filter the samples based on a boolean expression", []string{"expr"})
 
 	// Reorder
@@ -177,22 +177,27 @@ func filter_variance(p *SamplePipeline, params map[string]string) error {
 }
 
 func pick_head(p *SamplePipeline, params map[string]string) error {
+	doClose := params["close"] == "true"
 	num, err := strconv.Atoi(params["num"])
 	if err != nil {
 		err = query.ParameterError("num", err)
 	} else {
 		processed := 0
-		p.Add(&SimpleProcessor{
+		proc := &SimpleProcessor{
 			Description: "Pick first " + strconv.Itoa(num) + " samples",
-			Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
-				if num > processed {
-					processed++
-					return sample, header, nil
-				} else {
-					return nil, nil, nil
+		}
+		proc.Process = func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			if num > processed {
+				processed++
+				return sample, header, nil
+			} else {
+				if doClose {
+					proc.Error(nil) // Stop processing without an error
 				}
-			},
-		})
+				return nil, nil, nil
+			}
+		}
+		p.Add(proc)
 	}
 	return err
 }
