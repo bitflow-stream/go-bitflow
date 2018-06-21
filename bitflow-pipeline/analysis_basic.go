@@ -36,7 +36,8 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	// Forks
 	b.RegisterFork("rr", fork_round_robin, "The round-robin fork distributes the samples equally to a fixed number of sub-pipelines", []string{"num"})
 	b.RegisterFork("remap", fork_remap, "The remap-fork can be used after another fork to remap the incoming sub-pipelines to new outgoing sub-pipelines", nil)
-	b.RegisterFork("fork_tags", fork_tags, "The tag-fork creates one sub-pipeline for each occurrence of a given fork", []string{"tag"})
+	b.RegisterFork("fork_tags", fork_tags, "The tag-fork creates one sub-pipeline for each occurrence of a given tag", []string{"tag"})
+	b.RegisterFork("fork_tag_template", fork_tag_template, "Placeholders like ${xxx} are replaced by tag values. The resulting string forms the fork key", []string{"template"})
 
 	// Set metadata
 	b.RegisterAnalysisParamsErr("listen_tags", add_listen_tags, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", []string{"listen"})
@@ -480,6 +481,12 @@ func fork_tags(params map[string]string) (fmt.Stringer, error) {
 	}, nil
 }
 
+func fork_tag_template(params map[string]string) (fmt.Stringer, error) {
+	return &TagTemplateDistributor{
+		Template: params["template"],
+	}, nil
+}
+
 func fork_remap(params map[string]string) (fmt.Stringer, error) {
 	return &StringRemapDistributor{
 		Mapping: params,
@@ -490,7 +497,7 @@ func parse_tags_to_metrics(p *SamplePipeline, params map[string]string) {
 	var checker bitflow.HeaderChecker
 	var outHeader *bitflow.Header
 	var sorted SortedStringPairs
-	missingTagWarned := false
+	warnedMissingTags := make(map[string]bool)
 	sorted.FillFromMap(params)
 	sort.Sort(&sorted)
 
@@ -504,9 +511,9 @@ func parse_tags_to_metrics(p *SamplePipeline, params map[string]string) {
 			for i, tag := range sorted.Values {
 				var value float64
 				if !sample.HasTag(tag) {
-					if !missingTagWarned {
-						missingTagWarned = true
-						log.Warnf("Encountered sample missing tag '%v'. Using metric value 0 instead.", tag)
+					if !warnedMissingTags[tag] {
+						warnedMissingTags[tag] = true
+						log.Warnf("Encountered sample missing tag '%v'. Using metric value 0 instead. This warning is printed once per tag.", tag)
 					}
 				} else {
 					var err error

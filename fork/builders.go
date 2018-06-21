@@ -103,12 +103,12 @@ func (b *StringPipelineBuilder) BuildPipeline(key interface{}, _ *ForkMerger) *b
 			keys = append(keys, key)
 		}
 		if b.BuildMissingPipeline != nil {
+			log.Debugf("No subpipeline defined for key '%v' (type %T). Building default pipeline (Have pipelines: %v)", strKey, key, keys)
 			var err error
 			pipe, err = b.BuildMissingPipeline(strKey)
-			log.Debugf("No subpipeline defined for key '%v' (type %T). Building default pipeline (Have pipelines: %v)", strKey, key, keys)
 			if err != nil {
-				log.Errorf("Failed to build default subpipeline for key '%v': %v", strKey, err)
-				pipe = nil
+				log.Errorf("Failed to build default subpipeline for key '%v', using empty pipeline (%v)", strKey, err)
+				pipe = new(pipeline.SamplePipeline)
 			}
 		} else {
 			log.Warnf("No subpipeline defined for key '%v' (type %T). Using empty pipeline (Have pipelines: %v)", strKey, key, keys)
@@ -126,15 +126,9 @@ func (b *StringPipelineBuilder) String() string {
 func (b *StringPipelineBuilder) ContainedStringers() []fmt.Stringer {
 	res := make([]fmt.Stringer, 0, len(b.Pipelines))
 	for key, pipe := range b.Pipelines {
-		var title string
-		if key == "" {
-			title = "Default pipeline"
-		} else {
-			title = fmt.Sprintf("Pipeline %v", key)
-		}
 		res = append(res, &pipeline.TitledSamplePipeline{
 			SamplePipeline: pipe,
-			Title:          title,
+			Title:          fmt.Sprintf("Pipeline %v", key),
 		})
 	}
 	sort.Sort(pipeline.SortedStringers(res))

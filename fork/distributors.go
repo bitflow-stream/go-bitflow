@@ -70,8 +70,16 @@ func (d *TagsDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) 
 	return []interface{}{key.String()}
 }
 
-func (d *TagsDistributor) String() string {
-	return fmt.Sprintf("tags %v, separated by %v", d.Tags, d.Separator)
+func (d *TagsDistributor) String() (res string) {
+	if len(d.Tags) == 1 {
+		res = "tag " + d.Tags[0]
+	} else {
+		fmt.Sprintf("tags %v", d.Tags)
+	}
+	if d.Separator != "" {
+		res += ", separated by " + d.Separator
+	}
+	return
 }
 
 type TagTemplateDistributor struct {
@@ -91,7 +99,7 @@ func (d *TagTemplateDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.H
 }
 
 func (d *TagTemplateDistributor) String() string {
-	return fmt.Sprintf("Tag template: %v", d.Template)
+	return fmt.Sprintf("tag template: %v", d.Template)
 }
 
 type StringRemapDistributor struct {

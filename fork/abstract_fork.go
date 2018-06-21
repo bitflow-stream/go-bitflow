@@ -18,8 +18,14 @@ type PipelineBuilder interface {
 type AbstractMetricFork struct {
 	MultiPipeline
 	bitflow.NoopProcessor
-	pipelines map[interface{}]bitflow.SampleProcessor
-	lock      sync.Mutex
+
+	// If true, errors of subpipelines will be logged but don't stop the entire MultiPipeline
+	// Finished pipelines must be reported through LogFinishedPipeline()
+	NonfatalErrors bool
+
+	pipelines        map[interface{}]bitflow.SampleProcessor
+	reversePipelines map[*bitflow.SamplePipeline]interface{}
+	lock             sync.Mutex
 
 	newPipelineHandler func(bitflow.SampleProcessor) bitflow.SampleProcessor // Optional hook
 	ForkPath           []interface{}
@@ -29,6 +35,7 @@ func (f *AbstractMetricFork) Start(wg *sync.WaitGroup) golib.StopChan {
 	result := f.NoopProcessor.Start(wg)
 	f.MultiPipeline.Init(f.GetSink(), f.CloseSink, wg)
 	f.pipelines = make(map[interface{}]bitflow.SampleProcessor)
+	f.reversePipelines = make(map[*bitflow.SamplePipeline]interface{})
 	return result
 }
 
@@ -60,19 +67,30 @@ func (f *AbstractMetricFork) getPipeline(builder PipelineBuilder, key interface{
 
 func (f *AbstractMetricFork) newPipeline(builder PipelineBuilder, key interface{}, description fmt.Stringer) bitflow.SampleProcessor {
 	pipe := builder.BuildPipeline(key, &f.merger)
-	path := f.setForkPaths(pipe, key)
-	log.Debugf("[%v]: Starting forked subpipeline %v", description, path)
-	if pipe.Source != nil {
-		// Forked pipelines should not have an explicit source, as they receive
-		// samples from the steps preceding them
-		log.Warnf("[%v]: The Source field of the %v subpipeline was set and will be ignored: %v", description, path, pipe.Source)
-		pipe.Source = nil
+	if previousKey, ok := f.reversePipelines[pipe]; ok {
+		// Pipeline has been built and started before.
+		log.Debugf("[%v]: Subpipeline %v is reusing the pipeline started previously for key %v", description, key, previousKey)
+	} else {
+		f.reversePipelines[pipe] = key
+
+		path := f.setForkPaths(pipe, key)
+		log.Debugf("[%v]: Starting forked subpipeline %v", description, path)
+		if pipe.Source != nil {
+			// Forked pipelines should not have an explicit source, as they receive
+			// samples from the steps preceding them
+			log.Warnf("[%v]: The Source field of the %v subpipeline was set and will be ignored: %v", description, path, pipe.Source)
+			pipe.Source = nil
+		}
+		// Special handling of ForkRemapper: automatically connect mapped pipelines
+		pipe.Add(f.getRemappedSink(pipe, path))
+		f.StartPipeline(pipe, func(isPassive bool, err error) {
+			if f.NonfatalErrors {
+				f.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Subpipeline %v", description, path))
+			} else {
+				f.Error(err)
+			}
+		})
 	}
-	// Special handling of ForkRemapper: automatically connect mapped pipelines
-	pipe.Add(f.getRemappedSink(pipe, path))
-	f.StartPipeline(pipe, func(isPassive bool, err error) {
-		f.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Subpipeline %v", description, path))
-	})
 	return pipe.Processors[0]
 }
 

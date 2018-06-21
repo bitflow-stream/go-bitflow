@@ -8,6 +8,14 @@ import (
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
 )
 
+const (
+	// The empty string matches all undefined pipelines. The associated pipeline will be instantiated for every missing key.
+	DefaultForkKey = ""
+
+	// All samples with missing pipeline keys will be forwarded into one single instance of the default pipeline.
+	SingletonDefaultForkKey = "*"
+)
+
 type PipelineBuilder struct {
 	Endpoints bitflow.EndpointFactory
 
@@ -188,8 +196,11 @@ func (builder PipelineBuilder) getFork(name_tok Token) (registeredFork, error) {
 }
 
 func (builder PipelineBuilder) makePipelineBuilder(pipelines Pipelines) (fork.PipelineBuilder, error) {
-	builderPipes := make(map[string]*pipeline.SamplePipeline)
-	var defaultTail Pipeline
+	res := extendedStringPipelineBuilder{builder: &builder}
+	res.StringPipelineBuilder = fork.StringPipelineBuilder{
+		Pipelines:            make(map[string]*pipeline.SamplePipeline),
+		BuildMissingPipeline: res.buildMissing,
+	}
 	for _, pipe := range pipelines {
 		inputs := pipe[0].(Input)
 		builtPipe, err := builder.makePipelineTail(pipe[1:])
@@ -197,22 +208,60 @@ func (builder PipelineBuilder) makePipelineBuilder(pipelines Pipelines) (fork.Pi
 			return nil, err
 		}
 		for _, input := range inputs {
-			builderPipes[input.Content()] = builtPipe
-			if input.Content() == "" {
-				defaultTail = pipe[1:]
+			key := input.Content()
+			if _, ok := res.Pipelines[key]; ok {
+				return nil, fmt.Errorf("Subpipeline key '%v' defined multiple times", key)
+			}
+			if key == DefaultForkKey {
+				res.defaultTail = pipe[1:]
+				res.defaultPipeline = builtPipe
+			} else if key == SingletonDefaultForkKey {
+				res.singletonDefaultPipeline = builtPipe
+			} else {
+				res.Pipelines[key] = builtPipe
 			}
 		}
 	}
-	return &fork.StringPipelineBuilder{
-		Pipelines: builderPipes,
-		BuildMissingPipeline: func(string) (*pipeline.SamplePipeline, error) {
-			if len(defaultTail) == 0 {
-				return new(pipeline.SamplePipeline), nil
-			} else {
-				return builder.makePipelineTail(defaultTail)
-			}
-		},
-	}, nil
+	if res.defaultPipeline != nil && res.singletonDefaultPipeline != nil {
+		return nil, fmt.Errorf("Cannot have both singleton and individual default subpipelines (fork keys '%v' and '%v')", DefaultForkKey, SingletonDefaultForkKey)
+	}
+	return &res, nil
+}
+
+type extendedStringPipelineBuilder struct {
+	fork.StringPipelineBuilder
+	builder                  *PipelineBuilder
+	defaultTail              Pipeline
+	defaultPipeline          *pipeline.SamplePipeline
+	singletonDefaultPipeline *pipeline.SamplePipeline
+}
+
+func (b *extendedStringPipelineBuilder) ContainedStringers() []fmt.Stringer {
+	res := b.StringPipelineBuilder.ContainedStringers()
+	var title string
+	var pipe *pipeline.SamplePipeline
+	if b.singletonDefaultPipeline != nil {
+		title = "Default pipeline"
+		pipe = b.defaultPipeline
+	} else if b.defaultPipeline != nil {
+		title = "Singleton default pipeline"
+		pipe = b.singletonDefaultPipeline
+	}
+	if pipe != nil {
+		res = append([]fmt.Stringer{&pipeline.TitledSamplePipeline{Title: title, SamplePipeline: pipe}}, res...)
+	}
+	return res
+}
+
+func (b *extendedStringPipelineBuilder) buildMissing(string) (res *pipeline.SamplePipeline, err error) {
+	if b.singletonDefaultPipeline != nil {
+		res = b.singletonDefaultPipeline // Use the same pipelien for every fork key
+	} else if b.defaultPipeline != nil {
+		res, err = b.builder.makePipelineTail(b.defaultTail) // Build new pipeline for every fork key
+	} else {
+		res = new(pipeline.SamplePipeline)
+	}
+	return
 }
 
 // Implement the PipelineVerification interface

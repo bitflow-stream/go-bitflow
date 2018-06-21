@@ -105,12 +105,17 @@ func (p *BatchProcessor) flush(header *bitflow.Header) error {
 func (p *BatchProcessor) executeSteps(samples []*bitflow.Sample, header *bitflow.Header) ([]*bitflow.Sample, *bitflow.Header, error) {
 	if len(p.Steps) > 0 {
 		log.Println("Executing", len(p.Steps), "batch processing step(s)")
-		for _, step := range p.Steps {
-			log.Println("Executing", step, "on", len(samples), "samples with", len(header.Fields), "metrics")
-			var err error
-			header, samples, err = step.ProcessBatch(header, samples)
-			if err != nil {
-				return nil, nil, err
+		for i, step := range p.Steps {
+			if len(samples) == 0 {
+				log.Warnln("Cannot execute remaining", len(p.Steps)-i, "batch step(s) because the batch with", len(header.Fields), "has no samples")
+				break
+			} else {
+				log.Println("Executing", step, "on", len(samples), "samples with", len(header.Fields), "metrics")
+				var err error
+				header, samples, err = step.ProcessBatch(header, samples)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 		}
 	}
