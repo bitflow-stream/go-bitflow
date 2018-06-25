@@ -107,20 +107,21 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	newNode.isLeaf = true
 
 	parentNode := s.root
-	if parentNode.numChildren == 0 {
+	if parentNode.numChildren < 3{
 		addCFtoParentNode(parentNode, newNode)
 		addChild(parentNode, newNode)
 	} else {
 		nearestNode := parentNode
 		//identify the node where newnode can be insterted as a leaf, if the num of children is max, then split the node
 		for nearestNode.isLeaf == false {
-			parentNode := nearestNode
-			addCFtoParentNode(parentNode, newNode)
+			parentNode = nearestNode
+			// addCFtoParentNode(parentNode, newNode)
 			nearestchildIdx := findNearestChildNode(nearestNode, cluster)
 			nearestNode = nearestNode.children[nearestchildIdx]
 		}
 		if parentNode.numChildren < 3 {
 			addChild(parentNode, newNode)
+			addCFtoParentNodes(parentNode, newNode)
 		} else {
 			splitNode(parentNode, newNode)
 		}
