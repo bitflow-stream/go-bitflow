@@ -6,6 +6,7 @@ import (
 )
 
 var _ ClusterSpace = new(BirchTreeClusterSpace)
+var _maxChildren = 3
 
 type BirchTreeClusterSpace struct {
 	root          *BirchTreeNode
@@ -107,7 +108,7 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	newNode.isLeaf = true
 
 	parentNode := s.root
-	if parentNode.numChildren < 3{
+	if parentNode.numChildren < _maxChildren {
 		addCFtoParentNode(parentNode, newNode)
 		addChild(parentNode, newNode)
 	} else {
@@ -119,7 +120,7 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 			nearestchildIdx := findNearestChildNode(nearestNode, cluster)
 			nearestNode = nearestNode.children[nearestchildIdx]
 		}
-		if parentNode.numChildren < 3 {
+		if parentNode.numChildren < _maxChildren {
 			addChild(parentNode, newNode)
 			addCFtoParentNodes(parentNode, newNode)
 		} else {
@@ -211,7 +212,7 @@ func splitNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
 	numChildren := parentNode.numChildren
 	children := parentNode.children
 	numDimensions := len(parentNode.cluster.Center())
-	if numChildren == 3 {
+	if numChildren == _maxChildren {
 		//Identify 2 farthest child as seeds of new node
 		farthest := 0.0
 		c1 := 0
@@ -240,14 +241,14 @@ func splitNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
 		var node1 *BirchTreeNode
 		var node2 *BirchTreeNode
 		node1 = new(BirchTreeNode)
-		node1.children = make([]*BirchTreeNode, 3)
+		node1.children = make([]*BirchTreeNode, _maxChildren)
 		node1.cluster = &BasicMicroCluster{
 			cf1:          make([]float64, numDimensions),
 			cf2:          make([]float64, numDimensions),
 			creationTime: time.Time{},
 		}
 		node2 = new(BirchTreeNode)
-		node2.children = make([]*BirchTreeNode, 3)
+		node2.children = make([]*BirchTreeNode, _maxChildren)
 		node2.cluster = &BasicMicroCluster{
 			cf1:          make([]float64, numDimensions),
 			cf2:          make([]float64, numDimensions),
@@ -272,7 +273,7 @@ func splitNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
 		}
 		//clear parent
 		clearBirchTreeNode(parentNode)
-		parentNode.children = make([]*BirchTreeNode, 3)
+		parentNode.children = make([]*BirchTreeNode, _maxChildren)
 		parentNode.cluster = &BasicMicroCluster{
 			cf1:          make([]float64, numDimensions),
 			cf2:          make([]float64, numDimensions),
@@ -296,7 +297,7 @@ func clearBirchTreeNode(node *BirchTreeNode) {
 }
 
 func addChild(node *BirchTreeNode, childNode *BirchTreeNode) {
-	if node.numChildren < 3 {
+	if node.numChildren < _maxChildren {
 		childNode.parent = node
 		node.children[node.numChildren] = childNode
 		node.numChildren++
