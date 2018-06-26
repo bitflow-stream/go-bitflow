@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 )
@@ -38,6 +40,15 @@ func NewStandaloneHttpTagger(pathPrefix string, endpoint string) *HttpTagger {
 		tagger.Error(server.ListenAndServe())
 	}()
 	return tagger
+}
+
+func RegisterHttpTagger(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+		p.Add(NewStandaloneHttpTagger("/api", params["listen"]))
+		return nil
+	}
+
+	b.RegisterAnalysisParamsErr("listen_tags", create, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", []string{"listen"})
 }
 
 func (tagger *HttpTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

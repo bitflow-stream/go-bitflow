@@ -10,8 +10,11 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/http"
+	"github.com/antongulenko/go-bitflow-pipeline/http_tags"
 	"github.com/antongulenko/go-bitflow-pipeline/plugin"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
@@ -34,12 +37,7 @@ func do_main() int {
 	flag.StringVar(&scriptFile, "f", "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 
 	plugin.RegisterPluginDataSource(&builder.Endpoints)
-	RegisterBasicAnalyses(builder)
-	RegisterMathAnalyses(builder)
-	RegisterPlots(builder)
-	RegisterPreprocessingSteps(builder)
-	RegisterPrintAnalyses(builder)
-	RegisterTaggingAnalyses(builder)
+	register_analyses(builder)
 
 	bitflow.RegisterGolibFlags()
 	builder.Endpoints.RegisterFlags()
@@ -91,4 +89,24 @@ func make_pipeline(script string) (*pipeline.SamplePipeline, error) {
 		return nil, err
 	}
 	return builder.MakePipeline(pipe)
+}
+
+func register_analyses(b *query.PipelineBuilder) {
+	RegisterTaggingAnalyses(b)
+
+	steps.REGISTER_BASIC(b)
+	steps.REGISTER_MATH(b)
+	steps.REGISTER_PLOT(b)
+	steps.REGISTER_PRINT(b)
+
+	plotHttp.RegisterHttpPlotter(b)
+	steps.RegisterDecouple(b)
+	steps.RegisterGenericBatch(b)
+	steps.RegisterSleep(b)
+	steps.RegisterNoop(b)
+	steps.RegisterTaggingProcessor(b)
+	steps.RegisterPipelineRateSynchronizer(b)
+	steps.RegisterSampleMerger(b)
+	steps.RegisterForks(b)
+	http_tags.RegisterHttpTagger(b)
 }

@@ -5,13 +5,11 @@ import (
 	"strconv"
 
 	"github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
 )
 
-const (
-	MultiplexForkName  = "multiplex"
-	MultiplexForkParam = "num"
-)
+const MultiplexForkName = "multiplex"
 
 type PipelineVerification interface {
 	VerifyInput(inputs []string) error
@@ -21,16 +19,20 @@ type PipelineVerification interface {
 }
 
 func RegisterMultiplexFork(builder *PipelineBuilder) {
-	builder.RegisterFork(MultiplexForkName, createMultiplexFork,
-		"Basic fork forwarding samples to all subpipelines", []string{MultiplexForkParam})
+	builder.RegisterFork(MultiplexForkName, createMultiplexFork, "Basic fork forwarding samples to all subpipelines. Subpipeline keys are ignored.", []string{})
 }
 
-func createMultiplexFork(params map[string]string) (fmt.Stringer, error) {
-	num, err := strconv.Atoi(params[MultiplexForkParam])
-	if err != nil {
-		return nil, ParameterError(MultiplexForkParam, err)
+func createMultiplexFork(subpipelines []Subpipeline, _ map[string]string) (fork.ForkDistributor, error) {
+	var res fork.MultiplexDistributor
+	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpipelines))
+	var err error
+	for i, pipe := range subpipelines {
+		res.Subpipelines[i], err = pipe.Build()
+		if err != nil {
+			return nil, err
+		}
 	}
-	return fork.NewMultiplexDistributor(num), nil
+	return &res, nil
 }
 
 func strTok(str string) Token {
@@ -141,9 +143,8 @@ func (pipes Pipelines) transformMultiplex(verify PipelineVerification) (Fork, er
 	}
 	return Fork{
 		Step: Step{
-			Name: strTok(MultiplexForkName),
-			Params: map[Token]Token{
-				strTok(MultiplexForkParam): strTok(strconv.Itoa(len(pipes)))},
+			Name:   strTok(MultiplexForkName),
+			Params: make(map[Token]Token),
 		},
 		Pipelines: newPipes,
 	}.transformFork(verify)

@@ -4,10 +4,22 @@ import (
 	"fmt"
 
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/fork"
 )
 
+type Subpipeline struct {
+	Keys []string
+
+	builder *PipelineBuilder
+	pipe    Pipeline
+}
+
+func (s *Subpipeline) Build() (*pipeline.SamplePipeline, error) {
+	return s.builder.makePipelineTail(s.pipe)
+}
+
 type AnalysisFunc func(pipeline *pipeline.SamplePipeline, params map[string]string) error
-type ForkFunc func(params map[string]string) (fmt.Stringer, error) // Can return a fork.ForkDistributor or a fork.RemapDistributor
+type ForkFunc func(subpiplines []Subpipeline, params map[string]string) (fork.ForkDistributor, error)
 
 func ParameterError(name string, err error) error {
 	return fmt.Errorf("Failed to parse '%v' parameter: %v", name, err)
