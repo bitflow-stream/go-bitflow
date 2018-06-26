@@ -6,7 +6,8 @@ import (
 )
 
 var _ ClusterSpace = new(BirchTreeClusterSpace)
-var _maxChildren = 3
+
+const _maxChildren = 3
 
 type BirchTreeClusterSpace struct {
 	root          *BirchTreeNode
@@ -33,7 +34,7 @@ func (s *BirchTreeClusterSpace) Init(numDimensions int) {
 	s.nextClusterId = 0
 	s.numDimensions = numDimensions
 	s.root = new(BirchTreeNode)
-	s.root.children = make([]*BirchTreeNode, 3)
+	s.root.children = make([]*BirchTreeNode, _maxChildren)
 	s.root.cluster = &BasicMicroCluster{
 		cf1:          make([]float64, numDimensions),
 		cf2:          make([]float64, numDimensions),
@@ -108,10 +109,13 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	newNode.isLeaf = true
 
 	parentNode := s.root
-	if parentNode.numChildren < _maxChildren {
+
+	if parentNode.numChildren < (_maxChildren - 1) {
 		addCFtoParentNode(parentNode, newNode)
 		addChild(parentNode, newNode)
+
 	} else {
+
 		nearestNode := parentNode
 		//identify the node where newnode can be insterted as a leaf, if the num of children is max, then split the node
 		for nearestNode.isLeaf == false {
@@ -120,7 +124,7 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 			nearestchildIdx := findNearestChildNode(nearestNode, cluster)
 			nearestNode = nearestNode.children[nearestchildIdx]
 		}
-		if parentNode.numChildren < _maxChildren {
+		if parentNode.numChildren < (_maxChildren - 1) {
 			addChild(parentNode, newNode)
 			addCFtoParentNodes(parentNode, newNode)
 		} else {
@@ -161,7 +165,6 @@ func (s *BirchTreeClusterSpace) TransferCluster(cluster MicroCluster, otherSpace
 }
 
 func (s *BirchTreeClusterSpace) UpdateCluster(cluster MicroCluster, do func() (reinsertCluster bool)) {
-
 	parentNode := s.root
 	nearestNode := parentNode
 	for nearestNode.isLeaf == false {
@@ -208,16 +211,17 @@ func findNearestChildNode(nearestNode *BirchTreeNode, cluster MicroCluster) (nea
 	}
 	return
 }
+
 func splitNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
 	numChildren := parentNode.numChildren
 	children := parentNode.children
 	numDimensions := len(parentNode.cluster.Center())
-	if numChildren == _maxChildren {
+	if numChildren == (_maxChildren - 1) {
 		//Identify 2 farthest child as seeds of new node
 		farthest := 0.0
 		c1 := 0
 		c2 := 0
-		var dist [3 + 1][3 + 1]float64
+		var dist [_maxChildren + 1][_maxChildren + 1]float64
 		for i := 0; i < numChildren; i++ {
 			for j := i + 1; j < numChildren; j++ {
 				dist[i][j] = euclideanDistance(children[i].cluster.Center(), children[j].cluster.Center())
@@ -297,7 +301,7 @@ func clearBirchTreeNode(node *BirchTreeNode) {
 }
 
 func addChild(node *BirchTreeNode, childNode *BirchTreeNode) {
-	if node.numChildren < _maxChildren {
+	if node.numChildren < (_maxChildren - 1) {
 		childNode.parent = node
 		node.children[node.numChildren] = childNode
 		node.numChildren++
