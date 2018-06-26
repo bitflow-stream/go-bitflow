@@ -47,7 +47,7 @@ func (h *SampleTagger) HandleSample(sample *bitflow.Sample, source string) {
 }
 
 func set_sample_tagger(p *SamplePipeline, tag string, dontOverwrite bool) {
-	if source, ok := p.Source.(bitflow.UnmarshallingMetricSource); ok {
+	if source, ok := p.Source.(bitflow.UnmarshallingSampleSource); ok {
 		source.SetSampleHandler(&SampleTagger{SourceTags: []string{tag}, DontOverwrite: dontOverwrite})
 	}
 }

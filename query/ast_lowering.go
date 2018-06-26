@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-
 	"strconv"
 
 	"github.com/antongulenko/go-bitflow"
@@ -49,9 +48,6 @@ func (pipe Pipeline) Transform(verify PipelineVerification) (Pipeline, error) {
 		default:
 			res = append(Pipeline{Input{emptyEndpointToken}}, res...)
 		}
-		if _, hasOutput := res[len(res)-1].(Output); !hasOutput {
-			res = append(res, Output(emptyEndpointToken))
-		}
 	}
 	return res, err
 }
@@ -65,7 +61,6 @@ func (pipe Pipeline) transform(verify PipelineVerification, isInput bool) (Pipel
 	}
 	var res Pipeline
 	var err error
-	var newOutput PipelineStep
 
 	switch input := pipe[0].(type) {
 	case Input:
@@ -90,19 +85,12 @@ func (pipe Pipeline) transform(verify PipelineVerification, isInput bool) (Pipel
 			res = append(res, newInput)
 		}
 	}
-	if len(pipe) >= 1 {
-		if output, ok := pipe[len(pipe)-1].(Output); ok {
-			pipe = pipe[:len(pipe)-1]
-			newOutput = output
-			if err = verify.VerifyOutput(Token(output).Content()); err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	for _, step := range pipe {
 		var newStep PipelineStep
 		switch step := step.(type) {
+		case Output:
+			err = verify.VerifyOutput(Token(step).Content())
+			newStep = step
 		case Step:
 			newStep, err = step.transformStep(verify)
 		case Pipelines:
@@ -119,9 +107,6 @@ func (pipe Pipeline) transform(verify PipelineVerification, isInput bool) (Pipel
 			break
 		}
 		res = append(res, newStep)
-	}
-	if newOutput != nil {
-		res = append(res, newOutput)
 	}
 	return res, err
 }

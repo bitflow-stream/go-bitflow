@@ -7,7 +7,7 @@ import (
 )
 
 type ExpressionProcessor struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	Filter bool
 
 	checker     bitflow.HeaderChecker
@@ -24,13 +24,10 @@ func (p *ExpressionProcessor) AddExpression(expressionString string) error {
 }
 
 func (p *ExpressionProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
 	if res, err := p.evaluate(sample, header); err != nil {
 		return err
 	} else if res {
-		return p.OutgoingSink.Sample(sample, header)
+		return p.NoopProcessor.Sample(sample, header)
 	}
 	return nil
 }

@@ -27,9 +27,6 @@ func (f *MetricFork) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (f *MetricFork) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := f.Check(sample, header); err != nil {
-		return err
-	}
 	keys := f.Distributor.Distribute(sample, header)
 	sink := f.getPipelines(f.Builder, keys, f)
 	return sink.Sample(sample, header)

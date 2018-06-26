@@ -2,21 +2,21 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
 	. "github.com/antongulenko/go-bitflow-pipeline/fork"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
+	log "github.com/sirupsen/logrus"
 )
 
 func RegisterPreprocessingSteps(b *query.PipelineBuilder) {
 	b.RegisterAnalysis("tag_injection_info", tag_injection_info, "Convert tags (cls, target) into (injected, measured, anomaly)")
-	b.RegisterAnalysis("injection_directory_structure", injection_directory_structure, "Split samples into a directory structure based on the tags provided by tag_injection_info. Must be used as last step before a file output")
-	b.RegisterAnalysisParamsErr("split_experiments", split_experiments, "Split samples into separate files based on their timestamps. When the difference between two (sorted) timestamps is too large, start a new file. Must be used as the last step before a file output", []string{"min_duration"})
+	b.RegisterAnalysisParamsErr("injection_directory_structure", injection_directory_structure, "Split samples into a directory structure based on the tags provided by tag_injection_info. Must be used as last step before a file output", nil)
+	b.RegisterAnalysisParamsErr("split_experiments", split_experiments, "Split samples into separate files based on their timestamps. When the difference between two (sorted) timestamps is too large, start a new file. Must be used as the last step before a file output", []string{"min_duration", "file"}, "batch_tag")
 }
 
 const (
@@ -64,49 +64,66 @@ func tag_injection_info(p *SamplePipeline) {
 	})
 }
 
-func injection_directory_structure(p *SamplePipeline) {
-	distributor := &TagsDistributor{
-		Tags:        []string{injectedTag, anomalyTag, measuredTag},
-		Separator:   string(filepath.Separator),
-		Replacement: "_unknown_",
+func injection_directory_structure(p *SamplePipeline, params map[string]string) error {
+	distributor := &TagTemplateDistributor{
+		Template: fmt.Sprintf("%s/%s/%s", injectedTag, anomalyTag, measuredTag),
 	}
-	builder := MultiFileDirectoryBuilder(false, nil)
-	p.Add(&MetricFork{
-		ParallelClose: true,
-		Distributor:   distributor,
-		Builder:       builder},
-	)
+	builder, err := make_multi_file_pipeline_builder(params)
+	if err == nil {
+		p.Add(&MetricFork{
+			ParallelClose: true,
+			Distributor:   distributor,
+			Builder:       builder},
+		)
+	}
+	return err
 }
 
-type TimeDistributor struct {
+type PauseTagger struct {
+	bitflow.NoopProcessor
 	MinimumPause time.Duration
+	Tag          string
 
 	counter  int
 	lastTime time.Time
 }
 
-func (d *TimeDistributor) String() string {
-	return "split after pauses of " + d.MinimumPause.String()
+func (d *PauseTagger) String() string {
+	return fmt.Sprintf("increment tag '%v' after pauses of %v", d.Tag, d.MinimumPause.String())
 }
 
-func (d *TimeDistributor) Distribute(sample *bitflow.Sample, header *bitflow.Header) []interface{} {
+func (d *PauseTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	last := d.lastTime
 	d.lastTime = sample.Time
 	if !last.IsZero() && sample.Time.Sub(last) >= d.MinimumPause {
 		d.counter++
 	}
-	return []interface{}{d.counter}
+	sample.SetTag(d.Tag, strconv.Itoa(d.counter))
+	return d.GetSink().Sample(sample, header)
 }
 
 func split_experiments(p *SamplePipeline, params map[string]string) error {
+	tag := params["batch_tag"]
+	if tag == "" {
+		tag = "experiment_batch"
+	}
 	duration, err := time.ParseDuration(params["min_duration"])
 	if err != nil {
-		err = query.ParameterError("min_duration", err)
-	} else {
+		return query.ParameterError("min_duration", err)
+	}
+	group := bitflow.NewFileGroup(params["file"])
+	fileTemplate := group.BuildFilenameStr("${" + tag + "}")
+
+	delete(params, "batch_tag")
+	delete(params, "min_duration")
+	delete(params, "file")
+	builder, err := make_multi_file_pipeline_builder(params)
+	if err == nil {
+		p.Add(&PauseTagger{MinimumPause: duration, Tag: tag})
 		p.Add(&MetricFork{
 			ParallelClose: true,
-			Distributor:   &TimeDistributor{MinimumPause: duration},
-			Builder:       MultiFileSuffixBuilder(nil),
+			Distributor:   &TagTemplateDistributor{Template: fileTemplate},
+			Builder:       builder,
 		})
 	}
 	return err

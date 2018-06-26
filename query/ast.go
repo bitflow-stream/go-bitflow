@@ -18,8 +18,7 @@ func (p Pipelines) Pos() (res Token) {
 }
 
 // Depending on their context, pipelines may contain different elements.
-// Any intermediate element (not the first and not the last) must be a Step, Fork or Pipelines.
-// The last element (if it is not the only element) can be any of that, and also an Output.
+// Any element can be Output, Step, Fork or Pipelines.
 // The first element depends on the context:
 //  - if the pipeline has no predecessor (does not receive data from another pipeline or step),
 //    it can start with anything, including an Input or Inputs

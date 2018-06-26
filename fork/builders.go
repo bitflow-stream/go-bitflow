@@ -2,8 +2,6 @@ package fork
 
 import (
 	"fmt"
-	"path/filepath"
-
 	"sort"
 
 	"github.com/antongulenko/go-bitflow"
@@ -37,12 +35,12 @@ func (b *SimplePipelineBuilder) String() string {
 
 func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
 	var res bitflow.SamplePipeline
-	res.Sink = output
 	if b.Build != nil {
 		for _, processor := range b.Build() {
 			res.Add(processor)
 		}
 	}
+	res.Add(output)
 	return &res
 }
 
@@ -51,9 +49,7 @@ type MultiplexPipelineBuilder []*pipeline.SamplePipeline
 func (b MultiplexPipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
 	// Type of key must be int, and index must be in range. Otherwise panic!
 	pipe := &(b[key.(int)].SamplePipeline)
-	if pipe.Sink == nil {
-		pipe.Sink = output
-	}
+	pipe.Add(output)
 	return pipe
 }
 
@@ -70,69 +66,24 @@ func (b MultiplexPipelineBuilder) ContainedStringers() []fmt.Stringer {
 }
 
 type MultiFilePipelineBuilder struct {
-	SimplePipelineBuilder
-	NewFile     func(originalFile string, key interface{}) string
-	Description string
+	Config bitflow.FileSink // Configuration parameters in this field will be used for file outputs
+}
+
+func (b *MultiFilePipelineBuilder) ContainedStringers() []fmt.Stringer {
+	return []fmt.Stringer{pipeline.String(b.String())}
 }
 
 func (b *MultiFilePipelineBuilder) String() string {
-	_ = b.SimplePipelineBuilder.String() // Fill the examplePipeline field
-	if len(b.examplePipeline) == 0 {
-		return fmt.Sprintf("MultiFiles %v", b.Description)
-	} else {
-		return fmt.Sprintf("MultiFiles %v (subpipeline: %v)", b.Description, b.examplePipeline)
-	}
+	return "Output to files named by fork key"
 }
 
 func (b *MultiFilePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *bitflow.SamplePipeline {
-	simple := b.SimplePipelineBuilder.BuildPipeline(key, output)
-	files, ok := output.GetOriginalSink().(*bitflow.FileSink)
-	if ok {
-		newFilename := b.NewFile(files.Filename, key)
-		newFiles := &bitflow.FileSink{
-			AbstractMarshallingMetricSink: files.AbstractMarshallingMetricSink,
-			Filename:                      newFilename,
-			CleanFiles:                    files.CleanFiles,
-			IoBuffer:                      files.IoBuffer,
-		}
-		simple.Sink = newFiles
-	} else {
-		log.Warnf("[%v]: Cannot assign new files, did not find *bitflow.FileSink as my direct output", b)
-	}
-	return simple
-}
-
-func MultiFileSuffixBuilder(buildPipeline func() []bitflow.SampleProcessor) *MultiFilePipelineBuilder {
-	builder := &MultiFilePipelineBuilder{
-		Description: "files suffixed with subpipeline key",
-		NewFile: func(oldFile string, key interface{}) string {
-			suffix := fmt.Sprintf("%v", key)
-			group := bitflow.NewFileGroup(oldFile)
-			return group.BuildFilenameStr(suffix)
-		},
-	}
-	builder.Build = buildPipeline
-	return builder
-}
-
-func MultiFileDirectoryBuilder(replaceFilename bool, buildPipeline func() []bitflow.SampleProcessor) *MultiFilePipelineBuilder {
-	builder := &MultiFilePipelineBuilder{
-		Description: "directory tree built from subpipeline key",
-		NewFile: func(oldFile string, key interface{}) string {
-			path := fmt.Sprintf("%v", key)
-			if path == "" {
-				return oldFile
-			}
-			if replaceFilename {
-				path += filepath.Ext(oldFile)
-			} else {
-				path = filepath.Join(path, filepath.Base(oldFile))
-			}
-			return filepath.Join(filepath.Dir(oldFile), path)
-		},
-	}
-	builder.Build = buildPipeline
-	return builder
+	var pipe bitflow.SamplePipeline
+	fileOut := b.Config
+	fileName := fmt.Sprintf("%v", key) // TODO this could be parameterized
+	fileOut.Filename = fileName
+	pipe.Add(&fileOut).Add(output)
+	return &pipe
 }
 
 type StringPipelineBuilder struct {
@@ -152,12 +103,12 @@ func (b *StringPipelineBuilder) BuildPipeline(key interface{}, _ *ForkMerger) *b
 			keys = append(keys, key)
 		}
 		if b.BuildMissingPipeline != nil {
+			log.Debugf("No subpipeline defined for key '%v' (type %T). Building default pipeline (Have pipelines: %v)", strKey, key, keys)
 			var err error
 			pipe, err = b.BuildMissingPipeline(strKey)
-			log.Debugf("No subpipeline defined for key '%v' (type %T). Building default pipeline (Have pipelines: %v)", strKey, key, keys)
 			if err != nil {
-				log.Errorf("Failed to build default subpipeline for key '%v': %v", strKey, err)
-				pipe = nil
+				log.Errorf("Failed to build default subpipeline for key '%v', using empty pipeline (%v)", strKey, err)
+				pipe = new(pipeline.SamplePipeline)
 			}
 		} else {
 			log.Warnf("No subpipeline defined for key '%v' (type %T). Using empty pipeline (Have pipelines: %v)", strKey, key, keys)
@@ -175,15 +126,9 @@ func (b *StringPipelineBuilder) String() string {
 func (b *StringPipelineBuilder) ContainedStringers() []fmt.Stringer {
 	res := make([]fmt.Stringer, 0, len(b.Pipelines))
 	for key, pipe := range b.Pipelines {
-		var title string
-		if key == "" {
-			title = "Default pipeline"
-		} else {
-			title = fmt.Sprintf("Pipeline %v", key)
-		}
 		res = append(res, &pipeline.TitledSamplePipeline{
 			SamplePipeline: pipe,
-			Title:          title,
+			Title:          fmt.Sprintf("Pipeline %v", key),
 		})
 	}
 	sort.Sort(pipeline.SortedStringers(res))

@@ -11,7 +11,7 @@ import (
 )
 
 type SynchronizedSampleMerger struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 
 	MergeTag        string
 	MergeInterval   time.Duration
@@ -31,9 +31,6 @@ type SynchronizedSampleMerger struct {
 }
 
 func (p *SynchronizedSampleMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
 	if !sample.HasTag(p.MergeTag) {
 		log.Warnln("Dropping sample without", p.MergeTag, "tag")
 		return nil
@@ -63,7 +60,7 @@ func (p *SynchronizedSampleMerger) Sample(sample *bitflow.Sample, header *bitflo
 				if p.DebugQueueLengths {
 					p.logQueueLengths()
 				}
-				return p.OutgoingSink.Sample(sample, header)
+				return p.NoopProcessor.Sample(sample, header)
 			} else if p.DebugWaitingQueues {
 				p.logWaitingQueues()
 			}
@@ -81,7 +78,7 @@ func (p *SynchronizedSampleMerger) Close() {
 		if sample == nil {
 			break
 		}
-		if err := p.OutgoingSink.Sample(sample, header); err != nil {
+		if err := p.NoopProcessor.Sample(sample, header); err != nil {
 			p.Error(err)
 			break
 		}

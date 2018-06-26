@@ -20,7 +20,7 @@ func NewHttpPlotter(endpoint string, windowSize int, useLocalStatic bool) *HttpP
 }
 
 type HttpPlotter struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 
 	Endpoint       string
 	WindowSize     int
@@ -37,7 +37,7 @@ func (p *HttpPlotter) Start(wg *sync.WaitGroup) golib.StopChan {
 			p.Error(err)
 		}
 	}()
-	return p.AbstractProcessor.Start(wg)
+	return p.NoopProcessor.Start(wg)
 }
 
 func (p *HttpPlotter) String() string {
@@ -49,11 +49,8 @@ func (p *HttpPlotter) String() string {
 }
 
 func (p *HttpPlotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
 	p.logSample(sample, header)
-	return p.OutgoingSink.Sample(sample, header)
+	return p.NoopProcessor.Sample(sample, header)
 }
 
 func (p *HttpPlotter) logSample(sample *bitflow.Sample, header *bitflow.Header) {

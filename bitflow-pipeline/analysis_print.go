@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	. "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
+	log "github.com/sirupsen/logrus"
 )
 
 func RegisterPrintAnalyses(b *query.PipelineBuilder) {
@@ -47,7 +47,7 @@ func print_header(p *SamplePipeline) {
 }
 
 type UniqueTagPrinter struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	Tag    string
 	Count  bool
 	values map[string]int
@@ -70,16 +70,13 @@ func NewUniqueTagCounter(tag string) *UniqueTagPrinter {
 }
 
 func (printer *UniqueTagPrinter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := printer.Check(sample, header); err != nil {
-		return err
-	}
 	val := sample.Tag(printer.Tag)
 	if printer.Count {
 		printer.values[val] = printer.values[val] + 1
 	} else {
 		printer.values[val] = 1
 	}
-	return printer.OutgoingSink.Sample(sample, header)
+	return printer.NoopProcessor.Sample(sample, header)
 }
 
 func (printer *UniqueTagPrinter) Close() {
@@ -107,7 +104,7 @@ func (printer *UniqueTagPrinter) Close() {
 	if printer.Count {
 		fmt.Println("Total", total)
 	}
-	printer.AbstractProcessor.Close()
+	printer.NoopProcessor.Close()
 }
 
 func (printer *UniqueTagPrinter) String() string {

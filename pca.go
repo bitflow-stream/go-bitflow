@@ -9,10 +9,10 @@ import (
 	"os"
 	"strconv"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/gonum/matrix/mat64"
 	"github.com/gonum/stat"
+	log "github.com/sirupsen/logrus"
 )
 
 const DefaultContainedVariance = 0.99

@@ -6,12 +6,12 @@ import (
 	"sort"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
+	log "github.com/sirupsen/logrus"
 )
 
 type BatchProcessor struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	checker      bitflow.HeaderChecker
 	samples      []*bitflow.Sample
 	lastFlushTag string
@@ -53,9 +53,6 @@ func (p *BatchProcessor) ContainedStringers() []fmt.Stringer {
 }
 
 func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
 	oldHeader := p.checker.LastHeader
 	flush := p.checker.InitializedHeaderChanged(header)
 	if p.FlushTag != "" {
@@ -97,7 +94,7 @@ func (p *BatchProcessor) flush(header *bitflow.Header) error {
 		}
 		log.Println("Flushing", len(samples), "batched samples with", len(header.Fields), "metrics")
 		for _, sample := range samples {
-			if err := p.OutgoingSink.Sample(sample, header); err != nil {
+			if err := p.NoopProcessor.Sample(sample, header); err != nil {
 				return fmt.Errorf("Error flushing batch: %v", err)
 			}
 		}
@@ -108,12 +105,17 @@ func (p *BatchProcessor) flush(header *bitflow.Header) error {
 func (p *BatchProcessor) executeSteps(samples []*bitflow.Sample, header *bitflow.Header) ([]*bitflow.Sample, *bitflow.Header, error) {
 	if len(p.Steps) > 0 {
 		log.Println("Executing", len(p.Steps), "batch processing step(s)")
-		for _, step := range p.Steps {
-			log.Println("Executing", step, "on", len(samples), "samples with", len(header.Fields), "metrics")
-			var err error
-			header, samples, err = step.ProcessBatch(header, samples)
-			if err != nil {
-				return nil, nil, err
+		for i, step := range p.Steps {
+			if len(samples) == 0 {
+				log.Warnln("Cannot execute remaining", len(p.Steps)-i, "batch step(s) because the batch with", len(header.Fields), "has no samples")
+				break
+			} else {
+				log.Println("Executing", step, "on", len(samples), "samples with", len(header.Fields), "metrics")
+				var err error
+				header, samples, err = step.ProcessBatch(header, samples)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 		}
 	}
@@ -236,7 +238,7 @@ func NewSampleShuffler() *SimpleBatchProcessingStep {
 // ==================== Multi-header merger ====================
 // Can tolerate multiple headers, fills missing data up with default values.
 type MultiHeaderMerger struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	header *bitflow.Header
 
 	metrics map[string][]bitflow.Value
@@ -250,9 +252,6 @@ func NewMultiHeaderMerger() *MultiHeaderMerger {
 }
 
 func (p *MultiHeaderMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := p.Check(sample, header); err != nil {
-		return err
-	}
 	p.addSample(sample, header)
 	return nil
 }
@@ -291,7 +290,7 @@ func (p *MultiHeaderMerger) Close() {
 	outHeader := p.reconstructHeader()
 	for index := range p.samples {
 		outSample := p.reconstructSample(index, outHeader)
-		if err := p.OutgoingSink.Sample(outSample, outHeader); err != nil {
+		if err := p.NoopProcessor.Sample(outSample, outHeader); err != nil {
 			err = fmt.Errorf("Error flushing reconstructed samples: %v", err)
 			log.Errorln(err)
 			p.Error(err)

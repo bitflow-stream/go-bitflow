@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
 type PipelineBuilder interface {
@@ -17,18 +17,25 @@ type PipelineBuilder interface {
 
 type AbstractMetricFork struct {
 	MultiPipeline
-	bitflow.AbstractProcessor
-	pipelines map[interface{}]bitflow.MetricSink
-	lock      sync.Mutex
+	bitflow.NoopProcessor
 
-	newPipelineHandler func(bitflow.MetricSink) bitflow.MetricSink // Optional hook
+	// If true, errors of subpipelines will be logged but don't stop the entire MultiPipeline
+	// Finished pipelines must be reported through LogFinishedPipeline()
+	NonfatalErrors bool
+
+	pipelines        map[interface{}]bitflow.SampleProcessor
+	reversePipelines map[*bitflow.SamplePipeline]interface{}
+	lock             sync.Mutex
+
+	newPipelineHandler func(bitflow.SampleProcessor) bitflow.SampleProcessor // Optional hook
 	ForkPath           []interface{}
 }
 
 func (f *AbstractMetricFork) Start(wg *sync.WaitGroup) golib.StopChan {
-	result := f.AbstractProcessor.Start(wg)
-	f.MultiPipeline.Init(f.OutgoingSink, f.CloseSink, wg)
-	f.pipelines = make(map[interface{}]bitflow.MetricSink)
+	result := f.NoopProcessor.Start(wg)
+	f.MultiPipeline.Init(f.GetSink(), f.CloseSink, wg)
+	f.pipelines = make(map[interface{}]bitflow.SampleProcessor)
+	f.reversePipelines = make(map[*bitflow.SamplePipeline]interface{})
 	return result
 }
 
@@ -36,15 +43,15 @@ func (f *AbstractMetricFork) Close() {
 	f.StopPipelines()
 }
 
-func (f *AbstractMetricFork) getPipelines(builder PipelineBuilder, keys []interface{}, description fmt.Stringer) bitflow.MetricSink {
-	sinks := make([]bitflow.MetricSink, len(keys))
+func (f *AbstractMetricFork) getPipelines(builder PipelineBuilder, keys []interface{}, description fmt.Stringer) bitflow.SampleProcessor {
+	sinks := make([]bitflow.SampleProcessor, len(keys))
 	for i, key := range keys {
 		sinks[i] = f.getPipeline(builder, key, description)
 	}
 	return &multiPipelineSink{sinks: sinks}
 }
 
-func (f *AbstractMetricFork) getPipeline(builder PipelineBuilder, key interface{}, description fmt.Stringer) bitflow.MetricSink {
+func (f *AbstractMetricFork) getPipeline(builder PipelineBuilder, key interface{}, description fmt.Stringer) bitflow.SampleProcessor {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 	pipe, ok := f.pipelines[key]
@@ -58,29 +65,33 @@ func (f *AbstractMetricFork) getPipeline(builder PipelineBuilder, key interface{
 	return pipe
 }
 
-func (f *AbstractMetricFork) newPipeline(builder PipelineBuilder, key interface{}, description fmt.Stringer) bitflow.MetricSink {
+func (f *AbstractMetricFork) newPipeline(builder PipelineBuilder, key interface{}, description fmt.Stringer) bitflow.SampleProcessor {
 	pipe := builder.BuildPipeline(key, &f.merger)
-	path := f.setForkPaths(pipe, key)
-	log.Debugf("[%v]: Starting forked subpipeline %v", description, path)
-	if pipe.Source != nil {
-		// Forked pipelines should not have an explicit source, as they receive
-		// samples from the steps preceding them
-		log.Warnf("[%v]: The Source field of the %v subpipeline was set and will be ignored: %v", description, path, pipe.Source)
-		pipe.Source = nil
-	}
-	if pipe.Sink == nil {
-		// Special handling of ForkRemapper: automatically connect mapped pipelines
-		pipe.Sink = f.getRemappedSink(pipe, path)
-	}
-	f.StartPipeline(pipe, func(isPassive bool, err error) {
-		f.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Subpipeline %v", description, path))
-	})
-
-	if len(pipe.Processors) == 0 {
-		return pipe.Sink
+	if previousKey, ok := f.reversePipelines[pipe]; ok {
+		// Pipeline has been built and started before.
+		log.Debugf("[%v]: Subpipeline %v is reusing the pipeline started previously for key %v", description, key, previousKey)
 	} else {
-		return pipe.Processors[0]
+		f.reversePipelines[pipe] = key
+
+		path := f.setForkPaths(pipe, key)
+		log.Debugf("[%v]: Starting forked subpipeline %v", description, path)
+		if pipe.Source != nil {
+			// Forked pipelines should not have an explicit source, as they receive
+			// samples from the steps preceding them
+			log.Warnf("[%v]: The Source field of the %v subpipeline was set and will be ignored: %v", description, path, pipe.Source)
+			pipe.Source = nil
+		}
+		// Special handling of ForkRemapper: automatically connect mapped pipelines
+		pipe.Add(f.getRemappedSink(pipe, path))
+		f.StartPipeline(pipe, func(isPassive bool, err error) {
+			if f.NonfatalErrors {
+				f.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Subpipeline %v", description, path))
+			} else {
+				f.Error(err)
+			}
+		})
 	}
+	return pipe.Processors[0]
 }
 
 func (f *AbstractMetricFork) containedStringers(builder PipelineBuilder) []fmt.Stringer {
@@ -103,7 +114,7 @@ func (f *AbstractMetricFork) setForkPaths(pipeline *bitflow.SamplePipeline, key 
 	return path
 }
 
-func (f *AbstractMetricFork) getRemappedSink(pipeline *bitflow.SamplePipeline, forkPath []interface{}) bitflow.MetricSink {
+func (f *AbstractMetricFork) getRemappedSink(pipeline *bitflow.SamplePipeline, forkPath []interface{}) bitflow.SampleProcessor {
 	if len(pipeline.Processors) > 0 {
 		last := pipeline.Processors[len(pipeline.Processors)-1]
 		if _, isFork := last.(abstractForkContainer); isFork {
@@ -111,10 +122,10 @@ func (f *AbstractMetricFork) getRemappedSink(pipeline *bitflow.SamplePipeline, f
 			return nil
 		}
 	}
-	return f.getRemappedSinkRecursive(f.OutgoingSink, forkPath)
+	return f.getRemappedSinkRecursive(f.GetSink(), forkPath)
 }
 
-func (f *AbstractMetricFork) getRemappedSinkRecursive(outgoing bitflow.MetricSink, forkPath []interface{}) bitflow.MetricSink {
+func (f *AbstractMetricFork) getRemappedSinkRecursive(outgoing bitflow.SampleProcessor, forkPath []interface{}) bitflow.SampleProcessor {
 	switch outgoing := outgoing.(type) {
 	case *ForkRemapper:
 		// Ask follow-up ForkRemapper for the pipeline we should connect to
@@ -137,8 +148,8 @@ func (f *AbstractMetricFork) getAbstractFork() *AbstractMetricFork {
 }
 
 type multiPipelineSink struct {
-	bitflow.EmptyMetricSink
-	sinks []bitflow.MetricSink
+	bitflow.DroppingSampleProcessor
+	sinks []bitflow.SampleProcessor
 }
 
 func (s *multiPipelineSink) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

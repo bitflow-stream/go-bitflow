@@ -3,9 +3,11 @@ package fork
 import (
 	"bytes"
 	"fmt"
+	"regexp"
+	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
+	log "github.com/sirupsen/logrus"
 )
 
 type RoundRobinDistributor struct {
@@ -68,8 +70,36 @@ func (d *TagsDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) 
 	return []interface{}{key.String()}
 }
 
-func (d *TagsDistributor) String() string {
-	return fmt.Sprintf("tags %v, separated by %v", d.Tags, d.Separator)
+func (d *TagsDistributor) String() (res string) {
+	if len(d.Tags) == 1 {
+		res = "tag " + d.Tags[0]
+	} else {
+		fmt.Sprintf("tags %v", d.Tags)
+	}
+	if d.Separator != "" {
+		res += ", separated by " + d.Separator
+	}
+	return
+}
+
+type TagTemplateDistributor struct {
+	Template string // Placeholders like ${xxx} will be replaced by tag values (left empty if tag missing)
+}
+
+var templateRegex = regexp.MustCompile("\\$\\{[^\\{]*\\}") // Example: ${hello}
+
+func (d *TagTemplateDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) []interface{} {
+	key := templateRegex.ReplaceAllStringFunc(d.Template, func(placeholder string) string {
+		if strings.HasPrefix(placeholder, "${") && strings.HasSuffix(placeholder, "}") {
+			return sample.Tag(placeholder[2 : len(placeholder)-1])
+		}
+		return ""
+	})
+	return []interface{}{key}
+}
+
+func (d *TagTemplateDistributor) String() string {
+	return fmt.Sprintf("tag template: %v", d.Template)
 }
 
 type StringRemapDistributor struct {

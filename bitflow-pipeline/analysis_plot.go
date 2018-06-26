@@ -46,6 +46,11 @@ func plot(p *SamplePipeline, params map[string]string) error {
 				plot.Type = LinePlot
 			case "linepoint":
 				plot.Type = LinePointPlot
+			case "cluster":
+				plot.Type = ClusterPlot
+				plot.RadiusDimension = 0
+				plot.AxisX = 1
+				plot.AxisY = 2
 			case "separate":
 				plot.SeparatePlots = true
 			case "force_scatter":

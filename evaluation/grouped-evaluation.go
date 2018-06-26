@@ -14,7 +14,7 @@ import (
 )
 
 type GroupedEvaluation struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	groups         map[string]EvaluationStats
 	ignoredSamples map[string]int
 
@@ -96,7 +96,7 @@ func (p *GroupedEvaluation) PrintResults() {
 func (p *GroupedEvaluation) Start(wg *sync.WaitGroup) golib.StopChan {
 	p.groups = make(map[string]EvaluationStats)
 	p.ignoredSamples = make(map[string]int)
-	return p.AbstractProcessor.Start(wg)
+	return p.NoopProcessor.Start(wg)
 }
 
 func (p *GroupedEvaluation) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -118,10 +118,10 @@ func (p *GroupedEvaluation) Sample(sample *bitflow.Sample, header *bitflow.Heade
 		ignoredCounter := p.ignoredSamples[eval]
 		p.ignoredSamples[eval] = ignoredCounter + 1
 	}
-	return p.OutgoingSink.Sample(sample, header)
+	return p.NoopProcessor.Sample(sample, header)
 }
 
 func (p *GroupedEvaluation) Close() {
 	p.PrintResults()
-	p.AbstractProcessor.Close()
+	p.NoopProcessor.Close()
 }

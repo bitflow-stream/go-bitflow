@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
+	log "github.com/sirupsen/logrus"
 )
 
 // Graham Scan for computing the convex hull of a point set

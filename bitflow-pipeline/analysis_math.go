@@ -18,9 +18,9 @@ import (
 func RegisterMathAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysis("dbscan", dbscan_rtree, "Perform a dbscan clustering on a batch of samples")
 	b.RegisterAnalysis("dbscan_parallel", dbscan_parallel, "Perform a parallelized dbscan clustering on a batch of samples")
-	b.RegisterAnalysisParamsErr("denstream", add_denstream_rtree, "Perform a denstream clustering on the data stream. Clusters organzied in r-tree.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay")
-	b.RegisterAnalysisParamsErr("denstream_linear", add_denstream_linear, "Perform a denstream clustering on the data stream. Clusters searched linearly.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay")
-	b.RegisterAnalysisParamsErr("denstream_birch", add_denstream_birch, "Perform a denstream clustering on the data stream. Clusters organized in BIRCH-like tree structure.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay")
+	b.RegisterAnalysisParamsErr("denstream", add_denstream_rtree, "Perform a denstream clustering on the data stream. Clusters organzied in r-tree.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters")
+	b.RegisterAnalysisParamsErr("denstream_linear", add_denstream_linear, "Perform a denstream clustering on the data stream. Clusters searched linearly.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters")
+	b.RegisterAnalysisParamsErr("denstream_birch", add_denstream_birch, "Perform a denstream clustering on the data stream. Clusters organized in BIRCH-like tree structure.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters")
 
 	b.RegisterAnalysisParams("binary_evaluation", add_binary_evaluation, "Evaluate 'expected' and 'predicted' tags, separate evaluation by |-separated fields in 'evalGroups' tag", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator")
 	b.RegisterAnalysisParams("event_evaluation", add_event_evaluation, "Like binary_evaluation, but add evaluation metrics for individual anomaly events", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "batchTag")
@@ -169,21 +169,21 @@ func dbscan_parallel(p *SamplePipeline) {
 }
 
 func add_denstream_rtree(p *SamplePipeline, params map[string]string) (err error) {
-	return add_denstream(p, params, 
+	return add_denstream(p, params,
 		func(numDimensions int) denstream.ClusterSpace {
 			return denstream.NewRtreeClusterSpace(numDimensions, 25, 50)
 		})
 }
 
 func add_denstream_linear(p *SamplePipeline, params map[string]string) (err error) {
-	return add_denstream(p, params, 
+	return add_denstream(p, params,
 		func(numDimensions int) denstream.ClusterSpace {
 			return denstream.NewLinearClusterSpace()
 		})
 }
 
 func add_denstream_birch(p *SamplePipeline, params map[string]string) (err error) {
-	return add_denstream(p, params, 
+	return add_denstream(p, params,
 		func(numDimensions int) denstream.ClusterSpace {
 			return denstream.NewBirchTreeClusterSpace(numDimensions)
 		})
@@ -227,14 +227,24 @@ func add_denstream(p *SamplePipeline, params map[string]string, createClusterSpa
 		}
 	}
 
+	outputClusters := false
+	if outputClustersStr, ok := params["output-clusters"]; ok {
+		outputClusters, err = strconv.ParseBool(outputClustersStr)
+		if err != nil {
+			err = query.ParameterError("output-clusters", err)
+			return
+		}
+	}
+
 	clust := &denstream.DenstreamClusterProcessor{
 		DenstreamClusterer: denstream.DenstreamClusterer{
 			HistoryFading:    lambda,
 			MaxOutlierWeight: maxOutlierWeight,
 			Epsilon:          eps,
 		},
-		OutputStateModulo: debug,
-		CreateClusterSpace: createClusterSpace,
+		OutputStateModulo:    debug,
+		FlushClustersAtClose: outputClusters,
+		CreateClusterSpace:   createClusterSpace,
 	}
 
 	if decayTimeStr, ok := params["decay"]; ok {

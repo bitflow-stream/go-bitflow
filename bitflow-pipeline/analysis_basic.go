@@ -21,11 +21,11 @@ import (
 func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	// Control execution
 	b.RegisterAnalysis("noop", noop_processor, "Pass samples through without modification")
-	b.RegisterAnalysisParamsErr("sleep", sleep_samples, "Between every two samples, sleep the time difference between their timestamps", []string{}, "time")
+	b.RegisterAnalysisParamsErr("sleep", sleep_samples, "Between every two samples, sleep the time difference between their timestamps", []string{}, "time", "onChangedTag")
 	b.RegisterAnalysisParams("batch", generic_batch, "Collect samples and flush them when the given tag changes its value. Affects the follow-up analysis step, if it is also a batch analysis", []string{"tag"})
 	b.RegisterAnalysisParamsErr("decouple", decouple_samples, "Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples", []string{"batch"})
 
-	b.RegisterAnalysisParams("split_files", split_files, "Split the samples into multiple files, one file per value of the given tag. Must be used as last step before a file output", []string{"tag"})
+	b.RegisterAnalysisParamsErr("output_files", split_files, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values", nil)
 	b.RegisterAnalysisParamsErr("do", general_expression, "Execute the given expression on every sample", []string{"expr"})
 
 	b.RegisterAnalysisParamsErr("subprocess", run_subprocess, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", []string{"cmd"}, "format")
@@ -36,7 +36,8 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 	// Forks
 	b.RegisterFork("rr", fork_round_robin, "The round-robin fork distributes the samples equally to a fixed number of sub-pipelines", []string{"num"})
 	b.RegisterFork("remap", fork_remap, "The remap-fork can be used after another fork to remap the incoming sub-pipelines to new outgoing sub-pipelines", nil)
-	b.RegisterFork("fork_tags", fork_tags, "The tag-fork creates one sub-pipeline for each occurrence of a given fork", []string{"tag"})
+	b.RegisterFork("fork_tags", fork_tags, "The tag-fork creates one sub-pipeline for each occurrence of a given tag", []string{"tag"})
+	b.RegisterFork("fork_tag_template", fork_tag_template, "Placeholders like ${xxx} are replaced by tag values. The resulting string forms the fork key", []string{"template"})
 
 	// Set metadata
 	b.RegisterAnalysisParamsErr("listen_tags", add_listen_tags, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", []string{"listen"})
@@ -45,7 +46,7 @@ func RegisterBasicAnalyses(b *query.PipelineBuilder) {
 
 	// Select
 	b.RegisterAnalysisParamsErr("pick", pick_x_percent, "Forward only a percentage of samples, parameter is in the range 0..1", []string{"percent"})
-	b.RegisterAnalysisParamsErr("head", pick_head, "Forward only a number of the first processed samples", []string{"num"})
+	b.RegisterAnalysisParamsErr("head", pick_head, "Forward only a number of the first processed samples. If close=true is given as parameter, close the whole pipeline afterwards.", []string{"num"}, "close")
 	b.RegisterAnalysisParamsErr("filter", filter_expression, "Filter the samples based on a boolean expression", []string{"expr"})
 
 	// Reorder
@@ -176,22 +177,27 @@ func filter_variance(p *SamplePipeline, params map[string]string) error {
 }
 
 func pick_head(p *SamplePipeline, params map[string]string) error {
+	doClose := params["close"] == "true"
 	num, err := strconv.Atoi(params["num"])
 	if err != nil {
 		err = query.ParameterError("num", err)
 	} else {
 		processed := 0
-		p.Add(&SimpleProcessor{
+		proc := &SimpleProcessor{
 			Description: "Pick first " + strconv.Itoa(num) + " samples",
-			Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
-				if num > processed {
-					processed++
-					return sample, header, nil
-				} else {
-					return nil, nil, nil
+		}
+		proc.Process = func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			if num > processed {
+				processed++
+				return sample, header, nil
+			} else {
+				if doClose {
+					proc.Error(nil) // Stop processing without an error
 				}
-			},
-		})
+				return nil, nil, nil
+			}
+		}
+		p.Add(proc)
 	}
 	return err
 }
@@ -205,17 +211,41 @@ func set_tags(p *SamplePipeline, params map[string]string) {
 	p.Add(NewTaggingProcessor(params))
 }
 
-func split_files(p *SamplePipeline, params map[string]string) {
-	distributor := &TagsDistributor{
-		Tags:        []string{params["tag"]},
-		Separator:   "-",
-		Replacement: "_empty_",
+func split_files(p *SamplePipeline, params map[string]string) error {
+	filename := params["file"]
+	if filename == "" {
+		return query.ParameterError("file", errors.New("Missing required parameter"))
 	}
-	p.Add(&MetricFork{
-		ParallelClose: true,
-		Distributor:   distributor,
-		Builder:       MultiFileSuffixBuilder(nil),
-	})
+	delete(params, "file")
+
+	distributor := &TagTemplateDistributor{
+		Template: filename,
+	}
+	builder, err := make_multi_file_pipeline_builder(params)
+	if err == nil {
+		p.Add(&MetricFork{
+			ParallelClose: true,
+			Distributor:   distributor,
+			Builder:       builder,
+		})
+	}
+	return err
+}
+
+func make_multi_file_pipeline_builder(params map[string]string) (*MultiFilePipelineBuilder, error) {
+	var endpointFactory bitflow.EndpointFactory
+	if err := endpointFactory.ParseParameters(params); err != nil {
+		return nil, fmt.Errorf("Error parsing parameters: %v", err)
+	}
+	output, err := endpointFactory.CreateOutput("file://-") // Create empty file output, will only be used as template with configuration values
+	if err != nil {
+		return nil, fmt.Errorf("Error creating template file output: %v", err)
+	}
+	fileOutput, ok := output.(*bitflow.FileSink)
+	if !ok {
+		return nil, fmt.Errorf("Error creating template file output, received wrong type: %T", output)
+	}
+	return &MultiFilePipelineBuilder{Config: *fileOutput}, nil
 }
 
 func rename_metrics(p *SamplePipeline, params map[string]string) error {
@@ -248,9 +278,9 @@ func strip_metrics(p *SamplePipeline) {
 
 func sleep_samples(p *SamplePipeline, params map[string]string) error {
 	var timeout time.Duration
-	hasTimeout := false
-	if timeoutStr, ok := params["time"]; ok {
-		hasTimeout = true
+	timeoutStr, hasTimeout := params["time"]
+	changedTag, hasOnTagChange := params["onChangedTag"]
+	if hasTimeout {
 		var err error
 		timeout, err = time.ParseDuration(timeoutStr)
 		if err != nil {
@@ -264,28 +294,41 @@ func sleep_samples(p *SamplePipeline, params map[string]string) error {
 	} else {
 		desc += " (timestamp difference)"
 	}
+	if hasOnTagChange {
+		desc += " when tag " + changedTag + " changes"
+	}
 
-	// TODO make this sleep interruptible
-
+	previousTag := ""
 	var lastTimestamp time.Time
-	p.Add(&SimpleProcessor{
+	processor := &SimpleProcessor{
 		Description: desc,
-		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+	}
+	processor.Process = func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+		doSleep := true
+		if hasOnTagChange {
+			newTag := sample.Tag(changedTag)
+			if newTag == previousTag {
+				doSleep = false
+			}
+			previousTag = newTag
+		}
+		if doSleep {
 			if hasTimeout {
-				time.Sleep(timeout)
+				processor.StopChan.WaitTimeout(timeout)
 			} else {
 				last := lastTimestamp
 				if !last.IsZero() {
 					diff := sample.Time.Sub(last)
 					if diff > 0 {
-						time.Sleep(diff)
+						processor.StopChan.WaitTimeout(diff)
 					}
 				}
 				lastTimestamp = sample.Time
 			}
-			return sample, header, nil
-		},
-	})
+		}
+		return sample, header, nil
+	}
+	p.Add(processor)
 	return nil
 }
 
@@ -443,6 +486,12 @@ func fork_tags(params map[string]string) (fmt.Stringer, error) {
 	}, nil
 }
 
+func fork_tag_template(params map[string]string) (fmt.Stringer, error) {
+	return &TagTemplateDistributor{
+		Template: params["template"],
+	}, nil
+}
+
 func fork_remap(params map[string]string) (fmt.Stringer, error) {
 	return &StringRemapDistributor{
 		Mapping: params,
@@ -453,7 +502,7 @@ func parse_tags_to_metrics(p *SamplePipeline, params map[string]string) {
 	var checker bitflow.HeaderChecker
 	var outHeader *bitflow.Header
 	var sorted SortedStringPairs
-	missingTagWarned := false
+	warnedMissingTags := make(map[string]bool)
 	sorted.FillFromMap(params)
 	sort.Sort(&sorted)
 
@@ -467,9 +516,9 @@ func parse_tags_to_metrics(p *SamplePipeline, params map[string]string) {
 			for i, tag := range sorted.Values {
 				var value float64
 				if !sample.HasTag(tag) {
-					if !missingTagWarned {
-						missingTagWarned = true
-						log.Warnf("Encountered sample missing tag '%v'. Using metric value 0 instead.", tag)
+					if !warnedMissingTags[tag] {
+						warnedMissingTags[tag] = true
+						log.Warnf("Encountered sample missing tag '%v'. Using metric value 0 instead. This warning is printed once per tag.", tag)
 					}
 				} else {
 					var err error

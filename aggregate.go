@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
+	log "github.com/sirupsen/logrus"
 )
 
 type FeatureAggregator struct {
-	bitflow.AbstractProcessor
+	bitflow.NoopProcessor
 	WindowSize     int           // Applied if >0
 	WindowDuration time.Duration // Applied if >0
 	UseCurrentTime bool          // If true, use time.Now() as reference for WindowTime. Otherwise, use the timestamp of the latest Sample.
@@ -61,9 +61,6 @@ func (agg *FeatureAggregator) OutputSampleSize(sampleSize int) int {
 }
 
 func (agg *FeatureAggregator) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if err := agg.Check(sample, header); err != nil {
-		return err
-	}
 	if agg.checker.HeaderChanged(header) {
 		agg.newHeader(header)
 	}
@@ -82,7 +79,7 @@ func (agg *FeatureAggregator) Sample(sample *bitflow.Sample, header *bitflow.Hea
 		}
 	}
 	sample.Values = outValues
-	return agg.OutgoingSink.Sample(sample, agg.outHeader)
+	return agg.NoopProcessor.Sample(sample, agg.outHeader)
 }
 
 func (agg *FeatureAggregator) newHeader(header *bitflow.Header) {

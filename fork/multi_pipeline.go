@@ -3,9 +3,9 @@ package fork
 import (
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
+	log "github.com/sirupsen/logrus"
 )
 
 type MultiPipeline struct {
@@ -19,7 +19,7 @@ type MultiPipeline struct {
 	merger           ForkMerger
 }
 
-func (m *MultiPipeline) Init(outgoing bitflow.MetricSink, closeHook func(), wg *sync.WaitGroup) {
+func (m *MultiPipeline) Init(outgoing bitflow.SampleProcessor, closeHook func(), wg *sync.WaitGroup) {
 	m.stoppedCond = sync.NewCond(new(sync.Mutex))
 	m.merger.outgoing = outgoing
 	wg.Add(1)
@@ -31,12 +31,10 @@ func (m *MultiPipeline) Init(outgoing bitflow.MetricSink, closeHook func(), wg *
 }
 
 func (m *MultiPipeline) StartPipeline(pipeline *bitflow.SamplePipeline, finishedHook func(isPassive bool, err error)) {
-	if pipeline.Sink == nil {
-		pipeline.Sink = &m.merger
-	}
+	pipeline.Add(&m.merger)
 	if pipeline.Source == nil {
 		// Use an empty source to make stopPipeline() work
-		pipeline.Source = new(bitflow.EmptyMetricSource)
+		pipeline.Source = new(bitflow.EmptySampleSource)
 	}
 	m.runningPipelines++
 
@@ -132,9 +130,9 @@ func (r *runningSubPipeline) stop() {
 }
 
 type ForkMerger struct {
-	bitflow.AbstractMetricSink
+	bitflow.AbstractSampleProcessor
 	mutex    sync.Mutex
-	outgoing bitflow.MetricSink
+	outgoing bitflow.SampleProcessor
 }
 
 func (sink *ForkMerger) String() string {
@@ -156,6 +154,6 @@ func (sink *ForkMerger) Close() {
 }
 
 // Can be used by implementations of PipelineBuilder to access the next step of the entire fork.
-func (sink *ForkMerger) GetOriginalSink() bitflow.MetricSink {
+func (sink *ForkMerger) GetOriginalSink() bitflow.SampleProcessor {
 	return sink.outgoing
 }

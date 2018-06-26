@@ -151,7 +151,7 @@ func (c *RtreeMicroCluster) computeBounds() *rtreego.Rect {
 	}
 	bounds, err := rtreego.NewRect(origin, lengths)
 	if err != nil {
-		panic(fmt.Errorf("Illegal rect (W: %v, origin: %v, lengths: %v): %v", c.W, origin, lengths, err))
+		panic(fmt.Errorf("Illegal rect (W: %v, origin: %v, lengths: %v): %v", c.W(), origin, lengths, err))
 	}
 	return bounds
 }
