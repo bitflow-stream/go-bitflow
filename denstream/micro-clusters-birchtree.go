@@ -1,7 +1,7 @@
 package denstream
 
 import (
-	// log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -113,10 +113,9 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	}
 	s.nextNodeId++
 	newNode.isLeaf = true
-
 	parentNode := s.root
-
-	if parentNode.numChildren < (_maxChildren - 1) {
+	log.Println("Insert is children matching", parentNode.numChildren, len(parentNode.children))
+	if parentNode.numChildren < _maxChildren {
 		addCFtoParentNode(parentNode, newNode)
 		addChild(parentNode, newNode)
 
@@ -130,7 +129,7 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 			nearestNode = nearestNode.children[nearestchildIdx]
 		}
 
-		if parentNode.numChildren < (_maxChildren - 1) {
+		if parentNode.numChildren < _maxChildren {
 			addChild(parentNode, newNode)
 			addCFtoParentNodes(parentNode, newNode)
 		} else {
@@ -151,7 +150,6 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 		nearestchildIdx := findNearestChildNode(nearestNode, cluster)
 		nearestNode = nearestNode.children[nearestchildIdx]
 	}
-
 	for i := 0; i < parentNode.numChildren; i++ {
 		if parentNode.children[i].cluster.Id() == cluster.Id() {
 
@@ -177,13 +175,12 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 		}
 
 	}
-	//panic("Cluster not in cluster space during: " + reason)
+	panic(cluster.Id())
 }
 
 func (s *BirchTreeClusterSpace) TransferCluster(cluster MicroCluster, otherSpace ClusterSpace) {
-	otherSpace.Insert(cluster)
 	s.Delete(cluster, "transfering")
-
+	otherSpace.Insert(cluster)
 }
 
 func (s *BirchTreeClusterSpace) UpdateCluster(cluster MicroCluster, do func() (reinsertCluster bool)) {
@@ -211,7 +208,8 @@ func (s *BirchTreeClusterSpace) UpdateCluster(cluster MicroCluster, do func() (r
 func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
 	numChildren := parentNode.numChildren
 	children := parentNode.children
-	if numChildren == (_maxChildren - 1) {
+
+	if numChildren == _maxChildren {
 		//Identify 2 farthest child as seeds of new node
 		farthest := 0.0
 		c1 := 0
@@ -248,7 +246,6 @@ func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *Bi
 			cf2:          make([]float64, s.numDimensions),
 			creationTime: time.Time{},
 		}
-
 		node2 = new(BirchTreeNode)
 		node2.id = s.nextNodeId
 		s.nextNodeId++
@@ -258,7 +255,6 @@ func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *Bi
 			cf2:          make([]float64, s.numDimensions),
 			creationTime: time.Time{},
 		}
-
 		for i := 0; i < numChildren; i++ {
 			if dist[i][c1] < dist[i][c2] {
 				addCFtoParentNode(node1, children[i])
@@ -266,6 +262,7 @@ func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *Bi
 			} else {
 				addCFtoParentNode(node2, children[i])
 				addChild(node2, children[i])
+
 			}
 		}
 
@@ -290,7 +287,6 @@ func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *Bi
 
 		addCFtoParentNode(parentNode, node2)
 		addChild(parentNode, node2)
-
 		if parentNode != s.root {
 			addCFtoParentNodes(parentNode.parent, newNode)
 		}
@@ -317,6 +313,7 @@ func findNearestChildNode(nearestNode *BirchTreeNode, cluster MicroCluster) (nea
 	var closestDistance float64
 	for idx := 0; idx < nearestNode.numChildren; idx++ {
 		childClust := nearestNode.children[idx].cluster
+
 		dist := euclideanDistance(cluster.Center(), childClust.Center())
 		if nearestChildIdx == -1 || dist < closestDistance {
 			nearestChildIdx = idx
@@ -334,10 +331,11 @@ func clearBirchTreeNode(node *BirchTreeNode) {
 }
 
 func addChild(node *BirchTreeNode, childNode *BirchTreeNode) {
-	if node.numChildren < (_maxChildren - 1) {
+	if node.numChildren < _maxChildren {
 		childNode.parent = node
 		node.children[node.numChildren] = childNode
 		node.numChildren++
+		log.Println(" add Child: ", node.id, childNode.id)
 	}
 }
 
