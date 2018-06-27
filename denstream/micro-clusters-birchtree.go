@@ -1,7 +1,7 @@
 package denstream
 
 import (
-	log "github.com/sirupsen/logrus"
+	// log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -114,7 +114,6 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	s.nextNodeId++
 	newNode.isLeaf = true
 	parentNode := s.root
-	log.Println("Insert is children matching", parentNode.numChildren, len(parentNode.children))
 	if parentNode.numChildren < _maxChildren {
 		addCFtoParentNode(parentNode, newNode)
 		addChild(parentNode, newNode)
@@ -145,6 +144,7 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 
 	parentNode := s.root
 	nearestNode := parentNode
+
 	for nearestNode.isLeaf == false {
 		parentNode = nearestNode
 		nearestchildIdx := findNearestChildNode(nearestNode, cluster)
@@ -156,6 +156,7 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 			delCFfromParentNodes(parentNode, parentNode.children[i])
 			parentNode.children[i] = nil
 			parentNode.children = append(parentNode.children[:i], parentNode.children[i+1:]...)
+			parentNode.children = append(parentNode.children, nil)
 			parentNode.numChildren--
 			s.totalClusters--
 
@@ -166,6 +167,7 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 					if parentNode.children[j].id == curNode.id {
 						parentNode.children[j] = nil
 						parentNode.children = append(parentNode.children[:j], parentNode.children[j+1:]...)
+						parentNode.children = append(parentNode.children, nil)
 						parentNode.numChildren--
 					}
 				}
@@ -175,7 +177,7 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 		}
 
 	}
-	panic(cluster.Id())
+	panic("Cluster not in cluster space during: " + reason)
 }
 
 func (s *BirchTreeClusterSpace) TransferCluster(cluster MicroCluster, otherSpace ClusterSpace) {
@@ -335,7 +337,7 @@ func addChild(node *BirchTreeNode, childNode *BirchTreeNode) {
 		childNode.parent = node
 		node.children[node.numChildren] = childNode
 		node.numChildren++
-		log.Println(" add Child: ", node.id, childNode.id)
+
 	}
 }
 
