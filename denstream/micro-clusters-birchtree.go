@@ -113,33 +113,13 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	}
 	s.nextNodeId++
 	newNode.isLeaf = true
-	parentNode := s.root
-	if parentNode.numChildren < _maxChildren {
-		addCFtoParentNode(parentNode, newNode)
-		addChild(parentNode, newNode)
-
-	} else {
-
-		nearestNode := parentNode
-		//identify the node where newnode can be insterted as a leaf, if the num of children is max, then split the node
-		for nearestNode.isLeaf == false {
-			parentNode = nearestNode
-			nearestchildIdx := findNearestChildNode(nearestNode, cluster)
-			nearestNode = nearestNode.children[nearestchildIdx]
-		}
-
-		if parentNode.numChildren < _maxChildren {
-			addChild(parentNode, newNode)
-			addCFtoParentNodes(parentNode, newNode)
-		} else {
-			s.splitNode(parentNode, newNode)
-		}
-	}
+	addNode(s, newNode)
 	s.totalClusters++
 
 	return
 
 }
+
 
 func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 
@@ -286,6 +266,47 @@ func traverseTree(node *BirchTreeNode, do func(cluster MicroCluster)) {
 		traverseTree(child, do)
 	}
 }
+
+
+func createNewNode(node *BirchTreeNode, s *BirchTreeClusterSpace) *BirchTreeNode {
+	node = new(BirchTreeNode)
+	node.id = s.nextNodeId
+	s.nextNodeId++
+	node.children = make([]*BirchTreeNode, _maxChildren)
+	node.cluster = &BasicMicroCluster{
+		cf1:          make([]float64, s.numDimensions),
+		cf2:          make([]float64, s.numDimensions),
+		creationTime: time.Time{},
+	}
+	node.isLeaf = false
+	return node
+}
+
+func addNode(s *BirchTreeClusterSpace, newNode *BirchTreeNode) {
+	parentNode := s.root
+	if parentNode.numChildren < _maxChildren {
+		addCFtoParentNode(parentNode, newNode)
+		addChild(parentNode, newNode)
+
+	} else {
+
+		nearestNode := parentNode
+		//identify the node where newnode can be insterted as a leaf, if the num of children is max, then split the node
+		for nearestNode.isLeaf == false {
+			parentNode = nearestNode
+			nearestchildIdx := findNearestChildNode(nearestNode, newNode.cluster)
+			nearestNode = nearestNode.children[nearestchildIdx]
+		}
+
+		if parentNode.numChildren < _maxChildren {
+			addChild(parentNode, newNode)
+			addCFtoParentNodes(parentNode, newNode)
+		} else {
+			s.splitNode(parentNode, newNode)
+		}
+	}
+}
+
 func findNearestChildNode(nearestNode *BirchTreeNode, cluster MicroCluster) (nearestChildIdx int) {
 	nearestChildIdx = -1
 
@@ -300,20 +321,6 @@ func findNearestChildNode(nearestNode *BirchTreeNode, cluster MicroCluster) (nea
 		}
 	}
 	return
-}
-
-func createNewNode(node *BirchTreeNode, s *BirchTreeClusterSpace) *BirchTreeNode {
-	node = new(BirchTreeNode)
-	node.id = s.nextNodeId
-	s.nextNodeId++
-	node.children = make([]*BirchTreeNode, _maxChildren)
-	node.cluster = &BasicMicroCluster{
-		cf1:          make([]float64, s.numDimensions),
-		cf2:          make([]float64, s.numDimensions),
-		creationTime: time.Time{},
-	}
-	node.isLeaf = false
-	return node
 }
 
 func resetNode(node *BirchTreeNode, numDimensions int) {
