@@ -26,10 +26,12 @@ func REGISTER_BASIC(b *query.PipelineBuilder) {
 
 	// Set metadata
 	b.RegisterAnalysis("set_time", set_time_processor, "Set the timestamp on every processed sample to the current time")
+	b.RegisterAnalysis("append_latency", append_time_difference, "Append the time difference to the previous sample as a metric")
 
 	// Select
 	b.RegisterAnalysisParamsErr("pick", pick_x_percent, "Forward only a percentage of samples, parameter is in the range 0..1", []string{"percent"})
 	b.RegisterAnalysisParamsErr("head", pick_head, "Forward only a number of the first processed samples. If close=true is given as parameter, close the whole pipeline afterwards.", []string{"num"}, "close")
+	b.RegisterAnalysisParamsErr("skip", skip_samples, "Drop a number of samples in the beginning", []string{"num"})
 	b.RegisterAnalysisParamsErr("filter", filter_expression, "Filter the samples based on a boolean expression", []string{"expr"})
 
 	// Reorder
@@ -163,6 +165,28 @@ func pick_head(p *pipeline.SamplePipeline, params map[string]string) error {
 				if doClose {
 					proc.Error(nil) // Stop processing without an error
 				}
+				return nil, nil, nil
+			}
+		}
+		p.Add(proc)
+	}
+	return err
+}
+
+func skip_samples(p *pipeline.SamplePipeline, params map[string]string) error {
+	num, err := strconv.Atoi(params["num"])
+	if err != nil {
+		err = query.ParameterError("num", err)
+	} else {
+		dropped := 0
+		proc := &pipeline.SimpleProcessor{
+			Description: "Drop first " + strconv.Itoa(num) + " samples",
+		}
+		proc.Process = func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			if dropped >= num {
+				return sample, header, nil
+			} else {
+				dropped++
 				return nil, nil, nil
 			}
 		}
@@ -331,6 +355,29 @@ func parse_tags_to_metrics(p *pipeline.SamplePipeline, params map[string]string)
 				values[i] = value
 			}
 			pipeline.AppendToSample(sample, values)
+			return sample, outHeader, nil
+		},
+	})
+}
+
+func append_time_difference(p *pipeline.SamplePipeline) {
+	fieldName := "time-difference"
+	var checker bitflow.HeaderChecker
+	var outHeader *bitflow.Header
+	var lastTime time.Time
+
+	p.Add(&pipeline.SimpleProcessor{
+		Description: "Append time difference as metric " + fieldName,
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			if checker.HeaderChanged(header) {
+				outHeader = header.Clone(append(header.Fields, fieldName))
+			}
+			var diff float64
+			if !lastTime.IsZero() {
+				diff = float64(sample.Time.Sub(lastTime))
+			}
+			lastTime = sample.Time
+			pipeline.AppendToSample(sample, []float64{diff})
 			return sample, outHeader, nil
 		},
 	})
