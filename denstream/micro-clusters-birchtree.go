@@ -206,8 +206,8 @@ func traverseTree(node *BirchTreeNode, do func(cluster MicroCluster)) {
 		do(node.cluster)
 		return
 	}
-	for _, child := range node.children {
-		traverseTree(child, do)
+	for i := 0; i < node.numChildren; i++ {
+		traverseTree(node.children[i], do)
 	}
 }
 
