@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
@@ -28,6 +30,34 @@ type SubprocessRunner struct {
 	output *bitflow.WriterSink
 	input  *bitflow.ReaderSource
 	stderr bytes.Buffer
+}
+
+func RegisterSubprocessRunner(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+		cmd := pipeline.SplitShellCommand(params["cmd"])
+		format, ok := params["format"]
+		if !ok {
+			format = "bin"
+		}
+		delete(params, "cmd")
+		delete(params, "format")
+
+		var endpointFactory bitflow.EndpointFactory
+		if err := endpointFactory.ParseParameters(params); err != nil {
+			return fmt.Errorf("Error parsing parameters: %v", err)
+		}
+
+		runner := &SubprocessRunner{
+			Cmd:  cmd[0],
+			Args: cmd[1:],
+		}
+		if err := runner.Configure(format, &endpointFactory); err != nil {
+			return err
+		}
+		p.Add(runner)
+		return nil
+	}
+	b.RegisterAnalysisParamsErr("subprocess", create, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", []string{"cmd"}, "format")
 }
 
 func (r *SubprocessRunner) Configure(marshallingFormat string, f *bitflow.EndpointFactory) error {

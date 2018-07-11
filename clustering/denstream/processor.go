@@ -3,8 +3,11 @@ package denstream
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	bitflow "github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -101,4 +104,99 @@ func (p *DenstreamClusterProcessor) outputCluster(cluster MicroCluster, clusterT
 	if *err != nil {
 		log.Errorln("Error outputting cluster centers:", *err)
 	}
+}
+
+func create_denstream_step(p *pipeline.SamplePipeline, params map[string]string, linearClusterSpace bool) (err error) {
+	eps := 0.1
+	if epsStr, ok := params["eps"]; ok {
+		eps, err = strconv.ParseFloat(epsStr, 64)
+		if err != nil {
+			err = query.ParameterError("eps", err)
+			return
+		}
+	}
+
+	lambda := 0.0000000001 // 0.0001 -> Decay check every 37 minutes
+	lambdaStr, hasLambda := params["lambda"]
+	if hasLambda {
+		lambda, err = strconv.ParseFloat(lambdaStr, 64)
+		if err != nil {
+			err = query.ParameterError("lambda", err)
+			return
+		}
+	}
+
+	maxOutlierWeight := 5.0
+	if maxOutlierWeightStr, ok := params["maxOutlierWeight"]; ok {
+		maxOutlierWeight, err = strconv.ParseFloat(maxOutlierWeightStr, 64)
+		if err != nil {
+			err = query.ParameterError("maxOutlierWeight", err)
+			return
+		}
+	}
+
+	debug := 0
+	if debugStr, ok := params["debug"]; ok {
+		debug, err = strconv.Atoi(debugStr)
+		if err != nil {
+			err = query.ParameterError("debug", err)
+			return
+		}
+	}
+
+	outputClusters := false
+	if outputClustersStr, ok := params["output-clusters"]; ok {
+		outputClusters, err = strconv.ParseBool(outputClustersStr)
+		if err != nil {
+			err = query.ParameterError("output-clusters", err)
+			return
+		}
+	}
+
+	clust := &DenstreamClusterProcessor{
+		DenstreamClusterer: DenstreamClusterer{
+			HistoryFading:    lambda,
+			MaxOutlierWeight: maxOutlierWeight,
+			Epsilon:          eps,
+		},
+		OutputStateModulo:    debug,
+		FlushClustersAtClose: outputClusters,
+		CreateClusterSpace: func(numDimensions int) ClusterSpace {
+			if linearClusterSpace {
+				return NewLinearClusterSpace()
+			} else {
+				return NewRtreeClusterSpace(numDimensions, 25, 50)
+			}
+		},
+	}
+
+	if decayTimeStr, ok := params["decay"]; ok {
+		var decayTime time.Duration
+		decayTime, err = time.ParseDuration(decayTimeStr)
+		if err != nil {
+			err = query.ParameterError("decay", err)
+			return
+		}
+		if hasLambda {
+			return fmt.Errorf("Cannot define both 'lambda' and 'decay' parameters")
+		}
+		clust.SetDecayTimeUnit(decayTime)
+	}
+
+	p.Add(clust)
+	return nil
+}
+
+func RegisterDenstream(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+		return create_denstream_step(p, params, false)
+	}
+	b.RegisterAnalysisParamsErr("denstream", create, "Perform a denstream clustering on the data stream. Clusters organzied in r-tree.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters")
+}
+
+func RegisterDenstreamLinear(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+		return create_denstream_step(p, params, true)
+	}
+	b.RegisterAnalysisParamsErr("denstream_linear", create, "Perform a denstream clustering on the data stream. Clusters searched linearly.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters")
 }

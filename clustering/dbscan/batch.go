@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-onlinestats"
 	log "github.com/sirupsen/logrus"
 )
@@ -44,4 +46,23 @@ func (c *DbscanBatchClusterer) ProcessBatch(header *bitflow.Header, samples []*b
 func (c *DbscanBatchClusterer) String() string {
 	return fmt.Sprintf("Rtree-Dbscan(eps: %v, minpts: %v, tree: %v-%v, width: %v)",
 		c.Eps, c.MinPts, c.TreeMinChildren, c.TreeMaxChildren, c.TreePointWidth)
+}
+
+func RegisterDbscan(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline) {
+		p.Batch(&DbscanBatchClusterer{
+			Dbscan:          Dbscan{Eps: 0.1, MinPts: 5},
+			TreeMinChildren: 25,
+			TreeMaxChildren: 50,
+			TreePointWidth:  0.0001,
+		})
+	}
+	b.RegisterAnalysis("dbscan", create, "Perform a dbscan clustering on a batch of samples")
+}
+
+func RegisterDbscanParallel(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline) {
+		p.Batch(&ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5})
+	}
+	b.RegisterAnalysis("dbscan_parallel", create, "Perform a parallelized dbscan clustering on a batch of samples")
 }

@@ -7,10 +7,11 @@ import (
 )
 
 func RegisterNoop(b *query.PipelineBuilder) {
-	create := func(p *pipeline.SamplePipeline) {
-		p.Add(new(NoopProcessor))
-	}
-	b.RegisterAnalysis("noop", create, "Pass samples through without modification")
+	b.RegisterAnalysis("noop",
+		func(p *pipeline.SamplePipeline) {
+			p.Add(new(NoopProcessor))
+		},
+		"Pass samples through without modification")
 }
 
 type NoopProcessor struct {

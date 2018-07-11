@@ -6,7 +6,9 @@ import (
 	"time"
 
 	bitflow "github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/clustering/denstream"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
@@ -46,6 +48,19 @@ func (p *ClusterTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 	}
 	sample.SetTag(p.Predicted, predicted)
 	return p.NoopProcessor.Sample(sample, header)
+}
+
+func RegisterClusterTagger(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) {
+		proc := new(ClusterTagger)
+		proc.SetBinaryEvaluationTags(params)
+		proc.NormalTagValue = params["normalValue"]
+		if proc.NormalTagValue == "" {
+			proc.NormalTagValue = "normal"
+		}
+		p.Add(proc)
+	}
+	b.RegisterAnalysisParams("cluster_tag", create, "Translate 'cluster' tag into 'predicted' = 'anomaly' or 'normal'", []string{}, "expectedTag", "predictedTag", "anomalyValue", "normalValue")
 }
 
 type TagsPreprocessor struct {
@@ -136,4 +151,19 @@ func (p *TagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header
 	sample.SetTag(p.EvalGroupsTag, strings.Join(groups, p.EvalGroupSeparator))
 
 	return p.NoopProcessor.Sample(sample, header)
+}
+
+func RegisterTagsPreprocessor(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+		proc, err := NewTagsPreprocessor(params["trainingEnd"])
+		proc.SetBinaryEvaluationTags(params)
+		proc.SetEvaluationTags(params)
+		proc.NormalTagValue = params["normalValue"]
+		if proc.NormalTagValue == "" {
+			proc.NormalTagValue = "normal"
+		}
+		p.Add(proc)
+		return err
+	}
+	b.RegisterAnalysisParamsErr("preprocess_tags", create, "Process 'host', 'cls' and 'target' tags into more useful information.", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "trainingEnd", "normalValue")
 }

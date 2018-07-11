@@ -5,6 +5,8 @@ import (
 	"sort"
 
 	bitflow "github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -21,6 +23,14 @@ func NewMultiHeaderMerger() *MultiHeaderMerger {
 	return &MultiHeaderMerger{
 		metrics: make(map[string][]bitflow.Value),
 	}
+}
+
+func RegisterMergeHeaders(b *query.PipelineBuilder) {
+	b.RegisterAnalysis("merge_headers",
+		func(p *pipeline.SamplePipeline) {
+			p.Add(NewMultiHeaderMerger())
+		},
+		"Accept any number of changing headers and merge them into one output header when flushing the results")
 }
 
 func (p *MultiHeaderMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

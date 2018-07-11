@@ -5,9 +5,26 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
 
 type MinMaxScaling struct {
+}
+
+func RegisterMinMaxScaling(b *query.PipelineBuilder) {
+	b.RegisterAnalysis("scale_min_max",
+		func(p *pipeline.SamplePipeline) {
+			p.Batch(new(MinMaxScaling))
+		},
+		"Normalize a batch of samples using a min-max scale")
+}
+
+func RegisterStandardizationScaling(b *query.PipelineBuilder) {
+	b.RegisterAnalysis("standardize",
+		func(p *pipeline.SamplePipeline) {
+			p.Batch(new(StandardizationScaling))
+		},
+		"Normalize a batch of samples based on the mean and std-deviation")
 }
 
 func GetMinMax(header *bitflow.Header, samples []*bitflow.Sample) ([]float64, []float64) {

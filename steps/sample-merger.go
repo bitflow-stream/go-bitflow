@@ -14,7 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type SynchronizedSampleMerger struct {
+type SynchronizedStreamMerger struct {
 	bitflow.NoopProcessor
 
 	MergeTag        string
@@ -34,7 +34,7 @@ type SynchronizedSampleMerger struct {
 	samples         []queueElem // Reused slice to avoid reallocations
 }
 
-func RegisterSampleMerger(b *query.PipelineBuilder) {
+func RegisterSubpipelineStreamMerger(b *query.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		intervalStr := params["interval"]
 		tag := params["tag"]
@@ -49,7 +49,7 @@ func RegisterSampleMerger(b *query.PipelineBuilder) {
 			return query.ParameterError("interval", err)
 		}
 
-		merger := &SynchronizedSampleMerger{
+		merger := &SynchronizedStreamMerger{
 			MergeTag:           tag,
 			MergeInterval:      interval,
 			ExpectedStreams:    num,
@@ -94,7 +94,7 @@ func RegisterSampleMerger(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("merge_streams", create, "Merge multiple streams, identified by a given tag. Output samples are generated in a given interval, all incoming metrics are averaged within that window, incoming metric names are prefixes with the respective tag value.", []string{"tag", "num", "interval"})
 }
 
-func (p *SynchronizedSampleMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (p *SynchronizedStreamMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if !sample.HasTag(p.MergeTag) {
 		log.Warnln("Dropping sample without", p.MergeTag, "tag")
 		return nil
@@ -133,7 +133,7 @@ func (p *SynchronizedSampleMerger) Sample(sample *bitflow.Sample, header *bitflo
 	return nil
 }
 
-func (p *SynchronizedSampleMerger) Close() {
+func (p *SynchronizedStreamMerger) Close() {
 	for {
 		if !p.canMergeSamples() {
 			break
@@ -150,7 +150,7 @@ func (p *SynchronizedSampleMerger) Close() {
 	p.CloseSink()
 }
 
-func (p *SynchronizedSampleMerger) StreamClosed(name string) {
+func (p *SynchronizedStreamMerger) StreamClosed(name string) {
 	p.readyQueuesLock.Lock()
 	defer p.readyQueuesLock.Unlock()
 	if queue, ok := p.queues[name]; ok {
@@ -159,15 +159,15 @@ func (p *SynchronizedSampleMerger) StreamClosed(name string) {
 	}
 }
 
-func (p *SynchronizedSampleMerger) StreamOfSampleClosed(lastSample *bitflow.Sample, lastHeader *bitflow.Header) {
+func (p *SynchronizedStreamMerger) StreamOfSampleClosed(lastSample *bitflow.Sample, lastHeader *bitflow.Header) {
 	p.StreamClosed(lastSample.Tag("client"))
 }
 
-func (p *SynchronizedSampleMerger) String() string {
+func (p *SynchronizedStreamMerger) String() string {
 	return p.Description
 }
 
-func (p *SynchronizedSampleMerger) logQueueLengths() {
+func (p *SynchronizedStreamMerger) logQueueLengths() {
 	min := math.MaxInt32
 	max := 0
 	var avg float64
@@ -184,7 +184,7 @@ func (p *SynchronizedSampleMerger) logQueueLengths() {
 	log.Printf("%v: Outputting merged sample, avg queue length: %v (min: %v max: %v)", p, avg, min, max)
 }
 
-func (p *SynchronizedSampleMerger) logWaitingQueues() {
+func (p *SynchronizedStreamMerger) logWaitingQueues() {
 	waitingQueues := make([]string, 0, len(p.queues))
 	for name := range p.queues {
 		if _, ok := p.readyQueues[name]; !ok {
@@ -194,7 +194,7 @@ func (p *SynchronizedSampleMerger) logWaitingQueues() {
 	log.Printf("Waiting for %v queue(s): %v", len(waitingQueues), waitingQueues)
 }
 
-func (s *SynchronizedSampleMerger) canMergeSamples() bool {
+func (s *SynchronizedStreamMerger) canMergeSamples() bool {
 	if len(s.queues) < s.ExpectedStreams {
 		// Still waiting for every input stream to deliver at least one sample
 		return false
@@ -211,7 +211,7 @@ func (s *SynchronizedSampleMerger) canMergeSamples() bool {
 	return true
 }
 
-func (s *SynchronizedSampleMerger) createSample() (*bitflow.Sample, *bitflow.Header) {
+func (s *SynchronizedStreamMerger) createSample() (*bitflow.Sample, *bitflow.Header) {
 	queueElements := s.collectQueuedSamples(s.queues)
 	if len(queueElements) == 0 {
 		return nil, nil
@@ -245,7 +245,7 @@ func (s *SynchronizedSampleMerger) createSample() (*bitflow.Sample, *bitflow.Hea
 	return outSample, outHeader
 }
 
-func (s *SynchronizedSampleMerger) collectQueuedSamples(queues map[string]*mergeQueue) []queueElem {
+func (s *SynchronizedStreamMerger) collectQueuedSamples(queues map[string]*mergeQueue) []queueElem {
 	res := s.samples[:0]
 	for _, queue := range queues {
 		for {
@@ -260,7 +260,7 @@ func (s *SynchronizedSampleMerger) collectQueuedSamples(queues map[string]*merge
 	return res
 }
 
-func (s *SynchronizedSampleMerger) storeStart() {
+func (s *SynchronizedStreamMerger) storeStart() {
 	s.start = time.Time{}
 	s.end = time.Time{}
 	for _, queue := range s.queues {

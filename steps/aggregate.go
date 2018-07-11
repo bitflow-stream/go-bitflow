@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -192,4 +195,46 @@ func FeatureWindowSlope(stats *FeatureWindowStats) bitflow.Value {
 	front := stats.values.Front().Value.(bitflow.Value)
 	back := stats.values.Back().Value.(bitflow.Value)
 	return back - front
+}
+
+func RegisterAggregateAvg(b *query.PipelineBuilder) {
+	b.RegisterAnalysisParamsErr("avg",
+		func(p *pipeline.SamplePipeline, params map[string]string) error {
+			agg, err := create_aggregator(params)
+			if err != nil {
+				return err
+			}
+			p.Add(agg.AddAvg("_avg"))
+			return nil
+		},
+		"Add an average metric for every incoming metric. Optional parameter: duration or number of samples", []string{}, "window")
+}
+
+func RegisterAggregateSlope(b *query.PipelineBuilder) {
+	b.RegisterAnalysisParamsErr("slope",
+		func(p *pipeline.SamplePipeline, params map[string]string) error {
+			agg, err := create_aggregator(params)
+			if err != nil {
+				return err
+			}
+			p.Add(agg.AddSlope("_slope"))
+			return nil
+		},
+		"Add a slope metric for every incoming metric. Optional parameter: duration or number of samples", []string{}, "window")
+}
+
+func create_aggregator(params map[string]string) (*FeatureAggregator, error) {
+	window, haveWindow := params["window"]
+	if !haveWindow {
+		return &FeatureAggregator{}, nil
+	}
+	dur, err1 := time.ParseDuration(window)
+	if err1 == nil {
+		return &FeatureAggregator{WindowDuration: dur}, nil
+	}
+	num, err2 := strconv.Atoi(window)
+	if err2 == nil {
+		return &FeatureAggregator{WindowSize: num}, nil
+	}
+	return nil, query.ParameterError("window", golib.MultiError{err1, err2})
 }

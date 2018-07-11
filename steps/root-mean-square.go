@@ -4,7 +4,17 @@ import (
 	"math"
 
 	bitflow "github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
+
+func RegisterRMS(b *query.PipelineBuilder) {
+	b.RegisterAnalysis("rms",
+		func(p *pipeline.SamplePipeline) {
+			p.Batch(new(BatchRms))
+		},
+		"Compute the Root Mean Square value for every metric in a data batch. Output a single sample with all values.")
+}
 
 type BatchRms struct {
 }

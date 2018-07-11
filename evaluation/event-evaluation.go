@@ -7,6 +7,8 @@ import (
 	"time"
 
 	bitflow "github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	onlinestats "github.com/antongulenko/go-onlinestats"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
@@ -57,6 +59,17 @@ func (p *AbstractAnomalyEventProcessor) Close() {
 type EventEvaluationProcessor struct {
 	GroupedEvaluation
 	AbstractAnomalyEventProcessor
+}
+
+func RegisterEventEvaluation(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) {
+		eval := new(EventEvaluationProcessor)
+		eval.BatchKeyTag = params["batchTag"]
+		eval.SetBinaryEvaluationTags(params)
+		eval.SetEvaluationTags(params)
+		p.Add(eval)
+	}
+	b.RegisterAnalysisParams("event_evaluation", create, "Like binary_evaluation, but add evaluation metrics for individual anomaly events", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "batchTag")
 }
 
 func (p *EventEvaluationProcessor) String() string {
@@ -233,4 +246,29 @@ func (p *AnomalySmoothing) Close() {
 
 func (p *AnomalySmoothing) anomalyStateChanged(t time.Time) {
 	p.stateChanged = time.Time{}
+}
+
+func RegisterAnomalySmoothing(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+		proc := new(AnomalySmoothing)
+		proc.SetBinaryEvaluationTags(params)
+		proc.NormalTagValue = params["normalValue"]
+		if proc.NormalTagValue == "" {
+			proc.NormalTagValue = "normal"
+		}
+		smoothingDuration := 5 * time.Second
+		if smoothingDurationStr, ok := params["interval"]; ok {
+			var err error
+			smoothingDuration, err = time.ParseDuration(smoothingDurationStr)
+			if err != nil {
+				return query.ParameterError("interval", err)
+			}
+		}
+		proc.SetBinaryEvaluationTags(params)
+		proc.BatchKeyTag = params["batchTag"]
+		proc.SmoothingDuration = smoothingDuration
+		p.Add(proc)
+		return nil
+	}
+	b.RegisterAnalysisParamsErr("smooth_anomalies", create, "Smooth the switching between anomalies and non-anomalies. Switch when one state stabilizes for a given time.", []string{}, "batchTag", "interval", "expectedTag", "predictedTag", "anomalyValue") // Missing: "normalValue", ""
 }

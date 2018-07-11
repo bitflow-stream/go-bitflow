@@ -6,6 +6,7 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/antongulenko/golearn/base"
 	"github.com/antongulenko/golearn/linear_models"
@@ -36,6 +37,20 @@ func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearReg
 	reg.Header = header
 	reg.Vars = fieldNumbers
 	return reg, nil
+}
+
+func RegisterLinearRegression(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline) {
+		p.Batch(new(LinearRegressionBatchProcessor))
+	}
+	b.RegisterAnalysis("regression", create, "Perform a linear regression analysis on a batch of samples")
+}
+
+func RegisterLinearRegressionBruteForce(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline) {
+		p.Batch(new(LinearRegressionBruteForce))
+	}
+	b.RegisterAnalysis("regression_brute", create, "In a batch of samples, perform a linear regression analysis for every possible combination of metrics")
 }
 
 func (reg *LinearRegression) FormulaString() string {

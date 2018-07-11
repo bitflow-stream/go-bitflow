@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	bitflow "github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/ktye/fft"
 	log "github.com/sirupsen/logrus"
 )
@@ -28,6 +30,14 @@ var (
 	warnedRadixResizes = make(map[int]bool)
 	warningLock        sync.Mutex
 )
+
+func RegisterFFT(b *query.PipelineBuilder) {
+	b.RegisterAnalysis("fft",
+		func(p *pipeline.SamplePipeline) {
+			p.Batch(new(BatchFft))
+		},
+		"Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result")
+}
 
 type BatchFft struct {
 	// By default, the upper half of the FFT results is cut off, because the FFT results are symmetric.

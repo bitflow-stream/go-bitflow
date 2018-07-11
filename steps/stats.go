@@ -6,6 +6,8 @@ import (
 	"strconv"
 
 	"github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/go-ini/ini"
 	log "github.com/sirupsen/logrus"
@@ -23,6 +25,13 @@ func NewStoreStats(targetFile string) *StoreStats {
 		TargetFile: targetFile,
 		stats:      make(map[string]*FeatureStats),
 	}
+}
+
+func RegisterStoreStats(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) {
+		p.Add(NewStoreStats(params["file"]))
+	}
+	b.RegisterAnalysisParams("stats", create, "Output statistics about processed samples to a given ini-file", []string{"file"})
 }
 
 type FeatureStats struct {

@@ -14,7 +14,7 @@ import (
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
 
-func REGISTER_PRINT(b *query.PipelineBuilder) {
+func RegisterLoggingSteps(b *query.PipelineBuilder) {
 	b.RegisterAnalysis("print_header", print_header, "Print every changing header to the log")
 	b.RegisterAnalysisParams("print_tags", print_tags, "When done processing, print every encountered value of the given tag", []string{"tag"})
 	b.RegisterAnalysisParams("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", []string{"tag"})
