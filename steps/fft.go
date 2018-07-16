@@ -110,18 +110,18 @@ func (s *BatchFft) samplingFrequency(samples []*bitflow.Sample) (float64, error)
 }
 
 func (s *BatchFft) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
-	header, sample, err := s.processBatch(header, samples)
+	outHeader, outSamples, err := s.processBatch(header, samples)
 	if err != nil && !s.FatalErrors {
 		tagStr := ""
 		if len(samples) > 0 {
-			tagStr = "tags of first received sample:" + samples[0].TagString()
+			tagStr = ", tags of first received sample:" + samples[0].TagString()
 		}
 		log.Warnln("Error processing FFT:", err, tagStr)
 		err = nil
-		header = nil
-		sample = nil
+		outHeader = header
+		outSamples = nil
 	}
-	return header, sample, err
+	return outHeader, outSamples, err
 }
 
 func (s *BatchFft) processBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
