@@ -59,6 +59,11 @@ func (f *SampleFork) Sample(sample *bitflow.Sample, header *bitflow.Header) erro
 	if err != nil {
 		return err
 	}
+	for _, subpipe := range subpipes {
+		if subpipe.Pipe == nil {
+			log.Println("Fork distributor %v: Returned nil-pipeline for key %v (%v pipeline(s) total)", f.Distributor, subpipe.Key, len(subpipes))
+		}
+	}
 	return f.getSubpipelineSink(subpipes).Sample(sample, header)
 }
 

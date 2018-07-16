@@ -15,14 +15,15 @@ const DefaultForkKey = "*"
 // This function is placed in this package to avoid circular dependency between the fork and the query package.
 func RegisterForks(b *query.PipelineBuilder) {
 	b.RegisterFork("rr", fork_round_robin, "The round-robin fork distributes the samples to the subpipelines based on weights. The pipeline selector keys must be positive integers denoting the weight of the respective pipeline.", []string{})
-	b.RegisterFork("fork_tags", fork_tags, "Placeholders like ${xxx} are replaced by tag values. The resulting string forms the fork key", []string{"template"})
+	b.RegisterFork("fork_tag", fork_tag, "Fork based on the values of the given tag", []string{"tag"})
+	b.RegisterFork("fork_tag_template", fork_tag_template, "Fork based on a template string, placeholders like ${xxx} are replaced by tag values.", []string{"template"})
 }
 
-func fork_round_robin(subpiplines []query.Subpipeline, params map[string]string) (fork.ForkDistributor, error) {
+func fork_round_robin(subpipelines []query.Subpipeline, params map[string]string) (fork.ForkDistributor, error) {
 	res := new(fork.RoundRobinDistributor)
-	res.Weights = make([]int, len(subpiplines))
-	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpiplines))
-	for i, pipe := range subpiplines {
+	res.Weights = make([]int, len(subpipelines))
+	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpipelines))
+	for i, pipe := range subpipelines {
 		weightSum := 0
 		for _, keyStr := range pipe.Keys {
 			weight, err := strconv.Atoi(keyStr)
@@ -44,12 +45,19 @@ func fork_round_robin(subpiplines []query.Subpipeline, params map[string]string)
 	return res, nil
 }
 
-func fork_tags(subpiplines []query.Subpipeline, params map[string]string) (fork.ForkDistributor, error) {
+func fork_tag(subpipelines []query.Subpipeline, params map[string]string) (fork.ForkDistributor, error) {
+	tag := params["tag"]
+	delete(params, "tag")
+	params["template"] = "${" + tag + "}"
+	return fork_tag_template(subpipelines, params)
+}
+
+func fork_tag_template(subpipelines []query.Subpipeline, params map[string]string) (fork.ForkDistributor, error) {
 	// TODO use a more generic version of fork.CachedDistributor (should be renamed to RegexDistributor)
 
 	var initialKeys []string
 	keys := make(map[string]*query.Subpipeline)
-	for _, pipe := range subpiplines {
+	for _, pipe := range subpipelines {
 		for _, key := range pipe.Keys {
 			if _, ok := keys[key]; ok {
 				return nil, fmt.Errorf("Subpipeline key occurs multiple times: %v", key)

@@ -113,12 +113,14 @@ func (d *PipelineCache) getPipeline(key string, build PipelineBuildFunc) (Subpip
 	}
 	pipe, ok := d.pipelines[key]
 	if !ok {
-		var pipe *pipeline.SamplePipeline
 		if build == nil {
 			pipe = new(pipeline.SamplePipeline)
 		} else {
 			var err error
 			pipe, err = build(key)
+			if err == nil && pipe == nil {
+				err = fmt.Errorf("Build function returned nil pipeline")
+			}
 			if err != nil {
 				return Subpipeline{}, err
 			}
