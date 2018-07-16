@@ -2,6 +2,7 @@ package steps
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 
 	pipeline "github.com/antongulenko/go-bitflow-pipeline"
@@ -57,16 +58,19 @@ func fork_tag_template(subpipelines []query.Subpipeline, params map[string]strin
 
 	var initialKeys []string
 	keys := make(map[string]*query.Subpipeline)
+	keysArray := make([]string)
 	for _, pipe := range subpipelines {
 		for _, key := range pipe.Keys {
 			if _, ok := keys[key]; ok {
 				return nil, fmt.Errorf("Subpipeline key occurs multiple times: %v", key)
 			}
 			keys[key] = &pipe
+			keysArray = append(keysArray, key)
 			initialKeys = append(initialKeys, key)
 		}
 	}
 	defaultPipe, haveDefault := keys[DefaultForkKey]
+	sort.Strings(keysArray)
 
 	dist := new(fork.TagDistributor)
 	dist.Template = params["template"]
@@ -76,10 +80,10 @@ func fork_tag_template(subpipelines []query.Subpipeline, params map[string]strin
 			return pipe.Build()
 		} else {
 			if haveDefault {
-				log.Debugf("No subpipeline defined for key '%v'. Building default pipeline (Have pipelines: %v)", key, keys)
+				log.Debugf("No subpipeline defined for key '%v'. Building default pipeline (Have pipelines: %v)", key, keysArray)
 				return defaultPipe.Build()
 			} else {
-				log.Warnf("No subpipeline defined for key '%v'. Using empty pipeline (Have pipelines: %v)", key, keys)
+				log.Warnf("No subpipeline defined for key '%v'. Using empty pipeline (Have pipelines: %v)", key, keysArray)
 				return new(pipeline.SamplePipeline), nil
 			}
 		}
