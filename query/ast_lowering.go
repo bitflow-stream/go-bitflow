@@ -157,10 +157,15 @@ func (f Fork) transformFork(verify PipelineVerification) (outFork Fork, err erro
 		outFork.Pipelines = make(Pipelines, len(f.Pipelines))
 		for i, subPipe := range f.Pipelines {
 			subPipe, err = subPipe.transform(verify, false)
-			if err != nil {
-				return
+			if err == nil {
+				outFork.Pipelines[i] = subPipe
 			}
-			outFork.Pipelines[i] = subPipe
+		}
+	}
+	if err != nil {
+		err = ParserError{
+			Pos:     f.Name,
+			Message: fmt.Sprintf("%v: %v", f.Name.Content(), err),
 		}
 	}
 	return
