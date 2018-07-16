@@ -58,7 +58,7 @@ func fork_tag_template(subpipelines []query.Subpipeline, params map[string]strin
 
 	var initialKeys []string
 	keys := make(map[string]*query.Subpipeline)
-	keysArray := make([]string)
+	var keysArray []string
 	for _, pipe := range subpipelines {
 		for _, key := range pipe.Keys {
 			if _, ok := keys[key]; ok {
