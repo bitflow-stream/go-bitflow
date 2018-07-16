@@ -39,8 +39,7 @@ type SampleFork struct {
 	pipelines map[*pipeline.SamplePipeline]subpipelineStart
 	lock      sync.Mutex
 
-	newPipelineHandler func(bitflow.SampleProcessor) bitflow.SampleProcessor // Optional hook
-	ForkPath           []string
+	ForkPath []string
 }
 
 func (f *SampleFork) Start(wg *sync.WaitGroup) golib.StopChan {
@@ -82,9 +81,6 @@ func (f *SampleFork) getPipeline(subpipe Subpipeline) bitflow.SampleProcessor {
 	pipe, ok := f.pipelines[subpipe.Pipe]
 	if !ok {
 		firstStep := f.initializePipeline(subpipe)
-		if hook := f.newPipelineHandler; hook != nil {
-			firstStep = hook(firstStep)
-		}
 		pipe = subpipelineStart{key: subpipe.Key, pipe: subpipe.Pipe, firstStep: firstStep}
 		f.pipelines[subpipe.Pipe] = pipe
 	} else if subpipe.Key != pipe.key {
@@ -104,6 +100,9 @@ func (f *SampleFork) initializePipeline(subpipe Subpipeline) bitflow.SampleProce
 		pipe.Source = nil
 	}
 	pipe.Add(&f.merger)
+	f.StartPipeline(&pipe.SamplePipeline, func(isPassive bool, err error) {
+		f.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Subpipeline %v", f, path))
+	})
 	return pipe.Processors[0]
 }
 
