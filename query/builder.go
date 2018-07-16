@@ -133,18 +133,20 @@ func (builder PipelineBuilder) createMultiInput(pipes MultiInput) (bitflow.Sampl
 
 func (builder PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) error {
 	forkStep, err := builder.getFork(f.Name)
-	if err != nil {
-		return err
+	var distributor fork.ForkDistributor
+	if err == nil {
+		params := f.ParamsMap()
+		err = forkStep.Params.Verify(params)
+		if err == nil {
+			subpipelines := builder.prepareSubpipelines(f.Pipelines)
+			distributor, err = forkStep.Func(subpipelines, params)
+		}
 	}
-	params := f.ParamsMap()
-	err = forkStep.Params.Verify(params)
 	if err != nil {
-		return err
-	}
-	subpipelines := builder.prepareSubpipelines(f.Pipelines)
-	distributor, err := forkStep.Func(subpipelines, params)
-	if err != nil {
-		return err
+		return ParserError{
+			Pos:     f.Name,
+			Message: fmt.Sprintf("%v: %v", f.Name.Content(), err),
+		}
 	}
 	pipe.Add(&fork.SampleFork{
 		Distributor: distributor,
