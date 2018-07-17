@@ -2,8 +2,10 @@ package http_tags
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
@@ -17,11 +19,13 @@ type HttpTagger struct {
 	bitflow.NoopProcessor
 	lock            sync.RWMutex
 	currentHttpTags map[string]string
+	listenEndpoint  string
 }
 
 func NewHttpTagger(pathPrefix string, r *mux.Router) *HttpTagger {
 	tagger := &HttpTagger{
 		currentHttpTags: make(map[string]string),
+		listenEndpoint:  pathPrefix,
 	}
 	r.HandleFunc(pathPrefix+"/tag/{name}", tagger.handleTagRequest).Methods("GET", "DELETE")
 	r.HandleFunc(pathPrefix+"/tags", tagger.handleTagsRequest).Methods("GET", "PUT", "POST", "DELETE")
@@ -31,6 +35,7 @@ func NewHttpTagger(pathPrefix string, r *mux.Router) *HttpTagger {
 func NewStandaloneHttpTagger(pathPrefix string, endpoint string) *HttpTagger {
 	router := mux.NewRouter()
 	tagger := NewHttpTagger(pathPrefix, router)
+	tagger.listenEndpoint = endpoint + pathPrefix
 	server := http.Server{
 		Addr:    endpoint,
 		Handler: router,
@@ -44,11 +49,22 @@ func NewStandaloneHttpTagger(pathPrefix string, endpoint string) *HttpTagger {
 
 func RegisterHttpTagger(b *query.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
-		p.Add(NewStandaloneHttpTagger("/api", params["listen"]))
+		tagger := NewStandaloneHttpTagger("/api", params["listen"])
+		if defaultTagStr, ok := params["default"]; ok {
+			parts := strings.Split(defaultTagStr, ",")
+			for _, part := range parts {
+				tagParts := strings.Split(part, "=")
+				if len(tagParts) != 2 {
+					return query.ParameterError("default", errors.New("Format must be 'key1=value1,key2=value2,...'. Received: "+defaultTagStr))
+				}
+				tagger.currentHttpTags[tagParts[0]] = tagParts[1]
+			}
+		}
+		p.Add(tagger)
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("listen_tags", create, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", []string{"listen"})
+	b.RegisterAnalysisParamsErr("listen_tags", create, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", []string{"listen"}, "default")
 }
 
 func (tagger *HttpTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -61,7 +77,9 @@ func (tagger *HttpTagger) Sample(sample *bitflow.Sample, header *bitflow.Header)
 }
 
 func (tagger *HttpTagger) String() string {
-	return "HTTP tagger"
+	tagger.lock.Lock()
+	defer tagger.lock.Unlock()
+	return fmt.Sprintf("HTTP tagger on %v (tags: %v)", tagger.listenEndpoint, tagger.currentHttpTags)
 }
 
 func (tagger *HttpTagger) respondJson(w http.ResponseWriter, code int, obj interface{}) {

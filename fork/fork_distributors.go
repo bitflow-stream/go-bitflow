@@ -258,6 +258,7 @@ func (b *MultiFileDistributor) String() string {
 func (b *MultiFileDistributor) build(fileName string) (*pipeline.SamplePipeline, error) {
 	fileOut := b.Config
 	fileOut.Filename = fileName
+	fileOut.Marshaller = bitflow.EndpointDescription{Target: fileName, Type: bitflow.FileEndpoint}.DefaultOutputFormat().Marshaller()
 	return (new(pipeline.SamplePipeline)).Add(&fileOut), nil
 }
 
