@@ -99,7 +99,6 @@ func register_analyses(b *query.PipelineBuilder) {
 
 	// Control flow
 	RegisterTaggingAnalyses(b)
-	steps.RegisterOutputFiles(b)
 	steps.RegisterNoop(b)
 	steps.RegisterSleep(b)
 	steps.RegisterForks(b)
@@ -110,6 +109,10 @@ func register_analyses(b *query.PipelineBuilder) {
 	steps.RegisterDecouple(b)
 	steps.RegisterPipelineRateSynchronizer(b)
 	steps.RegisterSubpipelineStreamMerger(b)
+
+	// Data output
+	steps.RegisterOutputFiles(b)
+	steps.RegisterGraphiteOutput(b)
 
 	// Logging, output metadata
 	steps.RegisterStoreStats(b)
