@@ -8,6 +8,7 @@ import (
 
 	bitflow "github.com/antongulenko/go-bitflow"
 	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/fork"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
 
@@ -69,9 +70,18 @@ func (o *GraphiteMarshaller) WriteHeader(header *bitflow.Header, hasTags bool, w
 }
 
 func (o *GraphiteMarshaller) WriteSample(sample *bitflow.Sample, header *bitflow.Header, hasTags bool, writer io.Writer) error {
+	prefix := o.MetricPrefix
+	if prefix != "" {
+		templater := fork.TagTemplate{
+			Template:     prefix,
+			MissingValue: "_",
+		}
+		prefix = templater.BuildKey(sample)
+	}
+
 	for i, value := range sample.Values {
 		name := header.Fields[i]
-		name = o.MetricPrefix + name
+		name = prefix + name
 		name = graphiteMetricNameCleaner.Replace(name)
 		if err := o.writeValue(name, float64(value), sample.Time, writer); err != nil {
 			return err
