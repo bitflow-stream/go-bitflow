@@ -56,17 +56,15 @@ func fork_tag(subpipelines []query.Subpipeline, params map[string]string) (fork.
 func fork_tag_template(subpipelines []query.Subpipeline, params map[string]string) (fork.ForkDistributor, error) {
 	// TODO use a more generic version of fork.CachedDistributor (should be renamed to RegexDistributor)
 
-	var initialKeys []string
-	keys := make(map[string]*query.Subpipeline)
+	keys := make(map[string]query.Subpipeline)
 	var keysArray []string
 	for _, pipe := range subpipelines {
 		for _, key := range pipe.Keys {
 			if _, ok := keys[key]; ok {
 				return nil, fmt.Errorf("Subpipeline key occurs multiple times: %v", key)
 			}
-			keys[key] = &pipe
+			keys[key] = pipe
 			keysArray = append(keysArray, key)
-			initialKeys = append(initialKeys, key)
 		}
 	}
 	defaultPipe, haveDefault := keys[DefaultForkKey]
@@ -88,5 +86,5 @@ func fork_tag_template(subpipelines []query.Subpipeline, params map[string]strin
 			}
 		}
 	}
-	return dist, dist.EnsurePipelines(initialKeys)
+	return dist, dist.EnsurePipelines(keysArray)
 }
