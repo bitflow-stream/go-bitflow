@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"math"
+	"regexp"
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/gonum/matrix/mat64"
@@ -95,4 +96,26 @@ func SplitShellCommand(s string) []string {
 		res = append(res, buf.String())
 	}
 	return res
+}
+
+func ResolveTagTemplate(template string, missingValues string, sample *bitflow.Sample) string {
+	return TagTemplate{Template: template, MissingValue: missingValues}.BuildKey(sample)
+}
+
+type TagTemplate struct {
+	Template     string // Placeholders like ${xxx} will be replaced by tag values (left empty if tag missing)
+	MissingValue string // Replacement for missing values
+}
+
+var templateRegex = regexp.MustCompile("\\$\\{[^\\{]*\\}") // Example: ${hello}
+
+func (t TagTemplate) BuildKey(sample *bitflow.Sample) string {
+	return templateRegex.ReplaceAllStringFunc(t.Template, func(placeholder string) string {
+		placeholder = placeholder[2 : len(placeholder)-1] // Strip the ${} prefix/suffix
+		if sample.HasTag(placeholder) {
+			return sample.Tag(placeholder)
+		} else {
+			return t.MissingValue
+		}
+	})
 }
