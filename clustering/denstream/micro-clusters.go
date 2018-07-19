@@ -117,18 +117,21 @@ func (c *BasicMicroCluster) Update() {
 }
 
 func (c *BasicMicroCluster) computeRadius() float64 {
+	if c.w <= 0 {
+		return 0
+	}
 	var radius float64
-	if c.w > 0 {
-		cf1 := vectorLength(c.cf1) / c.w
-		cf2 := vectorLength(c.cf2) / c.w
-		diff := cf2 - cf1*cf1
-
-		// TODO this is a workaround, does not match the paper!
-		diff = math.Abs(diff)
-
-		radius = math.Sqrt(diff)
-		if math.IsNaN(c.radius) {
-			panic(fmt.Sprintf("Radius is NaN for cf1/w = %v, cf2/w = %v, w = %v", cf1, cf2, c.w))
+	for i := range c.cf1 {
+		v1 := c.cf1[i] / c.w
+		v2 := c.cf2[i] / c.w
+		r := v2 - v1*v1
+		if r < 0 {
+			panic(fmt.Sprintf("Negatie radius component %v, cf1 = %v, cf2 = %v, w = %v", i, c.cf1, c.cf2, c.w))
+		}
+		r = math.Sqrt(r)
+		if radius < r {
+			// We use the largest radius of any component as the overall radius. TODO There could be other strategies.
+			radius = r
 		}
 	}
 	return radius
