@@ -58,20 +58,17 @@ func (f *SampleFork) Sample(sample *bitflow.Sample, header *bitflow.Header) erro
 	if err != nil {
 		return err
 	}
-	for _, subpipe := range subpipes {
-		if subpipe.Pipe == nil {
-			log.Println("Fork distributor %v: Returned nil-pipeline for key %v (%v pipeline(s) total)", f.Distributor, subpipe.Key, len(subpipes))
-		}
-	}
 	return f.getSubpipelineSink(subpipes).Sample(sample, header)
 }
 
 func (f *SampleFork) getSubpipelineSink(subpipes []Subpipeline) bitflow.SampleProcessor {
-	sinks := make([]bitflow.SampleProcessor, len(subpipes))
-	for i, subpipe := range subpipes {
-		sinks[i] = f.getPipeline(subpipe)
+	sinks := make([]bitflow.SampleProcessor, 0, len(subpipes))
+	for _, subpipe := range subpipes {
+		if subpipe.Pipe != nil {
+			sinks = append(sinks, f.getPipeline(subpipe))
+		}
 	}
-	return &sinkMultiplexer{sinks: sinks}
+	return &sinkMultiplexer{sinks: sinks, fallbackSink: &f.merger}
 }
 
 func (f *SampleFork) getPipeline(subpipe Subpipeline) bitflow.SampleProcessor {
@@ -144,21 +141,27 @@ func (f *SampleFork) getAbstractFork() *SampleFork {
 
 type sinkMultiplexer struct {
 	bitflow.DroppingSampleProcessor
-	sinks []bitflow.SampleProcessor
+	sinks        []bitflow.SampleProcessor
+	fallbackSink bitflow.SampleProcessor
 }
 
 func (s *sinkMultiplexer) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	// The samples are not forwarded in parallel. Parllelism between pipelines can be achieved by decoupling steps on each subpipeline.
-	var errors golib.MultiError
-	for _, sink := range s.sinks {
-		if sink != nil {
+	switch len(s.sinks) {
+	case 0:
+		return s.fallbackSink.Sample(sample, header)
+	case 1:
+		return s.sinks[0].Sample(sample, header)
+	default:
+		// The samples are not forwarded in parallel. Parllelism between pipelines can be achieved by decoupling steps on each subpipeline.
+		var errors golib.MultiError
+		for _, sink := range s.sinks {
 			// The DeepClone() is necessary since the forks might change the sample
 			// values independently. In some cases it might not be necessary, but that
 			// would be a rather complex optimization.
 			errors.Add(sink.Sample(sample.DeepClone(), header))
 		}
+		return errors.NilOrError()
 	}
-	return errors.NilOrError()
 }
 
 func (s *sinkMultiplexer) String() string {

@@ -8,10 +8,7 @@ import (
 	pipeline "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
-	log "github.com/sirupsen/logrus"
 )
-
-const DefaultForkKey = "*"
 
 // This function is placed in this package to avoid circular dependency between the fork and the query package.
 func RegisterForks(b *query.PipelineBuilder) {
@@ -54,37 +51,30 @@ func fork_tag(subpipelines []query.Subpipeline, params map[string]string) (fork.
 }
 
 func fork_tag_template(subpipelines []query.Subpipeline, params map[string]string) (fork.ForkDistributor, error) {
-	// TODO use a more generic version of fork.CachedDistributor (should be renamed to RegexDistributor)
-
-	keys := make(map[string]query.Subpipeline)
+	wildcardPipelines := make(map[string]func() ([]*pipeline.SamplePipeline, error))
 	var keysArray []string
 	for _, pipe := range subpipelines {
 		for _, key := range pipe.Keys {
-			if _, ok := keys[key]; ok {
+			if _, ok := wildcardPipelines[key]; ok {
 				return nil, fmt.Errorf("Subpipeline key occurs multiple times: %v", key)
 			}
-			keys[key] = pipe
+			wildcardPipelines[key] = (&wildcardSubpipeline{p: pipe}).build
 			keysArray = append(keysArray, key)
 		}
 	}
-	defaultPipe, haveDefault := keys[DefaultForkKey]
 	sort.Strings(keysArray)
 
 	dist := new(fork.TagDistributor)
 	dist.Template = params["template"]
-	dist.Build = func(key string) (*pipeline.SamplePipeline, error) {
-		pipe, found := keys[key]
-		if found {
-			return pipe.Build()
-		} else {
-			if haveDefault {
-				log.Debugf("No subpipeline defined for key '%v'. Building default pipeline (Have pipelines: %v)", key, keysArray)
-				return defaultPipe.Build()
-			} else {
-				log.Warnf("No subpipeline defined for key '%v'. Using empty pipeline (Have pipelines: %v)", key, keysArray)
-				return new(pipeline.SamplePipeline), nil
-			}
-		}
-	}
-	return dist, dist.EnsurePipelines(keysArray)
+	dist.Pipelines = wildcardPipelines
+	return dist, dist.Init()
+}
+
+type wildcardSubpipeline struct {
+	p query.Subpipeline
+}
+
+func (m wildcardSubpipeline) build() ([]*pipeline.SamplePipeline, error) {
+	pipe, err := m.p.Build()
+	return []*pipeline.SamplePipeline{pipe}, err
 }

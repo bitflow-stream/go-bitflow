@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	bitflow "github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -32,19 +33,41 @@ func (suite *distributorsTestSuite) TestTagTemplateDistributor() {
 	s.SetTag("tag2", "val2")
 	h := &bitflow.Header{Fields: []string{"a", "b", "c"}}
 
-	test := func(input, output string) {
-		res, err := (&TagDistributor{TagTemplate: TagTemplate{Template: input}}).Distribute(s, h)
+	pipeA := new(pipeline.SamplePipeline)
+	pipeB := new(pipeline.SamplePipeline)
+
+	test := func(input, output string, expectedPipes ...*pipeline.SamplePipeline) {
+		var dist TagDistributor
+		dist.Template = input
+		dist.Pipelines = map[string]func() ([]*pipeline.SamplePipeline, error){
+			"a*": func() ([]*pipeline.SamplePipeline, error) {
+				return []*pipeline.SamplePipeline{pipeA}, nil
+			},
+			"b*": func() ([]*pipeline.SamplePipeline, error) {
+				return []*pipeline.SamplePipeline{pipeB}, nil
+			},
+			"c": func() ([]*pipeline.SamplePipeline, error) {
+				return []*pipeline.SamplePipeline{pipeA, pipeB}, nil
+			},
+		}
+		suite.NoError(dist.Init())
+		res, err := dist.Distribute(s, h)
 		suite.Nil(err)
-		suite.Len(res, 1)
-		suite.Equal(output, res[0].Key)
+		suite.Len(res, len(expectedPipes))
+		for i := 0; i < len(expectedPipes); i++ {
+			suite.Equal(output, res[i].Key)
+			suite.Equal(expectedPipes[i], res[i].Pipe)
+		}
 	}
-	test("abc", "abc")
+	test("abc", "abc", pipeA)
 	test("${missing}", "")
-	test("a${missing}b", "ab")
-	test("a${missing}", "a")
-	test("${missing}b", "b")
-	test("${tag1}", "val1")
-	test("a${tag1}b${tag2}c", "aval1bval2c")
-	test("a$x$z", "a$x$z")
-	test("${tag", "${tag")
+	test("a${missing}b", "ab", pipeA)
+	test("a${missing}", "a", pipeA)
+	test("${missing}b", "b", pipeB)
+	test("b${tag1}", "bval1", pipeB)
+	test("a${tag1}b${tag2}c", "aval1bval2c", pipeA)
+	test("a$x$z", "a$x$z", pipeA)
+	test("b${tag", "b${tag", pipeB)
+	test("c", "c", pipeA, pipeB)
+	test("cxx", "")
 }

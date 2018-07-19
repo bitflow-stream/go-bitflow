@@ -2,14 +2,20 @@ package fork
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
 	bitflow "github.com/antongulenko/go-bitflow"
 	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	glob "github.com/ryanuber/go-glob"
 )
+
+//
+// TODO RegexDistributor:
+// TODO allow full regexes instead of just wildcards?
+// TODO allow controlling pipeline instances: per full pipeline definition, per (wildcard) pattern, per specific key, per sample
+//
 
 type PipelineArray struct {
 	Subpipelines []*pipeline.SamplePipeline
@@ -54,18 +60,27 @@ func (rr *RoundRobinDistributor) getWeight(index int) int {
 }
 
 func (rr *RoundRobinDistributor) String() string {
-	return fmt.Sprintf("round robin (%v)", len(rr.Subpipelines))
+	return fmt.Sprintf("round robin (%v pipelines, total weight %v)", len(rr.Subpipelines), rr.TotalWeight())
 }
 
 func (rr *RoundRobinDistributor) ContainedStringers() []fmt.Stringer {
 	res := make([]fmt.Stringer, len(rr.Subpipelines))
+	total := rr.TotalWeight()
 	for i, pipe := range rr.Subpipelines {
+		weight := rr.getWeight(i)
 		res[i] = &pipeline.TitledSamplePipeline{
 			SamplePipeline: pipe,
-			Title:          fmt.Sprintf("%v (weight %v)", i, rr.getWeight(i)),
+			Title:          fmt.Sprintf("weight %v (%.2v%%)", weight, float64(weight)/float64(total)),
 		}
 	}
 	return res
+}
+
+func (rr *RoundRobinDistributor) TotalWeight() (res int) {
+	for i := range rr.Subpipelines {
+		res += rr.getWeight(i)
+	}
+	return
 }
 
 type MultiplexDistributor struct {
@@ -91,59 +106,56 @@ func (p *MultiplexDistributor) ContainedStringers() []fmt.Stringer {
 	return res
 }
 
-type PipelineBuildFunc func(key string) (*pipeline.SamplePipeline, error)
+type PipelineBuildFunc func(key string) ([]*pipeline.SamplePipeline, error)
 
 type PipelineCache struct {
-	pipelines map[string]*pipeline.SamplePipeline
+	pipelines map[string][]*pipeline.SamplePipeline
 	keys      map[*pipeline.SamplePipeline][]string
 }
 
-func (d *PipelineCache) getPipeline(key string, build PipelineBuildFunc) (Subpipeline, error) {
-
-	//
-	// TODO: extend to handle regexes and allow the same key multiple times
-	// Also, make possible to share pipelines between keys, controlled
-	//
-
+func (d *PipelineCache) getPipelines(key string, build PipelineBuildFunc) ([]Subpipeline, error) {
 	if d.pipelines == nil {
-		d.pipelines = make(map[string]*pipeline.SamplePipeline)
+		d.pipelines = make(map[string][]*pipeline.SamplePipeline)
 	}
 	if d.keys == nil {
 		d.keys = make(map[*pipeline.SamplePipeline][]string)
 	}
-	pipe, ok := d.pipelines[key]
+	pipes, ok := d.pipelines[key]
 	if !ok {
-		if build == nil {
-			pipe = new(pipeline.SamplePipeline)
-		} else {
+		if build != nil {
 			var err error
-			pipe, err = build(key)
-			if err == nil && pipe == nil {
-				err = fmt.Errorf("Build function returned nil pipeline")
-			}
+			pipes, err = build(key)
 			if err != nil {
-				return Subpipeline{}, err
+				return nil, err
 			}
 		}
-		d.pipelines[key] = pipe
+		d.pipelines[key] = pipes
 	}
-	if keys, ok := d.keys[pipe]; ok {
-		index := sort.SearchStrings(keys, key)
-		if index < len(keys) && keys[index] == key {
-			// Key already present
+	// Maintain a sorted list of keys that lead to each pipeline
+	for _, pipe := range pipes {
+		if keys, ok := d.keys[pipe]; ok {
+			index := sort.SearchStrings(keys, key)
+			if index < len(keys) && keys[index] == key {
+				// Key already present
+			} else {
+				// Insert the key and keep the key slice sorted
+				keys = append(keys, "")
+				if index <= len(keys) {
+					copy(keys[index+1:], keys[index:])
+				}
+				keys[index] = key
+				d.keys[pipe] = keys
+			}
 		} else {
-			// Insert the key and keep the key slice sorted
-			keys = append(keys, "")
-			if index <= len(keys) {
-				copy(keys[index+1:], keys[index:])
-			}
-			keys[index] = key
-			d.keys[pipe] = keys
+			d.keys[pipe] = []string{key}
 		}
-	} else {
-		d.keys[pipe] = []string{key}
 	}
-	return Subpipeline{pipe, key}, nil
+	result := make([]Subpipeline, len(pipes))
+	for i, pipe := range pipes {
+		result[i].Key = key
+		result[i].Pipe = pipe
+	}
+	return result, nil
 }
 
 func (d *PipelineCache) ContainedStringers() []fmt.Stringer {
@@ -163,38 +175,70 @@ func (d *PipelineCache) ContainedStringers() []fmt.Stringer {
 	return res
 }
 
-type CachingDistributor struct {
-	PipelineCache
-	Build func(key string) (*pipeline.SamplePipeline, error)
+type RegexDistributor struct {
+	Pipelines              map[string]func() ([]*pipeline.SamplePipeline, error)
+	DisableWildcardMatches bool
+
+	cache             PipelineCache
+	wildcardPipelines PipelineCache // This extra cache is only for implementing ContainedStringers()
 }
 
-func (d *CachingDistributor) getPipeline(key string) (Subpipeline, error) {
-	return d.PipelineCache.getPipeline(key, d.Build)
-}
-
-func (d *CachingDistributor) EnsurePipelines(keys []string) error {
-	for _, key := range keys {
-		if _, err := d.getPipeline(key); err != nil {
+func (d *RegexDistributor) Init() error {
+	for key := range d.Pipelines {
+		_, err := d.wildcardPipelines.getPipelines(key, d.build)
+		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+func (d *RegexDistributor) getPipelines(key string) ([]Subpipeline, error) {
+	return d.cache.getPipelines(key, d.build)
+}
+
+func (d *RegexDistributor) build(key string) ([]*pipeline.SamplePipeline, error) {
+	var res []*pipeline.SamplePipeline
+	for wildcardKey, builderFunc := range d.Pipelines {
+		if d.matches(key, wildcardKey) {
+			newPipelines, err := builderFunc()
+			if err != nil {
+				return res, err
+			}
+			res = append(res, newPipelines...)
+		}
+	}
+	return res, nil
+}
+
+func (d *RegexDistributor) matches(key, wildcard string) bool {
+	if d.DisableWildcardMatches {
+		return key == wildcard
+	} else {
+		return glob.Glob(wildcard, key)
+	}
+}
+
+func (d *RegexDistributor) ContainedStringers() []fmt.Stringer {
+	return d.wildcardPipelines.ContainedStringers()
+}
+
 type GenericDistributor struct {
-	CachingDistributor
+	RegexDistributor
 	GetKeys     func(sample *bitflow.Sample, header *bitflow.Header) []string
 	Description string
 }
 
 func (d *GenericDistributor) Distribute(sample *bitflow.Sample, header *bitflow.Header) ([]Subpipeline, error) {
 	keys := d.GetKeys(sample, header)
-	res := make([]Subpipeline, len(keys))
-	for i, key := range keys {
-		var err error
-		res[i], err = d.getPipeline(key)
+	res := make([]Subpipeline, 0, len(keys)) // Preallocated capacity is just a heuristic
+	for _, key := range keys {
+		newPipes, err := d.getPipelines(key)
 		if err != nil {
 			return nil, err
+		}
+		for _, pipe := range newPipes {
+			res = append(res, pipe)
 		}
 	}
 	return res, nil
@@ -204,33 +248,13 @@ func (d *GenericDistributor) String() string {
 	return d.Description
 }
 
-type TagTemplate struct {
-	Template     string // Placeholders like ${xxx} will be replaced by tag values (left empty if tag missing)
-	MissingValue string // Replacement for missing values
-}
-
-var templateRegex = regexp.MustCompile("\\$\\{[^\\{]*\\}") // Example: ${hello}
-
-func (t *TagTemplate) BuildKey(sample *bitflow.Sample) string {
-	return templateRegex.ReplaceAllStringFunc(t.Template, func(placeholder string) string {
-		placeholder = placeholder[2 : len(placeholder)-1] // Strip the ${} prefix/suffix
-		if sample.HasTag(placeholder) {
-			return sample.Tag(placeholder)
-		} else {
-			return t.MissingValue
-		}
-	})
-}
-
 type TagDistributor struct {
-	CachingDistributor
-	TagTemplate
+	RegexDistributor
+	pipeline.TagTemplate
 }
 
 func (d *TagDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) ([]Subpipeline, error) {
-	key := d.BuildKey(sample)
-	res, err := d.getPipeline(key)
-	return []Subpipeline{res}, err
+	return d.getPipelines(d.BuildKey(sample))
 }
 
 func (d *TagDistributor) String() string {
@@ -240,131 +264,23 @@ func (d *TagDistributor) String() string {
 var _ ForkDistributor = new(MultiFileDistributor)
 
 type MultiFileDistributor struct {
-	TagTemplate
+	pipeline.TagTemplate
 	PipelineCache
 	Config bitflow.FileSink // Configuration parameters in this field will be used for file outputs
 }
 
 func (b *MultiFileDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) ([]Subpipeline, error) {
-	fileName := b.BuildKey(sample)
-	res, err := b.getPipeline(fileName, b.build)
-	return []Subpipeline{res}, err
+	return b.getPipelines(b.BuildKey(sample), b.build)
 }
 
 func (b *MultiFileDistributor) String() string {
 	return "Output to files: " + b.Template
 }
 
-func (b *MultiFileDistributor) build(fileName string) (*pipeline.SamplePipeline, error) {
+func (b *MultiFileDistributor) build(fileName string) ([]*pipeline.SamplePipeline, error) {
 	fileOut := b.Config
 	fileOut.Filename = fileName
 	fileOut.Marshaller = bitflow.EndpointDescription{Target: fileName, Type: bitflow.FileEndpoint}.DefaultOutputFormat().Marshaller()
-	return (new(pipeline.SamplePipeline)).Add(&fileOut), nil
+	pipe := (new(pipeline.SamplePipeline)).Add(&fileOut)
+	return []*pipeline.SamplePipeline{pipe}, nil
 }
-
-/*
-
-
-
-
-
-
-
-
-
-type SimplePipelineBuilder struct {
-	Build           func() []bitflow.SampleProcessor
-	examplePipeline []fmt.Stringer
-}
-
-func (b *SimplePipelineBuilder) ContainedStringers() []fmt.Stringer {
-	if b.examplePipeline == nil {
-		if b.Build == nil {
-			b.examplePipeline = make([]fmt.Stringer, 0)
-		} else {
-			pipe := b.Build()
-			b.examplePipeline = make([]fmt.Stringer, len(pipe))
-			for i, step := range pipe {
-				b.examplePipeline[i] = step
-			}
-		}
-	}
-	return b.examplePipeline
-}
-
-func (b *SimplePipelineBuilder) String() string {
-	return fmt.Sprintf("Simple Pipeline Builder len %v", len(b.ContainedStringers()))
-}
-
-func (b *SimplePipelineBuilder) BuildPipeline(key interface{}, output *ForkMerger) *pipeline.SamplePipeline {
-	var res pipeline.SamplePipeline
-	if b.Build != nil {
-		for _, processor := range b.Build() {
-			res.Add(processor)
-		}
-	}
-	res.Add(output)
-	return &res
-}
-
-
-
-
-
-type extendedStringPipelineBuilder struct {
-	fork.StringPipelineBuilder
-	builder                  *PipelineBuilder
-	defaultTail              Pipeline
-	defaultPipeline          *pipeline.SamplePipeline
-	singletonDefaultPipeline *pipeline.SamplePipeline
-}
-
-func (b *extendedStringPipelineBuilder) ContainedStringers() []fmt.Stringer {
-	res := b.StringPipelineBuilder.ContainedStringers()
-	var title string
-	var pipe *pipeline.SamplePipeline
-	if b.singletonDefaultPipeline != nil {
-		title = "Default pipeline"
-		pipe = b.defaultPipeline
-	} else if b.defaultPipeline != nil {
-		title = "Singleton default pipeline"
-		pipe = b.singletonDefaultPipeline
-	}
-	if pipe != nil {
-		res = append([]fmt.Stringer{&pipeline.TitledSamplePipeline{Title: title, SamplePipeline: pipe}}, res...)
-	}
-	return res
-}
-
-func (b *extendedStringPipelineBuilder) buildMissing(string) (res *pipeline.SamplePipeline, err error) {
-	if b.singletonDefaultPipeline != nil {
-		res = b.singletonDefaultPipeline // Use the same pipelien for every fork key
-	} else if b.defaultPipeline != nil {
-		res, err = b.builder.makePipelineTail(b.defaultTail) // Build new pipeline for every fork key
-	} else {
-		res = new(pipeline.SamplePipeline)
-	}
-	return
-}
-
-func make() {
-	for _, input := range inputs {
-		key := input.Content()
-		if _, ok := res.Pipelines[key]; ok {
-			return nil, fmt.Errorf("Subpipeline key '%v' defined multiple times", key)
-		}
-		if key == DefaultForkKey {
-			res.defaultTail = pipe[1:]
-			res.defaultPipeline = builtPipe
-		} else if key == SingletonDefaultForkKey {
-			res.singletonDefaultPipeline = builtPipe
-		} else {
-			res.Pipelines[key] = builtPipe
-		}
-	}
-	if res.defaultPipeline != nil && res.singletonDefaultPipeline != nil {
-		return nil, fmt.Errorf("Cannot have both singleton and individual default subpipelines (fork keys '%v' and '%v')", DefaultForkKey, SingletonDefaultForkKey)
-	}
-}
-
-*/
