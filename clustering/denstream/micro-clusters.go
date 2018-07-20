@@ -1,10 +1,24 @@
 package denstream
 
 import (
+	"flag"
 	"fmt"
 	"math"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
+
+var (
+	ForceComponentRadius = false
+	HoldZeroRadius       = false
+)
+
+// TODO move these parameters elsewhere
+func init() {
+	flag.BoolVar(&ForceComponentRadius, "microclusters-component-radius", false, "Always use the component radius computation for Denstream")
+	flag.BoolVar(&HoldZeroRadius, "microclusters-hold-zero-radius", false, "Until the radius can be calculated, treat the radius of Denstream microclusters as zero")
+}
 
 type ClusterSpace interface {
 	NumClusters() int
@@ -120,21 +134,37 @@ func (c *BasicMicroCluster) computeRadius() float64 {
 	if c.w <= 0 {
 		return 0
 	}
-	var radius float64
-	for i := range c.cf1 {
-		v1 := c.cf1[i] / c.w
-		v2 := c.cf2[i] / c.w
-		r := v2 - v1*v1
-		if r < 0 {
-			panic(fmt.Sprintf("Negatie radius component %v, cf1 = %v, cf2 = %v, w = %v", i, c.cf1, c.cf2, c.w))
+	cf1Len := vectorLength(c.cf1)
+	cf1LenSq := cf1Len * cf1Len / (c.w * c.w)
+	cf2LenSq := vectorLength(c.cf2) / c.w
+	if cf2LenSq >= cf1LenSq && !ForceComponentRadius {
+		// This is the formula from the Denstream paper. It is only applicable in this special case.
+		return math.Sqrt(cf2LenSq - cf1LenSq)
+	} else {
+		if HoldZeroRadius {
+			// Alternative strategy: until the above condition is met, hold the radius at "zero", because
+			// it is not yet large enough
+			return 0
 		}
-		r = math.Sqrt(r)
-		if radius < r {
-			// We use the largest radius of any component as the overall radius. TODO There could be other strategies.
-			radius = r
+		// ... otherwise, fall back to computing the radius for every component
+		// We use the largest radius of any component as the overall radius. TODO There could be other strategies.
+		var maxRadius float64
+		for i := range c.cf1 {
+			v1 := c.cf1[i] / c.w
+			v2 := c.cf2[i] / c.w
+			r := v2 - v1*v1
+			if r > maxRadius {
+				maxRadius = r
+			}
+		}
+		if maxRadius < 0 {
+			log.Debugf("Max radius component negative (%v), cf1 = %v, cf2 = %v, w = %v", maxRadius, c.cf1, c.cf2, c.w)
+			// No other choice... Cluster is probably still too small
+			return 0
+		} else {
+			return math.Sqrt(maxRadius)
 		}
 	}
-	return radius
 }
 
 func (c *BasicMicroCluster) computeCenter(center []float64) []float64 {

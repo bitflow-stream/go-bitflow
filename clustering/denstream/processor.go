@@ -13,7 +13,11 @@ import (
 
 var _ bitflow.SampleProcessor = new(DenstreamClusterProcessor)
 
-const ClusterRadiusSuffic = "/radius"
+const (
+	ClusterTag          = "cluster"
+	RadiusMetric        = "radius"
+	ClusterRadiusSuffic = "/radius"
+)
 
 type DenstreamClusterProcessor struct {
 	bitflow.NoopProcessor
@@ -26,6 +30,9 @@ type DenstreamClusterProcessor struct {
 	// If set to true, this processing step will output all clusters as special samples when closing.
 	// The first metric will be the radius of the cluster, followed by the cluster center in every dimension.
 	FlushClustersAtClose bool
+
+	TrainTag      string // If TrainTag is not empty, only certain samples actually modify the clusters. Other samples are tagged with the cluter ID.
+	TrainTagValue string // If TrainTagValue is empty, samples that have the TrainTag tag are used for training (value irrelevant). Otherwise, the tag value must match TrainTagValue.
 
 	numDimensions       int
 	processedSamples    int
@@ -52,23 +59,38 @@ func (p *DenstreamClusterProcessor) Sample(sample *bitflow.Sample, header *bitfl
 	for i, v := range sample.Values {
 		point[i] = float64(v)
 	}
-	clusterId := p.Insert(point, sample.Time)
+	var clusterId int
+	if p.shouldTrain(sample) {
+		clusterId = p.Insert(point, sample.Time)
+	} else {
+		clusterId = p.GetCluster(point)
+	}
 
 	if p.OutputStateModulo > 0 && p.processedSamples%p.OutputStateModulo == 0 {
 		log.Println("Denstream processed", p.processedSamples, "points in:", p.DenstreamClusterer.String())
 	}
 	p.processedSamples++
 
-	sample.SetTag("cluster", strconv.Itoa(clusterId))
+	sample.SetTag(ClusterTag, strconv.Itoa(clusterId))
 	p.lastProcessedSample = sample
 	p.lastProcessedHeader = header
 	return p.NoopProcessor.Sample(sample, header)
 }
 
+func (p *DenstreamClusterProcessor) shouldTrain(sample *bitflow.Sample) bool {
+	switch {
+	case p.TrainTag == "":
+		return true
+	case !sample.HasTag(p.TrainTag):
+		return false
+	}
+	return p.TrainTagValue == "" || sample.Tag(p.TrainTag) == p.TrainTagValue
+}
+
 func (p *DenstreamClusterProcessor) Close() {
 	if p.FlushClustersAtClose && p.lastProcessedSample != nil {
 		newFields := make([]string, len(p.lastProcessedHeader.Fields)+1)
-		newFields[0] = "radius"
+		newFields[0] = RadiusMetric
 		copy(newFields[1:], p.lastProcessedHeader.Fields)
 		header := p.lastProcessedHeader.Clone(newFields)
 
@@ -76,7 +98,7 @@ func (p *DenstreamClusterProcessor) Close() {
 		p.oClusters.ClustersDo(func(cluster MicroCluster) {
 			p.outputCluster(cluster, "outlier", header, &err)
 		})
-		p.oClusters.ClustersDo(func(cluster MicroCluster) {
+		p.pClusters.ClustersDo(func(cluster MicroCluster) {
 			p.outputCluster(cluster, "real", header, &err)
 		})
 	}
@@ -161,6 +183,8 @@ func create_denstream_step(p *pipeline.SamplePipeline, params map[string]string,
 		},
 		OutputStateModulo:    debug,
 		FlushClustersAtClose: outputClusters,
+		TrainTag:             params["trainTag"],
+		TrainTagValue:        params["trainTagValue"],
 		CreateClusterSpace: func(numDimensions int) ClusterSpace {
 			if linearClusterSpace {
 				return NewLinearClusterSpace()
@@ -191,12 +215,12 @@ func RegisterDenstream(b *query.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
 		return create_denstream_step(p, params, false)
 	}
-	b.RegisterAnalysisParamsErr("denstream", create, "Perform a denstream clustering on the data stream. Clusters organzied in r-tree.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters")
+	b.RegisterAnalysisParamsErr("denstream", create, "Perform a denstream clustering on the data stream. Clusters organzied in r-tree.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters", "trainTag", "trainTagValue")
 }
 
 func RegisterDenstreamLinear(b *query.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
 		return create_denstream_step(p, params, true)
 	}
-	b.RegisterAnalysisParamsErr("denstream_linear", create, "Perform a denstream clustering on the data stream. Clusters searched linearly.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters")
+	b.RegisterAnalysisParamsErr("denstream_linear", create, "Perform a denstream clustering on the data stream. Clusters searched linearly.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters", "trainTag", "trainTagValue")
 }

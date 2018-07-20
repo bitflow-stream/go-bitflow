@@ -307,9 +307,11 @@ func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs, rad
 	}
 
 	for name, data := range plotData {
-		var line *plotter.Line
-		var scatter *plotter.Scatter
+		plotColor := shape.Colors.Next()
+		legend := name != "" && !p.NoLegend
 
+		var scatter *plotter.Scatter
+		var line *plotter.Line
 		switch p.Type {
 		case ScatterPlot:
 			scatter, err = plotter.NewScatter(data)
@@ -318,28 +320,40 @@ func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs, rad
 		case LinePointPlot:
 			line, scatter, err = plotter.NewLinePoints(data)
 		case ClusterPlot:
-			radiuses := radiusData[name]
-			pts := plotutil.ErrorPoints{
+			errorBars := &plotutil.ErrorPoints{
 				XYs:     data,
 				XErrors: make(plotter.XErrors, len(data)),
 				YErrors: make(plotter.YErrors, len(data)),
 			}
+			radiuses := radiusData[name]
 			for i, r := range radiuses {
-				pts.XErrors[i].Low = r
-				pts.XErrors[i].High = r
-				pts.YErrors[i].Low = r
-				pts.YErrors[i].High = r
+				errorBars.XErrors[i].Low = r
+				errorBars.XErrors[i].High = r
+				errorBars.YErrors[i].Low = r
+				errorBars.YErrors[i].High = r
 			}
-			err = plotutil.AddErrorBars(plot, pts)
+			var xErr *plotter.XErrorBars
+			var yErr *plotter.YErrorBars
+			xErr, err = plotter.NewXErrorBars(errorBars)
+			if err == nil {
+				yErr, err = plotter.NewYErrorBars(errorBars)
+			}
+			if err == nil {
+				xErr.Color = plotColor
+				yErr.Color = plotColor
+				plot.Add(xErr, yErr)
+				if legend {
+					plot.Legend.Add(name, &boxThumnail{color: plotColor})
+					legend = false
+				}
+			}
 		default:
 			return fmt.Errorf("Invalid PlotType: %v", p.Type)
 		}
-
 		if err != nil {
 			return fmt.Errorf("Error creating plot (type %v): %v", p.Type, err)
 		}
-		plotColor := shape.Colors.Next()
-		legend := name != "" && !p.NoLegend
+
 		if line != nil {
 			line.Color = plotColor
 			line.Dashes = shape.Dashes.Next()
@@ -360,6 +374,21 @@ func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs, rad
 		}
 	}
 	return nil
+}
+
+type boxThumnail struct {
+	color color.Color
+}
+
+func (b *boxThumnail) Thumbnail(c *draw.Canvas) {
+	points := []vg.Point{
+		{c.Min.X, c.Min.Y},
+		{c.Min.X, c.Max.Y},
+		{c.Max.X, c.Max.Y},
+		{c.Max.X, c.Min.Y},
+	}
+	poly := c.ClipPolygonY(points)
+	c.FillPolygon(b.color, poly)
 }
 
 // ================================= Random Colors/Shapes =================================
