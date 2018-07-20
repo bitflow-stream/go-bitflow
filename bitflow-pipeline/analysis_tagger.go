@@ -10,6 +10,8 @@ import (
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
 
+// TODO make this configurable as parameters of file inputs etc.
+
 func RegisterTaggingAnalyses(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("set_filename", set_filename_tag,
 		"When reading files, instead of using the entire path for source_tag, use only the given level in the directory tree (0 is the file, 1 the containing directory name, 2 the parent directory, ...)",

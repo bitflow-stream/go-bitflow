@@ -9,6 +9,7 @@ import (
 	pipeline "github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
 	"github.com/antongulenko/go-bitflow-pipeline/http_tags"
+	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -52,7 +53,7 @@ func (c *CmdDataCollector) MakePipeline() *pipeline.SamplePipeline {
 	// Configure the data collector pipeline
 	p := new(pipeline.SamplePipeline)
 	if len(c.flagTags.Keys) > 0 {
-		p.Add(pipeline.NewTaggingProcessor(c.flagTags.Map()))
+		p.Add(steps.NewTaggingProcessor(c.flagTags.Map()))
 	}
 	if c.restApiEndpoint != "" {
 		router := mux.NewRouter()
@@ -81,17 +82,13 @@ func (c *CmdDataCollector) add_outputs(p *pipeline.SamplePipeline) {
 		c.set_sink(p, outputs[0])
 	} else {
 		// Create a multiplex-fork for all outputs
-		num := len(outputs)
-		builder := make(fork.MultiplexPipelineBuilder, num)
-		for i, sink := range outputs {
-			builder[i] = new(pipeline.SamplePipeline)
-			c.set_sink(builder[i], sink)
+		dist := new(fork.MultiplexDistributor)
+		for _, sink := range outputs {
+			pipe := new(pipeline.SamplePipeline)
+			c.set_sink(pipe, sink)
+			dist.Subpipelines = append(dist.Subpipelines, pipe)
 		}
-		p.Add(&fork.MetricFork{
-			ParallelClose: true,
-			Distributor:   fork.NewMultiplexDistributor(num),
-			Builder:       builder,
-		})
+		p.Add(&fork.SampleFork{Distributor: dist})
 	}
 }
 
@@ -119,7 +116,7 @@ func (c *CmdDataCollector) set_sink(p *pipeline.SamplePipeline, sink bitflow.Sam
 	// Add a filter to file outputs
 	if _, isFile := sink.(*bitflow.FileSink); isFile {
 		if c.restApiEndpoint != "" {
-			p.Add(&pipeline.SampleFilter{
+			p.Add(&steps.SampleFilter{
 				Description: pipeline.String("Filter samples based on /file_output REST API."),
 				IncludeFilter: func(sample *bitflow.Sample, header *bitflow.Header) (bool, error) {
 					return c.fileOutputApi.FileOutputEnabled, nil

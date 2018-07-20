@@ -1,18 +1,48 @@
 package plotHttp
 
 import (
+	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"
 )
 
+func RegisterHttpPlotter(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+		windowSize := 100
+		if windowStr, ok := params["window"]; ok {
+			var err error
+			windowSize, err = strconv.Atoi(windowStr)
+			if err != nil {
+				return query.ParameterError("window", err)
+			}
+		}
+		useLocalStatic := false
+		static, ok := params["local_static"]
+		if ok {
+			if static == "true" {
+				useLocalStatic = true
+			} else {
+				return query.ParameterError("local_static", errors.New("The only accepted value is 'true'"))
+			}
+		}
+		p.Add(NewHttpPlotter(params["endpoint"], windowSize, useLocalStatic))
+		return nil
+	}
+
+	b.RegisterAnalysisParamsErr("http", create, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", []string{"endpoint"}, "window", "local_static")
+}
+
 func NewHttpPlotter(endpoint string, windowSize int, useLocalStatic bool) *HttpPlotter {
 	return &HttpPlotter{
-		data:           make(map[string]*pipeline.MetricWindow),
+		data:           make(map[string]*steps.MetricWindow),
 		Endpoint:       endpoint,
 		WindowSize:     windowSize,
 		UseLocalStatic: useLocalStatic,
@@ -26,7 +56,7 @@ type HttpPlotter struct {
 	WindowSize     int
 	UseLocalStatic bool
 
-	data  map[string]*pipeline.MetricWindow
+	data  map[string]*steps.MetricWindow
 	names []string
 }
 
@@ -56,7 +86,7 @@ func (p *HttpPlotter) Sample(sample *bitflow.Sample, header *bitflow.Header) err
 func (p *HttpPlotter) logSample(sample *bitflow.Sample, header *bitflow.Header) {
 	for i, field := range header.Fields {
 		if _, ok := p.data[field]; !ok {
-			p.data[field] = pipeline.NewMetricWindow(p.WindowSize)
+			p.data[field] = steps.NewMetricWindow(p.WindowSize)
 			p.names = append(p.names, field)
 			sort.Strings(p.names)
 		}

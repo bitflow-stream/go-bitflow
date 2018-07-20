@@ -5,6 +5,8 @@ import (
 	"sync"
 
 	bitflow "github.com/antongulenko/go-bitflow"
+	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 )
 
@@ -38,6 +40,16 @@ type BinaryEvaluationTags struct {
 	Expected     string // "expected"
 	Predicted    string // "predicted"
 	AnomalyValue string // "anomaly", All other values (or missing values) considered not anomaly
+}
+
+func RegisterBinaryEvaluation(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) {
+		eval := new(BinaryEvaluationProcessor)
+		eval.SetBinaryEvaluationTags(params)
+		eval.SetEvaluationTags(params)
+		p.Add(eval)
+	}
+	b.RegisterAnalysisParams("binary_evaluation", create, "Evaluate 'expected' and 'predicted' tags, separate evaluation by |-separated fields in 'evalGroups' tag", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator")
 }
 
 func (e *BinaryEvaluationTags) SetBinaryEvaluationTags(params map[string]string) {

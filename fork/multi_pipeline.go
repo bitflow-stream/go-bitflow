@@ -9,7 +9,7 @@ import (
 )
 
 type MultiPipeline struct {
-	parallelClose bool
+	SequentialClose bool
 
 	pipelines        []*runningSubPipeline
 	runningPipelines int
@@ -85,7 +85,7 @@ func (m *MultiPipeline) stopPipelines() {
 				defer wg.Done()
 				pipeline.stop()
 			}(pipeline)
-			if !m.parallelClose {
+			if m.SequentialClose {
 				wg.Wait()
 			}
 		}
@@ -151,9 +151,4 @@ func (sink *ForkMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 
 func (sink *ForkMerger) Close() {
 	// The actual outgoing sink must be closed after waitForPipelines() returns
-}
-
-// Can be used by implementations of PipelineBuilder to access the next step of the entire fork.
-func (sink *ForkMerger) GetOriginalSink() bitflow.SampleProcessor {
-	return sink.outgoing
 }

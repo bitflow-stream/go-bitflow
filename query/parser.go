@@ -64,7 +64,7 @@ func (p *Parser) scan() (Token, error) {
 	if err != nil {
 		return tok, err
 	}
-	if tok.Type == WS {
+	if tok.Type == WS || tok.Type == COMMENT {
 		return p.scan()
 	}
 	return tok, err

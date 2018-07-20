@@ -14,6 +14,7 @@ const (
 	ILLEGAL TokenType = iota
 	EOF
 	WS
+	COMMENT
 
 	// Literals
 	STR
@@ -43,6 +44,7 @@ var (
 // These runes interrupt a non-quoted string
 // The '-' rune is handled specially because it is part of the two-rune token '->'
 var specialRunes = map[rune]bool{
+	'#':  true,
 	';':  true,
 	'{':  true,
 	'}':  true,
@@ -94,6 +96,8 @@ func (t TokenType) String() (s string) {
 		s = "EOF"
 	case WS:
 		s = "WS"
+	case COMMENT:
+		s = "COMMENT"
 	case STR:
 		s = "STR"
 	case QUOT_STR:
@@ -218,6 +222,9 @@ func (s *Scanner) Scan() (Token, error) {
 	case ',':
 		tok.Type = PARAM_SEP
 		return tok, nil
+	case '#':
+		s.unread()
+		return s.scanComment()
 	case '"', '`', '\'':
 		s.unread()
 		return s.scanQuotedStr(ch)
@@ -247,6 +254,27 @@ func (s *Scanner) scanWhitespace() Token {
 	tok.End = s.pos
 	tok.Lit = buf.String()
 	return tok
+}
+
+func (s *Scanner) scanComment() (tok Token, err error) {
+	// Scan until end of line or end of file
+	tok.Type = COMMENT
+	tok.Start = s.pos
+
+	var buf bytes.Buffer
+	buf.WriteRune(s.read()) // Current character is the starting hash sign
+	for {
+		ch := s.read()
+		if ch != eof {
+			buf.WriteRune(ch)
+		}
+		if ch == eof || ch == '\n' {
+			break
+		}
+	}
+	tok.End = s.pos
+	tok.Lit = buf.String()
+	return
 }
 
 func (s *Scanner) scanQuotedStr(quoteRune rune) (tok Token, err error) {
