@@ -62,6 +62,14 @@ type BasicMicroCluster struct {
 	creationTime time.Time
 }
 
+func NewBasicMicroCluster(numDimensions int) BasicMicroCluster {
+	return BasicMicroCluster{
+		cf1:    make([]float64, numDimensions),
+		cf2:    make([]float64, numDimensions),
+		center: make([]float64, numDimensions),
+	}
+}
+
 func (c *BasicMicroCluster) CreationTime() time.Time {
 	return c.creationTime
 }
