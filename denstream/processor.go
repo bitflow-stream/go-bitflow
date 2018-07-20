@@ -73,11 +73,10 @@ func (p *DenstreamClusterProcessor) Close() {
 		p.oClusters.ClustersDo(func(cluster MicroCluster) {
 			p.outputCluster(cluster, "outlier", header, &err)
 		})
-		p.pClusters.ClustersDo(func(cluster MicroCluster) {
+		p.oClusters.ClustersDo(func(cluster MicroCluster) {
 			p.outputCluster(cluster, "real", header, &err)
 		})
 	}
-	log.Println("Total number of outlier clusters:", p.oClusters.NumClusters(), ", total number of real clusters:", p.pClusters.NumClusters())
 	p.NoopProcessor.Close()
 }
 
