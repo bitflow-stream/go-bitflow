@@ -113,7 +113,6 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	}
 	s.nextNodeId++
 	newChildNode.isLeaf = true
-
 	nearestParentNode := s.root
 	if nearestParentNode.numChildren < _maxChildren {
 		addCFtoParentNode(nearestParentNode, newChildNode)
@@ -166,7 +165,6 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 		}
 
 	}
-	// log.Println("Panicking for cluster Id", cluster.Id())
 	panic("Cluster not in cluster space during: " + reason)
 }
 
