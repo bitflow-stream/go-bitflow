@@ -74,6 +74,31 @@ func (suite *lexerTestSuite) TestWhitespace() {
 	})
 }
 
+func (suite *lexerTestSuite) TestComments() {
+	s := `xxx# hello
+
+nothing
+#again
+#2
+
+nothing
+#eof`
+	suite.test(s, []Token{
+		{Type: STR, Lit: "xxx"},
+		{Type: COMMENT, Lit: string("# hello\n")},
+		{Type: WS, Lit: "\n"},
+		{Type: STR, Lit: "nothing"},
+		{Type: WS, Lit: "\n"},
+		{Type: COMMENT, Lit: string("#again\n")},
+		{Type: COMMENT, Lit: string("#2\n")},
+		{Type: WS, Lit: "\n"},
+		{Type: STR, Lit: "nothing"},
+		{Type: WS, Lit: "\n"},
+		{Type: COMMENT, Lit: string("#eof")},
+		{Type: EOF, Lit: string(eof)},
+	})
+}
+
 func (suite *lexerTestSuite) TestOperators() {
 	suite.test("  ;{ \n[;\n ]}}\t}{]{  ;-> {->->}  []{->",
 		[]Token{

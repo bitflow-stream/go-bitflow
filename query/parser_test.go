@@ -212,10 +212,10 @@ func (suite *parserTestSuite) TestExamples() {
 		Pipeline{Input{{Type: STR, Start: 0, End: 1, Lit: "a"}}})
 	suite.test("a(x  = y,  f='g')",
 		Pipeline{Step{
-			Name: Token{Type: 3, Lit: "a", Start: 0, End: 1},
+			Name: Token{Type: STR, Lit: "a", Start: 0, End: 1},
 			Params: map[Token]Token{
-				Token{Type: 3, Lit: "f", Start: 11, End: 12}: {Type: 4, Lit: "'g'", Start: 13, End: 16},
-				Token{Type: 3, Lit: "x", Start: 2, End: 3}:   {Type: 3, Lit: "y", Start: 7, End: 8}}}})
+				Token{Type: STR, Lit: "f", Start: 11, End: 12}: {Type: QUOT_STR, Lit: "'g'", Start: 13, End: 16},
+				Token{Type: STR, Lit: "x", Start: 2, End: 3}:   {Type: STR, Lit: "y", Start: 7, End: 8}}}})
 	suite.test("a b c",
 		Pipeline{Input{
 			{Type: STR, Start: 0, End: 1, Lit: "a"},
@@ -304,74 +304,74 @@ func (suite *parserTestSuite) TestFragmentedPipelines() {
 	// Fragmented Multiplex
 	suite.test("xx -> [a()] {b(); c()} [d()->e()] {f()}",
 		Pipeline{
-			Input{Token{Type: 3, Lit: "xx", Start: 0, End: 2}},
+			Input{Token{Type: STR, Lit: "xx", Start: 0, End: 2}},
 			Pipelines{
 				Pipeline{
-					Step{Name: Token{Type: 3, Lit: "a", Start: 7, End: 8}},
-					Step{Name: Token{Type: 3, Lit: "b", Start: 13, End: 14}},
-					Step{Name: Token{Type: 3, Lit: "d", Start: 24, End: 25}},
-					Step{Name: Token{Type: 3, Lit: "e", Start: 29, End: 30}},
-					Step{Name: Token{Type: 3, Lit: "f", Start: 35, End: 36}}},
+					Step{Name: Token{Type: STR, Lit: "a", Start: 7, End: 8}},
+					Step{Name: Token{Type: STR, Lit: "b", Start: 13, End: 14}},
+					Step{Name: Token{Type: STR, Lit: "d", Start: 24, End: 25}},
+					Step{Name: Token{Type: STR, Lit: "e", Start: 29, End: 30}},
+					Step{Name: Token{Type: STR, Lit: "f", Start: 35, End: 36}}},
 				Pipeline{
-					Step{Name: Token{Type: 3, Lit: "a", Start: 7, End: 8}},
-					Step{Name: Token{Type: 3, Lit: "c", Start: 18, End: 19}},
-					Step{Name: Token{Type: 3, Lit: "d", Start: 24, End: 25}},
-					Step{Name: Token{Type: 3, Lit: "e", Start: 29, End: 30}}}}})
+					Step{Name: Token{Type: STR, Lit: "a", Start: 7, End: 8}},
+					Step{Name: Token{Type: STR, Lit: "c", Start: 18, End: 19}},
+					Step{Name: Token{Type: STR, Lit: "d", Start: 24, End: 25}},
+					Step{Name: Token{Type: STR, Lit: "e", Start: 29, End: 30}}}}})
 
 	// Fragmented Fork
 	suite.test("rr (num=1) [a()] {0 -> b(); 1 -> c()} [d()->e()] {3 -> f()} { '' -> default() }",
 		Pipeline{
 			Fork{
 				Step: Step{
-					Name:   Token{Type: 3, Lit: "rr", Start: 0, End: 2},
-					Params: map[Token]Token{Token{Type: 3, Lit: "num", Start: 4, End: 7}: {Type: 3, Lit: "1", Start: 8, End: 9}}},
+					Name:   Token{Type: STR, Lit: "rr", Start: 0, End: 2},
+					Params: map[Token]Token{Token{Type: STR, Lit: "num", Start: 4, End: 7}: {Type: STR, Lit: "1", Start: 8, End: 9}}},
 				Pipelines: Pipelines{
 					Pipeline{
-						Input{Token{Type: 3, Lit: "0", Start: 18, End: 19}},
-						Step{Name: Token{Type: 3, Lit: "a", Start: 12, End: 13}},
-						Step{Name: Token{Type: 3, Lit: "b", Start: 23, End: 24}},
-						Step{Name: Token{Type: 3, Lit: "d", Start: 39, End: 40}},
-						Step{Name: Token{Type: 3, Lit: "e", Start: 44, End: 45}}},
+						Input{Token{Type: STR, Lit: "0", Start: 18, End: 19}},
+						Step{Name: Token{Type: STR, Lit: "a", Start: 12, End: 13}},
+						Step{Name: Token{Type: STR, Lit: "b", Start: 23, End: 24}},
+						Step{Name: Token{Type: STR, Lit: "d", Start: 39, End: 40}},
+						Step{Name: Token{Type: STR, Lit: "e", Start: 44, End: 45}}},
 					Pipeline{
-						Input{Token{Type: 3, Lit: "1", Start: 28, End: 29}},
-						Step{Name: Token{Type: 3, Lit: "a", Start: 12, End: 13}},
-						Step{Name: Token{Type: 3, Lit: "c", Start: 33, End: 34}},
-						Step{Name: Token{Type: 3, Lit: "d", Start: 39, End: 40}},
-						Step{Name: Token{Type: 3, Lit: "e", Start: 44, End: 45}}},
+						Input{Token{Type: STR, Lit: "1", Start: 28, End: 29}},
+						Step{Name: Token{Type: STR, Lit: "a", Start: 12, End: 13}},
+						Step{Name: Token{Type: STR, Lit: "c", Start: 33, End: 34}},
+						Step{Name: Token{Type: STR, Lit: "d", Start: 39, End: 40}},
+						Step{Name: Token{Type: STR, Lit: "e", Start: 44, End: 45}}},
 					Pipeline{
-						Input{Token{Type: 3, Lit: "3", Start: 50, End: 51}},
-						Step{Name: Token{Type: 3, Lit: "a", Start: 12, End: 13}},
-						Step{Name: Token{Type: 3, Lit: "d", Start: 39, End: 40}},
-						Step{Name: Token{Type: 3, Lit: "e", Start: 44, End: 45}},
-						Step{Name: Token{Type: 3, Lit: "f", Start: 55, End: 56}}},
+						Input{Token{Type: STR, Lit: "3", Start: 50, End: 51}},
+						Step{Name: Token{Type: STR, Lit: "a", Start: 12, End: 13}},
+						Step{Name: Token{Type: STR, Lit: "d", Start: 39, End: 40}},
+						Step{Name: Token{Type: STR, Lit: "e", Start: 44, End: 45}},
+						Step{Name: Token{Type: STR, Lit: "f", Start: 55, End: 56}}},
 					Pipeline{
-						Input{Token{Type: 4, Lit: "''", Start: 62, End: 64}},
-						Step{Name: Token{Type: 3, Lit: "a", Start: 12, End: 13}},
-						Step{Name: Token{Type: 3, Lit: "d", Start: 39, End: 40}},
-						Step{Name: Token{Type: 3, Lit: "e", Start: 44, End: 45}},
-						Step{Name: Token{Type: 3, Lit: "default", Start: 68, End: 75}}}}}})
+						Input{Token{Type: QUOT_STR, Lit: "''", Start: 62, End: 64}},
+						Step{Name: Token{Type: STR, Lit: "a", Start: 12, End: 13}},
+						Step{Name: Token{Type: STR, Lit: "d", Start: 39, End: 40}},
+						Step{Name: Token{Type: STR, Lit: "e", Start: 44, End: 45}},
+						Step{Name: Token{Type: STR, Lit: "default", Start: 68, End: 75}}}}}})
 
 	// Fragmented Multi Input
 	suite.test("[a()] {0 -> b(); 1 -> c()} [d()->e()] {3 -> f()}",
 		Pipeline{Pipelines{
 			Pipeline{
-				Input{Token{Type: 3, Lit: "0", Start: 7, End: 8}},
-				Step{Name: Token{Type: 3, Lit: "a", Start: 1, End: 2}},
-				Step{Name: Token{Type: 3, Lit: "b", Start: 12, End: 13}},
-				Step{Name: Token{Type: 3, Lit: "d", Start: 28, End: 29}},
-				Step{Name: Token{Type: 3, Lit: "e", Start: 33, End: 34}}},
+				Input{Token{Type: STR, Lit: "0", Start: 7, End: 8}},
+				Step{Name: Token{Type: STR, Lit: "a", Start: 1, End: 2}},
+				Step{Name: Token{Type: STR, Lit: "b", Start: 12, End: 13}},
+				Step{Name: Token{Type: STR, Lit: "d", Start: 28, End: 29}},
+				Step{Name: Token{Type: STR, Lit: "e", Start: 33, End: 34}}},
 			Pipeline{
-				Input{Token{Type: 3, Lit: "1", Start: 17, End: 18}},
-				Step{Name: Token{Type: 3, Lit: "a", Start: 1, End: 2}},
-				Step{Name: Token{Type: 3, Lit: "c", Start: 22, End: 23}},
-				Step{Name: Token{Type: 3, Lit: "d", Start: 28, End: 29}},
-				Step{Name: Token{Type: 3, Lit: "e", Start: 33, End: 34}}},
+				Input{Token{Type: STR, Lit: "1", Start: 17, End: 18}},
+				Step{Name: Token{Type: STR, Lit: "a", Start: 1, End: 2}},
+				Step{Name: Token{Type: STR, Lit: "c", Start: 22, End: 23}},
+				Step{Name: Token{Type: STR, Lit: "d", Start: 28, End: 29}},
+				Step{Name: Token{Type: STR, Lit: "e", Start: 33, End: 34}}},
 			Pipeline{
-				Input{Token{Type: 3, Lit: "3", Start: 39, End: 40}},
-				Step{Name: Token{Type: 3, Lit: "a", Start: 1, End: 2}},
-				Step{Name: Token{Type: 3, Lit: "d", Start: 28, End: 29}},
-				Step{Name: Token{Type: 3, Lit: "e", Start: 33, End: 34}},
-				Step{Name: Token{Type: 3, Lit: "f", Start: 44, End: 45}}}}})
+				Input{Token{Type: STR, Lit: "3", Start: 39, End: 40}},
+				Step{Name: Token{Type: STR, Lit: "a", Start: 1, End: 2}},
+				Step{Name: Token{Type: STR, Lit: "d", Start: 28, End: 29}},
+				Step{Name: Token{Type: STR, Lit: "e", Start: 33, End: 34}},
+				Step{Name: Token{Type: STR, Lit: "f", Start: 44, End: 45}}}}})
 }
 
 func (suite *parserTestSuite) xxTestBigExample() {
