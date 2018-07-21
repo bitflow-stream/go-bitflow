@@ -7,7 +7,6 @@ import (
 
 	bitflow "github.com/antongulenko/go-bitflow"
 	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/clustering/denstream"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
@@ -27,43 +26,7 @@ var (
 	}
 )
 
-type ClusterTagger struct {
-	bitflow.NoopProcessor
-	BinaryEvaluationTags
-	NormalTagValue string
-}
-
-func (p *ClusterTagger) String() string {
-	return fmt.Sprintf("cluster tagger (normal tag value: \"%v\", binary evaluation: [%v])",
-		p.NormalTagValue, &p.BinaryEvaluationTags)
-}
-
-func (p *ClusterTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	clusterId := sample.Tag("cluster")
-	predicted := ""
-	if clusterId == denstream.OutlierStr || clusterId == denstream.NewOutlierStr {
-		predicted = p.AnomalyValue
-	} else {
-		predicted = p.NormalTagValue
-	}
-	sample.SetTag(p.Predicted, predicted)
-	return p.NoopProcessor.Sample(sample, header)
-}
-
-func RegisterClusterTagger(b *query.PipelineBuilder) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) {
-		proc := new(ClusterTagger)
-		proc.SetBinaryEvaluationTags(params)
-		proc.NormalTagValue = params["normalValue"]
-		if proc.NormalTagValue == "" {
-			proc.NormalTagValue = "normal"
-		}
-		p.Add(proc)
-	}
-	b.RegisterAnalysisParams("cluster_tag", create, "Translate 'cluster' tag into 'predicted' = 'anomaly' or 'normal'", []string{}, "expectedTag", "predictedTag", "anomalyValue", "normalValue")
-}
-
-type TagsPreprocessor struct {
+type CitTagsPreprocessor struct {
 	bitflow.NoopProcessor
 
 	EvaluationTags
@@ -72,24 +35,35 @@ type TagsPreprocessor struct {
 	TrainingEnd    time.Time
 }
 
-func NewTagsPreprocessor(trainingEndStr string) (*TagsPreprocessor, error) {
-	result := new(TagsPreprocessor)
-	if trainingEndStr != "" {
-		trainingEnd, err := time.Parse(golib.SimpleTimeLayout, trainingEndStr)
-		if err != nil {
-			return nil, err
+func RegisterCitTagsPreprocessor(b *query.PipelineBuilder) {
+	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+		proc := &CitTagsPreprocessor{
+			NormalTagValue: params["normalValue"],
 		}
-		result.TrainingEnd = trainingEnd
+		if trainingEndStr, ok := params["trainingEnd"]; ok {
+			trainingEnd, err := time.Parse(golib.SimpleTimeLayout, trainingEndStr)
+			if err != nil {
+				return query.ParameterError("trainingEnd", err)
+			}
+			proc.TrainingEnd = trainingEnd
+		}
+		proc.SetBinaryEvaluationTags(params)
+		proc.SetEvaluationTags(params)
+		if proc.NormalTagValue == "" {
+			proc.NormalTagValue = "normal"
+		}
+		p.Add(proc)
+		return nil
 	}
-	return result, nil
+	b.RegisterAnalysisParamsErr("preprocess_cit_tags", create, "Process 'host', 'cls' and 'target' tags into more useful information.", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "trainingEnd", "normalValue")
 }
 
-func (p *TagsPreprocessor) String() string {
+func (p *CitTagsPreprocessor) String() string {
 	return fmt.Sprintf("tags preprocessor (training end: %v, normal tag value: \"%v\", evaluation: [%v], binary evaluation: [%v])",
 		p.TrainingEnd, p.NormalTagValue, &p.EvaluationTags, &p.BinaryEvaluationTags)
 }
 
-func (p *TagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (p *CitTagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	host := sample.Tag("host")
 
 	// Infer the layer and component from the host name
@@ -151,19 +125,4 @@ func (p *TagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header
 	sample.SetTag(p.EvalGroupsTag, strings.Join(groups, p.EvalGroupSeparator))
 
 	return p.NoopProcessor.Sample(sample, header)
-}
-
-func RegisterTagsPreprocessor(b *query.PipelineBuilder) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
-		proc, err := NewTagsPreprocessor(params["trainingEnd"])
-		proc.SetBinaryEvaluationTags(params)
-		proc.SetEvaluationTags(params)
-		proc.NormalTagValue = params["normalValue"]
-		if proc.NormalTagValue == "" {
-			proc.NormalTagValue = "normal"
-		}
-		p.Add(proc)
-		return err
-	}
-	b.RegisterAnalysisParamsErr("preprocess_tags", create, "Process 'host', 'cls' and 'target' tags into more useful information.", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "trainingEnd", "normalValue")
 }

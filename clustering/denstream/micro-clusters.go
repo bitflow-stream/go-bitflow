@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"math"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -51,7 +49,7 @@ type BasicMicroCluster struct {
 	id int
 
 	cf1 []float64
-	cf2 []float64
+	cf2 float64
 	w   float64
 
 	// Values computed from above values
@@ -65,7 +63,6 @@ type BasicMicroCluster struct {
 func NewBasicMicroCluster(numDimensions int) BasicMicroCluster {
 	return BasicMicroCluster{
 		cf1:    make([]float64, numDimensions),
-		cf2:    make([]float64, numDimensions),
 		center: make([]float64, numDimensions),
 	}
 }
@@ -93,8 +90,8 @@ func (c *BasicMicroCluster) Center() []float64 {
 func (c *BasicMicroCluster) Merge(p []float64) {
 	for i, v := range p {
 		c.cf1[i] += v
-		c.cf2[i] += v * v
 	}
+	c.cf2 += vectorSquared(p, 1)
 	c.w++
 	c.Update()
 }
@@ -103,34 +100,37 @@ func (c *BasicMicroCluster) Decay(decayFactor float64) {
 	for i := range c.cf1 {
 		c.cf1[i] *= decayFactor
 	}
-	for i := range c.cf2 {
-		c.cf2[i] *= decayFactor
-	}
+	c.cf2 *= decayFactor
 	c.w *= decayFactor
 	c.Update()
 }
 
 func (c *BasicMicroCluster) Clone() MicroCluster {
-	return &BasicMicroCluster{
+	res := &BasicMicroCluster{
 		id:           c.id,
-		cf1:          c.cf1,
+		cf1:          make([]float64, len(c.cf1)),
 		cf2:          c.cf2,
 		w:            c.w,
 		radius:       c.radius,
-		center:       c.center,
+		center:       make([]float64, len(c.center)),
 		creationTime: c.creationTime,
 	}
+	copy(res.cf1, c.cf1)
+	copy(res.center, c.center)
+	return res
 }
 
 func (c *BasicMicroCluster) CopyFrom(other MicroCluster) {
 	b := other.(*BasicMicroCluster)
 	c.id = b.id
-	c.cf1 = b.cf1
 	c.cf2 = b.cf2
 	c.w = b.w
 	c.radius = b.radius
-	c.center = b.center
 	c.creationTime = b.creationTime
+
+	// Set len to zero and use append to reuse the preallocated memory if possible
+	c.center = append(c.center[0:0], b.center...)
+	c.cf1 = append(c.cf1[0:0], b.cf1...)
 }
 
 func (c *BasicMicroCluster) Update() {
@@ -138,40 +138,34 @@ func (c *BasicMicroCluster) Update() {
 	c.center = c.computeCenter(c.center)
 }
 
+func (c *BasicMicroCluster) Add(other *BasicMicroCluster) {
+	for i := range other.cf1 {
+		c.cf1[i] += other.cf1[i]
+	}
+	c.cf2 += other.cf2
+	c.w += other.w
+	c.Update()
+}
+
+func (c *BasicMicroCluster) Subtract(other *BasicMicroCluster) {
+	for i := range other.cf1 {
+		c.cf1[i] -= other.cf1[i]
+	}
+	c.cf2 -= other.cf2
+	c.w -= other.w
+	c.Update()
+}
+
 func (c *BasicMicroCluster) computeRadius() float64 {
 	if c.w <= 0 {
 		return 0
 	}
-	cf1Len := vectorLength(c.cf1)
-	cf1LenSq := cf1Len * cf1Len / (c.w * c.w)
-	cf2LenSq := vectorLength(c.cf2) / c.w
-	if cf2LenSq >= cf1LenSq && !ForceComponentRadius {
-		// This is the formula from the Denstream paper. It is only applicable in this special case.
-		return math.Sqrt(cf2LenSq - cf1LenSq)
+	cf2 := c.cf2 / c.w
+	cf1 := vectorSquared(c.cf1, 1/c.w)
+	if cf2 < cf1 {
+		panic(fmt.Sprintf("Radius part negative (%v < %v), cf1 = %v, cf2 = %v, w = %v", cf2, cf1, c.cf1, c.cf2, c.w))
 	} else {
-		if HoldZeroRadius {
-			// Alternative strategy: until the above condition is met, hold the radius at "zero", because
-			// it is not yet large enough
-			return 0
-		}
-		// ... otherwise, fall back to computing the radius for every component
-		// We use the largest radius of any component as the overall radius. TODO There could be other strategies.
-		var maxRadius float64
-		for i := range c.cf1 {
-			v1 := c.cf1[i] / c.w
-			v2 := c.cf2[i] / c.w
-			r := v2 - v1*v1
-			if r > maxRadius {
-				maxRadius = r
-			}
-		}
-		if maxRadius < 0 {
-			log.Debugf("Max radius component negative (%v), cf1 = %v, cf2 = %v, w = %v", maxRadius, c.cf1, c.cf2, c.w)
-			// No other choice... Cluster is probably still too small
-			return 0
-		} else {
-			return math.Sqrt(maxRadius)
-		}
+		return math.Sqrt(cf2 - cf1)
 	}
 }
 
@@ -189,12 +183,23 @@ func (c *BasicMicroCluster) computeCenter(center []float64) []float64 {
 func (c *BasicMicroCluster) reset() {
 	c.id = -1
 	c.cf1 = []float64{}
-	c.cf2 = []float64{}
+	c.cf2 = 0
 	c.w = 0
 	c.radius = 0
 	c.center = []float64{}
 	c.creationTime = time.Time{}
 }
+
+func vectorSquared(p []float64, componentFactor float64) float64 {
+	// Squaring a vector means multiplying it with its transposed, resulting in a scalar.
+	var res float64
+	for _, v := range p {
+		v *= componentFactor
+		res += v * v
+	}
+	return res
+}
+
 func vectorLength(p []float64) float64 {
 	var res float64
 	for _, v := range p {

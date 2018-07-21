@@ -307,16 +307,11 @@ func (s *BirchTreeClusterSpace) addCFtoParentNodes(parentNode *BirchTreeNode, ne
 }
 
 func (s *BirchTreeClusterSpace) addCFtoParentNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
+	parentNode.Add(&newNode.BasicMicroCluster)
+}
 
-	parentClust := parentNode
-	newClust := newNode
-
-	for i := range newClust.cf1 {
-		parentClust.cf1[i] += newClust.cf1[i]
-		parentClust.cf2[i] += newClust.cf2[i]
-	}
-	parentClust.w += newClust.w
-	parentClust.Update()
+func (s *BirchTreeClusterSpace) delCFfromParentNode(parentNode *BirchTreeNode, delNode BirchTreeNode) {
+	parentNode.Subtract(&delNode.BasicMicroCluster)
 }
 
 func (s *BirchTreeClusterSpace) delCFfromParentNodes(parentNode *BirchTreeNode, delNode *BirchTreeNode) {
@@ -328,15 +323,4 @@ func (s *BirchTreeClusterSpace) delCFfromParentNodes(parentNode *BirchTreeNode, 
 		}
 		parentNode = curNode.parent
 	}
-}
-
-func (s *BirchTreeClusterSpace) delCFfromParentNode(parentNode *BirchTreeNode, delNode BirchTreeNode) {
-	parentClust := parentNode
-	delClust := delNode
-	for i := range parentClust.cf1 {
-		parentClust.cf1[i] -= delClust.cf1[i]
-		parentClust.cf2[i] -= delClust.cf2[i]
-	}
-	parentClust.w -= delClust.w
-	parentClust.Update()
 }

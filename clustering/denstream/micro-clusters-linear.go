@@ -46,14 +46,10 @@ func (s *LinearClusterSpace) ClustersDo(do func(cluster MicroCluster)) {
 }
 
 func (s *LinearClusterSpace) NewCluster(point []float64, creationTime time.Time) MicroCluster {
-	clust := &BasicMicroCluster{
-		cf1:          make([]float64, len(point)),
-		cf2:          make([]float64, len(point)),
-		creationTime: creationTime,
-	}
+	clust := NewBasicMicroCluster(len(point))
 	clust.Merge(point)
-	s.Insert(clust)
-	return clust
+	s.Insert(&clust)
+	return &clust
 }
 
 func (s *LinearClusterSpace) Insert(cluster MicroCluster) {

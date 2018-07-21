@@ -51,11 +51,7 @@ func (s *RtreeClusterSpace) TransferCluster(clust MicroCluster, newSpace Cluster
 
 func (s *RtreeClusterSpace) NewCluster(point []float64, creationTime time.Time) MicroCluster {
 	clust := &RtreeMicroCluster{
-		BasicMicroCluster: BasicMicroCluster{
-			cf1:          make([]float64, len(point)),
-			cf2:          make([]float64, len(point)),
-			creationTime: creationTime,
-		},
+		BasicMicroCluster: NewBasicMicroCluster(len(point)),
 	}
 	clust.Merge(point)
 	s.Insert(clust)
