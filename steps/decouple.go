@@ -15,36 +15,32 @@ import (
 // looping goroutine and a channel. Creates potential parallelism in the pipeline.
 type DecouplingProcessor struct {
 	bitflow.NoopProcessor
-	samples       chan TaggedSample
+	samples       chan bitflow.SampleAndHeader
 	loopTask      *golib.LoopTask
 	ChannelBuffer int // Must be set before calling Start()
 }
 
-func RegisterDecouple(b *query.PipelineBuilder) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
-		buf, err := strconv.Atoi(params["batch"])
-		if err != nil {
-			err = query.ParameterError("batch", err)
-		} else {
-			p.Add(&DecouplingProcessor{ChannelBuffer: buf})
-		}
-		return err
+func AddDecoupleStep(p *pipeline.SamplePipeline, params map[string]string) error {
+	buf, err := strconv.Atoi(params["buf"])
+	if err != nil {
+		err = query.ParameterError("buf", err)
+	} else {
+		p.Add(&DecouplingProcessor{ChannelBuffer: buf})
 	}
-	b.RegisterAnalysisParamsErr("decouple", create, "Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples", []string{"batch"})
+	return err
 }
 
-type TaggedSample struct {
-	Sample *bitflow.Sample
-	Header *bitflow.Header
+func RegisterDecouple(b *query.PipelineBuilder) {
+	b.RegisterAnalysisParamsErr("decouple", AddDecoupleStep, "Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples", []string{"buf"})
 }
 
 func (p *DecouplingProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	p.samples <- TaggedSample{Sample: sample, Header: header}
+	p.samples <- bitflow.SampleAndHeader{Sample: sample, Header: header}
 	return nil
 }
 
 func (p *DecouplingProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
-	p.samples = make(chan TaggedSample, p.ChannelBuffer)
+	p.samples = make(chan bitflow.SampleAndHeader, p.ChannelBuffer)
 	p.loopTask = &golib.LoopTask{
 		Description: p.String(),
 		StopHook:    p.CloseSink,
@@ -66,7 +62,7 @@ func (p *DecouplingProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	return p.loopTask.Start(wg)
 }
 
-func (p *DecouplingProcessor) forward(sample TaggedSample) error {
+func (p *DecouplingProcessor) forward(sample bitflow.SampleAndHeader) error {
 	return p.NoopProcessor.Sample(sample.Sample, sample.Header)
 }
 

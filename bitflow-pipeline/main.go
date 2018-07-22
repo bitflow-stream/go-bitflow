@@ -110,6 +110,9 @@ func register_analyses(b *query.PipelineBuilder) {
 	steps.RegisterResendStep(b)
 	steps.RegisterPipelineRateSynchronizer(b)
 	steps.RegisterSubpipelineStreamMerger(b)
+	blockMgr := steps.NewBlockManager()
+	blockMgr.RegisterBlockingProcessor(b)
+	blockMgr.RegisterReleasingProcessor(b)
 
 	// Data output
 	steps.RegisterOutputFiles(b)
