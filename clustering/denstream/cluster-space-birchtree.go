@@ -2,6 +2,8 @@ package denstream
 
 import (
 	"time"
+
+	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 )
 
 var _ ClusterSpace = new(BirchTreeClusterSpace)
@@ -16,7 +18,7 @@ type BirchTreeClusterSpace struct {
 }
 
 type BirchTreeNode struct {
-	BasicMicroCluster
+	clustering.Coreset
 
 	numChildren int
 	children    []*BirchTreeNode
@@ -38,7 +40,7 @@ func (s *BirchTreeClusterSpace) Init(numDimensions int) {
 	s.numDimensions = numDimensions
 	s.root = new(BirchTreeNode)
 	s.root.children = make([]*BirchTreeNode, _maxChildren)
-	s.root.BasicMicroCluster = NewBasicMicroCluster(numDimensions)
+	s.root.Coreset = clustering.NewCoreset(numDimensions)
 	s.root.parent = nil
 }
 
@@ -46,7 +48,7 @@ func (s *BirchTreeClusterSpace) NumClusters() int {
 	return s.totalClusters
 }
 
-func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster MicroCluster) {
+func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster clustering.SphericalCluster) {
 	//check root, if root is empty add a child, insert and update root. If not empty, then increment root and all the nodes along the traversal
 	var closestDistance float64
 	var nearestNode *BirchTreeNode
@@ -57,7 +59,7 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 		for !curNode.isLeaf() {
 			for idx := 0; idx < curNode.numChildren; idx++ {
 				childClust := curNode.children[idx]
-				dist := euclideanDistance(point, childClust.Center()) - childClust.Radius()
+				dist := clustering.EuclideanDistance(point, childClust.Center()) - childClust.Radius()
 				if nearestNode == nil || dist < closestDistance {
 					nearestNode = curNode.children[idx]
 					closestDistance = dist
@@ -73,25 +75,25 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 	return
 }
 
-func (s *BirchTreeClusterSpace) ClustersDo(do func(cluster MicroCluster)) {
+func (s *BirchTreeClusterSpace) ClustersDo(do func(cluster clustering.SphericalCluster)) {
 	s.traverseTree(s.root, do)
 }
 
-func (s *BirchTreeClusterSpace) NewCluster(point []float64, creationTime time.Time) MicroCluster {
+func (s *BirchTreeClusterSpace) NewCluster(point []float64, creationTime time.Time) clustering.SphericalCluster {
 	clust := &BirchTreeNode{
-		BasicMicroCluster: NewBasicMicroCluster(s.numDimensions),
-		children:          make([]*BirchTreeNode, _maxChildren),
+		Coreset:  clustering.NewCoreset(s.numDimensions),
+		children: make([]*BirchTreeNode, _maxChildren),
 	}
 	clust.Merge(point)
 	s.Insert(clust)
 	return clust
 }
 
-func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
+func (s *BirchTreeClusterSpace) Insert(cluster clustering.SphericalCluster) {
 	//create a new node and embed the cluster
 
 	newChildNode := cluster.(*BirchTreeNode)
-	newChildNode.id = s.nextClusterId
+	newChildNode.SetId(s.nextClusterId)
 	s.nextClusterId++
 	if !newChildNode.isLeaf() {
 		panic("Can only insert a leaf node without children")
@@ -114,7 +116,7 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	s.totalClusters++
 }
 
-func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
+func (s *BirchTreeClusterSpace) Delete(cluster clustering.SphericalCluster, reason string) {
 	node := cluster.(*BirchTreeNode)
 	parentNode := node.parent
 	if parentNode.numChildren == 1 {
@@ -134,17 +136,16 @@ func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 	}
 }
 
-func (s *BirchTreeClusterSpace) TransferCluster(cluster MicroCluster, otherSpace ClusterSpace) {
+func (s *BirchTreeClusterSpace) TransferCluster(cluster clustering.SphericalCluster, otherSpace ClusterSpace) {
 	s.Delete(cluster, "transfering")
 	otherSpace.Insert(cluster)
 }
 
-func (s *BirchTreeClusterSpace) UpdateCluster(cluster MicroCluster, do func() (reinsertCluster bool)) {
+func (s *BirchTreeClusterSpace) UpdateCluster(cluster clustering.SphericalCluster, do func() (reinsertCluster bool)) {
 	node := cluster.(*BirchTreeNode)
 	parentNode := node.parent
 	s.delCFfromParentNodes(parentNode, node)
 	if do() {
-		node.Update()
 		s.addCFtoParentNodes(parentNode, node)
 	}
 }
@@ -155,14 +156,14 @@ func (s *BirchTreeClusterSpace) UpdateCluster(cluster MicroCluster, do func() (r
 
 func (s *BirchTreeClusterSpace) createNewNode() *BirchTreeNode {
 	node := new(BirchTreeNode)
-	node.id = s.nextClusterId
+	node.SetId(s.nextClusterId)
 	s.nextClusterId++
 	node.children = make([]*BirchTreeNode, _maxChildren)
-	node.BasicMicroCluster = NewBasicMicroCluster(s.numDimensions)
+	node.Coreset = clustering.NewCoreset(s.numDimensions)
 	return node
 }
 
-func (s *BirchTreeClusterSpace) traverseTree(node *BirchTreeNode, do func(cluster MicroCluster)) {
+func (s *BirchTreeClusterSpace) traverseTree(node *BirchTreeNode, do func(cluster clustering.SphericalCluster)) {
 	if node.isLeaf() && node != s.root {
 		do(node)
 		return
@@ -201,7 +202,7 @@ func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *Bi
 		var dist [_maxChildren + 1][_maxChildren + 1]float64
 		for i := 0; i < numChildren; i++ {
 			for j := i + 1; j < numChildren; j++ {
-				dist[i][j] = euclideanDistance(children[i].Center(), children[j].Center())
+				dist[i][j] = clustering.EuclideanDistance(children[i].Center(), children[j].Center())
 				dist[j][i] = dist[i][j]
 				if farthest < dist[i][j] {
 					c1 = i
@@ -210,7 +211,7 @@ func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *Bi
 				}
 			}
 
-			dist[i][numChildren] = euclideanDistance(children[i].Center(), newNode.Center())
+			dist[i][numChildren] = clustering.EuclideanDistance(children[i].Center(), newNode.Center())
 			dist[numChildren][i] = dist[i][numChildren]
 			if farthest < dist[i][numChildren] {
 				c1 = i
@@ -250,14 +251,14 @@ func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *Bi
 
 	return newBrother
 }
-func (s *BirchTreeClusterSpace) findNearestChildNode(nearestNode *BirchTreeNode, cluster MicroCluster) (nearestChildIdx int) {
+func (s *BirchTreeClusterSpace) findNearestChildNode(nearestNode *BirchTreeNode, cluster clustering.SphericalCluster) (nearestChildIdx int) {
 	nearestChildIdx = -1
 
 	var closestDistance float64
 	for idx := 0; idx < nearestNode.numChildren; idx++ {
 		childClust := nearestNode.children[idx]
 
-		dist := euclideanDistance(cluster.Center(), childClust.Center())
+		dist := clustering.EuclideanDistance(cluster.Center(), childClust.Center())
 		if nearestChildIdx == -1 || dist < closestDistance {
 			nearestChildIdx = idx
 			closestDistance = dist
@@ -269,9 +270,8 @@ func (s *BirchTreeClusterSpace) findNearestChildNode(nearestNode *BirchTreeNode,
 func (s *BirchTreeClusterSpace) resetNode(node *BirchTreeNode, numDimensions int) {
 	node.children = nil
 	node.numChildren = 0
-	node.reset()
 	node.children = make([]*BirchTreeNode, _maxChildren)
-	node.BasicMicroCluster = NewBasicMicroCluster(numDimensions)
+	node.Coreset = clustering.NewCoreset(numDimensions)
 }
 
 func (s *BirchTreeClusterSpace) addChild(node *BirchTreeNode, childNode *BirchTreeNode) {
@@ -286,7 +286,7 @@ func (s *BirchTreeClusterSpace) addChild(node *BirchTreeNode, childNode *BirchTr
 
 func (s *BirchTreeClusterSpace) deleteChild(parentNode *BirchTreeNode, child *BirchTreeNode) {
 	for i := 0; i < parentNode.numChildren; i++ {
-		if parentNode.children[i].id == child.id {
+		if parentNode.children[i].Id() == child.Id() {
 			parentNode.children[i] = nil
 			parentNode.children = append(parentNode.children[:i], parentNode.children[i+1:]...)
 			parentNode.children = append(parentNode.children, nil)
@@ -307,11 +307,11 @@ func (s *BirchTreeClusterSpace) addCFtoParentNodes(parentNode *BirchTreeNode, ne
 }
 
 func (s *BirchTreeClusterSpace) addCFtoParentNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
-	parentNode.Add(&newNode.BasicMicroCluster)
+	parentNode.MergeCoreset(&newNode.Coreset)
 }
 
 func (s *BirchTreeClusterSpace) delCFfromParentNode(parentNode *BirchTreeNode, delNode BirchTreeNode) {
-	parentNode.Subtract(&delNode.BasicMicroCluster)
+	parentNode.SubtractCoreset(&delNode.Coreset)
 }
 
 func (s *BirchTreeClusterSpace) delCFfromParentNodes(parentNode *BirchTreeNode, delNode *BirchTreeNode) {

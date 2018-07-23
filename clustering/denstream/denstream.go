@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 )
 
 const (
@@ -13,6 +15,19 @@ const (
 	OutlierStr    = "-1"
 	NewOutlierStr = "-2"
 )
+
+type ClusterSpace interface {
+	NumClusters() int
+
+	NearestCluster(point []float64) clustering.SphericalCluster
+	ClustersDo(func(cluster clustering.SphericalCluster))
+
+	NewCluster(point []float64, timestamp time.Time) clustering.SphericalCluster
+	Insert(cluster clustering.SphericalCluster)
+	Delete(cluster clustering.SphericalCluster, reason string)
+	TransferCluster(cluster clustering.SphericalCluster, otherSpace ClusterSpace)
+	UpdateCluster(cluster clustering.SphericalCluster, do func() (reinsertCluster bool))
+}
 
 type DenstreamClusterer struct {
 	pClusters ClusterSpace
@@ -101,7 +116,7 @@ func (c *DenstreamClusterer) insertPoint(point []float64) int {
 	return NewOutlier
 }
 
-func (c *DenstreamClusterer) testMergeNearest(point []float64, space ClusterSpace) (testCluster MicroCluster, realCluster MicroCluster) {
+func (c *DenstreamClusterer) testMergeNearest(point []float64, space ClusterSpace) (testCluster clustering.SphericalCluster, realCluster clustering.SphericalCluster) {
 	realCluster = space.NearestCluster(point)
 	if realCluster != nil {
 		testCluster = realCluster.Clone() // Copy the cluster to check the radius after mergin the incoming point
@@ -114,7 +129,7 @@ func (c *DenstreamClusterer) testMergeNearest(point []float64, space ClusterSpac
 	return
 }
 
-func (c *DenstreamClusterer) mergeNearest(point []float64, space ClusterSpace) MicroCluster {
+func (c *DenstreamClusterer) mergeNearest(point []float64, space ClusterSpace) clustering.SphericalCluster {
 	test, real := c.testMergeNearest(point, space)
 	if real != nil {
 		space.UpdateCluster(real, func() bool {
@@ -146,7 +161,7 @@ func (c *DenstreamClusterer) periodicCheck(curTime time.Time, delta time.Duratio
 	decayFactor := c.weightDecay(delta)
 
 	// 1. decay weight of p-clusters. delete, if too small.
-	c.pClusters.ClustersDo(func(clust MicroCluster) {
+	c.pClusters.ClustersDo(func(clust clustering.SphericalCluster) {
 		c.pClusters.UpdateCluster(clust, func() bool {
 			clust.Decay(decayFactor)
 			return clust.W() >= c.MaxOutlierWeight
@@ -154,7 +169,7 @@ func (c *DenstreamClusterer) periodicCheck(curTime time.Time, delta time.Duratio
 	})
 
 	// 2. decay weight of o-clusters. delete, if too small.
-	c.oClusters.ClustersDo(func(clust MicroCluster) {
+	c.oClusters.ClustersDo(func(clust clustering.SphericalCluster) {
 		if clust.CreationTime().Equal(curTime) {
 			// If the cluster has JUST been created, do not decay it yet
 			return
