@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 	"github.com/dhconnelly/rtreego"
 )
 
 type RtreeClusterSpace struct {
-	clusters      map[*RtreeMicroCluster]bool
+	clusters      map[*RtreeCluster]bool
 	tree          *rtreego.Rtree
 	nextClusterId int
 }
@@ -20,7 +21,7 @@ func NewRtreeClusterSpace(numDimensions, minChildren, maxChildren int) *RtreeClu
 }
 
 func (s *RtreeClusterSpace) Init(numDimensions, minChildren, maxChildren int) {
-	s.clusters = make(map[*RtreeMicroCluster]bool)
+	s.clusters = make(map[*RtreeCluster]bool)
 	s.tree = rtreego.NewTree(numDimensions, minChildren, maxChildren)
 }
 
@@ -32,48 +33,48 @@ func (s *RtreeClusterSpace) TreeSize() int {
 	return s.tree.Size()
 }
 
-func (s *RtreeClusterSpace) NearestCluster(p []float64) MicroCluster {
+func (s *RtreeClusterSpace) NearestCluster(p []float64) clustering.SphericalCluster {
 	point := make(rtreego.Point, len(p))
 	for i, v := range p {
 		point[i] = v
 	}
 	res := s.tree.NearestNeighbor(point)
 	if res != nil {
-		return res.(MicroCluster)
+		return res.(clustering.SphericalCluster)
 	}
 	return nil
 }
 
-func (s *RtreeClusterSpace) TransferCluster(clust MicroCluster, newSpace ClusterSpace) {
+func (s *RtreeClusterSpace) TransferCluster(clust clustering.SphericalCluster, newSpace ClusterSpace) {
 	s.Delete(clust, "transfering")
 	newSpace.Insert(clust)
 }
 
-func (s *RtreeClusterSpace) NewCluster(point []float64, creationTime time.Time) MicroCluster {
-	clust := &RtreeMicroCluster{
-		BasicMicroCluster: NewBasicMicroCluster(len(point)),
+func (s *RtreeClusterSpace) NewCluster(point []float64, creationTime time.Time) clustering.SphericalCluster {
+	clust := &RtreeCluster{
+		Coreset: clustering.NewCoreset(len(point)),
 	}
 	clust.Merge(point)
 	s.Insert(clust)
 	return clust
 }
 
-func (s *RtreeClusterSpace) ClustersDo(do func(MicroCluster)) {
+func (s *RtreeClusterSpace) ClustersDo(do func(clustering.SphericalCluster)) {
 	for clust := range s.clusters {
 		do(clust)
 	}
 }
 
-func (s *RtreeClusterSpace) Insert(clust MicroCluster) {
-	r := clust.(*RtreeMicroCluster)
+func (s *RtreeClusterSpace) Insert(clust clustering.SphericalCluster) {
+	r := clust.(*RtreeCluster)
 	s.clusters[r] = true
 	s.tree.Insert(r)
-	r.id = s.nextClusterId
+	r.SetId(s.nextClusterId)
 	s.nextClusterId++
 }
 
-func (s *RtreeClusterSpace) DeleteFromTree(clust MicroCluster, reason string) {
-	c := clust.(*RtreeMicroCluster)
+func (s *RtreeClusterSpace) DeleteFromTree(clust clustering.SphericalCluster, reason string) {
+	c := clust.(*RtreeCluster)
 	if !s.clusters[c] {
 		panic("cluster is not in micro-cluster-space during: " + reason)
 	}
@@ -82,14 +83,14 @@ func (s *RtreeClusterSpace) DeleteFromTree(clust MicroCluster, reason string) {
 	}
 }
 
-func (s *RtreeClusterSpace) Delete(clust MicroCluster, reason string) {
+func (s *RtreeClusterSpace) Delete(clust clustering.SphericalCluster, reason string) {
 	s.DeleteFromTree(clust, reason)
-	delete(s.clusters, clust.(*RtreeMicroCluster))
+	delete(s.clusters, clust.(*RtreeCluster))
 }
 
-// See MicroCluster.Invalidate() for the return value
-func (s *RtreeClusterSpace) UpdateCluster(clust MicroCluster, do func() bool) {
-	r := clust.(*RtreeMicroCluster)
+// See clustering.SphericalCluster.Invalidate() for the return value
+func (s *RtreeClusterSpace) UpdateCluster(clust clustering.SphericalCluster, do func() bool) {
+	r := clust.(*RtreeCluster)
 	s.DeleteFromTree(r, "update")
 	if do() {
 		s.tree.Insert(r)
@@ -97,46 +98,46 @@ func (s *RtreeClusterSpace) UpdateCluster(clust MicroCluster, do func() bool) {
 }
 
 func (s *RtreeClusterSpace) clusterDeleteComparator(obj1, obj2 rtreego.Spatial) bool {
-	return obj1.(*RtreeMicroCluster) == obj2.(*RtreeMicroCluster)
+	return obj1.(*RtreeCluster) == obj2.(*RtreeCluster)
 }
 
-type RtreeMicroCluster struct {
-	BasicMicroCluster
+type RtreeCluster struct {
+	clustering.Coreset
 	bounds *rtreego.Rect
 }
 
-func (c *RtreeMicroCluster) Bounds() *rtreego.Rect {
+func (c *RtreeCluster) Bounds() *rtreego.Rect {
 	return c.bounds
 }
 
-func (c *RtreeMicroCluster) Merge(point []float64) {
-	c.BasicMicroCluster.Merge(point)
+func (c *RtreeCluster) Merge(point []float64) {
+	c.Coreset.Merge(point)
 	c.updateBounds()
 }
 
-func (c *RtreeMicroCluster) Decay(factor float64) {
-	c.BasicMicroCluster.Decay(factor)
+func (c *RtreeCluster) Decay(factor float64) {
+	c.Coreset.Decay(factor)
 	c.updateBounds()
 }
 
-func (c *RtreeMicroCluster) CopyFrom(other MicroCluster) {
-	otherRtree := other.(*RtreeMicroCluster)
-	c.BasicMicroCluster.CopyFrom(&otherRtree.BasicMicroCluster)
+func (c *RtreeCluster) CopyFrom(other clustering.SphericalCluster) {
+	otherRtree := other.(*RtreeCluster)
+	c.Coreset.CopyFrom(&otherRtree.Coreset)
 	c.bounds = otherRtree.bounds
 }
 
-func (c *RtreeMicroCluster) Clone() MicroCluster {
-	return &RtreeMicroCluster{
-		BasicMicroCluster: *c.BasicMicroCluster.Clone().(*BasicMicroCluster),
-		bounds:            c.bounds,
+func (c *RtreeCluster) Clone() clustering.SphericalCluster {
+	return &RtreeCluster{
+		Coreset: *c.Coreset.Clone().(*clustering.Coreset),
+		bounds:  c.bounds,
 	}
 }
 
-func (c *RtreeMicroCluster) updateBounds() {
+func (c *RtreeCluster) updateBounds() {
 	c.bounds = c.computeBounds()
 }
 
-func (c *RtreeMicroCluster) computeBounds() *rtreego.Rect {
+func (c *RtreeCluster) computeBounds() *rtreego.Rect {
 	center := c.Center()
 	radius := c.Radius()
 	origin := make(rtreego.Point, len(center))

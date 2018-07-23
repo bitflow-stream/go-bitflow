@@ -7,6 +7,7 @@ import (
 
 	bitflow "github.com/antongulenko/go-bitflow"
 	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	log "github.com/sirupsen/logrus"
 )
@@ -95,17 +96,17 @@ func (p *DenstreamClusterProcessor) Close() {
 		header := p.lastProcessedHeader.Clone(newFields)
 
 		var err error
-		p.oClusters.ClustersDo(func(cluster MicroCluster) {
+		p.oClusters.ClustersDo(func(cluster clustering.SphericalCluster) {
 			p.outputCluster(cluster, "outlier", header, &err)
 		})
-		p.pClusters.ClustersDo(func(cluster MicroCluster) {
+		p.pClusters.ClustersDo(func(cluster clustering.SphericalCluster) {
 			p.outputCluster(cluster, "real", header, &err)
 		})
 	}
 	p.NoopProcessor.Close()
 }
 
-func (p *DenstreamClusterProcessor) outputCluster(cluster MicroCluster, clusterType string, header *bitflow.Header, err *error) {
+func (p *DenstreamClusterProcessor) outputCluster(cluster clustering.SphericalCluster, clusterType string, header *bitflow.Header, err *error) {
 	if *err != nil {
 		return
 	}
@@ -205,13 +206,15 @@ func create_denstream_step(p *pipeline.SamplePipeline, params map[string]string,
 	return nil
 }
 
+var optionalParameters = []string{"eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters", "trainTag", "trainTagValue"}
+
 func RegisterDenstream(b *query.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
 		return create_denstream_step(p, params, func(numDimensions int) ClusterSpace {
 			return NewRtreeClusterSpace(numDimensions, 25, 50)
 		})
 	}
-	b.RegisterAnalysisParamsErr("denstream", create, "Perform a denstream clustering on the data stream. Clusters organzied in r-tree.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters", "trainTag", "trainTagValue")
+	b.RegisterAnalysisParamsErr("denstream_rtree", create, "Perform a denstream clustering on the data stream. Clusters organzied in r-tree.", []string{}, optionalParameters...)
 }
 
 func RegisterDenstreamLinear(b *query.PipelineBuilder) {
@@ -220,7 +223,7 @@ func RegisterDenstreamLinear(b *query.PipelineBuilder) {
 			return NewLinearClusterSpace()
 		})
 	}
-	b.RegisterAnalysisParamsErr("denstream_linear", create, "Perform a denstream clustering on the data stream. Clusters searched linearly.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters", "trainTag", "trainTagValue")
+	b.RegisterAnalysisParamsErr("denstream_linear", create, "Perform a denstream clustering on the data stream. Clusters searched linearly.", []string{}, optionalParameters...)
 }
 
 func RegisterDenstreamBirch(b *query.PipelineBuilder) {
@@ -229,5 +232,5 @@ func RegisterDenstreamBirch(b *query.PipelineBuilder) {
 			return NewBirchTreeClusterSpace(numDimensions)
 		})
 	}
-	b.RegisterAnalysisParamsErr("denstream_birch", create, "Perform a denstream clustering on the data stream. Clusters managed by BIRCH tree structure.", []string{}, "eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters", "trainTag", "trainTagValue")
+	b.RegisterAnalysisParamsErr("denstream_birch", create, "Perform a denstream clustering on the data stream. Clusters managed by BIRCH tree structure.", []string{}, optionalParameters...)
 }
