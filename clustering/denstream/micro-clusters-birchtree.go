@@ -1,6 +1,7 @@
 package denstream
 
 import (
+	// log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -89,7 +90,6 @@ func (s *BirchTreeClusterSpace) NewCluster(point []float64, creationTime time.Ti
 
 func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 	//create a new node and embed the cluster
-
 	newChildNode := cluster.(*BirchTreeNode)
 	newChildNode.id = s.nextClusterId
 	s.nextClusterId++
@@ -117,6 +117,9 @@ func (s *BirchTreeClusterSpace) Insert(cluster MicroCluster) {
 func (s *BirchTreeClusterSpace) Delete(cluster MicroCluster, reason string) {
 	node := cluster.(*BirchTreeNode)
 	parentNode := node.parent
+	if node == s.root {
+		return
+	}
 	if parentNode.numChildren == 1 {
 		// Last child -> immediately delete the parent instead
 		s.Delete(parentNode, reason)
