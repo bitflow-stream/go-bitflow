@@ -1,10 +1,8 @@
 package denstream
 
 import (
-	// log "github.com/sirupsen/logrus"
-	"time"
-
 	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	"time"
 )
 
 var _ ClusterSpace = new(BirchTreeClusterSpace)
@@ -111,7 +109,14 @@ func (s *BirchTreeClusterSpace) Insert(cluster clustering.SphericalCluster) {
 			nearestchildIdx := s.findNearestChildNode(nearestNode, newChildNode)
 			nearestNode = nearestNode.children[nearestchildIdx]
 		}
-		s.addNode(nearestParentNode, newChildNode)
+
+		if nearestParentNode.numChildren < _maxChildren {
+			s.addChild(nearestParentNode, newChildNode)
+			s.addCFtoParentNodes(nearestParentNode, newChildNode)
+		} else {
+			s.addNode(nearestParentNode, newChildNode)
+			s.addCFtoParentNodes(newChildNode.parent.parent, newChildNode)
+		}
 	}
 	s.totalClusters++
 }
@@ -147,10 +152,12 @@ func (s *BirchTreeClusterSpace) TransferCluster(cluster clustering.SphericalClus
 func (s *BirchTreeClusterSpace) UpdateCluster(cluster clustering.SphericalCluster, do func() (reinsertCluster bool)) {
 	node := cluster.(*BirchTreeNode)
 	parentNode := node.parent
+
 	s.delCFfromParentNodes(parentNode, node)
 	if do() {
 		s.addCFtoParentNodes(parentNode, node)
 	}
+
 }
 
 // ========================================================================================================
@@ -179,7 +186,6 @@ func (s *BirchTreeClusterSpace) traverseTree(node *BirchTreeNode, do func(cluste
 func (s *BirchTreeClusterSpace) addNode(node *BirchTreeNode, childNode *BirchTreeNode) {
 	if node.numChildren < _maxChildren {
 		s.addChild(node, childNode)
-		s.addCFtoParentNodes(node, childNode)
 	} else {
 
 		parentNode := node.parent
@@ -187,11 +193,13 @@ func (s *BirchTreeClusterSpace) addNode(node *BirchTreeNode, childNode *BirchTre
 			//var newRoot *BirchTreeNode
 			parentNode = s.createNewNode()
 			s.addChild(parentNode, node)
+			s.addCFtoParentNode(parentNode, node)
 			s.root = parentNode
 		}
 
 		s.addNode(parentNode, s.splitNode(node, childNode))
 	}
+
 }
 func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) (newBrother *BirchTreeNode) {
 	numChildren := parentNode.numChildren
@@ -222,9 +230,7 @@ func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *Bi
 				farthest = dist[i][numChildren]
 			}
 		}
-
 		s.resetNode(parentNode, s.numDimensions)
-
 		newBrother = s.createNewNode()
 
 		for i := 0; i < numChildren; i++ {
