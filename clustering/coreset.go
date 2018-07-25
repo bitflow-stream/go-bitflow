@@ -1,10 +1,17 @@
 package clustering
 
 import (
+	"flag"
 	"fmt"
 	"math"
 	"time"
 )
+
+var acceptableRadiusRoundingError = float64(0)
+
+func init() {
+	flag.Float64Var(&acceptableRadiusRoundingError, "coreset-radius-rounding", acceptableRadiusRoundingError, "Acceptable rounding error when computing the radius of coresets for Denstream")
+}
 
 type SphericalCluster interface {
 	Id() int
@@ -175,6 +182,9 @@ func (c *Coreset) computeRadius() float64 {
 	cf2 := c.cf2 / c.w
 	cf1 := VectorSquared(c.cf1, 1/c.w)
 	if cf2 < cf1 {
+		if cf1-cf2 <= acceptableRadiusRoundingError {
+			return 0
+		}
 		c.debugWrongRadiusComputation()
 		panic(fmt.Sprintf("Radius part negative (%v < %v) for %v", cf2, cf1, c))
 	} else {
