@@ -168,12 +168,16 @@ func print_timeline(p *pipeline.SamplePipeline, params map[string]string) error 
 		numBuckets = 1
 	}
 
-	p.Batch(&pipeline.SimpleBatchProcessingStep{
+	var times []time.Time
+	p.Add(&pipeline.SimpleProcessor{
 		Description: fmt.Sprintf("Print timeline (len %v)", numBuckets),
-		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			times = append(times, sample.Time)
+			return sample, header, nil
+		},
+		OnClose: func() {
 			var from, to time.Time
-			for _, sample := range samples {
-				t := sample.Time
+			for _, t := range times {
 				if from.IsZero() || to.IsZero() {
 					from = t
 					to = t
@@ -193,9 +197,9 @@ func print_timeline(p *pipeline.SamplePipeline, params map[string]string) error 
 				bucketEnds[i] = from.Add(time.Duration(i+1) * bucketDuration)
 			}
 			bucketEnds[numBuckets-1] = to // No rounding error
-			for _, sample := range samples {
+			for _, t := range times {
 				index := sort.Search(len(buckets), func(n int) bool {
-					return !sample.Time.After(bucketEnds[n])
+					return !t.After(bucketEnds[n])
 				})
 				buckets[index]++
 			}
@@ -220,7 +224,6 @@ func print_timeline(p *pipeline.SamplePipeline, params map[string]string) error 
 			log.Println("[Timeline]: Duration:", duration)
 			log.Println("[Timeline]: One bucket:", bucketDuration)
 			log.Println("[Timeline]:", timeline.String())
-			return header, samples, nil
 		},
 	})
 	return nil
