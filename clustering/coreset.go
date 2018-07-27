@@ -210,3 +210,11 @@ func (c *Coreset) computeCenter(center []float64) []float64 {
 	}
 	return center
 }
+
+func (c *Coreset) Reset() {
+	for i := range c.cf1 {
+		c.cf1[i] = 0
+	}
+	c.cf2 = 0
+	c.w = 0
+}
