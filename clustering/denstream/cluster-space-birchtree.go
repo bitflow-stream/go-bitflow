@@ -2,7 +2,7 @@ package denstream
 
 import (
 	"github.com/antongulenko/go-bitflow-pipeline/clustering"
-	log "github.com/sirupsen/logrus"
+	// log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -94,14 +94,13 @@ func (s *BirchTreeClusterSpace) Insert(cluster clustering.SphericalCluster) {
 	newChildNode := cluster.(*BirchTreeNode)
 	newChildNode.SetId(s.nextClusterId)
 	s.nextClusterId++
-
 	if !newChildNode.isLeaf() {
 		panic("Can only insert a leaf node without children")
 	}
 	nearestParentNode := s.root
 	if nearestParentNode.numChildren < _maxChildren {
-		s.addCFtoParentNode(nearestParentNode, newChildNode)
 		s.addChild(nearestParentNode, newChildNode)
+		s.addCFtoParentNode(nearestParentNode, newChildNode)
 	} else {
 		nearestNode := nearestParentNode
 		//identify the node where newnode can be insterted as a leaf, if the num of children is max, then split the node
@@ -111,15 +110,12 @@ func (s *BirchTreeClusterSpace) Insert(cluster clustering.SphericalCluster) {
 			nearestNode = nearestNode.children[nearestchildIdx]
 		}
 
-		// s.printTree(nearestNode)
 		if nearestParentNode.numChildren < _maxChildren {
 			s.addChild(nearestParentNode, newChildNode)
 			s.addCFtoParentNodes(nearestParentNode, newChildNode)
 		} else {
-			log.Println("SplittinNode**************************************************")
 			s.addNode(nearestParentNode, newChildNode)
 			s.updateCFofParentNodes(newChildNode)
-
 		}
 	}
 	s.totalClusters++
@@ -129,10 +125,16 @@ func (s *BirchTreeClusterSpace) Delete(cluster clustering.SphericalCluster, reas
 
 	node := cluster.(*BirchTreeNode)
 	parentNode := node.parent
+
 	if node == s.root {
 		return
 	}
-
+	if parentNode == s.root {
+		s.delCFfromParentNode(parentNode, *node)
+		s.deleteChild(parentNode, node)
+		s.totalClusters--
+		return
+	}
 	if parentNode.numChildren == 1 {
 		// Last child -> immediately delete the parent instead
 		s.Delete(parentNode, reason)
@@ -141,13 +143,14 @@ func (s *BirchTreeClusterSpace) Delete(cluster clustering.SphericalCluster, reas
 		s.deleteChild(parentNode, node)
 		s.totalClusters--
 
-		curNode := parentNode
-		for curNode != s.root && curNode.numChildren == 0 {
-			parentNode = curNode.parent
-			s.deleteChild(parentNode, curNode)
-			curNode = curNode.parent
-		}
+		// curNode := parentNode
+		// for curNode != s.root && curNode.numChildren == 0 {
+		// 	parentNode = curNode.parent
+		// 	s.deleteChild(parentNode, curNode)
+		// 	curNode = curNode.parent
+		// }
 	}
+
 }
 
 func (s *BirchTreeClusterSpace) TransferCluster(cluster clustering.SphericalCluster, otherSpace ClusterSpace) {
@@ -162,7 +165,6 @@ func (s *BirchTreeClusterSpace) UpdateCluster(cluster clustering.SphericalCluste
 	if do() {
 		s.addCFtoParentNodes(parentNode, node)
 	}
-
 }
 
 // ========================================================================================================
@@ -190,8 +192,6 @@ func (s *BirchTreeClusterSpace) traverseTree(node *BirchTreeNode, do func(cluste
 
 func (s *BirchTreeClusterSpace) addNode(node *BirchTreeNode, childNode *BirchTreeNode) {
 	if node.numChildren < _maxChildren {
-		log.Println("addNode: node children", node.numChildren)
-		s.printChildren(node)
 		s.addChild(node, childNode)
 	} else {
 
@@ -202,20 +202,12 @@ func (s *BirchTreeClusterSpace) addNode(node *BirchTreeNode, childNode *BirchTre
 			s.addChild(parentNode, node)
 			s.addCFtoParentNode(parentNode, node)
 			s.root = parentNode
-			log.Println("addNode: create root node children", s.root.numChildren)
-			s.printChildren(s.root)
 		}
-		log.Println("Split node", node.numChildren, node.Coreset)
 		s.addNode(parentNode, s.splitNode(node, childNode))
 	}
 }
 
 func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) (newBrother *BirchTreeNode) {
-	log.Println("	----------------------------------------------------------")
-	log.Println("	splitNode: parentNode", parentNode.numChildren, parentNode.Coreset)
-	log.Println("	splitNode: newNode", newNode.numChildren, newNode.Coreset)
-	log.Println("	splitNode: parentNode children")
-	s.printChildren(parentNode)
 
 	numChildren := parentNode.numChildren
 	children := parentNode.children
@@ -250,31 +242,25 @@ func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *Bi
 
 		for i := 0; i < numChildren; i++ {
 			if dist[i][c1] < dist[i][c2] {
-				log.Println("		splitNode: addChild to parentNode", children[i].Coreset)
 				s.addChild(parentNode, children[i])
 			} else {
-				log.Println("		splitNode: addChild to new Node", children[i].Coreset)
 				s.addChild(newBrother, children[i])
 
 			}
 		}
 
 		if dist[numChildren][c1] < dist[numChildren][c2] {
-			log.Println("		splitNode: addChild to parentNode", newNode.Coreset)
 			s.addChild(parentNode, newNode)
 		} else {
-			log.Println("		splitNode: addChild to new Node", newNode.Coreset)
 			s.addChild(newBrother, newNode)
 		}
 
 		for i := 0; i < parentNode.numChildren; i++ {
 			s.addCFtoParentNode(parentNode, parentNode.children[i])
-			log.Println("		splitNode: addCF to parentNode", parentNode.Coreset, parentNode.children[i].Coreset)
 		}
 
 		for i := 0; i < newBrother.numChildren; i++ {
 			s.addCFtoParentNode(newBrother, newBrother.children[i])
-			log.Println("		splitNode: addCF to newBrother", newBrother.Coreset, newBrother.children[i].Coreset)
 		}
 
 	}
@@ -315,14 +301,16 @@ func (s *BirchTreeClusterSpace) addChild(node *BirchTreeNode, childNode *BirchTr
 }
 
 func (s *BirchTreeClusterSpace) deleteChild(parentNode *BirchTreeNode, child *BirchTreeNode) {
+
 	for i := 0; i < parentNode.numChildren; i++ {
-		if parentNode.children[i].Id() == child.Id() {
+		if parentNode.children[i] == child {
 			parentNode.children[i] = nil
 			parentNode.children = append(parentNode.children[:i], parentNode.children[i+1:]...)
 			parentNode.children = append(parentNode.children, nil)
 			parentNode.numChildren--
 		}
 	}
+
 }
 
 func (s *BirchTreeClusterSpace) addCFtoParentNodes(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
@@ -342,9 +330,7 @@ func (s *BirchTreeClusterSpace) addCFtoParentNode(parentNode *BirchTreeNode, new
 }
 
 func (s *BirchTreeClusterSpace) delCFfromParentNode(parentNode *BirchTreeNode, delNode BirchTreeNode) {
-	// printChildren(parentNode)
 	parentNode.SubtractCoreset(&delNode.Coreset)
-
 }
 
 func (s *BirchTreeClusterSpace) delCFfromParentNodes(parentNode *BirchTreeNode, delNode *BirchTreeNode) {
@@ -356,6 +342,7 @@ func (s *BirchTreeClusterSpace) delCFfromParentNodes(parentNode *BirchTreeNode, 
 		}
 		parentNode = curNode.parent
 	}
+
 }
 
 func (s *BirchTreeClusterSpace) updateCFofParentNodes(node *BirchTreeNode) {
@@ -367,19 +354,9 @@ func (s *BirchTreeClusterSpace) updateCFofParentNodes(node *BirchTreeNode) {
 			break
 		}
 		parentNode.Reset()
-		log.Println("			updateCFofParentNodes : parentNode", parentNode.numChildren, parentNode.Coreset)
-		s.printChildren(parentNode)
 		for i := 0; i < parentNode.numChildren; i++ {
 			s.addCFtoParentNode(parentNode, parentNode.children[i])
-			log.Println("			updateCFofParentNodes : child", parentNode.children[i].Coreset)
-			log.Println("			updateCFofParentNodes : parentNode after update", parentNode.numChildren, parentNode.Coreset)
 		}
 		curNode = parentNode
-	}
-}
-
-func (s *BirchTreeClusterSpace) printChildren(node *BirchTreeNode) {
-	for i := 0; i < node.numChildren; i++ {
-		log.Println("		printChildren child coreset", node.children[i].numChildren, node.children[i].Coreset)
 	}
 }
