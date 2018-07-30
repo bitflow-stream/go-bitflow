@@ -274,7 +274,7 @@ func (s *BirchTreeClusterSpace) findNearestChildNode(nearestNode *BirchTreeNode,
 	for idx := 0; idx < nearestNode.numChildren; idx++ {
 		childClust := nearestNode.children[idx]
 
-		dist := clustering.EuclideanDistance(cluster.Center(), childClust.Center())
+		dist := clustering.EuclideanDistance(cluster.Center(), childClust.Center()) - childClust.Radius()
 		if nearestChildIdx == -1 || dist < closestDistance {
 			nearestChildIdx = idx
 			closestDistance = dist
