@@ -17,6 +17,7 @@ import (
 	"github.com/antongulenko/go-bitflow-pipeline/http_tags"
 	"github.com/antongulenko/go-bitflow-pipeline/plugin"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/recovery"
 	"github.com/antongulenko/go-bitflow-pipeline/regression"
 	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"
@@ -183,4 +184,5 @@ func register_analyses(b *query.PipelineBuilder) {
 	// Special
 	steps.RegisterSphere(b)
 	steps.RegisterAppendTimeDifference(b)
+	recovery.RegisterRecoveryEngine(b)
 }
