@@ -24,8 +24,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var builder = query.NewPipelineBuilder()
-
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <flags> <bitflow script>\nAll flags must be defined before the first non-flag parameter.\nFlags:\n", os.Args[0])
@@ -38,9 +36,11 @@ func do_main() int {
 	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
 	printPipeline := flag.Bool("print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
 	printCapabilities := flag.Bool("capabilities", false, "Print the capablities of this pipeline in JSON form and exit.")
+	useNewScript := flag.Bool("new", false, "Use the new script parser for processing the input script.")
 	scriptFile := ""
 	flag.StringVar(&scriptFile, "f", "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 
+	builder := query.NewPipelineBuilder()
 	plugin.RegisterPluginDataSource(&builder.Endpoints)
 	register_analyses(builder)
 
@@ -72,7 +72,13 @@ func do_main() int {
 		golib.Fatalln("Please provide a bitflow pipeline script via -f or directly as parameter.")
 	}
 
-	pipe, err := make_pipeline(script)
+	var pipe *pipeline.SamplePipeline
+	var err error
+	if *useNewScript {
+		pipe, err = make_pipeline_new(builder, script)
+	} else {
+		pipe, err = make_pipeline_old(builder, script)
+	}
 	if err != nil {
 		log.Errorln(err)
 		golib.Fatalln("Use -print-analyses to print all available analysis steps.")
@@ -87,13 +93,17 @@ func do_main() int {
 	return pipe.StartAndWait()
 }
 
-func make_pipeline(script string) (*pipeline.SamplePipeline, error) {
+func make_pipeline_old(builder *query.PipelineBuilder, script string) (*pipeline.SamplePipeline, error) {
 	parser := query.NewParser(bytes.NewReader([]byte(script)))
 	pipe, err := parser.Parse()
 	if err != nil {
 		return nil, err
 	}
 	return builder.MakePipeline(pipe)
+}
+
+func make_pipeline_new(builder *query.PipelineBuilder, script string) (*pipeline.SamplePipeline, error) {
+	return nil, fmt.Errorf("The new script parser is not yet implemented")
 }
 
 func register_analyses(b *query.PipelineBuilder) {
