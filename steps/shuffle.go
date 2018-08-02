@@ -6,7 +6,7 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 func NewSampleShuffler() *pipeline.SimpleBatchProcessingStep {
@@ -23,10 +23,11 @@ func NewSampleShuffler() *pipeline.SimpleBatchProcessingStep {
 	}
 }
 
-func RegisterSampleShuffler(b *query.PipelineBuilder) {
+func RegisterSampleShuffler(b builder.PipelineBuilder) {
 	b.RegisterAnalysis("shuffle",
 		func(p *pipeline.SamplePipeline) {
 			p.Batch(NewSampleShuffler())
 		},
-		"Shuffle a batch of samples to a random ordering")
+		"Shuffle a batch of samples to a random ordering",
+		builder.SupportBatch())
 }

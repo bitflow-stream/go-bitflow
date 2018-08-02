@@ -72,7 +72,7 @@ func (l *GinRequestLogger) formatRequest(context *gin.Context) []byte {
 			}
 			bodyData, err := ioutil.ReadAll(body)
 			if err != nil {
-				log.Errorln("Error reading request body: %v", err)
+				log.Errorf("Error reading request body: %v\n", err)
 			} else if len(bodyData) > 0 {
 				result.WriteString("\n")
 				result.Write(bodyData)

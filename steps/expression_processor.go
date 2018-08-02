@@ -5,7 +5,7 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type ExpressionProcessor struct {
@@ -16,20 +16,20 @@ type ExpressionProcessor struct {
 	expressions []*Expression
 }
 
-func RegisterExpression(b *query.PipelineBuilder) {
+func RegisterExpression(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("do",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			return add_expression(p, params, false)
 		},
-		"Execute the given expression on every sample", []string{"expr"})
+		"Execute the given expression on every sample", builder.RequiredParams("expr"))
 }
 
-func RegisterFilterExpression(b *query.PipelineBuilder) {
+func RegisterFilterExpression(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("filter",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			return add_expression(p, params, true)
 		},
-		"Filter the samples based on a boolean expression", []string{"expr"})
+		"Filter the samples based on a boolean expression", builder.RequiredParams("expr"))
 }
 
 func add_expression(p *pipeline.SamplePipeline, params map[string]string, filter bool) error {

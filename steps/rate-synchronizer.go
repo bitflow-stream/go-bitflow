@@ -6,8 +6,8 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type PipelineRateSynchronizer struct {
@@ -18,13 +18,13 @@ type PipelineRateSynchronizer struct {
 	ChannelCloseHook func(lastSample *bitflow.Sample, lastHeader *bitflow.Header)
 }
 
-func RegisterPipelineRateSynchronizer(b *query.PipelineBuilder) {
+func RegisterPipelineRateSynchronizer(b builder.PipelineBuilder) {
 	synchronization_keys := make(map[string]*PipelineRateSynchronizer)
 
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		var err error
 		key := params["key"]
-		chanSize := query.IntParam(params, "buf", 5, true, &err)
+		chanSize := builder.IntParam(params, "buf", 5, true, &err)
 		if err != nil {
 			return err
 		}
@@ -36,13 +36,13 @@ func RegisterPipelineRateSynchronizer(b *query.PipelineBuilder) {
 			}
 			synchronization_keys[key] = synchronizer
 		} else if synchronizer.ChannelSize != chanSize {
-			return query.ParameterError("buf", errors.New("synchronize() steps with the same 'key' parameter must all have the same 'buf' parameter"))
+			return builder.ParameterError("buf", errors.New("synchronize() steps with the same 'key' parameter must all have the same 'buf' parameter"))
 		}
 		p.Add(synchronizer.NewSynchronizationStep())
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("synchronize", create, "Synchronize the number of samples going through each synchronize() step with the same key parameter", []string{"key"}, "buf")
+	b.RegisterAnalysisParamsErr("synchronize", create, "Synchronize the number of samples going through each synchronize() step with the same key parameter", builder.RequiredParams("key"), builder.OptionalParams("buf"))
 }
 
 func (s *PipelineRateSynchronizer) NewSynchronizationStep() bitflow.SampleProcessor {

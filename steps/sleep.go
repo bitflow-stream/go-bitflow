@@ -6,11 +6,11 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterSleep(b *query.PipelineBuilder) {
-	b.RegisterAnalysisParamsErr("sleep", _create_sleep_processor, "Between every two samples, sleep the time difference between their timestamps", []string{}, "time", "onChangedTag")
+func RegisterSleep(b builder.PipelineBuilder) {
+	b.RegisterAnalysisParamsErr("sleep", _create_sleep_processor, "Between every two samples, sleep the time difference between their timestamps", builder.OptionalParams("time", "onChangedTag"))
 }
 
 func _create_sleep_processor(p *pipeline.SamplePipeline, params map[string]string) error {
@@ -21,7 +21,7 @@ func _create_sleep_processor(p *pipeline.SamplePipeline, params map[string]strin
 		var err error
 		timeout, err = time.ParseDuration(timeoutStr)
 		if err != nil {
-			return query.ParameterError("time", err)
+			return builder.ParameterError("time", err)
 		}
 	}
 

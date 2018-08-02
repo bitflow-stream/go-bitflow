@@ -6,6 +6,7 @@ import (
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
+	builderPackage "github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type PipelineBuilder struct {
@@ -139,7 +140,11 @@ func (b PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) error {
 		err = forkStep.Params.Verify(params)
 		if err == nil {
 			subpipelines := b.prepareSubpipelines(f.Pipelines)
-			distributor, err = forkStep.Func(subpipelines, params)
+			subpipes := make([]builderPackage.Subpipeline,len(subpipelines))
+			for i := range subpipelines{
+				subpipes[i] = &subpipelines[i]
+			}
+			distributor, err = forkStep.Func(subpipes, params)
 		}
 	}
 	if err != nil {
@@ -170,9 +175,9 @@ func (b PipelineBuilder) prepareSubpipelines(pipelines Pipelines) []Subpipeline 
 	res := make([]Subpipeline, len(pipelines))
 	for i, pipe := range pipelines {
 		inputs := pipe[0].(Input)
-		res[i].Keys = make([]string, len(inputs))
+		res[i].keys = make([]string, len(inputs))
 		for j, input := range inputs {
-			res[i].Keys[j] = input.Content()
+			res[i].keys[j] = input.Content()
 		}
 		res[i].pipe = pipe[1:]
 		res[i].builder = &b

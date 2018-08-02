@@ -8,10 +8,10 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterGraphiteOutput(b *query.PipelineBuilder) {
+func RegisterGraphiteOutput(b builder.PipelineBuilder) {
 	factory := &SimpleTextMarshallerFactory{
 		Description: "graphite",
 		NameFixer:   strings.NewReplacer("/", ".", " ", "_", "\t", "_", "\n", "_").Replace,
@@ -20,10 +20,10 @@ func RegisterGraphiteOutput(b *query.PipelineBuilder) {
 			return err
 		},
 	}
-	b.RegisterAnalysisParamsErr("graphite", factory.createTcpOutput, "Send metrics and/or tags to the given Graphite endpoint. Required parameter: 'target'. Optional: 'prefix'", nil)
+	b.RegisterAnalysisParamsErr("graphite", factory.createTcpOutput, "Send metrics and/or tags to the given Graphite endpoint. Required parameter: 'target'. Optional: 'prefix'")
 }
 
-func RegisterOpentsdbOutput(b *query.PipelineBuilder) {
+func RegisterOpentsdbOutput(b builder.PipelineBuilder) {
 	const max_opentsdb_tags = 8
 
 	nameReplacer := strings.NewReplacer("/", ".")          // Convention for bitflow metric names uses slashes, while OpenTSDB uses dots
@@ -57,7 +57,7 @@ func RegisterOpentsdbOutput(b *query.PipelineBuilder) {
 			return err
 		},
 	}
-	b.RegisterAnalysisParamsErr("opentsdb", factory.createTcpOutput, "Send metrics and/or tags to the given OpenTSDB endpoint. Required parameter: 'target'. Optional: 'prefix'", nil)
+	b.RegisterAnalysisParamsErr("opentsdb", factory.createTcpOutput, "Send metrics and/or tags to the given OpenTSDB endpoint. Required parameter: 'target'. Optional: 'prefix'")
 }
 
 var _ bitflow.Marshaller = new(SimpleTextMarshaller)
@@ -71,7 +71,7 @@ type SimpleTextMarshallerFactory struct {
 func (f *SimpleTextMarshallerFactory) createTcpOutput(p *pipeline.SamplePipeline, params map[string]string) error {
 	target, hasTarget := params["target"]
 	if !hasTarget {
-		return query.ParameterError("target", fmt.Errorf("Missing required parameter"))
+		return builder.ParameterError("target", fmt.Errorf("Missing required parameter"))
 	}
 	prefix := params["prefix"]
 	delete(params, "target")

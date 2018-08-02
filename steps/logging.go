@@ -11,15 +11,15 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterLoggingSteps(b *query.PipelineBuilder) {
+func RegisterLoggingSteps(b builder.PipelineBuilder) {
 	b.RegisterAnalysis("print_header", print_header, "Print every changing header to the log")
-	b.RegisterAnalysisParams("print_tags", print_tags, "When done processing, print every encountered value of the given tag", []string{"tag"})
-	b.RegisterAnalysisParams("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", []string{"tag"})
+	b.RegisterAnalysisParams("print_tags", print_tags, "When done processing, print every encountered value of the given tag", builder.RequiredParams("tag"))
+	b.RegisterAnalysisParams("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", builder.RequiredParams("tag"))
 	b.RegisterAnalysis("print_timerange", print_time_range, "When done processing, print the first and last encountered timestamp")
-	b.RegisterAnalysisParamsErr("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", []string{}, "buckets")
+	b.RegisterAnalysisParamsErr("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", builder.OptionalParams("buckets"))
 	b.RegisterAnalysis("count_invalid", count_invalid, "When done processing, print the number of invalid metric values and samples containing such values (NaN, -/+ infinity, ...)")
 	b.RegisterAnalysis("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
 }
@@ -161,7 +161,7 @@ func print_timeline(p *pipeline.SamplePipeline, params map[string]string) error 
 		var err error
 		numBuckets, err = strconv.ParseUint(bucketsStr, 10, 64)
 		if err != nil {
-			return query.ParameterError("buckets", err)
+			return builder.ParameterError("buckets", err)
 		}
 	}
 	if numBuckets <= 0 {

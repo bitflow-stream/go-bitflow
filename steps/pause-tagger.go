@@ -7,21 +7,21 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterPauseTagger(b *query.PipelineBuilder) {
+func RegisterPauseTagger(b builder.PipelineBuilder) {
 	create := func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 		tag := params["tag"]
 		duration, err := time.ParseDuration(params["minPause"])
 		if err != nil {
-			return query.ParameterError("minPause", err)
+			return builder.ParameterError("minPause", err)
 		}
 		pipeline.Add(&PauseTagger{MinimumPause: duration, Tag: tag})
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("tag-pauses", create, "Set a given tag to an integer value, that increments whenever the timestamps of two samples are more apart than a given duration", []string{"tag", "minPause"})
+	b.RegisterAnalysisParamsErr("tag-pauses", create, "Set a given tag to an integer value, that increments whenever the timestamps of two samples are more apart than a given duration", builder.RequiredParams("tag", "minPause"))
 }
 
 type PauseTagger struct {

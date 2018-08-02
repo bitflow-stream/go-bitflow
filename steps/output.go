@@ -7,19 +7,19 @@ import (
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterOutputFiles(b *query.PipelineBuilder) {
+func RegisterOutputFiles(b builder.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		filename := params["file"]
 		if filename == "" {
-			return query.ParameterError("file", errors.New("Missing required parameter"))
+			return builder.ParameterError("file", errors.New("Missing required parameter"))
 		}
 		delete(params, "file")
 
 		var err error
-		parallelize := query.IntParam(params, "parallelize", 0, true, &err)
+		parallelize := builder.IntParam(params, "parallelize", 0, true, &err)
 		if err != nil {
 			return err
 		}
@@ -38,7 +38,7 @@ func RegisterOutputFiles(b *query.PipelineBuilder) {
 		return err
 	}
 
-	b.RegisterAnalysisParamsErr("output_files", create, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values", nil)
+	b.RegisterAnalysisParamsErr("output_files", create, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values")
 }
 
 func _make_multi_file_pipeline_builder(params map[string]string) (*fork.MultiFileDistributor, error) {

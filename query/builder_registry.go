@@ -2,170 +2,72 @@ package query
 
 import (
 	"fmt"
-	"strconv"
-	"time"
-
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/fork"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type Subpipeline struct {
-	Keys []string
+	keys []string
 
 	builder *PipelineBuilder
 	pipe    Pipeline
+}
+
+func (s *Subpipeline) Keys() []string {
+	return s.keys
 }
 
 func (s *Subpipeline) Build() (*pipeline.SamplePipeline, error) {
 	return s.builder.makePipelineTail(s.pipe)
 }
 
-type AnalysisFunc func(pipeline *pipeline.SamplePipeline, params map[string]string) error
-type ForkFunc func(subpiplines []Subpipeline, params map[string]string) (fork.Distributor, error)
-
-func ParameterError(name string, err error) error {
-	return fmt.Errorf("Failed to parse '%v' parameter: %v", name, err)
-}
-
-func StrParam(params map[string]string, name string, defaultVal string, hasDefault bool, err *error) string {
-	if *err != nil {
-		return ""
-	}
-	strVal, ok := params[name]
-	if ok {
-		return strVal
-	} else if hasDefault {
-		return defaultVal
-	} else {
-		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
-		return ""
-	}
-}
-
-func BoolParam(params map[string]string, name string, defaultVal bool, hasDefault bool, err *error) bool {
-	if *err != nil {
-		return false
-	}
-	strVal, ok := params[name]
-	if ok {
-		parsed, parseErr := strconv.ParseBool(strVal)
-		if parseErr != nil {
-			*err = ParameterError(name, parseErr)
-			return false
-		}
-		return parsed
-	} else if hasDefault {
-		return defaultVal
-	} else {
-		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
-		return false
-	}
-}
-
-func DurationParam(params map[string]string, name string, defaultVal time.Duration, hasDefault bool, err *error) time.Duration {
-	if *err != nil {
-		return 0
-	}
-	strVal, ok := params[name]
-	if ok {
-		parsed, parseErr := time.ParseDuration(strVal)
-		if parseErr != nil {
-			*err = ParameterError(name, parseErr)
-			return 0
-		}
-		return parsed
-	} else if hasDefault {
-		return defaultVal
-	} else {
-		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
-		return 0
-	}
-}
-
-func IntParam(params map[string]string, name string, defaultVal int, hasDefault bool, err *error) int {
-	if *err != nil {
-		return 0
-	}
-	strVal, ok := params[name]
-	if ok {
-		parsed, parseErr := strconv.Atoi(strVal)
-		if parseErr != nil {
-			*err = ParameterError(name, parseErr)
-			return 0
-		}
-		return parsed
-	} else if hasDefault {
-		return defaultVal
-	} else {
-		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
-		return 0
-	}
-}
-
-func FloatParam(params map[string]string, name string, defaultVal float64, hasDefault bool, err *error) float64 {
-	if *err != nil {
-		return 0
-	}
-	strVal, ok := params[name]
-	if ok {
-		parsed, parseErr := strconv.ParseFloat(strVal, 64)
-		if parseErr != nil {
-			*err = ParameterError(name, parseErr)
-		}
-		return parsed
-	} else if hasDefault {
-		return defaultVal
-	} else {
-		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
-		return 0
-	}
-}
-
-func (b *PipelineBuilder) RegisterAnalysisParamsErr(name string, setupPipeline AnalysisFunc, description string, requiredParams []string, optionalParams ...string) {
+func (b *PipelineBuilder) RegisterAnalysisParamsErr(name string, setupPipeline builder.AnalysisFunc, description string, options ...builder.Option) {
 	if _, ok := b.analysis_registry[name]; ok {
 		panic("Analysis already registered: " + name)
 	}
-	params := registeredParameters{requiredParams, optionalParams}
+	opts := builder.GetOpts(options)
+	params := registeredParameters{opts.RequiredParams, opts.OptionalParams}
 	b.analysis_registry[name] = registeredAnalysis{name, setupPipeline, params.makeDescription(description), params}
 }
 
-func (b *PipelineBuilder) RegisterAnalysisParams(name string, setupPipeline func(pipeline *pipeline.SamplePipeline, params map[string]string), description string, requiredParams []string, optionalParams ...string) {
-	b.RegisterAnalysisParamsErr(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+func (builder *PipelineBuilder) RegisterAnalysisParams(name string, setupPipeline func(pipeline *pipeline.SamplePipeline, params map[string]string), description string, options ...builder.Option) {
+	builder.RegisterAnalysisParamsErr(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 		setupPipeline(pipeline, params)
 		return nil
-	}, description, requiredParams, optionalParams...)
+	}, description, options...)
 }
 
-func (b *PipelineBuilder) RegisterAnalysis(name string, setupPipeline func(pipeline *pipeline.SamplePipeline), description string) {
-	b.RegisterAnalysisParams(name, func(pipeline *pipeline.SamplePipeline, _ map[string]string) {
+func (builder *PipelineBuilder) RegisterAnalysis(name string, setupPipeline func(pipeline *pipeline.SamplePipeline), description string, options ...builder.Option) {
+	builder.RegisterAnalysisParams(name, func(pipeline *pipeline.SamplePipeline, _ map[string]string) {
 		setupPipeline(pipeline)
-	}, description, []string{})
+	}, description, options...)
 }
 
-func (b *PipelineBuilder) RegisterAnalysisErr(name string, setupPipeline func(pipeline *pipeline.SamplePipeline) error, description string) {
-	b.RegisterAnalysisParamsErr(name, func(pipeline *pipeline.SamplePipeline, _ map[string]string) error {
+func (builder *PipelineBuilder) RegisterAnalysisErr(name string, setupPipeline func(pipeline *pipeline.SamplePipeline) error, description string, options ...builder.Option) {
+	builder.RegisterAnalysisParamsErr(name, func(pipeline *pipeline.SamplePipeline, _ map[string]string) error {
 		return setupPipeline(pipeline)
-	}, description, []string{})
+	}, description, options...)
 }
 
-func (b *PipelineBuilder) RegisterFork(name string, createFork ForkFunc, description string, requiredParams []string, optionalParams ...string) {
+func (b *PipelineBuilder) RegisterFork(name string, createFork builder.ForkFunc, description string, options ...builder.Option) {
 	if _, ok := b.fork_registry[name]; ok {
 		panic("Fork already registered: " + name)
 	}
-	params := registeredParameters{requiredParams, optionalParams}
+	opts := builder.GetOpts(options)
+	params := registeredParameters{opts.RequiredParams, opts.OptionalParams}
 	b.fork_registry[name] = registeredFork{name, createFork, params.makeDescription(description), params}
 }
 
 type registeredAnalysis struct {
 	Name        string
-	Func        AnalysisFunc
+	Func        builder.AnalysisFunc
 	Description string
 	Params      registeredParameters
 }
 
 type registeredFork struct {
 	Name        string
-	Func        ForkFunc
+	Func        builder.ForkFunc
 	Description string
 	Params      registeredParameters
 }

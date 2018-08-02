@@ -5,14 +5,14 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterTaggingProcessor(b *query.PipelineBuilder) {
+func RegisterTaggingProcessor(b builder.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) {
 		p.Add(NewTaggingProcessor(params))
 	}
-	b.RegisterAnalysisParams("tags", create, "Set the given tags on every sample", nil)
+	b.RegisterAnalysisParams("tags", create, "Set the given tags on every sample")
 }
 
 func NewTaggingProcessor(tags map[string]string) bitflow.SampleProcessor {

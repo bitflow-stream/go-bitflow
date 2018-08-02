@@ -6,8 +6,8 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 	log "github.com/sirupsen/logrus"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 // Can tolerate multiple headers, fills missing data up with default values.
@@ -25,7 +25,7 @@ func NewMultiHeaderMerger() *MultiHeaderMerger {
 	}
 }
 
-func RegisterMergeHeaders(b *query.PipelineBuilder) {
+func RegisterMergeHeaders(b builder.PipelineBuilder) {
 	b.RegisterAnalysis("merge_headers",
 		func(p *pipeline.SamplePipeline) {
 			p.Add(NewMultiHeaderMerger())

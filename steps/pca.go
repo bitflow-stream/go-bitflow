@@ -11,10 +11,10 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/gonum/matrix/mat64"
 	"github.com/gonum/stat"
 	log "github.com/sirupsen/logrus"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 const DefaultContainedVariance = 0.99
@@ -266,7 +266,7 @@ func ComputeAndProjectPCA(containedVariance float64) pipeline.BatchProcessingSte
 	}
 }
 
-func RegisterPCA(b *query.PipelineBuilder) {
+func RegisterPCA(b builder.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
@@ -274,18 +274,20 @@ func RegisterPCA(b *query.PipelineBuilder) {
 		}
 		return err
 	}
-	b.RegisterAnalysisParamsErr("pca", create, "Create a PCA model of a batch of samples and project all samples into a number of principal components with a total contained variance given by the parameter", []string{"var"})
+	b.RegisterAnalysisParamsErr("pca", create, "Create a PCA model of a batch of samples and project all samples into a number of principal components with a total contained variance given by the parameter",
+		builder.RequiredParams("var"), builder.SupportBatch())
 }
 
-func RegisterPCAStore(b *query.PipelineBuilder) {
+func RegisterPCAStore(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParams("pca_store",
 		func(p *pipeline.SamplePipeline, params map[string]string) {
 			p.Batch(StorePCAModel(params["file"]))
 		},
-		"Create a PCA model of a batch of samples and store it to the given file", []string{"file"})
+		"Create a PCA model of a batch of samples and store it to the given file",
+		builder.RequiredParams("file"),builder.SupportBatch())
 }
 
-func RegisterPCALoad(b *query.PipelineBuilder) {
+func RegisterPCALoad(b builder.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
@@ -297,10 +299,11 @@ func RegisterPCALoad(b *query.PipelineBuilder) {
 		}
 		return err
 	}
-	b.RegisterAnalysisParamsErr("pca_load", create, "Load a PCA model from the given file and project all samples into a number of principal components with a total contained variance given by the parameter", []string{"var", "file"})
+	b.RegisterAnalysisParamsErr("pca_load", create, "Load a PCA model from the given file and project all samples into a number of principal components with a total contained variance given by the parameter",
+		builder.RequiredParams("var", "file"), builder.SupportBatch())
 }
 
-func RegisterPCALoadStream(b *query.PipelineBuilder) {
+func RegisterPCALoadStream(b builder.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
@@ -312,13 +315,13 @@ func RegisterPCALoadStream(b *query.PipelineBuilder) {
 		}
 		return err
 	}
-	b.RegisterAnalysisParamsErr("pca_load_stream", create, "Like pca_load, but process every sample individually, instead of batching them up", []string{"var", "file"})
+	b.RegisterAnalysisParamsErr("pca_load_stream", create, "Like pca_load, but process every sample individually, instead of batching them up", builder.RequiredParams("var", "file"))
 }
 
 func parse_pca_variance(params map[string]string) (float64, error) {
 	variance, err := strconv.ParseFloat(params["var"], 64)
 	if err != nil {
-		err = query.ParameterError("var", err)
+		err = builder.ParameterError("var", err)
 	}
 	return variance, err
 }

@@ -10,9 +10,9 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-onlinestats"
 	log "github.com/sirupsen/logrus"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type MetricMapperHelper struct {
@@ -115,7 +115,7 @@ func NewMetricFilter() *MetricFilter {
 	return res
 }
 
-func RegisterIncludeMetricsFilter(b *query.PipelineBuilder) {
+func RegisterIncludeMetricsFilter(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("include",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			filter, err := NewMetricFilter().IncludeRegex(params["m"])
@@ -124,10 +124,10 @@ func RegisterIncludeMetricsFilter(b *query.PipelineBuilder) {
 			}
 			return err
 		},
-		"Match every metric with the given regex and only include the matched metrics", []string{"m"})
+		"Match every metric with the given regex and only include the matched metrics", builder.RequiredParams("m"))
 }
 
-func RegisterExcludeMetricsFilter(b *query.PipelineBuilder) {
+func RegisterExcludeMetricsFilter(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("exclude",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			filter, err := NewMetricFilter().ExcludeRegex(params["m"])
@@ -136,7 +136,7 @@ func RegisterExcludeMetricsFilter(b *query.PipelineBuilder) {
 			}
 			return err
 		},
-		"Match every metric with the given regex and exclude the matched metrics", []string{"m"})
+		"Match every metric with the given regex and exclude the matched metrics", builder.RequiredParams("m"))
 }
 
 func (filter *MetricFilter) Exclude(regex *regexp.Regexp) *MetricFilter {
@@ -227,13 +227,13 @@ func NewMetricMapper(metrics []string) *MetricMapper {
 	return mapper
 }
 
-func RegisterMetricMapper(b *query.PipelineBuilder) {
+func RegisterMetricMapper(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParams("remap",
 		func(p *pipeline.SamplePipeline, params map[string]string) {
 			metrics := strings.Split(params["header"], ",")
 			p.Add(NewMetricMapper(metrics))
 		},
-		"Change (reorder) the header to the given comma-separated list of metrics", []string{"header"})
+		"Change (reorder) the header to the given comma-separated list of metrics", builder.RequiredParams("header"))
 }
 
 func (mapper *MetricMapper) constructIndices(header *bitflow.Header) ([]int, []string) {
@@ -320,18 +320,19 @@ func NewMetricVarianceFilter(minimumWeightedStddev float64) *AbstractBatchMetric
 	}
 }
 
-func RegisterVarianceMetricsFilter(b *query.PipelineBuilder) {
+func RegisterVarianceMetricsFilter(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("filter_variance",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			variance, err := strconv.ParseFloat(params["min"], 64)
 			if err != nil {
-				err = query.ParameterError("min", err)
+				err = builder.ParameterError("min", err)
 			} else {
 				p.Batch(NewMetricVarianceFilter(variance))
 			}
 			return err
 		},
-		"In a batch of samples, filter out the metrics with a variance lower than the given theshold (based on the weighted stdev of the population, stddev/mean)", []string{"min"})
+		"In a batch of samples, filter out the metrics with a variance lower than the given theshold (based on the weighted stdev of the population, stddev/mean)",
+		builder.RequiredParams("min"), builder.SupportBatch())
 }
 
 type MetricRenamer struct {
@@ -353,7 +354,7 @@ func NewMetricRenamer(regexes []*regexp.Regexp, replacements []string) *MetricRe
 	return renamer
 }
 
-func RegisterMetricRenamer(b *query.PipelineBuilder) {
+func RegisterMetricRenamer(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("rename",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			if len(params) == 0 {
@@ -365,7 +366,7 @@ func RegisterMetricRenamer(b *query.PipelineBuilder) {
 			for regex, replacement := range params {
 				r, err := regexp.Compile(regex)
 				if err != nil {
-					return query.ParameterError(regex, err)
+					return builder.ParameterError(regex, err)
 				}
 				regexes = append(regexes, r)
 				replacements = append(replacements, replacement)
@@ -373,7 +374,7 @@ func RegisterMetricRenamer(b *query.PipelineBuilder) {
 			p.Add(NewMetricRenamer(regexes, replacements))
 			return nil
 		},
-		"Find the keys (regexes) in every metric name and replace the matched parts with the given values", nil)
+		"Find the keys (regexes) in every metric name and replace the matched parts with the given values")
 }
 
 func (r *MetricRenamer) String() string {

@@ -7,6 +7,7 @@ import (
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 const MultiplexForkName = "multiplex"
@@ -19,10 +20,10 @@ type PipelineVerification interface {
 }
 
 func RegisterMultiplexFork(builder *PipelineBuilder) {
-	builder.RegisterFork(MultiplexForkName, createMultiplexFork, "Basic fork forwarding samples to all subpipelines. Subpipeline keys are ignored.", []string{})
+	builder.RegisterFork(MultiplexForkName, createMultiplexFork, "Basic fork forwarding samples to all subpipelines. Subpipeline keys are ignored.")
 }
 
-func createMultiplexFork(subpipelines []Subpipeline, _ map[string]string) (fork.Distributor, error) {
+func createMultiplexFork(subpipelines []builder.Subpipeline, _ map[string]string) (fork.Distributor, error) {
 	var res fork.MultiplexDistributor
 	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpipelines))
 	var err error

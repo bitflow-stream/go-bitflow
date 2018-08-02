@@ -7,24 +7,24 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterResendStep(b *query.PipelineBuilder) {
+func RegisterResendStep(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("resend",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			interval, err := time.ParseDuration(params["interval"])
 			if err != nil {
-				return query.ParameterError("interval", err)
+				return builder.ParameterError("interval", err)
 			}
 			p.Add(&ResendProcessor{
 				Interval: interval,
 			})
 			return nil
 		},
-		"If no new sample is received within the given period of time, resend a copy of it.", []string{"interval"})
+		"If no new sample is received within the given period of time, resend a copy of it.", builder.RequiredParams("interval"))
 }
 
 type ResendProcessor struct {

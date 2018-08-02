@@ -7,10 +7,10 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/go-ini/ini"
 	log "github.com/sirupsen/logrus"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type StoreStats struct {
@@ -27,11 +27,11 @@ func NewStoreStats(targetFile string) *StoreStats {
 	}
 }
 
-func RegisterStoreStats(b *query.PipelineBuilder) {
+func RegisterStoreStats(b builder.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) {
 		p.Add(NewStoreStats(params["file"]))
 	}
-	b.RegisterAnalysisParams("stats", create, "Output statistics about processed samples to a given ini-file", []string{"file"})
+	b.RegisterAnalysisParams("stats", create, "Output statistics about processed samples to a given ini-file",builder.RequiredParams("file"))
 }
 
 type FeatureStats struct {

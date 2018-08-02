@@ -7,8 +7,8 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 // Decouple the incoming samples from the MetricSink through a
@@ -23,15 +23,15 @@ type DecouplingProcessor struct {
 func AddDecoupleStep(p *pipeline.SamplePipeline, params map[string]string) error {
 	buf, err := strconv.Atoi(params["buf"])
 	if err != nil {
-		err = query.ParameterError("buf", err)
+		err = builder.ParameterError("buf", err)
 	} else {
 		p.Add(&DecouplingProcessor{ChannelBuffer: buf})
 	}
 	return err
 }
 
-func RegisterDecouple(b *query.PipelineBuilder) {
-	b.RegisterAnalysisParamsErr("decouple", AddDecoupleStep, "Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples", []string{"buf"})
+func RegisterDecouple(b builder.PipelineBuilder) {
+	b.RegisterAnalysisParamsErr("decouple", AddDecoupleStep, "Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples", builder.RequiredParams("buf"))
 }
 
 func (p *DecouplingProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

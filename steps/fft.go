@@ -8,9 +8,9 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/ktye/fft"
 	log "github.com/sirupsen/logrus"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 // TODO result modes: real part OR imaginary part OR both OR magnitude. Also, keep original values or not.
@@ -31,12 +31,13 @@ var (
 	warningLock        sync.Mutex
 )
 
-func RegisterFFT(b *query.PipelineBuilder) {
+func RegisterFFT(b builder.PipelineBuilder) {
 	b.RegisterAnalysis("fft",
 		func(p *pipeline.SamplePipeline) {
 			p.Batch(new(BatchFft))
 		},
-		"Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result")
+		"Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result",
+		builder.SupportBatch())
 }
 
 type BatchFft struct {

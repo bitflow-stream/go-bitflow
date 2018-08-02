@@ -7,9 +7,9 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type State string
@@ -43,15 +43,16 @@ type DecisionMaker struct {
 	progressCond *sync.Cond
 }
 
-func RegisterRecoveryEngine(b *query.PipelineBuilder) {
+func RegisterRecoveryEngine(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("recovery", func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 		var err error
-		noDataTimeout := query.DurationParam(params, "no-data", 0, false, &err)
-		recoveryFailedTimeout := query.DurationParam(params, "recovery-failed", 0, false, &err)
-		layerSimilarity := query.FloatParam(params, "layer-simil", 0, false, &err)
-		groupSimilarity := query.FloatParam(params, "group-simil", 0, false, &err)
-		evaluate := query.BoolParam(params, "evaluate", false, true, &err)
-		recoverNoDataState := query.BoolParam(params, "recover-no-data", false, false, &err)
+
+		noDataTimeout := builder.DurationParam(params, "no-data", 0, false, &err)
+		recoveryFailedTimeout := builder.DurationParam(params, "recovery-failed", 0, false, &err)
+		layerSimilarity := builder.FloatParam(params, "layer-simil", 0, false, &err)
+		groupSimilarity := builder.FloatParam(params, "group-simil", 0, false, &err)
+		evaluate := builder.BoolParam(params, "evaluate", false, true, &err)
+		recoverNoDataState := builder.BoolParam(params, "recover-no-data", false, false, &err)
 		if err != nil {
 			return err
 		}
@@ -59,7 +60,7 @@ func RegisterRecoveryEngine(b *query.PipelineBuilder) {
 		dependencyModelFile := params["model"]
 		dependencyModel, err := LoadDependencyModel(dependencyModelFile)
 		if err != nil {
-			return query.ParameterError("model", err)
+			return builder.ParameterError("model", err)
 		}
 		graph := dependencyModel.BuildSimilarityGraph(groupSimilarity, layerSimilarity)
 
@@ -73,11 +74,11 @@ func RegisterRecoveryEngine(b *query.PipelineBuilder) {
 				data:      make(map[string]*nodeEvaluationData),
 				Execution: execution,
 			}
-			evalStep.SampleRate = query.DurationParam(params, "sample-rate", 0, true, &err)
-			evalStep.FillerSamples = query.IntParam(params, "filler-samples", 0, true, &err)
-			evalStep.NormalSamplesBetweenAnomalies = query.IntParam(params, "normal-fillers", 0, true, &err)
-			evalStep.RecoveriesPerState = query.FloatParam(params, "recoveries-per-state", 1, true, &err)
-			evalStep.StoreNormalSamples = query.IntParam(params, "store-normal-samples", 1000, true, &err)
+			evalStep.SampleRate = builder.DurationParam(params, "sample-rate", 0, true, &err)
+			evalStep.FillerSamples = builder.IntParam(params, "filler-samples", 0, true, &err)
+			evalStep.NormalSamplesBetweenAnomalies = builder.IntParam(params, "normal-fillers", 0, true, &err)
+			evalStep.RecoveriesPerState = builder.FloatParam(params, "recoveries-per-state", 1, true, &err)
+			evalStep.StoreNormalSamples = builder.IntParam(params, "store-normal-samples", 1000, true, &err)
 			if err != nil {
 				return err
 			}
@@ -102,14 +103,16 @@ func RegisterRecoveryEngine(b *query.PipelineBuilder) {
 		})
 		return nil
 	}, "Recovery Engine based on recommendation system",
-		append([]string{
+		builder.RequiredParams(append([]string{
 			"model", "layer-simil", "group-simil", // Dependency/Similarity Graph
-			"no-data", "recovery-failed", // Timeouts
+			"no-data", "recovery-failed",          // Timeouts
 			"recover-no-data",
-		}, TagParameterNames...),
-		"avg-recovery-time", "recovery-error-percentage", "num-mock-recoveries", "rand-seed", // Mock execution engine
-		"evaluate", "sample-rate", "filler-samples", "normal-fillers", "recoveries-per-state", "store-normal-samples", // Evaluation
-	)
+		}, TagParameterNames...)...),
+		builder.OptionalParams(
+			"avg-recovery-time", "recovery-error-percentage", "num-mock-recoveries", "rand-seed",                          // Mock execution engine
+			"evaluate", "sample-rate", "filler-samples", "normal-fillers", "recoveries-per-state", "store-normal-samples", // Evaluation
+		))
+
 }
 
 func (d *DecisionMaker) String() string {
@@ -142,7 +145,8 @@ func (d *DecisionMaker) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 		nodeState, ok := d.state[node]
 		if !ok {
 			if !d.warnedUnknownNodes[node] {
-				log.Warnf("<%v> Ignoring data for unknown node with %v=%v and %v=%v", d.NodeNameTag, node, d.StateTag, state)
+				//log.Warnf("<%v> Ignoring data for unknown node with %v=%v and %v=%v", d.NodeNameTag, node, d.StateTag, state)
+				log.Warnf("Ignoring data for unknown node with %v=%v and %v=%v", d.NodeNameTag, node, d.StateTag, state)
 				d.warnedUnknownNodes[node] = true
 			}
 		} else {

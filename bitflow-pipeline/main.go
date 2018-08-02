@@ -16,13 +16,15 @@ import (
 	"github.com/antongulenko/go-bitflow-pipeline/http"
 	"github.com/antongulenko/go-bitflow-pipeline/http_tags"
 	"github.com/antongulenko/go-bitflow-pipeline/plugin"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-bitflow-pipeline/recovery"
 	"github.com/antongulenko/go-bitflow-pipeline/regression"
 	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
+	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
+
 
 func main() {
 	flag.Usage = func() {
@@ -40,20 +42,20 @@ func do_main() int {
 	scriptFile := ""
 	flag.StringVar(&scriptFile, "f", "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 
-	builder := query.NewPipelineBuilder()
-	plugin.RegisterPluginDataSource(&builder.Endpoints)
-	register_analyses(builder)
+	queryBuilder := query.NewPipelineBuilder()
+	plugin.RegisterPluginDataSource(&queryBuilder.Endpoints)
+	register_analyses(queryBuilder)
 
 	bitflow.RegisterGolibFlags()
-	builder.Endpoints.RegisterFlags()
+	queryBuilder.Endpoints.RegisterFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
 	if *printCapabilities {
-		builder.PrintJsonCapabilities(os.Stdout)
+		queryBuilder.PrintJsonCapabilities(os.Stdout)
 		return 0
 	}
 	if *printAnalyses {
-		fmt.Printf("Available analysis steps:\n%v\n", builder.PrintAllAnalyses())
+		fmt.Printf("Available analysis steps:\n%v\n", queryBuilder.PrintAllAnalyses())
 		return 0
 	}
 
@@ -64,7 +66,7 @@ func do_main() int {
 	if scriptFile != "" {
 		scriptBytes, err := ioutil.ReadFile(scriptFile)
 		if err != nil {
-			golib.Fatalf("Error reading bitflow script file $v: %v", scriptFile, err)
+			golib.Fatalf("Error reading bitflow script file %v: %v", scriptFile, err)
 		}
 		script = string(scriptBytes)
 	}
@@ -75,9 +77,9 @@ func do_main() int {
 	var pipe *pipeline.SamplePipeline
 	var err error
 	if *useNewScript {
-		pipe, err = make_pipeline_new(builder, script)
+		pipe, err = make_pipeline_new(queryBuilder, script)
 	} else {
-		pipe, err = make_pipeline_old(builder, script)
+		pipe, err = make_pipeline_old(queryBuilder, script)
 	}
 	if err != nil {
 		log.Errorln(err)
@@ -93,20 +95,21 @@ func do_main() int {
 	return pipe.StartAndWait()
 }
 
-func make_pipeline_old(builder *query.PipelineBuilder, script string) (*pipeline.SamplePipeline, error) {
+func make_pipeline_old(queryBuilder *query.PipelineBuilder, script string) (*pipeline.SamplePipeline, error) {
 	parser := query.NewParser(bytes.NewReader([]byte(script)))
 	pipe, err := parser.Parse()
 	if err != nil {
 		return nil, err
 	}
-	return builder.MakePipeline(pipe)
+	return queryBuilder.MakePipeline(pipe)
 }
 
 func make_pipeline_new(builder *query.PipelineBuilder, script string) (*pipeline.SamplePipeline, error) {
-	return nil, fmt.Errorf("The new script parser is not yet implemented")
+	return nil, fmt.Errorf("The new script parser is not yet implemented") //TODO
 }
 
-func register_analyses(b *query.PipelineBuilder) {
+
+func register_analyses(b builder.PipelineBuilder) {
 
 	// Control flow
 	steps.RegisterNoop(b)
