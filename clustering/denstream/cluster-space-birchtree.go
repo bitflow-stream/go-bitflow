@@ -53,7 +53,6 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 	var closestDistance float64
 	var nearestNode *BirchTreeNode
 	curNode := s.root
-
 	if curNode.numChildren != 0 {
 		//do this until you reach a leaf
 		for !curNode.isLeaf() {
@@ -94,11 +93,13 @@ func (s *BirchTreeClusterSpace) Insert(cluster clustering.SphericalCluster) {
 	newChildNode := cluster.(*BirchTreeNode)
 	newChildNode.SetId(s.nextClusterId)
 	s.nextClusterId++
+
 	if !newChildNode.isLeaf() {
 		panic("Can only insert a leaf node without children")
 	}
+
 	nearestParentNode := s.root
-	if nearestParentNode.numChildren < _maxChildren {
+	if nearestParentNode.numChildren == 0 {
 		s.addChild(nearestParentNode, newChildNode)
 		s.addCFtoParentNode(nearestParentNode, newChildNode)
 	} else {
