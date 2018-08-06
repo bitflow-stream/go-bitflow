@@ -266,7 +266,8 @@ var _ ForkDistributor = new(MultiFileDistributor)
 type MultiFileDistributor struct {
 	pipeline.TagTemplate
 	PipelineCache
-	Config bitflow.FileSink // Configuration parameters in this field will be used for file outputs
+	Config             bitflow.FileSink // Configuration parameters in this field will be used for file outputs
+	ExtendSubpipelines func(fileName string, pipe *pipeline.SamplePipeline)
 }
 
 func (b *MultiFileDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) ([]Subpipeline, error) {
@@ -282,5 +283,8 @@ func (b *MultiFileDistributor) build(fileName string) ([]*pipeline.SamplePipelin
 	fileOut.Filename = fileName
 	fileOut.Marshaller = bitflow.EndpointDescription{Target: fileName, Type: bitflow.FileEndpoint}.DefaultOutputFormat().Marshaller()
 	pipe := (new(pipeline.SamplePipeline)).Add(&fileOut)
+	if extend := b.ExtendSubpipelines; extend != nil {
+		extend(fileName, pipe)
+	}
 	return []*pipeline.SamplePipeline{pipe}, nil
 }
