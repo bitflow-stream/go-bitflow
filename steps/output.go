@@ -18,15 +18,27 @@ func RegisterOutputFiles(b *query.PipelineBuilder) {
 		}
 		delete(params, "file")
 
+		var err error
+		parallelize := query.IntParam(params, "parallelize", 0, true, &err)
+		if err != nil {
+			return err
+		}
+		delete(params, "parallelize")
+
 		distributor, err := _make_multi_file_pipeline_builder(params)
-		distributor.Template = filename
 		if err == nil {
+			distributor.Template = filename
+			if parallelize > 0 {
+				distributor.ExtendSubpipelines = func(fileName string, pipe *pipeline.SamplePipeline) {
+					pipe.Add(&DecouplingProcessor{ChannelBuffer: parallelize})
+				}
+			}
 			p.Add(&fork.SampleFork{Distributor: distributor})
 		}
 		return err
 	}
 
-	b.RegisterAnalysisParamsErr("output_files", create, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values", nil, "parallelize")
+	b.RegisterAnalysisParamsErr("output_files", create, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values", nil)
 }
 
 func _make_multi_file_pipeline_builder(params map[string]string) (*fork.MultiFileDistributor, error) {
@@ -42,17 +54,5 @@ func _make_multi_file_pipeline_builder(params map[string]string) (*fork.MultiFil
 	if !ok {
 		return nil, fmt.Errorf("Error creating template file output, received wrong type: %T", output)
 	}
-
-	distributor := &fork.MultiFileDistributor{Config: *fileOutput}
-	parallelize := query.IntParam(params, "parallelize", 0, true, &err)
-	if err != nil {
-		return nil, err
-	}
-	if parallelize > 0 {
-		distributor.ExtendSubpipelines = func(fileName string, pipe *pipeline.SamplePipeline) {
-			pipe.Add(&DecouplingProcessor{ChannelBuffer: parallelize})
-		}
-	}
-
-	return distributor, nil
+	return &fork.MultiFileDistributor{Config: *fileOutput}, nil
 }
