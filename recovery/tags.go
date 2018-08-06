@@ -11,6 +11,8 @@ type RecoveryTags struct {
 	NodeNameTag      string
 	StateTag         string
 	NormalStateValue string
+
+	warned bool
 }
 
 func (t *RecoveryTags) ParseRecoveryTags(params map[string]string) {
@@ -21,7 +23,10 @@ func (t *RecoveryTags) ParseRecoveryTags(params map[string]string) {
 
 func (t *RecoveryTags) GetRecoveryTags(sample *bitflow.Sample) (name string, state string) {
 	if !sample.HasTag(t.NodeNameTag) || !sample.HasTag(t.StateTag) {
-		log.Warnf("Ignoring Sample without tag '%v' and/or '%v'", t.NodeNameTag, t.StateTag)
+		if !t.warned {
+			log.Warnf("Ignoring samples without tag '%v' and/or '%v'", t.NodeNameTag, t.StateTag)
+			t.warned = true
+		}
 	} else {
 		name = sample.Tag(t.NodeNameTag)
 		state = sample.Tag(t.StateTag)

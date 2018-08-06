@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"runtime/debug"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -77,7 +78,7 @@ func (m *DependencyModel) fillOrPanic(root map[string]interface{}) {
 			hv := m.getById(hvId)
 			hv.setLayer(HypervisorLayer)
 			for _, vmId := range obj["children"].([]interface{}) {
-				vmNode := m.getById(vmId.(string))
+				vmNode := m.getById(m.getJsonString(vmId))
 				vmNode.setLayer(VMLayer)
 				hv.addChild(vmNode)
 			}
@@ -87,7 +88,7 @@ func (m *DependencyModel) fillOrPanic(root map[string]interface{}) {
 			vm := m.getById(vmId)
 			vm.setLayer(VMLayer)
 			for _, serviceId := range obj["children"].([]interface{}) {
-				serviceNode := m.getById(serviceId.(string))
+				serviceNode := m.getById(m.getJsonString(serviceId))
 				serviceNode.setLayer(ServiceLayer)
 				vm.addChild(serviceNode)
 			}
@@ -104,10 +105,10 @@ func (m *DependencyModel) fillOrPanic(root map[string]interface{}) {
 			vars := obj["vars"].(map[string]interface{})
 			strVars := make(map[string]string, len(vars))
 			for name, val := range vars {
-				strVars[name] = val.(string)
+				strVars[name] = m.getJsonString(val)
 			}
 			node := m.getById(name)
-			node.Name = hosts[0].(string)
+			node.Name = m.getJsonString(hosts[0])
 			node.Vars = strVars
 		}
 	}
@@ -139,7 +140,7 @@ func (m *DependencyModel) resolveGroup(name string, children []interface{}, root
 
 	var res []*DependencyNode
 	for _, child := range children {
-		id := child.(string)
+		id := m.getJsonString(child)
 		if children, ok := root[id].(map[string]interface{})["children"]; ok {
 			// Recursively points  to another group
 			subGroup := m.resolveGroup(id, children.([]interface{}), root)
@@ -151,6 +152,25 @@ func (m *DependencyModel) resolveGroup(name string, children []interface{}, root
 	m.Groups[name] = res
 	for _, node := range res {
 		node.Groups = append(node.Groups, name)
+	}
+	return res
+}
+
+func (m *DependencyModel) getJsonString(obj interface{}) string {
+	res, ok := obj.(string)
+	if !ok {
+		// Transparently parse arrays with 1 element
+		array, ok := obj.([]interface{})
+		if ok && len(array) == 1 {
+			res, ok = array[0].(string)
+			if ok {
+				return res
+			}
+		}
+
+		msg := fmt.Sprintf("JSON object was %T, not string: %v", obj, obj)
+		log.Errorf(msg + "\n" + string(debug.Stack()))
+		panic(msg)
 	}
 	return res
 }

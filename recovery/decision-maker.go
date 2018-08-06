@@ -37,7 +37,8 @@ type NodeState struct {
 
 type DecisionMaker struct {
 	bitflow.NoopProcessor
-	state map[string]*NodeState
+	state              map[string]*NodeState
+	warnedUnknownNodes map[string]bool
 
 	Graph     *SimilarityGraph
 	Execution ExecutionEngine
@@ -103,6 +104,7 @@ func (d *DecisionMaker) String() string {
 
 func (d *DecisionMaker) Start(wg *sync.WaitGroup) golib.StopChan {
 	d.state = make(map[string]*NodeState)
+	d.warnedUnknownNodes = make(map[string]bool)
 	for nodeName, node := range d.Graph.Nodes {
 		d.state[nodeName] = &NodeState{
 			SimilarityNode: node,
@@ -119,7 +121,10 @@ func (d *DecisionMaker) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 	if node != "" && state != "" {
 		nodeState, ok := d.state[node]
 		if !ok {
-			log.Warnf("Ignoring data for unknown node with %v=%v and %v=%v", d.NodeNameTag, node, d.StateTag, state)
+			if !d.warnedUnknownNodes[node] {
+				log.Warnf("Ignoring data for unknown node with %v=%v and %v=%v", d.NodeNameTag, node, d.StateTag, state)
+				d.warnedUnknownNodes[node] = true
+			}
 		} else {
 			nodeState.LastUpdate = now
 			nodeState.StateString = state

@@ -195,4 +195,5 @@ func register_analyses(b *query.PipelineBuilder) {
 	steps.RegisterSphere(b)
 	steps.RegisterAppendTimeDifference(b)
 	recovery.RegisterRecoveryEngine(b)
+	recovery.RegisterRecoveryEvaluation(b)
 }
