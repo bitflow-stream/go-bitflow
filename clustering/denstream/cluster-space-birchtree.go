@@ -8,7 +8,7 @@ import (
 
 var _ ClusterSpace = new(BirchTreeClusterSpace)
 
-const _maxChildren = 3
+const _maxChildren = 7
 
 type BirchTreeClusterSpace struct {
 	root          *BirchTreeNode
