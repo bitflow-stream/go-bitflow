@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	bitflow "github.com/antongulenko/go-bitflow"
 	pipeline "github.com/antongulenko/go-bitflow-pipeline"
@@ -15,8 +14,8 @@ func RegisterGraphiteOutput(b *query.PipelineBuilder) {
 	factory := &SimpleTextMarshallerFactory{
 		Description: "graphite",
 		NameFixer:   strings.NewReplacer("/", ".", " ", "_", "\t", "_", "\n", "_"),
-		WriteValue: func(name string, val float64, ts time.Time, writer io.Writer) error {
-			_, err := fmt.Fprintf(writer, "%v %v %v\n", name, val, ts.Unix())
+		WriteValue: func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error {
+			_, err := fmt.Fprintf(writer, "%v %v %v\n", name, val, sample.Time.Unix())
 			return err
 		},
 	}
@@ -27,9 +26,20 @@ func RegisterOpentsdbOutput(b *query.PipelineBuilder) {
 	factory := &SimpleTextMarshallerFactory{
 		Description: "opentsdb",
 		NameFixer:   strings.NewReplacer("/", ".", " ", "_", "\t", "_", "\n", "_"),
-		WriteValue: func(name string, val float64, ts time.Time, writer io.Writer) error {
-			// TODO tags could be appended at the end of each line as key=value key2=value2
-			_, err := fmt.Fprintf(writer, "put %v %v %v\n", name, ts.Unix(), val)
+		WriteValue: func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error {
+			_, err := fmt.Fprintf(writer, "put %v %v %v", name, sample.Time.Unix(), val)
+			for key, val := range sample.TagMap() {
+				_, err = fmt.Fprintf(writer, " %s=%s", key, val)
+				if err != nil {
+					break
+				}
+			}
+			if err == nil {
+				_, err = fmt.Fprintf(writer, " bitflow=true") // Add an artificial tag, because at least one tag is required
+			}
+			if err == nil {
+				_, err = writer.Write([]byte{'\n'})
+			}
 			return err
 		},
 	}
@@ -41,7 +51,7 @@ var _ bitflow.Marshaller = new(SimpleTextMarshaller)
 type SimpleTextMarshallerFactory struct {
 	Description string
 	NameFixer   *strings.Replacer
-	WriteValue  func(name string, val float64, ts time.Time, writer io.Writer) error
+	WriteValue  func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error
 }
 
 func (f *SimpleTextMarshallerFactory) createTcpOutput(p *pipeline.SamplePipeline, params map[string]string) error {
@@ -87,7 +97,7 @@ type SimpleTextMarshaller struct {
 	Description  string
 	MetricPrefix string
 	NameFixer    *strings.Replacer
-	WriteValue   func(name string, val float64, ts time.Time, writer io.Writer) error
+	WriteValue   func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error
 }
 
 func (o *SimpleTextMarshaller) String() string {
@@ -107,7 +117,7 @@ func (o *SimpleTextMarshaller) WriteSample(sample *bitflow.Sample, header *bitfl
 
 	for i, value := range sample.Values {
 		name := o.NameFixer.Replace(prefix + header.Fields[i])
-		if err := o.WriteValue(name, float64(value), sample.Time, writer); err != nil {
+		if err := o.WriteValue(name, float64(value), sample, writer); err != nil {
 			return err
 		}
 	}
