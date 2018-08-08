@@ -215,7 +215,7 @@ func (sink *TCPListenerSink) handleConnection(wg *sync.WaitGroup, conn *net.TCPC
 	if !sink.countConnectionAccepted(conn) {
 		return
 	}
-	writeConn := sink.OpenWriteConn(conn)
+	writeConn := sink.OpenWriteConn(wg, conn)
 	wg.Add(1)
 	go sink.sendSamples(wg, writeConn)
 }

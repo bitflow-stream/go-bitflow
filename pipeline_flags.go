@@ -89,6 +89,7 @@ type EndpointFactory struct {
 	FlagTcpConnectionLimit    uint
 	FlagInputTcpAcceptLimit   uint
 	FlagTcpSourceDropErrors   bool
+	FlagTcpLogReceivedData    bool
 
 	// Parallel marshalling/unmarshalling flags
 
@@ -189,6 +190,7 @@ func (p *EndpointFactory) ParseParameters(params map[string]string) (err error) 
 	boolParam(&p.FlagOutputFilesClean, "files-clean")
 	intParam(&p.FlagIoBuffer, "files-buf")
 	uintParam(&p.FlagTcpConnectionLimit, "tcp-limit")
+	boolParam(&p.FlagTcpLogReceivedData, "tcp-log-received")
 	intParam(&p.FlagParallelHandler.ParallelParsers, "par")
 	intParam(&p.FlagParallelHandler.BufferedSamples, "buf")
 	boolParam(&p.FlagFilesKeepAlive, "files-keep-alive")
@@ -249,6 +251,7 @@ func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
 	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", p.FlagOutputTcpListenBuffer, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
 	f.BoolVar(&p.FlagFilesAppend, "files-append", p.FlagFilesAppend, "For file output, do no create new files by incrementing the suffix and append to existing files.")
 	f.DurationVar(&p.FlagFileVanishedCheck, "files-check-output", p.FlagFileVanishedCheck, "For file output, check if the output file vanished or changed in regular intervals. Reopen the file in that case.")
+	f.BoolVar(&p.FlagTcpLogReceivedData, "tcp-log-received", p.FlagTcpLogReceivedData, "For all TCP output connections, log received data, which is usually not expected.")
 	for _, factoryFunc := range p.CustomOutputFlags {
 		factoryFunc(f)
 	}
@@ -387,6 +390,9 @@ func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 			DialTimeout: tcp_dial_timeout,
 		}
 		sink.TcpConnLimit = p.FlagTcpConnectionLimit
+		if p.FlagTcpLogReceivedData {
+			sink.LogReceivedTraffic = log.ErrorLevel
+		}
 		marshallingSink = &sink.AbstractMarshallingSampleOutput
 		resultSink = sink
 	case TcpListenEndpoint:
@@ -395,6 +401,9 @@ func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 			BufferedSamples: p.FlagOutputTcpListenBuffer,
 		}
 		sink.TcpConnLimit = p.FlagTcpConnectionLimit
+		if p.FlagTcpLogReceivedData {
+			sink.LogReceivedTraffic = log.ErrorLevel
+		}
 		marshallingSink = &sink.AbstractMarshallingSampleOutput
 		resultSink = sink
 	default:

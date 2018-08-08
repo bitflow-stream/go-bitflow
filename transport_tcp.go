@@ -1,6 +1,7 @@
 package bitflow
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"os"
@@ -66,6 +67,10 @@ func (counter *TCPConnCounter) countConnectionAccepted(conn *net.TCPConn) bool {
 type AbstractTcpSink struct {
 	AbstractMarshallingSampleOutput
 	TCPConnCounter
+
+	// LogReceivedTraffic enables logging received TCP traffic, which is usually not expected.
+	// Only the values log.ErrorLevel, log.WarnLevel, log.InfoLevel, log.DebugLevel enable logging.
+	LogReceivedTraffic log.Level
 }
 
 // TcpWriteConn is a helper type for TCP-base SampleSink implementations.
@@ -81,11 +86,17 @@ type TcpWriteConn struct {
 
 // OpenWriteConn wraps a net.TCPConn in a new TcpWriteConn using the parameters defined in
 // the receiving AbstractTcpSink.
-func (sink *AbstractTcpSink) OpenWriteConn(conn *net.TCPConn) *TcpWriteConn {
-	return &TcpWriteConn{
+func (sink *AbstractTcpSink) OpenWriteConn(wg *sync.WaitGroup, conn *net.TCPConn) *TcpWriteConn {
+	res := &TcpWriteConn{
 		stream: sink.Writer.Open(conn, sink.Marshaller),
 		log:    log.WithField("remote", conn.RemoteAddr()),
 	}
+	switch sink.LogReceivedTraffic {
+	case log.ErrorLevel, log.WarnLevel, log.InfoLevel, log.DebugLevel:
+		wg.Add(1)
+		go res.logReceivedTraffic(wg, conn, sink.LogReceivedTraffic)
+	}
+	return res
 }
 
 // Sample writes the given sample into the receiving TcpWriteConn and closes
@@ -117,6 +128,36 @@ func (conn *TcpWriteConn) doClose(cause error) {
 		}
 		conn.stream = nil // Make IsRunning() return false
 	})
+}
+
+func (conn *TcpWriteConn) logReceivedTraffic(wg *sync.WaitGroup, tcpConn *net.TCPConn, level log.Level) {
+	defer wg.Done()
+
+	// TODO make the receive buffer configurable
+	buf := bufio.NewReader(tcpConn)
+	for {
+		lineBytes, _, err := buf.ReadLine()
+		line := string(lineBytes)
+		if err != nil {
+			// This most likely means the connection was closed
+			conn.log.Debugf("Error receiving data:", err)
+			if !conn.IsRunning() {
+				return
+			}
+		} else {
+			msg := "Received data on output connection:"
+			switch level {
+			case log.ErrorLevel:
+				conn.log.Errorln(msg, line)
+			case log.WarnLevel:
+				conn.log.Warnln(msg, line)
+			case log.InfoLevel:
+				conn.log.Infoln(msg, line)
+			case log.DebugLevel:
+				conn.log.Debugln(msg, line)
+			}
+		}
+	}
 }
 
 // IsRunning returns true, if the receiving TcpWriteConn is connected to a remote TCP endpoint.
@@ -159,6 +200,7 @@ type TCPSink struct {
 
 	conn    *TcpWriteConn
 	stopped golib.StopChan
+	wg      *sync.WaitGroup
 }
 
 // String implements the SampleSink interface.
@@ -172,6 +214,7 @@ func (sink *TCPSink) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 	sink.connCounterDescription = sink
 	log.WithField("format", sink.Marshaller).Println("Sending data to", sink.Endpoint)
 	sink.stopped = golib.NewStopChan()
+	sink.wg = wg
 	return
 }
 
@@ -240,7 +283,7 @@ func (sink *TCPSink) assertConnection() error {
 		if err != nil {
 			return err
 		}
-		sink.conn = sink.OpenWriteConn(conn)
+		sink.conn = sink.OpenWriteConn(sink.wg, conn)
 	}
 	return nil
 }
