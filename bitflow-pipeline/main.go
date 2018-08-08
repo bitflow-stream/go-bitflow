@@ -129,6 +129,7 @@ func register_analyses(b *query.PipelineBuilder) {
 	// Data output
 	steps.RegisterOutputFiles(b)
 	steps.RegisterGraphiteOutput(b)
+	steps.RegisterOpentsdbOutput(b)
 
 	// Logging, output metadata
 	steps.RegisterStoreStats(b)
