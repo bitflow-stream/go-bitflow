@@ -42,6 +42,26 @@ func StrParam(params map[string]string, name string, defaultVal string, hasDefau
 	}
 }
 
+func BoolParam(params map[string]string, name string, defaultVal bool, hasDefault bool, err *error) bool {
+	if *err != nil {
+		return false
+	}
+	strVal, ok := params[name]
+	if ok {
+		parsed, parseErr := strconv.ParseBool(strVal)
+		if parseErr != nil {
+			*err = ParameterError(name, parseErr)
+			return false
+		}
+		return parsed
+	} else if hasDefault {
+		return defaultVal
+	} else {
+		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
+		return false
+	}
+}
+
 func DurationParam(params map[string]string, name string, defaultVal time.Duration, hasDefault bool, err *error) time.Duration {
 	if *err != nil {
 		return 0
