@@ -131,6 +131,17 @@ func (sample *Sample) DeleteTag(name string) {
 	})
 }
 
+// TagMap returns a copy of the tags stored in the receiving sample.
+func (sample *Sample) TagMap() (res map[string]string) {
+	sample.lockRead(func() {
+		res = make(map[string]string, len(sample.tags))
+		for key, val := range sample.tags {
+			res[key] = val
+		}
+	})
+	return res
+}
+
 // Tag returns the value of the given tag inside the receiving Sample.
 // If the tag is not defined in the sample, an empty string is returned.
 // HasTag can be used to find out if a tag is defined or not.
