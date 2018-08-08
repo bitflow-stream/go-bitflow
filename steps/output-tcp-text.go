@@ -28,12 +28,17 @@ func RegisterOpentsdbOutput(b *query.PipelineBuilder) {
 		NameFixer:   strings.NewReplacer("/", ".", " ", "_", "\t", "_", "\n", "_"),
 		WriteValue: func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error {
 			_, err := fmt.Fprintf(writer, "put %v %v %v", name, sample.Time.Unix(), val)
-			for key, val := range sample.TagMap() {
-				_, err = fmt.Fprintf(writer, " %s=%s", key, val)
-				if err != nil {
-					break
+
+			// TODO fix tags
+			/*
+				for key, val := range sample.TagMap() {
+					_, err = fmt.Fprintf(writer, " %s=%s", key, val)
+					if err != nil {
+						break
+					}
 				}
-			}
+			*/
+
 			if err == nil {
 				_, err = fmt.Fprintf(writer, " bitflow=true") // Add an artificial tag, because at least one tag is required
 			}
