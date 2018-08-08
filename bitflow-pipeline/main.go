@@ -118,6 +118,7 @@ func register_analyses(b *query.PipelineBuilder) {
 	steps.RegisterMergeHeaders(b)
 	steps.RegisterGenericBatch(b)
 	steps.RegisterDecouple(b)
+	steps.RegisterDropErrorsStep(b)
 	steps.RegisterResendStep(b)
 	steps.RegisterPipelineRateSynchronizer(b)
 	steps.RegisterSubpipelineStreamMerger(b)
