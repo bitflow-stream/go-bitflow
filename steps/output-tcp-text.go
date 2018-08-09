@@ -67,14 +67,14 @@ func (f *SimpleTextMarshallerFactory) createTcpOutput(p *pipeline.SamplePipeline
 	delete(params, "prefix")
 
 	sink, err := _make_tcp_output(params)
-	sink.Endpoint = target
-	sink.SetMarshaller(&SimpleTextMarshaller{
-		MetricPrefix: prefix,
-		Description:  f.Description,
-		NameFixer:    f.NameFixer,
-		WriteValue:   f.WriteValue,
-	})
 	if err == nil {
+		sink.Endpoint = target
+		sink.SetMarshaller(&SimpleTextMarshaller{
+			MetricPrefix: prefix,
+			Description:  f.Description,
+			NameFixer:    f.NameFixer,
+			WriteValue:   f.WriteValue,
+		})
 		p.Add(sink)
 	}
 	return err
