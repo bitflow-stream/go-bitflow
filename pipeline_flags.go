@@ -151,11 +151,6 @@ func RegisterGolibFlags() {
 }
 
 func (p *EndpointFactory) ParseParameters(params map[string]string) (err error) {
-	copy := make(map[string]string, len(params))
-	for key, val := range params {
-		copy[key] = val
-	}
-
 	get := func(name string) string {
 		if err != nil {
 			return ""
@@ -201,10 +196,10 @@ func (p *EndpointFactory) ParseParameters(params map[string]string) (err error) 
 	boolParam(&p.FlagFilesAppend, "files-append")
 	durationParam(&p.FlagFileVanishedCheck, "files-check-output")
 
-	if len(copy) > 0 {
-		return fmt.Errorf("Unexpected parameters for EndpointFactory: %v", copy)
+	if err == nil && len(params) > 0 {
+		err = fmt.Errorf("Unexpected parameters for EndpointFactory: %v", params)
 	}
-	return nil
+	return
 }
 
 // RegisterConfigFlags registers all flags to the global CommandLine object.
