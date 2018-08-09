@@ -54,6 +54,7 @@ func (p Pipeline) Transform(verify PipelineVerification) (Pipeline, error) {
 	return res, err
 }
 
+//noinspection GoAssignmentToReceiver
 func (p Pipeline) transform(verify PipelineVerification, isInput bool) (Pipeline, error) {
 	if len(p) == 0 {
 		return nil, ParserError{
