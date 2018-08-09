@@ -114,9 +114,9 @@ func (m BinaryMarshaller) WriteSample(sample *Sample, header *Header, withTags b
 // to decide if the stream contains a header or a sample. In case of a header, Read() continues
 // reading until an empty line and parse the data to a header instance. In case of a sample,
 // the size is derived from the previousHeader parameter.
-func (b BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *UnmarshalledHeader) (*UnmarshalledHeader, []byte, error) {
+func (m BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *UnmarshalledHeader) (*UnmarshalledHeader, []byte, error) {
 	if previousHeader == nil {
-		return b.readHeader(reader)
+		return m.readHeader(reader)
 	}
 
 	start, err := reader.Peek(len(binary_sample_start))
@@ -131,10 +131,10 @@ func (b BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *Unmarshalle
 
 	switch {
 	case bytes.HasPrefix([]byte(binary_time_col), start):
-		return b.readHeader(reader)
+		return m.readHeader(reader)
 	case bytes.Equal(start, []byte(binary_sample_start)):
 		reader.Discard(len(start)) // No error
-		data, err := b.readSampleData(previousHeader, reader)
+		data, err := m.readSampleData(previousHeader, reader)
 		return nil, data, err
 	default:
 		return nil, nil, fmt.Errorf("Bitflow binary protocol error, unexpected: %s. Expected %s or %s.",

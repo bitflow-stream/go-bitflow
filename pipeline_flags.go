@@ -150,7 +150,7 @@ func RegisterGolibFlags() {
 	golib.RegisterFlags(golib.FlagsAll)
 }
 
-func (p *EndpointFactory) ParseParameters(params map[string]string) (err error) {
+func (f *EndpointFactory) ParseParameters(params map[string]string) (err error) {
 	get := func(name string) string {
 		if err != nil {
 			return ""
@@ -182,19 +182,19 @@ func (p *EndpointFactory) ParseParameters(params map[string]string) (err error) 
 		}
 	}
 
-	boolParam(&p.FlagOutputFilesClean, "files-clean")
-	intParam(&p.FlagIoBuffer, "files-buf")
-	uintParam(&p.FlagTcpConnectionLimit, "tcp-limit")
-	boolParam(&p.FlagTcpLogReceivedData, "tcp-log-received")
-	intParam(&p.FlagParallelHandler.ParallelParsers, "par")
-	intParam(&p.FlagParallelHandler.BufferedSamples, "buf")
-	boolParam(&p.FlagFilesKeepAlive, "files-keep-alive")
-	boolParam(&p.FlagInputFilesRobust, "files-robust")
-	uintParam(&p.FlagInputTcpAcceptLimit, "listen-limit")
-	boolParam(&p.FlagTcpSourceDropErrors, "tcp-drop-err")
-	uintParam(&p.FlagOutputTcpListenBuffer, "listen-buffer")
-	boolParam(&p.FlagFilesAppend, "files-append")
-	durationParam(&p.FlagFileVanishedCheck, "files-check-output")
+	boolParam(&f.FlagOutputFilesClean, "files-clean")
+	intParam(&f.FlagIoBuffer, "files-buf")
+	uintParam(&f.FlagTcpConnectionLimit, "tcp-limit")
+	boolParam(&f.FlagTcpLogReceivedData, "tcp-log-received")
+	intParam(&f.FlagParallelHandler.ParallelParsers, "par")
+	intParam(&f.FlagParallelHandler.BufferedSamples, "buf")
+	boolParam(&f.FlagFilesKeepAlive, "files-keep-alive")
+	boolParam(&f.FlagInputFilesRobust, "files-robust")
+	uintParam(&f.FlagInputTcpAcceptLimit, "listen-limit")
+	boolParam(&f.FlagTcpSourceDropErrors, "tcp-drop-err")
+	uintParam(&f.FlagOutputTcpListenBuffer, "listen-buffer")
+	boolParam(&f.FlagFilesAppend, "files-append")
+	durationParam(&f.FlagFileVanishedCheck, "files-check-output")
 
 	if err == nil && len(params) > 0 {
 		err = fmt.Errorf("Unexpected parameters for EndpointFactory: %v", params)
@@ -203,66 +203,66 @@ func (p *EndpointFactory) ParseParameters(params map[string]string) (err error) 
 }
 
 // RegisterConfigFlags registers all flags to the global CommandLine object.
-func (p *EndpointFactory) RegisterFlags() {
-	p.RegisterGeneralFlagsTo(flag.CommandLine)
-	p.RegisterInputFlagsTo(flag.CommandLine)
-	p.RegisterOutputFlagsTo(flag.CommandLine)
+func (f *EndpointFactory) RegisterFlags() {
+	f.RegisterGeneralFlagsTo(flag.CommandLine)
+	f.RegisterInputFlagsTo(flag.CommandLine)
+	f.RegisterOutputFlagsTo(flag.CommandLine)
 }
 
 // RegisterGeneralFlagsTo registers flags that configure different aspects of both
 // data input and data output. These flags affect to both performance and functionality of
 // TCP, file and std I/O.
-func (p *EndpointFactory) RegisterGeneralFlagsTo(f *flag.FlagSet) {
+func (f *EndpointFactory) RegisterGeneralFlagsTo(fs *flag.FlagSet) {
 	// Files
-	f.BoolVar(&p.FlagOutputFilesClean, "files-clean", p.FlagOutputFilesClean, "Delete all potential output files before writing.")
-	f.IntVar(&p.FlagIoBuffer, "files-buf", p.FlagIoBuffer, "Size (byte) of buffered IO when reading/writing files.")
+	fs.BoolVar(&f.FlagOutputFilesClean, "files-clean", f.FlagOutputFilesClean, "Delete all potential output files before writing.")
+	fs.IntVar(&f.FlagIoBuffer, "files-buf", f.FlagIoBuffer, "Size (byte) of buffered IO when reading/writing files.")
 
 	// TCP
-	f.UintVar(&p.FlagTcpConnectionLimit, "tcp-limit", p.FlagTcpConnectionLimit, "Limit number of TCP connections to accept/establish. Exit afterwards")
+	fs.UintVar(&f.FlagTcpConnectionLimit, "tcp-limit", f.FlagTcpConnectionLimit, "Limit number of TCP connections to accept/establish. Exit afterwards")
 
 	// Parallel marshalling/unmarshalling
-	f.IntVar(&p.FlagParallelHandler.ParallelParsers, "par", p.FlagParallelHandler.ParallelParsers, "Parallel goroutines used for (un)marshalling samples")
-	f.IntVar(&p.FlagParallelHandler.BufferedSamples, "buf", p.FlagParallelHandler.BufferedSamples, "Number of samples buffered when (un)marshalling.")
+	fs.IntVar(&f.FlagParallelHandler.ParallelParsers, "par", f.FlagParallelHandler.ParallelParsers, "Parallel goroutines used for (un)marshalling samples")
+	fs.IntVar(&f.FlagParallelHandler.BufferedSamples, "buf", f.FlagParallelHandler.BufferedSamples, "Number of samples buffered when (un)marshalling.")
 
 	// Custom
-	for _, factoryFunc := range p.CustomGeneralFlags {
-		factoryFunc(f)
+	for _, factoryFunc := range f.CustomGeneralFlags {
+		factoryFunc(fs)
 	}
 }
 
 // RegisterInputFlagsTo registers flags that configure aspects of data input.
-func (p *EndpointFactory) RegisterInputFlagsTo(f *flag.FlagSet) {
-	f.BoolVar(&p.FlagFilesKeepAlive, "files-keep-alive", p.FlagFilesKeepAlive, "Do not shut down after all files have been read. Useful in combination with -listen-buffer.")
-	f.BoolVar(&p.FlagInputFilesRobust, "files-robust", p.FlagInputFilesRobust, "When encountering errors while reading files, print warnings instead of failing.")
-	f.UintVar(&p.FlagInputTcpAcceptLimit, "listen-limit", p.FlagInputTcpAcceptLimit, "Limit number of simultaneous TCP connections accepted for incoming data.")
-	f.BoolVar(&p.FlagTcpSourceDropErrors, "tcp-drop-err", p.FlagTcpSourceDropErrors, "Don't print errors when establishing active TCP input connection fails")
-	for _, factoryFunc := range p.CustomInputFlags {
-		factoryFunc(f)
+func (f *EndpointFactory) RegisterInputFlagsTo(fs *flag.FlagSet) {
+	fs.BoolVar(&f.FlagFilesKeepAlive, "files-keep-alive", f.FlagFilesKeepAlive, "Do not shut down after all files have been read. Useful in combination with -listen-buffer.")
+	fs.BoolVar(&f.FlagInputFilesRobust, "files-robust", f.FlagInputFilesRobust, "When encountering errors while reading files, print warnings instead of failing.")
+	fs.UintVar(&f.FlagInputTcpAcceptLimit, "listen-limit", f.FlagInputTcpAcceptLimit, "Limit number of simultaneous TCP connections accepted for incoming data.")
+	fs.BoolVar(&f.FlagTcpSourceDropErrors, "tcp-drop-err", f.FlagTcpSourceDropErrors, "Don't print errors when establishing active TCP input connection fails")
+	for _, factoryFunc := range f.CustomInputFlags {
+		factoryFunc(fs)
 	}
 }
 
 // RegisterOutputConfigFlagsTo registers flags that configure data outputs.
-func (p *EndpointFactory) RegisterOutputFlagsTo(f *flag.FlagSet) {
-	f.UintVar(&p.FlagOutputTcpListenBuffer, "listen-buffer", p.FlagOutputTcpListenBuffer, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
-	f.BoolVar(&p.FlagFilesAppend, "files-append", p.FlagFilesAppend, "For file output, do no create new files by incrementing the suffix and append to existing files.")
-	f.DurationVar(&p.FlagFileVanishedCheck, "files-check-output", p.FlagFileVanishedCheck, "For file output, check if the output file vanished or changed in regular intervals. Reopen the file in that case.")
-	f.BoolVar(&p.FlagTcpLogReceivedData, "tcp-log-received", p.FlagTcpLogReceivedData, "For all TCP output connections, log received data, which is usually not expected.")
-	for _, factoryFunc := range p.CustomOutputFlags {
-		factoryFunc(f)
+func (f *EndpointFactory) RegisterOutputFlagsTo(fs *flag.FlagSet) {
+	fs.UintVar(&f.FlagOutputTcpListenBuffer, "listen-buffer", f.FlagOutputTcpListenBuffer, "When listening for outgoing connections, store a number of samples in a ring buffer that will be delivered first to all established connections.")
+	fs.BoolVar(&f.FlagFilesAppend, "files-append", f.FlagFilesAppend, "For file output, do no create new files by incrementing the suffix and append to existing files.")
+	fs.DurationVar(&f.FlagFileVanishedCheck, "files-check-output", f.FlagFileVanishedCheck, "For file output, check if the output file vanished or changed in regular intervals. Reopen the file in that case.")
+	fs.BoolVar(&f.FlagTcpLogReceivedData, "tcp-log-received", f.FlagTcpLogReceivedData, "For all TCP output connections, log received data, which is usually not expected.")
+	for _, factoryFunc := range f.CustomOutputFlags {
+		factoryFunc(fs)
 	}
 }
 
 // Writer returns an instance of SampleReader, configured by the values stored in the EndpointFactory.
-func (p *EndpointFactory) Reader(um Unmarshaller) SampleReader {
+func (f *EndpointFactory) Reader(um Unmarshaller) SampleReader {
 	return SampleReader{
-		ParallelSampleHandler: p.FlagParallelHandler,
+		ParallelSampleHandler: f.FlagParallelHandler,
 		Unmarshaller:          um,
 	}
 }
 
 // CreateInput creates a SampleSource object based on the given input endpoint descriptions
 // and the configuration flags in the EndpointFactory.
-func (p *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
+func (f *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 	var result SampleSource
 	inputType := UndefinedEndpoint
 	for _, input := range inputs {
@@ -274,7 +274,7 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 			return nil, fmt.Errorf("Format cannot be specified for data input: %v", input)
 		}
 		if result == nil {
-			reader := p.Reader(endpoint.Unmarshaller())
+			reader := f.Reader(endpoint.Unmarshaller())
 			inputType = endpoint.Type
 			switch endpoint.Type {
 			case StdEndpoint:
@@ -284,30 +284,30 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 			case TcpEndpoint:
 				source := &TCPSource{
 					RemoteAddrs:   []string{endpoint.Target},
-					PrintErrors:   !p.FlagTcpSourceDropErrors,
+					PrintErrors:   !f.FlagTcpSourceDropErrors,
 					RetryInterval: tcp_download_retry_interval,
 					DialTimeout:   tcp_dial_timeout,
 				}
-				source.TcpConnLimit = p.FlagTcpConnectionLimit
+				source.TcpConnLimit = f.FlagTcpConnectionLimit
 				source.Reader = reader
 				result = source
 			case TcpListenEndpoint:
 				source := NewTcpListenerSource(endpoint.Target)
-				source.SimultaneousConnections = p.FlagInputTcpAcceptLimit
-				source.TcpConnLimit = p.FlagTcpConnectionLimit
+				source.SimultaneousConnections = f.FlagInputTcpAcceptLimit
+				source.TcpConnLimit = f.FlagTcpConnectionLimit
 				source.Reader = reader
 				result = source
 			case FileEndpoint:
 				source := &FileSource{
 					FileNames: []string{endpoint.Target},
-					IoBuffer:  p.FlagIoBuffer,
-					Robust:    p.FlagInputFilesRobust,
-					KeepAlive: p.FlagFilesKeepAlive,
+					IoBuffer:  f.FlagIoBuffer,
+					Robust:    f.FlagInputFilesRobust,
+					KeepAlive: f.FlagFilesKeepAlive,
 				}
 				source.Reader = reader
 				result = source
 			default:
-				if factory, ok := p.CustomDataSources[endpoint.Type]; ok && endpoint.IsCustomType {
+				if factory, ok := f.CustomDataSources[endpoint.Type]; ok && endpoint.IsCustomType {
 					var factoryErr error
 					result, factoryErr = factory(endpoint.Target)
 					if factoryErr != nil {
@@ -344,13 +344,13 @@ func (p *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 }
 
 // Writer returns an instance of SampleWriter, configured by the values stored in the EndpointFactory.
-func (p *EndpointFactory) Writer() SampleWriter {
-	return SampleWriter{p.FlagParallelHandler}
+func (f *EndpointFactory) Writer() SampleWriter {
+	return SampleWriter{f.FlagParallelHandler}
 }
 
 // CreateInput creates a SampleSink object based on the given output endpoint description
 // and the configuration flags in the EndpointFactory.
-func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
+func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 	var resultSink SampleProcessor
 	endpoint, err := ParseEndpointDescription(output, true)
 	if err != nil {
@@ -372,10 +372,10 @@ func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 	case FileEndpoint:
 		sink := &FileSink{
 			Filename:          endpoint.Target,
-			IoBuffer:          p.FlagIoBuffer,
-			CleanFiles:        p.FlagOutputFilesClean,
-			Append:            p.FlagFilesAppend,
-			VanishedFileCheck: p.FlagFileVanishedCheck,
+			IoBuffer:          f.FlagIoBuffer,
+			CleanFiles:        f.FlagOutputFilesClean,
+			Append:            f.FlagFilesAppend,
+			VanishedFileCheck: f.FlagFileVanishedCheck,
 		}
 		marshallingSink = &sink.AbstractMarshallingSampleOutput
 		resultSink = sink
@@ -384,8 +384,8 @@ func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 			Endpoint:    endpoint.Target,
 			DialTimeout: tcp_dial_timeout,
 		}
-		sink.TcpConnLimit = p.FlagTcpConnectionLimit
-		if p.FlagTcpLogReceivedData {
+		sink.TcpConnLimit = f.FlagTcpConnectionLimit
+		if f.FlagTcpLogReceivedData {
 			sink.LogReceivedTraffic = log.ErrorLevel
 		}
 		marshallingSink = &sink.AbstractMarshallingSampleOutput
@@ -393,16 +393,16 @@ func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 	case TcpListenEndpoint:
 		sink := &TCPListenerSink{
 			Endpoint:        endpoint.Target,
-			BufferedSamples: p.FlagOutputTcpListenBuffer,
+			BufferedSamples: f.FlagOutputTcpListenBuffer,
 		}
-		sink.TcpConnLimit = p.FlagTcpConnectionLimit
-		if p.FlagTcpLogReceivedData {
+		sink.TcpConnLimit = f.FlagTcpConnectionLimit
+		if f.FlagTcpLogReceivedData {
 			sink.LogReceivedTraffic = log.ErrorLevel
 		}
 		marshallingSink = &sink.AbstractMarshallingSampleOutput
 		resultSink = sink
 	default:
-		if factory, ok := p.CustomDataSinks[endpoint.Type]; ok && endpoint.IsCustomType {
+		if factory, ok := f.CustomDataSinks[endpoint.Type]; ok && endpoint.IsCustomType {
 			var factoryErr error
 			resultSink, factoryErr = factory(endpoint.Target)
 			if factoryErr != nil {
@@ -414,7 +414,7 @@ func (p *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 	}
 	if marshallingSink != nil {
 		marshallingSink.SetMarshaller(marshaller)
-		marshallingSink.Writer = p.Writer()
+		marshallingSink.Writer = f.Writer()
 	}
 	return resultSink, nil
 }

@@ -319,17 +319,17 @@ type TCPSource struct {
 }
 
 // String implements the SampleSource interface.
-func (sink *TCPSource) String() string {
-	return "TCP download (" + sink.SourceString() + ")"
+func (source *TCPSource) String() string {
+	return "TCP download (" + source.SourceString() + ")"
 }
 
 // SourceString returns a string representation of the TCP endpoints the TCPSource
 // will download data from.
-func (sink *TCPSource) SourceString() string {
-	if len(sink.RemoteAddrs) == 1 {
-		return sink.RemoteAddrs[0]
+func (source *TCPSource) SourceString() string {
+	if len(source.RemoteAddrs) == 1 {
+		return source.RemoteAddrs[0]
 	} else {
-		return strconv.Itoa(len(sink.RemoteAddrs)) + " sources"
+		return strconv.Itoa(len(source.RemoteAddrs)) + " sources"
 	}
 }
 

@@ -177,11 +177,11 @@ func (stream *SampleInputStream) closeUnderlyingReader() {
 
 // Format returns a string description of the unmarshalling format used by the receiving
 // SampleReader. It returns "auto-detected", if no Unmarshaller is configured.
-func (reader *SampleReader) Format() string {
-	if reader.Unmarshaller == nil {
+func (r *SampleReader) Format() string {
+	if r.Unmarshaller == nil {
 		return "auto-detected"
 	} else {
-		return reader.Unmarshaller.String()
+		return r.Unmarshaller.String()
 	}
 }
 

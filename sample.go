@@ -284,28 +284,28 @@ func (sample *Sample) Resize(newSize int) bool {
 // by first comparing the header pointers and the length of the Fields slices,
 // and pointers to the arrays backing the Fields slices.
 // If all the checks fail, the last resort is to compare all the fields string-by-string.
-func (header *Header) Equals(other *Header) bool {
+func (h *Header) Equals(other *Header) bool {
 	switch {
-	case header == other:
+	case h == other:
 		return true
-	case header == nil && other == nil:
+	case h == nil && other == nil:
 		return true
-	case header == nil || other == nil:
+	case h == nil || other == nil:
 		return false
-	case len(header.Fields) != len(other.Fields):
+	case len(h.Fields) != len(other.Fields):
 		return false
-	case len(header.Fields) == 0:
+	case len(h.Fields) == 0:
 		return true
 	}
-	if len(header.Fields) >= 1 {
+	if len(h.Fields) >= 1 {
 		// Compare the array backing the Fields slices
-		if &(header.Fields[0]) == &(other.Fields[0]) {
+		if &(h.Fields[0]) == &(other.Fields[0]) {
 			return true
 		}
 	}
 	// Last resort: compare every string pair
-	for i := range header.Fields {
-		if header.Fields[i] != other.Fields[i] {
+	for i := range h.Fields {
+		if h.Fields[i] != other.Fields[i] {
 			return false
 		}
 	}
