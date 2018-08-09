@@ -4,13 +4,13 @@ import (
 	"fmt"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-onlinestats"
 	log "github.com/sirupsen/logrus"
 )
 
-type DbscanBatchClusterer struct {
+type BatchClusterer struct {
 	Dbscan
 
 	TreeMinChildren int     // 25
@@ -18,7 +18,7 @@ type DbscanBatchClusterer struct {
 	TreePointWidth  float64 // 0.0001
 }
 
-func (c *DbscanBatchClusterer) printSummary(clusters map[string][]*bitflow.Sample) {
+func (c *BatchClusterer) printSummary(clusters map[string][]*bitflow.Sample) {
 	var stats onlinestats.Running
 	for _, cluster := range clusters {
 		stats.Push(float64(len(cluster)))
@@ -26,7 +26,7 @@ func (c *DbscanBatchClusterer) printSummary(clusters map[string][]*bitflow.Sampl
 	log.Printf("%v clusters, avg size %v, size stddev %v", len(clusters), stats.Mean(), stats.Stddev())
 }
 
-func (c *DbscanBatchClusterer) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+func (c *BatchClusterer) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 	log.Println("Building RTree...")
 
 	tree := NewRtreeSetOfPoints(len(header.Fields), c.TreeMinChildren, c.TreeMaxChildren, c.TreePointWidth)
@@ -43,14 +43,14 @@ func (c *DbscanBatchClusterer) ProcessBatch(header *bitflow.Header, samples []*b
 	return header, samples, nil
 }
 
-func (c *DbscanBatchClusterer) String() string {
+func (c *BatchClusterer) String() string {
 	return fmt.Sprintf("Rtree-Dbscan(eps: %v, minpts: %v, tree: %v-%v, width: %v)",
 		c.Eps, c.MinPts, c.TreeMinChildren, c.TreeMaxChildren, c.TreePointWidth)
 }
 
 func RegisterDbscan(b *query.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline) {
-		p.Batch(&DbscanBatchClusterer{
+		p.Batch(&BatchClusterer{
 			Dbscan:          Dbscan{Eps: 0.1, MinPts: 5},
 			TreeMinChildren: 25,
 			TreeMaxChildren: 50,
@@ -64,5 +64,5 @@ func RegisterDbscanParallel(b *query.PipelineBuilder) {
 	create := func(p *pipeline.SamplePipeline) {
 		p.Batch(&ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5})
 	}
-	b.RegisterAnalysis("dbscan_parallel", create, "Perform a parallelized dbscan clustering on a batch of samples")
+	b.RegisterAnalysis("dbscan_parallel", create, "Perform a parallel dbscan clustering on a batch of samples")
 }

@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
-	onlinestats "github.com/antongulenko/go-onlinestats"
+	"github.com/antongulenko/go-onlinestats"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
@@ -74,7 +74,7 @@ func RegisterEventEvaluation(b *query.PipelineBuilder) {
 
 func (p *EventEvaluationProcessor) String() string {
 	return fmt.Sprintf("event-based evaluation (batch-key-tag: \"%v\", evaluation: [%v], binary evaluation: [%v])",
-		p.BatchKeyTag, &p.EvaluationTags, &p.BinaryEvaluationTags)
+		p.BatchKeyTag, &p.ConfigurableTags, &p.BinaryEvaluationTags)
 }
 
 func (p *EventEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
@@ -100,7 +100,7 @@ func (p *EventEvaluationProcessor) Close() {
 	p.GroupedEvaluation.Close()
 }
 
-func (p *EventEvaluationProcessor) newGroup(groupName string) EvaluationStats {
+func (p *EventEvaluationProcessor) newGroup(groupName string) Stats {
 	return &EventEvaluationStats{
 		BinaryEvaluationStats: BinaryEvaluationStats{
 			Tags: &p.BinaryEvaluationTags,

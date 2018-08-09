@@ -7,12 +7,12 @@ import (
 	"plugin"
 	"sync"
 
-	bitflow "github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
 
-type PluginSampleSource struct {
+type SampleSource struct {
 	bitflow.AbstractSampleSource
 
 	path    string
@@ -60,30 +60,30 @@ func ParseUrl(urlStr string) (string, string, map[string]string, error) {
 	return parsedUrl.Host, parsedUrl.Path, params, nil
 }
 
-func NewPluginSource(path, symbol string, params map[string]string) (*PluginSampleSource, error) {
-	res := &PluginSampleSource{
+func NewPluginSource(path, symbolName string, params map[string]string) (*SampleSource, error) {
+	res := &SampleSource{
 		path:   path,
-		symbol: symbol,
+		symbol: symbolName,
 		params: params,
 	}
 	openedPlugin, err := plugin.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	lookedupSymbol, err := openedPlugin.Lookup(symbol)
+	symbolObject, err := openedPlugin.Lookup(symbolName)
 	if err != nil {
 		return nil, err
 	}
-	plugin, ok := lookedupSymbol.(SampleSourcePlugin)
+	sourcePlugin, ok := symbolObject.(SampleSourcePlugin)
 	if !ok {
 		return nil, fmt.Errorf(
-			"Symbol '%v' from plugin '%v' has type %T instead of SampleSourcePlugin", symbol, path, lookedupSymbol)
+			"Symbol '%v' from plugin '%v' has type %T instead of SampleSourcePlugin", symbolName, path, symbolObject)
 	}
-	res.plugin = plugin
+	res.plugin = sourcePlugin
 	return res, nil
 }
 
-func (s *PluginSampleSource) Start(wg *sync.WaitGroup) golib.StopChan {
+func (s *SampleSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	log.Println("Starting:", s.String())
 	s.stopper = golib.NewStopChan()
 	s.wg = wg
@@ -91,19 +91,19 @@ func (s *PluginSampleSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	return s.stopper
 }
 
-func (s *PluginSampleSource) Close() {
+func (s *SampleSource) Close() {
 	if p := s.plugin; p != nil {
 		// Tell the plugin to close, it will then call Close() on the *pluginDataSink
 		p.Close()
 	}
 }
 
-func (s *PluginSampleSource) String() string {
+func (s *SampleSource) String() string {
 	return fmt.Sprintf("Plugin %v, symbol %v (parameters: %v)", s.path, s.symbol, s.params)
 }
 
 type pluginDataSink struct {
-	source *PluginSampleSource
+	source *SampleSource
 }
 
 func (s *pluginDataSink) Error(err error) {

@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 	"github.com/lucasb-eyer/go-colorful"
@@ -511,8 +511,8 @@ func RegisterPlot(b *query.PipelineBuilder) {
 			OutputFile: params["file"],
 			Type:       ScatterPlot,
 		}
-		if color, hasColor := params["color"]; hasColor {
-			plot.ColorTag = color
+		if colorName, hasColor := params["colorName"]; hasColor {
+			plot.ColorTag = colorName
 		}
 		var err error
 		setPlotBoundParam(&err, params, "xMin", &plot.ForceXmin)

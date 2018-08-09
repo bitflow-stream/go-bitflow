@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline/plugin"
 	log "github.com/sirupsen/logrus"
 )
@@ -26,6 +26,7 @@ var source = RandomSampleGenerator{
 }
 
 // The Symbol to be loaded
+//noinspection GoUnusedGlobalVariable
 var Plugin = plugin.SampleSourcePluginImplementation{
 	Create: func(params map[string]string) (bitflow.SampleSource, error) {
 		generator := source

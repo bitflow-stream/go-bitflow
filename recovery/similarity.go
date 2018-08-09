@@ -71,16 +71,16 @@ func (g *SimilarityGraph) setEdges(intraGroupSimilarity, intraLayerSimilarity fl
 	}
 }
 
-func (node1 *SimilarityNode) getSimilarity(node2 *SimilarityNode, intraGroupSimilarity, intraLayerSimilarity float64) float64 {
-	for _, group1 := range node1.Groups {
-		for _, group2 := range node2.Groups {
+func (node *SimilarityNode) getSimilarity(other *SimilarityNode, intraGroupSimilarity, intraLayerSimilarity float64) float64 {
+	for _, group1 := range node.Groups {
+		for _, group2 := range other.Groups {
 			if group1 == group2 {
 				// The nodes share a group -> use the largest similarity
 				return intraGroupSimilarity
 			}
 		}
 	}
-	if node1.Layer == node2.Layer {
+	if node.Layer == other.Layer {
 		// The nodes are on the same layer -> use second largest similarity
 		return intraLayerSimilarity
 	}

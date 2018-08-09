@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	glob "github.com/ryanuber/go-glob"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/ryanuber/go-glob"
 )
 
 //
@@ -95,9 +95,9 @@ func (d *MultiplexDistributor) String() string {
 	return fmt.Sprintf("multiplex (%v)", len(d.Subpipelines))
 }
 
-func (p *MultiplexDistributor) ContainedStringers() []fmt.Stringer {
-	res := make([]fmt.Stringer, len(p.Subpipelines))
-	for i, pipe := range p.Subpipelines {
+func (d *MultiplexDistributor) ContainedStringers() []fmt.Stringer {
+	res := make([]fmt.Stringer, len(d.Subpipelines))
+	for i, pipe := range d.Subpipelines {
 		res[i] = &pipeline.TitledSamplePipeline{
 			SamplePipeline: pipe,
 			Title:          fmt.Sprintf("Pipeline %v", i),
@@ -261,7 +261,7 @@ func (d *TagDistributor) String() string {
 	return fmt.Sprintf("tag template: %v", d.Template)
 }
 
-var _ ForkDistributor = new(MultiFileDistributor)
+var _ Distributor = new(MultiFileDistributor)
 
 type MultiFileDistributor struct {
 	pipeline.TagTemplate

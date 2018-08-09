@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"sync"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
 	"github.com/antongulenko/go-bitflow-pipeline/http_tags"
 	"github.com/antongulenko/go-bitflow-pipeline/steps"
@@ -17,7 +17,6 @@ import (
 
 const (
 	RestApiPathPrefix = "/api"
-	DefaultOutput     = "box://-"
 )
 
 type CmdDataCollector struct {

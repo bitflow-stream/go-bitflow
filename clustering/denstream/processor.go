@@ -5,24 +5,23 @@ import (
 	"strconv"
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	log "github.com/sirupsen/logrus"
 )
 
-var _ bitflow.SampleProcessor = new(DenstreamClusterProcessor)
+var _ bitflow.SampleProcessor = new(ClusterProcessor)
 
 const (
-	ClusterTag          = "cluster"
-	RadiusMetric        = "radius"
-	ClusterRadiusSuffic = "/radius"
+	ClusterTag   = "cluster"
+	RadiusMetric = "radius"
 )
 
-type DenstreamClusterProcessor struct {
+type ClusterProcessor struct {
 	bitflow.NoopProcessor
-	DenstreamClusterer
+	Clusterer
 
 	// If set to >0, will log the denstream clusterer state every OutputStateModulo samples
 	OutputStateModulo  int
@@ -41,11 +40,11 @@ type DenstreamClusterProcessor struct {
 	lastProcessedHeader *bitflow.Header
 }
 
-func (p *DenstreamClusterProcessor) String() string {
+func (p *ClusterProcessor) String() string {
 	return fmt.Sprintf("denstream (λ=%v, ε=%v, βµ=%v)", p.HistoryFading, p.Epsilon, p.MaxOutlierWeight)
 }
 
-func (p *DenstreamClusterProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (p *ClusterProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if p.numDimensions == 0 {
 		p.numDimensions = len(sample.Values)
 		log.Printf("Initializing denstream processor to %v dimensions", p.numDimensions)
@@ -68,7 +67,7 @@ func (p *DenstreamClusterProcessor) Sample(sample *bitflow.Sample, header *bitfl
 	}
 
 	if p.OutputStateModulo > 0 && p.processedSamples%p.OutputStateModulo == 0 {
-		log.Println("Denstream processed", p.processedSamples, "points in:", p.DenstreamClusterer.String())
+		log.Println("Denstream processed", p.processedSamples, "points in:", p.Clusterer.String())
 	}
 	p.processedSamples++
 
@@ -78,7 +77,7 @@ func (p *DenstreamClusterProcessor) Sample(sample *bitflow.Sample, header *bitfl
 	return p.NoopProcessor.Sample(sample, header)
 }
 
-func (p *DenstreamClusterProcessor) shouldTrain(sample *bitflow.Sample) bool {
+func (p *ClusterProcessor) shouldTrain(sample *bitflow.Sample) bool {
 	switch {
 	case p.TrainTag == "":
 		return true
@@ -88,7 +87,7 @@ func (p *DenstreamClusterProcessor) shouldTrain(sample *bitflow.Sample) bool {
 	return p.TrainTagValue == "" || sample.Tag(p.TrainTag) == p.TrainTagValue
 }
 
-func (p *DenstreamClusterProcessor) Close() {
+func (p *ClusterProcessor) Close() {
 	if p.FlushClustersAtClose && p.lastProcessedSample != nil {
 		newFields := make([]string, len(p.lastProcessedHeader.Fields)+1)
 		newFields[0] = RadiusMetric
@@ -106,7 +105,7 @@ func (p *DenstreamClusterProcessor) Close() {
 	p.NoopProcessor.Close()
 }
 
-func (p *DenstreamClusterProcessor) outputCluster(cluster clustering.SphericalCluster, clusterType string, header *bitflow.Header, err *error) {
+func (p *ClusterProcessor) outputCluster(cluster clustering.SphericalCluster, clusterType string, header *bitflow.Header, err *error) {
 	if *err != nil {
 		return
 	}
@@ -176,8 +175,8 @@ func create_denstream_step(p *pipeline.SamplePipeline, params map[string]string,
 		}
 	}
 
-	clust := &DenstreamClusterProcessor{
-		DenstreamClusterer: DenstreamClusterer{
+	clust := &ClusterProcessor{
+		Clusterer: Clusterer{
 			HistoryFading:    lambda,
 			MaxOutlierWeight: maxOutlierWeight,
 			Epsilon:          eps,

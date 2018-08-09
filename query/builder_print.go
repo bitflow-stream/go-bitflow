@@ -30,9 +30,9 @@ type JsonProcessingStep struct {
 	OptionalParams []string
 }
 
-func (builder PipelineBuilder) getSortedProcessingSteps() ProcessingSteps {
-	all := make(ProcessingSteps, 0, len(builder.analysis_registry))
-	for _, step := range builder.analysis_registry {
+func (b PipelineBuilder) getSortedProcessingSteps() ProcessingSteps {
+	all := make(ProcessingSteps, 0, len(b.analysis_registry))
+	for _, step := range b.analysis_registry {
 		if step.Func == nil {
 			continue
 		}
@@ -44,7 +44,7 @@ func (builder PipelineBuilder) getSortedProcessingSteps() ProcessingSteps {
 			OptionalParams: step.Params.optional,
 		})
 	}
-	for _, fork := range builder.fork_registry {
+	for _, fork := range b.fork_registry {
 		if fork.Func == nil {
 			continue
 		}
@@ -60,8 +60,8 @@ func (builder PipelineBuilder) getSortedProcessingSteps() ProcessingSteps {
 	return all
 }
 
-func (builder PipelineBuilder) PrintAllAnalyses() string {
-	all := builder.getSortedProcessingSteps()
+func (b PipelineBuilder) PrintAllAnalyses() string {
+	all := b.getSortedProcessingSteps()
 	var buf bytes.Buffer
 	for i, analysis := range all {
 		if i > 0 {
@@ -76,8 +76,8 @@ func (builder PipelineBuilder) PrintAllAnalyses() string {
 	return buf.String()
 }
 
-func (builder PipelineBuilder) PrintJsonCapabilities(out io.Writer) error {
-	all := builder.getSortedProcessingSteps()
+func (b PipelineBuilder) PrintJsonCapabilities(out io.Writer) error {
+	all := b.getSortedProcessingSteps()
 	data, err := json.Marshal(all)
 	if err == nil {
 		_, err = out.Write(data)

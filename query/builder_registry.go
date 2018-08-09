@@ -21,7 +21,7 @@ func (s *Subpipeline) Build() (*pipeline.SamplePipeline, error) {
 }
 
 type AnalysisFunc func(pipeline *pipeline.SamplePipeline, params map[string]string) error
-type ForkFunc func(subpiplines []Subpipeline, params map[string]string) (fork.ForkDistributor, error)
+type ForkFunc func(subpiplines []Subpipeline, params map[string]string) (fork.Distributor, error)
 
 func ParameterError(name string, err error) error {
 	return fmt.Errorf("Failed to parse '%v' parameter: %v", name, err)

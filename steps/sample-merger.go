@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	log "github.com/sirupsen/logrus"
 )
@@ -194,25 +194,25 @@ func (p *SynchronizedStreamMerger) logWaitingQueues() {
 	log.Printf("Waiting for %v queue(s): %v", len(waitingQueues), waitingQueues)
 }
 
-func (s *SynchronizedStreamMerger) canMergeSamples() bool {
-	if len(s.queues) < s.ExpectedStreams {
+func (p *SynchronizedStreamMerger) canMergeSamples() bool {
+	if len(p.queues) < p.ExpectedStreams {
 		// Still waiting for every input stream to deliver at least one sample
 		return false
 	}
-	if s.readyQueues == nil {
+	if p.readyQueues == nil {
 		// Lazy initialize
-		s.readyQueues = make(map[string]bool)
+		p.readyQueues = make(map[string]bool)
 	}
-	if s.start.IsZero() {
+	if p.start.IsZero() {
 		// We now received one sample on each queue, initialize the first merge window.
-		s.storeStart()
+		p.storeStart()
 		return false
 	}
 	return true
 }
 
-func (s *SynchronizedStreamMerger) createSample() (*bitflow.Sample, *bitflow.Header) {
-	queueElements := s.collectQueuedSamples(s.queues)
+func (p *SynchronizedStreamMerger) createSample() (*bitflow.Sample, *bitflow.Header) {
+	queueElements := p.collectQueuedSamples(p.queues)
 	if len(queueElements) == 0 {
 		return nil, nil
 	}
@@ -222,54 +222,54 @@ func (s *SynchronizedStreamMerger) createSample() (*bitflow.Sample, *bitflow.Hea
 		samples[i] = elem.sample
 		headers[i] = elem.header
 	}
-	outSample, outHeader := s.MergeSamples(samples, headers)
+	outSample, outHeader := p.MergeSamples(samples, headers)
 
 	// Store the start + end times for the next interval, record which queues already have enough data
-	s.storeStart()
-	s.readyQueuesLock.Lock()
-	defer s.readyQueuesLock.Unlock()
-	s.readyQueues = make(map[string]bool)
-	for queueName, queue := range s.queues {
+	p.storeStart()
+	p.readyQueuesLock.Lock()
+	defer p.readyQueuesLock.Unlock()
+	p.readyQueues = make(map[string]bool)
+	for queueName, queue := range p.queues {
 		// Some queues might already have enough samples for the next interval
 		isReady := queue.closed
 		if !isReady {
 			newest := queue.peekNewest()
-			if newest.sample != nil && newest.sample.Time.After(s.end) {
+			if newest.sample != nil && newest.sample.Time.After(p.end) {
 				isReady = true
 			}
 		}
 		if isReady {
-			s.readyQueues[queueName] = true
+			p.readyQueues[queueName] = true
 		}
 	}
 	return outSample, outHeader
 }
 
-func (s *SynchronizedStreamMerger) collectQueuedSamples(queues map[string]*mergeQueue) []queueElem {
-	res := s.samples[:0]
+func (p *SynchronizedStreamMerger) collectQueuedSamples(queues map[string]*mergeQueue) []queueElem {
+	res := p.samples[:0]
 	for _, queue := range queues {
 		for {
-			sample := queue.popYoungerThan(s.end)
+			sample := queue.popYoungerThan(p.end)
 			if sample.sample == nil {
 				break
 			}
 			res = append(res, sample)
 		}
 	}
-	s.samples = res // Reuse (possibly extended buffer) next time
+	p.samples = res // Reuse (possibly extended buffer) next time
 	return res
 }
 
-func (s *SynchronizedStreamMerger) storeStart() {
-	s.start = time.Time{}
-	s.end = time.Time{}
-	for _, queue := range s.queues {
+func (p *SynchronizedStreamMerger) storeStart() {
+	p.start = time.Time{}
+	p.end = time.Time{}
+	for _, queue := range p.queues {
 		sample := queue.peek().sample
-		if sample != nil && (s.start.IsZero() || sample.Time.Before(s.start)) {
-			s.start = sample.Time
+		if sample != nil && (p.start.IsZero() || sample.Time.Before(p.start)) {
+			p.start = sample.Time
 		}
 	}
-	s.end = s.start.Add(s.MergeInterval)
+	p.end = p.start.Add(p.MergeInterval)
 }
 
 type mergeQueue struct {

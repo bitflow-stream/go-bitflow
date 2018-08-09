@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"

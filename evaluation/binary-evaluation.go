@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 )
@@ -21,7 +21,7 @@ type BinaryEvaluationProcessor struct {
 
 func (p *BinaryEvaluationProcessor) String() string {
 	return fmt.Sprintf("binary classification evaluation (evaluation: [%v], binary evaluation: [%v])",
-		&p.EvaluationTags, &p.BinaryEvaluationTags)
+		&p.ConfigurableTags, &p.BinaryEvaluationTags)
 }
 
 func (p *BinaryEvaluationProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
@@ -30,7 +30,7 @@ func (p *BinaryEvaluationProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	return p.GroupedEvaluation.Start(wg)
 }
 
-func (p *BinaryEvaluationProcessor) newGroup(groupName string) EvaluationStats {
+func (p *BinaryEvaluationProcessor) newGroup(groupName string) Stats {
 	return &BinaryEvaluationStats{
 		Tags: &p.BinaryEvaluationTags,
 	}

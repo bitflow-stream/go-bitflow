@@ -1,21 +1,7 @@
 
-PLOT_WIDTH = 800
-PLOT_HEIGHT = 300
-PAUSED = false
-
-function update_all_metrics_individually() {
-	d3.json("/metrics", function(metrics){
-		$.each(metrics, function(i, name) {
-			update_one_metric(name)
-		})
-	})
-}
-
-function update_one_metric(name) {
-	d3.json("/data", function(data) {
-		update_metric_data(name, data)
-	})
-}
+let PLOT_WIDTH = 800
+let PLOT_HEIGHT = 300
+let PAUSED = false
 
 function update_all_metrics() {
 	d3.json("/data", function(allMetrics) {
@@ -26,13 +12,13 @@ function update_all_metrics() {
 }
 
 function update_metric_data(name, data) {
-	plotData = []
+    let plotData = []
 	$.each(data, function(i, val){
 		plotData[i] = { index: i, value: val }
 	})
 	// 'date':new Date('2014-11-01')
 
-	target = get_target_div(name)
+    let target = get_target_div(name)
 	MG.data_graphic({
 		title: name,
 		data: plotData,
@@ -47,7 +33,7 @@ function update_metric_data(name, data) {
 }
 
 function stringHash(s) {
-	var hash = 0, i, chr, len;
+	let hash = 0, i, chr, len;
 	if (s.length === 0) return hash;
 	for (i = 0, len = s.length; i < len; i++) {
 		chr   = s.charCodeAt(i);
@@ -58,11 +44,11 @@ function stringHash(s) {
 }
 
 function get_target_div(name) {
-	hash = stringHash(name)
-	id = "__data__" + hash
-	sel = "#" + id
-	if ($(sel).length == 0) {
-		code = '<div id="' + id + '" class="data_plot"></div>'
+    let hash = stringHash(name)
+    let id = "__data__" + hash
+    let sel = "#" + id
+	if ($(sel).length === 0) {
+        let code = '<div id="' + id + '" class="data_plot"></div>'
 		$('.data_container').append(code);
 
 		$(sel)
@@ -70,8 +56,8 @@ function get_target_div(name) {
 			alsoResize: ".data_plot",
 			grid: 100,
 			resize: function(event, ui) {
-				PLOT_HEIGHT = ui.size.height
-				PLOT_WIDTH = ui.size.width
+                PLOT_HEIGHT = ui.size.height
+                PLOT_WIDTH = ui.size.width
 			},
 		})
 		.click(toggle_pause);

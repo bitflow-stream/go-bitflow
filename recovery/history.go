@@ -3,7 +3,7 @@ package recovery
 import (
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow"
 )
 
 type History interface {

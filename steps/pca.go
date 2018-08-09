@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/gonum/matrix/mat64"
 	"github.com/gonum/stat"

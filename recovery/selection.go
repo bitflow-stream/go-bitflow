@@ -2,14 +2,14 @@ package recovery
 
 import "math/rand"
 
-type RecoverySelection interface {
+type Selection interface {
 	SelectRecovery(node *SimilarityNode, anomalyFeatures []AnomalyFeature, possibleRecoveries []string, history History) string
 }
 
-type RandomRecoverySelection struct {
+type RandomSelection struct {
 }
 
-func (r *RandomRecoverySelection) SelectRecovery(node *SimilarityNode, anomalyFeatures []AnomalyFeature, possibleRecoveries []string, history History) string {
+func (r *RandomSelection) SelectRecovery(node *SimilarityNode, anomalyFeatures []AnomalyFeature, possibleRecoveries []string, history History) string {
 	selected := rand.Int31n(int32(len(possibleRecoveries)))
 	return possibleRecoveries[selected]
 }

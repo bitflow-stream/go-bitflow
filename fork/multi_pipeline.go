@@ -16,7 +16,7 @@ type MultiPipeline struct {
 	stopped          bool
 	stoppedCond      *sync.Cond
 	subPipelineWg    sync.WaitGroup
-	merger           ForkMerger
+	merger           Merger
 }
 
 func (m *MultiPipeline) Init(outgoing bitflow.SampleProcessor, closeHook func(), wg *sync.WaitGroup) {
@@ -129,26 +129,26 @@ func (r *runningSubPipeline) stop() {
 	r.group.Stop()
 }
 
-type ForkMerger struct {
+type Merger struct {
 	bitflow.AbstractSampleProcessor
 	mutex    sync.Mutex
 	outgoing bitflow.SampleProcessor
 }
 
-func (sink *ForkMerger) String() string {
+func (sink *Merger) String() string {
 	return "Fork merger for " + sink.outgoing.String()
 }
 
-func (sink *ForkMerger) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
+func (sink *Merger) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 	return
 }
 
-func (sink *ForkMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (sink *Merger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	sink.mutex.Lock()
 	defer sink.mutex.Unlock()
 	return sink.outgoing.Sample(sample, header)
 }
 
-func (sink *ForkMerger) Close() {
+func (sink *Merger) Close() {
 	// The actual outgoing sink must be closed after waitForPipelines() returns
 }

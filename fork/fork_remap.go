@@ -22,7 +22,7 @@ type ForkRemapper struct {
 func (f *ForkRemapper) Start(wg *sync.WaitGroup) golib.StopChan {
 	f.newPipelineHandler = func(sink bitflow.SampleProcessor) bitflow.SampleProcessor {
 		// Synchronize writing, because multiple incoming pipelines can write to one pipeline
-		return &ForkMerger{outgoing: sink}
+		return &Merger{outgoing: sink}
 	}
 	return f.AbstractMetricFork.Start(wg)
 }
@@ -57,7 +57,7 @@ func (f *AbstractMetricFork) getRemappedSinkRecursive(outgoing bitflow.SamplePro
 	case *ForkRemapper:
 		// Ask follow-up ForkRemapper for the pipeline we should connect to
 		return outgoing.GetMappedSink(forkPath)
-	case *ForkMerger:
+	case *Merger:
 		// If there are multiple layers of forks, we have to resolve the ForkMergers until we get the actual outgoing sink
 		return f.getRemappedSinkRecursive(outgoing.GetOriginalSink(), forkPath)
 	default:

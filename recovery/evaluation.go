@@ -3,8 +3,8 @@ package recovery
 import (
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	log "github.com/sirupsen/logrus"
 )
@@ -13,9 +13,9 @@ var (
 	evaluationFillerHeader = &bitflow.Header{Fields: []string{}} // Empty header for samples to progress the time in the DecisionMaker
 )
 
-type RecoveryEvaluationProcessor struct {
+type EvaluationProcessor struct {
 	bitflow.NoopProcessor
-	RecoveryTags
+	ConfigurableTags
 
 	NormalSamplesBetweenAnomalies int
 	FillerSamples                 int           // Number of samples to send between two real evaluation samples
@@ -33,7 +33,7 @@ type nodeEvaluationData struct {
 
 func RegisterRecoveryEvaluation(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("recovery-evaluation", func(p *pipeline.SamplePipeline, params map[string]string) error {
-		step := &RecoveryEvaluationProcessor{
+		step := &EvaluationProcessor{
 			data: make(map[string]*nodeEvaluationData),
 		}
 		var err error
@@ -50,11 +50,11 @@ func RegisterRecoveryEvaluation(b *query.PipelineBuilder) {
 	}, "Evaluation procedure for the recovery() step. Fully reads all input data before performing the evaluation.",
 		append([]string{
 			"sample-rate",
-		}, RecoveryTagParams...),
+		}, TagParameterNames...),
 		"filler-samples", "normal-fillers")
 }
 
-func (p *RecoveryEvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (p *EvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	node, state := p.GetRecoveryTags(sample)
 	if node != "" && state != "" {
 		p.storeEvaluationSample(node, state, sample, header)
@@ -62,7 +62,7 @@ func (p *RecoveryEvaluationProcessor) Sample(sample *bitflow.Sample, header *bit
 	return p.NoopProcessor.Sample(sample, header)
 }
 
-func (p *RecoveryEvaluationProcessor) storeEvaluationSample(node, state string, sample *bitflow.Sample, header *bitflow.Header) {
+func (p *EvaluationProcessor) storeEvaluationSample(node, state string, sample *bitflow.Sample, header *bitflow.Header) {
 	data, ok := p.data[node]
 	if !ok {
 		data = &nodeEvaluationData{
@@ -86,13 +86,13 @@ func (p *RecoveryEvaluationProcessor) storeEvaluationSample(node, state string, 
 	}
 }
 
-func (p *RecoveryEvaluationProcessor) Close() {
+func (p *EvaluationProcessor) Close() {
 	p.now = time.Now()
 	p.runEvaluation()
 	p.NoopProcessor.Close()
 }
 
-func (p *RecoveryEvaluationProcessor) runEvaluation() {
+func (p *EvaluationProcessor) runEvaluation() {
 	for node, data := range p.data {
 		if data.normal == nil {
 			log.Errorf("Cannot evaluate node %v: no normal data sample available", node)
@@ -116,7 +116,7 @@ func (p *RecoveryEvaluationProcessor) runEvaluation() {
 	}
 }
 
-func (p *RecoveryEvaluationProcessor) sendSample(sample *bitflow.SampleAndHeader) {
+func (p *EvaluationProcessor) sendSample(sample *bitflow.SampleAndHeader) {
 	sample.Sample.Time = p.progressTime()
 	err := p.NoopProcessor.Sample(sample.Sample, sample.Header)
 	if err != nil {
@@ -136,7 +136,7 @@ func (p *RecoveryEvaluationProcessor) sendSample(sample *bitflow.SampleAndHeader
 	}
 }
 
-func (p *RecoveryEvaluationProcessor) progressTime() time.Time {
+func (p *EvaluationProcessor) progressTime() time.Time {
 	res := p.now
 	p.now = res.Add(p.SampleRate)
 	return res

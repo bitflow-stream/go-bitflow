@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
@@ -43,12 +43,12 @@ type DecisionMaker struct {
 	Graph     *SimilarityGraph
 	Execution ExecutionEngine
 	History   History
-	Selection RecoverySelection
+	Selection Selection
 
 	NoDataTimeout         time.Duration
 	RecoveryFailedTimeout time.Duration
 
-	RecoveryTags
+	ConfigurableTags
 }
 
 func RegisterRecoveryEngine(b *query.PipelineBuilder) {
@@ -74,9 +74,9 @@ func RegisterRecoveryEngine(b *query.PipelineBuilder) {
 			return err
 		}
 		history := new(VolatileHistory)
-		selection := new(RandomRecoverySelection)
+		selection := new(RandomSelection)
 
-		var tags RecoveryTags
+		var tags ConfigurableTags
 		tags.ParseRecoveryTags(params)
 		pipeline.Add(&DecisionMaker{
 			Graph:                 graph,
@@ -85,7 +85,7 @@ func RegisterRecoveryEngine(b *query.PipelineBuilder) {
 			Selection:             selection,
 			NoDataTimeout:         noDataTimeout,
 			RecoveryFailedTimeout: recoveryFailedTimeout,
-			RecoveryTags:          tags,
+			ConfigurableTags:      tags,
 		})
 		return nil
 	}, "Recovery Engine based on recommendation system",
@@ -93,7 +93,7 @@ func RegisterRecoveryEngine(b *query.PipelineBuilder) {
 			"model", "layer-simil", "group-simil", // Dependency/Similarity Graph
 			"no-data", "recovery-failed", // Timeouts
 			"avg-recovery-time", "recovery-error-percentage", "num-mock-recoveries", // Mock execution engine
-		}, RecoveryTagParams...),
+		}, TagParameterNames...),
 	)
 }
 

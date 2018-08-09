@@ -15,7 +15,7 @@ type Subpipeline struct {
 	Key  string
 }
 
-type ForkDistributor interface {
+type Distributor interface {
 	Distribute(sample *bitflow.Sample, header *bitflow.Header) ([]Subpipeline, error)
 	String() string
 }
@@ -30,7 +30,7 @@ type SampleFork struct {
 	MultiPipeline
 	bitflow.NoopProcessor
 
-	Distributor ForkDistributor
+	Distributor Distributor
 
 	// If true, errors of subpipelines will be logged but don't stop the entire MultiPipeline
 	// Finished pipelines must be reported through LogFinishedPipeline()

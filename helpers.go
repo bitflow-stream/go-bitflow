@@ -107,7 +107,7 @@ type TagTemplate struct {
 	MissingValue string // Replacement for missing values
 }
 
-var templateRegex = regexp.MustCompile("\\$\\{[^\\{]*\\}") // Example: ${hello}
+var templateRegex = regexp.MustCompile("\\${[^{]*}") // Example: ${hello}
 
 func (t TagTemplate) BuildKey(sample *bitflow.Sample) string {
 	return templateRegex.ReplaceAllStringFunc(t.Template, func(placeholder string) string {

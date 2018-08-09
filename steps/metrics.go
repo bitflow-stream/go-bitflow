@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-onlinestats"
 	log "github.com/sirupsen/logrus"
@@ -209,8 +209,8 @@ func (filter *MetricFilter) MergeProcessor(other bitflow.SampleProcessor) bool {
 	}
 }
 
-func (p *MetricFilter) String() string {
-	return fmt.Sprintf("MetricFilter(%v exclude filters, %v include filters)", len(p.exclude), len(p.include))
+func (filter *MetricFilter) String() string {
+	return fmt.Sprintf("MetricFilter(%v exclude filters, %v include filters)", len(filter.exclude), len(filter.include))
 }
 
 type MetricMapper struct {

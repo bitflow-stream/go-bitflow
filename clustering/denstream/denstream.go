@@ -29,7 +29,7 @@ type ClusterSpace interface {
 	UpdateCluster(cluster clustering.SphericalCluster, do func() (reinsertCluster bool))
 }
 
-type DenstreamClusterer struct {
+type Clusterer struct {
 	pClusters ClusterSpace
 	oClusters ClusterSpace
 
@@ -42,18 +42,18 @@ type DenstreamClusterer struct {
 	decayCheckCounter     int
 }
 
-func (c *DenstreamClusterer) String() string {
+func (c *Clusterer) String() string {
 	return fmt.Sprintf("denstream-clusterer (λ=%v, ε=%v, βµ=%v, %v p-clusters, %v o-clusters, decay checked %v times, every %v)",
 		c.HistoryFading, c.Epsilon, c.MaxOutlierWeight, c.pClusters.NumClusters(), c.oClusters.NumClusters(), c.decayCheckCounter, c.computedDecayInterval)
 }
 
 // Set the lambda parameter (HistoryFading) to a value that makes the weights of all clusters decay by 1 after the given interval.
 // The computation is based on the MaxOutlierWeight parameter.
-func (c *DenstreamClusterer) SetDecayTimeUnit(delta time.Duration) {
+func (c *Clusterer) SetDecayTimeUnit(delta time.Duration) {
 	c.HistoryFading = math.Log(c.MaxOutlierWeight/(c.MaxOutlierWeight-1)) / (delta.Seconds() * 1000)
 }
 
-func (c *DenstreamClusterer) Insert(point []float64, timestamp time.Time) (clusterId int) {
+func (c *Clusterer) Insert(point []float64, timestamp time.Time) (clusterId int) {
 	if c.computedDecayInterval == 0 {
 		// Lazy initialize
 		c.computedDecayInterval = c.decayCheckInterval()
@@ -78,7 +78,7 @@ func (c *DenstreamClusterer) Insert(point []float64, timestamp time.Time) (clust
 	return
 }
 
-func (c *DenstreamClusterer) GetCluster(point []float64) (clusterId int) {
+func (c *Clusterer) GetCluster(point []float64) (clusterId int) {
 	_, nearest := c.testMergeNearest(point, c.pClusters)
 	if nearest != nil {
 		return nearest.Id()
@@ -94,7 +94,7 @@ func (c *DenstreamClusterer) GetCluster(point []float64) (clusterId int) {
 // ==== Internal ====
 // ========================================================================================================
 
-func (c *DenstreamClusterer) insertPoint(point []float64) int {
+func (c *Clusterer) insertPoint(point []float64) int {
 	// 1. try to merge into closest p-cluster. check if new radius small enough.
 	clust := c.mergeNearest(point, c.pClusters)
 	if clust != nil {
@@ -116,7 +116,7 @@ func (c *DenstreamClusterer) insertPoint(point []float64) int {
 	return NewOutlier
 }
 
-func (c *DenstreamClusterer) testMergeNearest(point []float64, space ClusterSpace) (testCluster clustering.SphericalCluster, realCluster clustering.SphericalCluster) {
+func (c *Clusterer) testMergeNearest(point []float64, space ClusterSpace) (testCluster clustering.SphericalCluster, realCluster clustering.SphericalCluster) {
 	realCluster = space.NearestCluster(point)
 	if realCluster != nil {
 		testCluster = realCluster.Clone() // Copy the cluster to check the radius after mergin the incoming point
@@ -129,18 +129,18 @@ func (c *DenstreamClusterer) testMergeNearest(point []float64, space ClusterSpac
 	return
 }
 
-func (c *DenstreamClusterer) mergeNearest(point []float64, space ClusterSpace) clustering.SphericalCluster {
-	test, real := c.testMergeNearest(point, space)
-	if real != nil {
-		space.UpdateCluster(real, func() bool {
-			real.CopyFrom(test)
+func (c *Clusterer) mergeNearest(point []float64, space ClusterSpace) clustering.SphericalCluster {
+	test, realCluster := c.testMergeNearest(point, space)
+	if realCluster != nil {
+		space.UpdateCluster(realCluster, func() bool {
+			realCluster.CopyFrom(test)
 			return true
 		})
 	}
-	return real
+	return realCluster
 }
 
-func (c *DenstreamClusterer) weightDecay(delta time.Duration) float64 {
+func (c *Clusterer) weightDecay(delta time.Duration) float64 {
 	timeUnits := delta.Seconds() * 1000
 	res := math.Pow(2, -c.HistoryFading*timeUnits)
 	return res
@@ -148,7 +148,7 @@ func (c *DenstreamClusterer) weightDecay(delta time.Duration) float64 {
 
 // The interval, in which the clusters should decay their weight and be checked for too small weight
 // This is the time, after which the weight of a cluster decays by 1
-func (c *DenstreamClusterer) decayCheckInterval() time.Duration {
+func (c *Clusterer) decayCheckInterval() time.Duration {
 	resFloat := float64(time.Millisecond) * (1 / c.HistoryFading) * math.Log(c.MaxOutlierWeight/(c.MaxOutlierWeight-1))
 	res := time.Duration(resFloat)
 	if res < 0 {
@@ -157,7 +157,7 @@ func (c *DenstreamClusterer) decayCheckInterval() time.Duration {
 	return res
 }
 
-func (c *DenstreamClusterer) periodicCheck(curTime time.Time, delta time.Duration) {
+func (c *Clusterer) periodicCheck(curTime time.Time, delta time.Duration) {
 	decayFactor := c.weightDecay(delta)
 
 	// 1. decay weight of p-clusters. delete, if too small.

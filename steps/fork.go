@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strconv"
 
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
@@ -17,13 +17,13 @@ func RegisterForks(b *query.PipelineBuilder) {
 	b.RegisterFork("fork_tag_template", fork_tag_template, "Fork based on a template string, placeholders like ${xxx} are replaced by tag values.", []string{"template"})
 }
 
-func fork_round_robin(subpipelines []query.Subpipeline, params map[string]string) (fork.ForkDistributor, error) {
+func fork_round_robin(subpipelines []query.Subpipeline, _ map[string]string) (fork.Distributor, error) {
 	res := new(fork.RoundRobinDistributor)
 	res.Weights = make([]int, len(subpipelines))
 	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpipelines))
-	for i, pipe := range subpipelines {
+	for i, subpipeAST := range subpipelines {
 		weightSum := 0
-		for _, keyStr := range pipe.Keys {
+		for _, keyStr := range subpipeAST.Keys {
 			weight, err := strconv.Atoi(keyStr)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to parse Round Robin subpipeline key '%v' to integer: %v", keyStr, err)
@@ -34,23 +34,23 @@ func fork_round_robin(subpipelines []query.Subpipeline, params map[string]string
 			weightSum += weight
 		}
 		res.Weights[i] = weightSum
-		pipeline, err := pipe.Build()
+		subpipe, err := subpipeAST.Build()
 		if err != nil {
 			return nil, err
 		}
-		res.Subpipelines[i] = pipeline
+		res.Subpipelines[i] = subpipe
 	}
 	return res, nil
 }
 
-func fork_tag(subpipelines []query.Subpipeline, params map[string]string) (fork.ForkDistributor, error) {
+func fork_tag(subpipelines []query.Subpipeline, params map[string]string) (fork.Distributor, error) {
 	tag := params["tag"]
 	delete(params, "tag")
 	params["template"] = "${" + tag + "}"
 	return fork_tag_template(subpipelines, params)
 }
 
-func fork_tag_template(subpipelines []query.Subpipeline, params map[string]string) (fork.ForkDistributor, error) {
+func fork_tag_template(subpipelines []query.Subpipeline, params map[string]string) (fork.Distributor, error) {
 	wildcardPipelines := make(map[string]func() ([]*pipeline.SamplePipeline, error))
 	var keysArray []string
 	for _, pipe := range subpipelines {

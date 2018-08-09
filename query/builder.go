@@ -25,15 +25,15 @@ func NewPipelineBuilder() *PipelineBuilder {
 	return builder
 }
 
-func (builder PipelineBuilder) MakePipeline(pipe Pipeline) (*pipeline.SamplePipeline, error) {
-	pipe, err := pipe.Transform(builder)
+func (b PipelineBuilder) MakePipeline(pipe Pipeline) (*pipeline.SamplePipeline, error) {
+	pipe, err := pipe.Transform(b)
 	if err != nil {
 		return nil, err
 	}
-	return builder.makePipeline(pipe)
+	return b.makePipeline(pipe)
 }
 
-func (builder PipelineBuilder) makePipeline(pipe Pipeline) (res *pipeline.SamplePipeline, err error) {
+func (b PipelineBuilder) makePipeline(pipe Pipeline) (res *pipeline.SamplePipeline, err error) {
 	var source bitflow.SampleSource
 
 	switch input := pipe[0].(type) {
@@ -42,31 +42,31 @@ func (builder PipelineBuilder) makePipeline(pipe Pipeline) (res *pipeline.Sample
 		for i, in := range input {
 			inputs[i] = in.Content()
 		}
-		source, err = builder.Endpoints.CreateInput(inputs...)
+		source, err = b.Endpoints.CreateInput(inputs...)
 	case MultiInput:
-		source, err = builder.createMultiInput(input)
+		source, err = b.createMultiInput(input)
 	default:
 		return nil, fmt.Errorf("Illegal input type %T: %v", input, input)
 	}
 
 	if err == nil {
-		res, err = builder.makePipelineTail(pipe[1:])
+		res, err = b.makePipelineTail(pipe[1:])
 		res.Source = source
 	}
 	return
 }
 
-func (builder PipelineBuilder) makePipelineTail(pipe Pipeline) (*pipeline.SamplePipeline, error) {
+func (b PipelineBuilder) makePipelineTail(pipe Pipeline) (*pipeline.SamplePipeline, error) {
 	res := new(pipeline.SamplePipeline)
 	var err error
 	for _, step := range pipe {
 		switch step := step.(type) {
 		case Output:
-			err = builder.addOutputStep(res, step)
+			err = b.addOutputStep(res, step)
 		case Step:
-			err = builder.addStep(res, step)
+			err = b.addStep(res, step)
 		case Fork:
-			err = builder.addFork(res, step)
+			err = b.addFork(res, step)
 		default:
 			err = ParserError{
 				Pos:     step.Pos(),
@@ -80,16 +80,16 @@ func (builder PipelineBuilder) makePipelineTail(pipe Pipeline) (*pipeline.Sample
 	return res, err
 }
 
-func (builder PipelineBuilder) addOutputStep(pipe *pipeline.SamplePipeline, output Output) error {
-	endpoint, err := builder.Endpoints.CreateOutput(Token(output).Content())
+func (b PipelineBuilder) addOutputStep(pipe *pipeline.SamplePipeline, output Output) error {
+	endpoint, err := b.Endpoints.CreateOutput(Token(output).Content())
 	if err == nil {
 		pipe.Add(endpoint)
 	}
 	return err
 }
 
-func (builder PipelineBuilder) addStep(pipe *pipeline.SamplePipeline, step Step) error {
-	analysis, err := builder.getAnalysis(step.Name)
+func (b PipelineBuilder) addStep(pipe *pipeline.SamplePipeline, step Step) error {
+	analysis, err := b.getAnalysis(step.Name)
 	if err != nil {
 		return err
 	}
@@ -107,9 +107,9 @@ func (builder PipelineBuilder) addStep(pipe *pipeline.SamplePipeline, step Step)
 	return err
 }
 
-func (builder PipelineBuilder) getAnalysis(name_tok Token) (registeredAnalysis, error) {
+func (b PipelineBuilder) getAnalysis(name_tok Token) (registeredAnalysis, error) {
 	name := name_tok.Content()
-	if analysis, ok := builder.analysis_registry[name]; ok {
+	if analysis, ok := b.analysis_registry[name]; ok {
 		return analysis, nil
 	} else {
 		return registeredAnalysis{}, ParserError{
@@ -119,10 +119,10 @@ func (builder PipelineBuilder) getAnalysis(name_tok Token) (registeredAnalysis, 
 	}
 }
 
-func (builder PipelineBuilder) createMultiInput(pipes MultiInput) (bitflow.SampleSource, error) {
+func (b PipelineBuilder) createMultiInput(pipes MultiInput) (bitflow.SampleSource, error) {
 	subPipelines := new(fork.MultiMetricSource)
 	for _, subPipe := range pipes.Pipelines {
-		subPipe, err := builder.makePipeline(subPipe)
+		subPipe, err := b.makePipeline(subPipe)
 		if err != nil {
 			return nil, err
 		}
@@ -131,14 +131,14 @@ func (builder PipelineBuilder) createMultiInput(pipes MultiInput) (bitflow.Sampl
 	return subPipelines, nil
 }
 
-func (builder PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) error {
-	forkStep, err := builder.getFork(f.Name)
-	var distributor fork.ForkDistributor
+func (b PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) error {
+	forkStep, err := b.getFork(f.Name)
+	var distributor fork.Distributor
 	if err == nil {
 		params := f.ParamsMap()
 		err = forkStep.Params.Verify(params)
 		if err == nil {
-			subpipelines := builder.prepareSubpipelines(f.Pipelines)
+			subpipelines := b.prepareSubpipelines(f.Pipelines)
 			distributor, err = forkStep.Func(subpipelines, params)
 		}
 	}
@@ -154,9 +154,9 @@ func (builder PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) er
 	return nil
 }
 
-func (builder PipelineBuilder) getFork(name_tok Token) (registeredFork, error) {
+func (b PipelineBuilder) getFork(name_tok Token) (registeredFork, error) {
 	name := name_tok.Content()
-	if res, ok := builder.fork_registry[name]; ok {
+	if res, ok := b.fork_registry[name]; ok {
 		return res, nil
 	} else {
 		return registeredFork{}, ParserError{
@@ -166,7 +166,7 @@ func (builder PipelineBuilder) getFork(name_tok Token) (registeredFork, error) {
 	}
 }
 
-func (builder PipelineBuilder) prepareSubpipelines(pipelines Pipelines) []Subpipeline {
+func (b PipelineBuilder) prepareSubpipelines(pipelines Pipelines) []Subpipeline {
 	res := make([]Subpipeline, len(pipelines))
 	for i, pipe := range pipelines {
 		inputs := pipe[0].(Input)
@@ -175,35 +175,35 @@ func (builder PipelineBuilder) prepareSubpipelines(pipelines Pipelines) []Subpip
 			res[i].Keys[j] = input.Content()
 		}
 		res[i].pipe = pipe[1:]
-		res[i].builder = &builder
+		res[i].builder = &b
 	}
 	return res
 }
 
 // Implement the PipelineVerification interface
 
-func (builder PipelineBuilder) VerifyInput(inputs []string) error {
+func (b PipelineBuilder) VerifyInput(inputs []string) error {
 	// This allocates some objects, but no system resources.
 	// TODO add some Verify* methods to EndpointFactory to avoid this.
-	_, err := builder.Endpoints.CreateInput(inputs...)
+	_, err := b.Endpoints.CreateInput(inputs...)
 	return err
 }
 
-func (builder PipelineBuilder) VerifyOutput(output string) error {
-	_, err := builder.Endpoints.CreateOutput(output)
+func (b PipelineBuilder) VerifyOutput(output string) error {
+	_, err := b.Endpoints.CreateOutput(output)
 	return err
 }
 
-func (builder PipelineBuilder) VerifyStep(name Token, params map[string]string) error {
-	analysis, err := builder.getAnalysis(name)
+func (b PipelineBuilder) VerifyStep(name Token, params map[string]string) error {
+	analysis, err := b.getAnalysis(name)
 	if err != nil {
 		return err
 	}
 	return analysis.Params.Verify(params)
 }
 
-func (builder PipelineBuilder) VerifyFork(name Token, params map[string]string) error {
-	forkStep, err := builder.getFork(name)
+func (b PipelineBuilder) VerifyFork(name Token, params map[string]string) error {
+	forkStep, err := b.getFork(name)
 	if err != nil {
 		return err
 	}

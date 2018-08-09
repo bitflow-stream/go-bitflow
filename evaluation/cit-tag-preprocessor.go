@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
@@ -29,7 +29,7 @@ var (
 type CitTagsPreprocessor struct {
 	bitflow.NoopProcessor
 
-	EvaluationTags
+	ConfigurableTags
 	BinaryEvaluationTags
 	NormalTagValue string
 	TrainingEnd    time.Time
@@ -60,7 +60,7 @@ func RegisterCitTagsPreprocessor(b *query.PipelineBuilder) {
 
 func (p *CitTagsPreprocessor) String() string {
 	return fmt.Sprintf("tags preprocessor (training end: %v, normal tag value: \"%v\", evaluation: [%v], binary evaluation: [%v])",
-		p.TrainingEnd, p.NormalTagValue, &p.EvaluationTags, &p.BinaryEvaluationTags)
+		p.TrainingEnd, p.NormalTagValue, &p.ConfigurableTags, &p.BinaryEvaluationTags)
 }
 
 func (p *CitTagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

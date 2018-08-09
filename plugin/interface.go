@@ -1,13 +1,13 @@
 package plugin
 
-import bitflow "github.com/antongulenko/go-bitflow"
+import "github.com/antongulenko/go-bitflow"
 
 type SampleSourcePlugin interface {
-	Start(params map[string]string, dataSink PluginDataSink)
+	Start(params map[string]string, dataSink DataSink)
 	Close()
 }
 
-type PluginDataSink interface {
+type DataSink interface {
 	Error(error)
 	Close()
 	Sample(sample *bitflow.Sample, header *bitflow.Header)
