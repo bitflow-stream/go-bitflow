@@ -13,8 +13,8 @@ import (
 // This function is placed in this package to avoid circular dependency between the fork and the query package.
 func RegisterForks(b *query.PipelineBuilder) {
 	b.RegisterFork("rr", fork_round_robin, "The round-robin fork distributes the samples to the subpipelines based on weights. The pipeline selector keys must be positive integers denoting the weight of the respective pipeline.", []string{})
-	b.RegisterFork("fork_tag", fork_tag, "Fork based on the values of the given tag", []string{"tag"})
-	b.RegisterFork("fork_tag_template", fork_tag_template, "Fork based on a template string, placeholders like ${xxx} are replaced by tag values.", []string{"template"})
+	b.RegisterFork("fork_tag", fork_tag, "Fork based on the values of the given tag", []string{"tag"}, "regex", "exact")
+	b.RegisterFork("fork_tag_template", fork_tag_template, "Fork based on a template string, placeholders like ${xxx} are replaced by tag values.", []string{"template"}, "regex", "exact")
 }
 
 func fork_round_robin(subpipelines []query.Subpipeline, _ map[string]string) (fork.Distributor, error) {
@@ -64,10 +64,21 @@ func fork_tag_template(subpipelines []query.Subpipeline, params map[string]strin
 	}
 	sort.Strings(keysArray)
 
-	dist := new(fork.TagDistributor)
-	dist.Template = params["template"]
-	dist.Pipelines = wildcardPipelines
-	return dist, dist.Init()
+	var err error
+	dist := &fork.TagDistributor{
+		TagTemplate: pipeline.TagTemplate{
+			Template: params["template"],
+		},
+		RegexDistributor: fork.RegexDistributor{
+			Pipelines:  wildcardPipelines,
+			ExactMatch: query.BoolParam(params, "exact", false, true, &err),
+			RegexMatch: query.BoolParam(params, "regex", false, true, &err),
+		},
+	}
+	if err == nil {
+		err = dist.Init()
+	}
+	return dist, err
 }
 
 type wildcardSubpipeline struct {

@@ -99,7 +99,7 @@ func SplitShellCommand(s string) []string {
 }
 
 func ResolveTagTemplate(template string, missingValues string, sample *bitflow.Sample) string {
-	return TagTemplate{Template: template, MissingValue: missingValues}.BuildKey(sample)
+	return TagTemplate{Template: template, MissingValue: missingValues}.Resolve(sample)
 }
 
 type TagTemplate struct {
@@ -109,7 +109,7 @@ type TagTemplate struct {
 
 var templateRegex = regexp.MustCompile("\\${[^{]*}") // Example: ${hello}
 
-func (t TagTemplate) BuildKey(sample *bitflow.Sample) string {
+func (t TagTemplate) Resolve(sample *bitflow.Sample) string {
 	return templateRegex.ReplaceAllStringFunc(t.Template, func(placeholder string) string {
 		placeholder = placeholder[2 : len(placeholder)-1] // Strip the ${} prefix/suffix
 		if sample.HasTag(placeholder) {
