@@ -77,10 +77,6 @@ func (c *Coreset) W() float64 {
 	return c.w
 }
 
-func (c *Coreset) CF2() float64 {
-	return c.cf2
-}
-
 func (c *Coreset) Radius() float64 {
 	return c.radius
 }

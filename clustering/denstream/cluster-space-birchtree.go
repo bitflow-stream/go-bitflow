@@ -2,6 +2,7 @@ package denstream
 
 import (
 	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	// log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -92,6 +93,7 @@ func (s *BirchTreeClusterSpace) Insert(cluster clustering.SphericalCluster) {
 	newChildNode := cluster.(*BirchTreeNode)
 	newChildNode.SetId(s.nextClusterId)
 	s.nextClusterId++
+
 	if !newChildNode.isLeaf() {
 		panic("Can only insert a leaf node without children")
 	}
@@ -142,6 +144,12 @@ func (s *BirchTreeClusterSpace) Delete(cluster clustering.SphericalCluster, reas
 		s.deleteChild(parentNode, node)
 		s.totalClusters--
 
+		// curNode := parentNode
+		// for curNode != s.root && curNode.numChildren == 0 {
+		// 	parentNode = curNode.parent
+		// 	s.deleteChild(parentNode, curNode)
+		// 	curNode = curNode.parent
+		// }
 	}
 
 }
@@ -152,10 +160,11 @@ func (s *BirchTreeClusterSpace) TransferCluster(cluster clustering.SphericalClus
 }
 
 func (s *BirchTreeClusterSpace) UpdateCluster(cluster clustering.SphericalCluster, do func() (reinsertCluster bool)) {
-
-	s.Delete(cluster, "Update")
+	node := cluster.(*BirchTreeNode)
+	parentNode := node.parent
+	s.delCFfromParentNodes(parentNode, node)
 	if do() {
-		s.Insert(cluster)
+		s.addCFtoParentNodes(parentNode, node)
 	}
 }
 
@@ -334,6 +343,7 @@ func (s *BirchTreeClusterSpace) delCFfromParentNodes(parentNode *BirchTreeNode, 
 		}
 		parentNode = curNode.parent
 	}
+
 }
 
 func (s *BirchTreeClusterSpace) updateCFofParentNodes(node *BirchTreeNode) {

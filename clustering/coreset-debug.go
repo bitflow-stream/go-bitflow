@@ -17,10 +17,10 @@ type coresetDebugData struct {
 }
 
 func (c *Coreset) debugString() string {
-	// if !doDebugCoresets {
-	// 	return ""
-	// }
-	return fmt.Sprintf(",cf1:%v,cf2:%v (cf1/w)^2: %v, cf2/w: %v", c.cf1, c.cf2, VectorSquared(c.cf1, 1/c.w), c.cf2/c.w)
+	if !doDebugCoresets {
+		return ""
+	}
+	return fmt.Sprintf(", (cf1/w)^2: %v, cf2/w: %v", VectorSquared(c.cf1, 1/c.w), c.cf2/c.w)
 }
 
 func (c *Coreset) storeHistory(message string, params ...interface{}) {
