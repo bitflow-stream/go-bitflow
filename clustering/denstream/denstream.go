@@ -3,10 +3,9 @@ package denstream
 
 import (
 	"fmt"
+	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 	"math"
 	"time"
-
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 )
 
 const (
