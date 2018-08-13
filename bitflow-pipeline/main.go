@@ -180,7 +180,7 @@ func register_analyses(b *query.PipelineBuilder) {
 	steps.RegisterSetCurrentTime(b)
 	steps.RegisterTaggingProcessor(b)
 	http_tags.RegisterHttpTagger(b)
-	steps.RegisterInjectionInfoTagger(b)
+	steps.RegisterTargetTagSplitter(b)
 	steps.RegisterPauseTagger(b)
 
 	// Add/Remove/Rename/Reorder generic metrics
