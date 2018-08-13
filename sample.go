@@ -142,6 +142,24 @@ func (sample *Sample) TagMap() (res map[string]string) {
 	return res
 }
 
+// SortedTags returns a slice of key-value tag pairs, sorted by key
+func (sample *Sample) SortedTags() (res []KeyValuePair) {
+	sample.lockRead(func() {
+		res = make([]KeyValuePair, len(sample.orderedTags))
+		for i, key := range sample.orderedTags {
+			res[i].Key = key
+			res[i].Value = sample.tags[key]
+		}
+	})
+	return res
+}
+
+// KeyValuePair represents a key-value string pair
+type KeyValuePair struct {
+	Key   string
+	Value string
+}
+
 // Tag returns the value of the given tag inside the receiving Sample.
 // If the tag is not defined in the sample, an empty string is returned.
 // HasTag can be used to find out if a tag is defined or not.
