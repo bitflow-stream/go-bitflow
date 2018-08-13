@@ -109,7 +109,6 @@ func make_pipeline_new(builder *query.PipelineBuilder, script string) (*pipeline
 func register_analyses(b *query.PipelineBuilder) {
 
 	// Control flow
-	RegisterTaggingAnalyses(b)
 	steps.RegisterNoop(b)
 	steps.RegisterSleep(b)
 	steps.RegisterForks(b)
