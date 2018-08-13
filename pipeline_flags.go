@@ -74,6 +74,8 @@ func init() {
 // FlagInputs is not set by command line flags automatically.
 // After flag.Parse(), those fields can be modified to override the command line flags defined by the user.
 type EndpointFactory struct {
+	FlagSourceTag string
+
 	// File input/output flags
 
 	FlagInputFilesRobust  bool
@@ -159,6 +161,9 @@ func (f *EndpointFactory) ParseParameters(params map[string]string) (err error) 
 		delete(params, name)
 		return res
 	}
+	strParam := func(target *string, name string) {
+		*target = get(name)
+	}
 	boolParam := func(target *bool, name string) {
 		if strVal := get(name); strVal != "" {
 			*target, err = strconv.ParseBool(strVal)
@@ -182,6 +187,7 @@ func (f *EndpointFactory) ParseParameters(params map[string]string) (err error) 
 		}
 	}
 
+	strParam(&f.FlagSourceTag, "source-tag")
 	boolParam(&f.FlagOutputFilesClean, "files-clean")
 	intParam(&f.FlagIoBuffer, "files-buf")
 	uintParam(&f.FlagTcpConnectionLimit, "tcp-limit")
@@ -232,6 +238,7 @@ func (f *EndpointFactory) RegisterGeneralFlagsTo(fs *flag.FlagSet) {
 
 // RegisterInputFlagsTo registers flags that configure aspects of data input.
 func (f *EndpointFactory) RegisterInputFlagsTo(fs *flag.FlagSet) {
+	fs.StringVar(&f.FlagSourceTag, "source-tag", f.FlagSourceTag, "Add the data source (e.g. input file, TCP endpoint, ...) as the given tag to each read sample.")
 	fs.BoolVar(&f.FlagFilesKeepAlive, "files-keep-alive", f.FlagFilesKeepAlive, "Do not shut down after all files have been read. Useful in combination with -listen-buffer.")
 	fs.BoolVar(&f.FlagInputFilesRobust, "files-robust", f.FlagInputFilesRobust, "When encountering errors while reading files, print warnings instead of failing.")
 	fs.UintVar(&f.FlagInputTcpAcceptLimit, "listen-limit", f.FlagInputTcpAcceptLimit, "Limit number of simultaneous TCP connections accepted for incoming data.")
@@ -275,6 +282,9 @@ func (f *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 		}
 		if result == nil {
 			reader := f.Reader(endpoint.Unmarshaller())
+			if f.FlagSourceTag != "" {
+				reader.Handler = sourceTagger(f.FlagSourceTag)
+			}
 			inputType = endpoint.Type
 			switch endpoint.Type {
 			case StdEndpoint:
@@ -620,4 +630,10 @@ func IsValidFilename(path string) bool {
 	default:
 		return true
 	}
+}
+
+type sourceTagger string
+
+func (t sourceTagger) HandleSample(sample *Sample, source string) {
+	sample.SetTag(string(t), source)
 }
