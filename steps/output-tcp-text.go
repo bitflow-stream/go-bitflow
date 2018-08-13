@@ -23,21 +23,25 @@ func RegisterGraphiteOutput(b *query.PipelineBuilder) {
 }
 
 func RegisterOpentsdbOutput(b *query.PipelineBuilder) {
+	const max_opentsdb_tags = 8
+
 	fixer := strings.NewReplacer("=", "_", "/", ".", " ", "_", "\t", "_", "\n", "_")
 	factory := &SimpleTextMarshallerFactory{
 		Description: "opentsdb",
 		NameFixer:   fixer,
 		WriteValue: func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error {
 			_, err := fmt.Fprintf(writer, "put %v %v %v", name, sample.Time.Unix(), val)
-			for key, val := range sample.TagMap() {
-				key = fixer.Replace(key)
-				name = fixer.Replace(name)
+			addedTags := 0
+			for _, tag := range sample.SortedTags() {
+				key := fixer.Replace(tag.Key)
+				val := fixer.Replace(tag.Value)
 				_, err = fmt.Fprintf(writer, " %s=%s", key, val)
-				if err != nil {
+				addedTags++
+				if err != nil || addedTags >= max_opentsdb_tags {
 					break
 				}
 			}
-			if err == nil {
+			if err == nil && addedTags == 0 {
 				_, err = fmt.Fprintf(writer, " bitflow=true") // Add an artificial tag, because at least one tag is required
 			}
 			if err == nil {
