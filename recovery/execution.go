@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/antongulenko/go-bitflow-pipeline/query"
-	log "github.com/sirupsen/logrus"
 )
 
 type ExecutionEngine interface {
@@ -21,6 +20,8 @@ type MockExecutionEngine struct {
 	Recoveries      []string
 	AvgRecoveryTime time.Duration
 	ErrorPercentage float64 // Should in in [0..1]
+
+	Events func(node string, recovery string, success bool, duration time.Duration)
 }
 
 func NewMockExecution(params map[string]string) (*MockExecutionEngine, error) {
@@ -31,15 +32,19 @@ func NewMockExecution(params map[string]string) (*MockExecutionEngine, error) {
 	if err != nil {
 		return nil, err
 	}
-	recoveries := make([]string, numRecoveries)
+	engine := &MockExecutionEngine{
+		AvgRecoveryTime: avgRecTime,
+		ErrorPercentage: recoveryErrorPercentage,
+	}
+	engine.SetNumRecoveries(numRecoveries)
+	return engine, nil
+}
+
+func (e *MockExecutionEngine) SetNumRecoveries(num int) {
+	recoveries := make([]string, num)
 	for i := range recoveries {
 		recoveries[i] = fmt.Sprintf("recovery-%v", i)
 	}
-	return &MockExecutionEngine{
-		Recoveries:      recoveries,
-		AvgRecoveryTime: avgRecTime,
-		ErrorPercentage: recoveryErrorPercentage,
-	}, nil
 }
 
 func (e *MockExecutionEngine) String() string {
@@ -57,11 +62,12 @@ func (e *MockExecutionEngine) RunRecovery(node string, recovery string) (duratio
 	}
 	roll := rand.Float64()
 	failed := roll < e.ErrorPercentage
-	log.Debugf("Mock execution of recovery '%v' on node '%v': success %v (%.2v >= %.2v), duration %v",
-		recovery, node, !failed, roll, e.ErrorPercentage, duration)
 	if failed {
 		err = fmt.Errorf("Mock execution of recovery '%v' on node '%v' failed (%.2v < %.2v), duration %v",
 			recovery, node, roll, e.ErrorPercentage, duration)
+	}
+	if callback := e.Events; callback != nil {
+		callback(node, recovery, !failed, duration)
 	}
 	return
 }
