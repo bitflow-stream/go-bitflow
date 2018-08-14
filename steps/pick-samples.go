@@ -35,12 +35,10 @@ func RegisterPickPercent(b *query.PipelineBuilder) {
 
 func RegisterPickHead(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("head",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
-			doClose := params["close"] == "true"
-			num, err := strconv.Atoi(params["num"])
-			if err != nil {
-				err = query.ParameterError("num", err)
-			} else {
+		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+			doClose := query.BoolParam(params, "close", false, true, &err)
+			num := query.IntParam(params, "num", 0, false, &err)
+			if err == nil {
 				processed := 0
 				proc := &pipeline.SimpleProcessor{
 					Description: "Pick first " + strconv.Itoa(num) + " samples",
@@ -58,33 +56,30 @@ func RegisterPickHead(b *query.PipelineBuilder) {
 				}
 				p.Add(proc)
 			}
-			return err
+			return
 		},
-		"Forward only a number of the first processed samples. If close=true is given as parameter, close the whole pipeline afterwards.", []string{"num"}, "close")
+		"Forward only a number of the first processed samples. The whole pipeline is closed afterwards, unless close=false is given.", []string{"num"}, "close")
 }
 
 func RegisterSkipHead(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("skip",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
-			num, err := strconv.Atoi(params["num"])
-			if err != nil {
-				err = query.ParameterError("num", err)
-			} else {
+		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+			num := query.IntParam(params, "num", 0, false, &err)
+			if err == nil {
 				dropped := 0
-				proc := &pipeline.SimpleProcessor{
+				p.Add(&pipeline.SimpleProcessor{
 					Description: "Drop first " + strconv.Itoa(num) + " samples",
-				}
-				proc.Process = func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
-					if dropped >= num {
-						return sample, header, nil
-					} else {
-						dropped++
-						return nil, nil, nil
-					}
-				}
-				p.Add(proc)
+					Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+						if dropped >= num {
+							return sample, header, nil
+						} else {
+							dropped++
+							return nil, nil, nil
+						}
+					},
+				})
 			}
-			return err
+			return
 		},
 		"Drop a number of samples in the beginning", []string{"num"})
 }

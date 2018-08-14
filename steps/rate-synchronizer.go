@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
@@ -21,19 +22,27 @@ func RegisterPipelineRateSynchronizer(b *query.PipelineBuilder) {
 	synchronization_keys := make(map[string]*PipelineRateSynchronizer)
 
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+		var err error
 		key := params["key"]
+		chanSize := query.IntParam(params, "buf", 5, true, &err)
+		if err != nil {
+			return err
+		}
+
 		synchronizer, ok := synchronization_keys[key]
 		if !ok {
 			synchronizer = &PipelineRateSynchronizer{
-				ChannelSize: 5, // TODO parameterize
+				ChannelSize: chanSize,
 			}
 			synchronization_keys[key] = synchronizer
+		} else if synchronizer.ChannelSize != chanSize {
+			return query.ParameterError("buf", errors.New("synchronize() steps with the same 'key' parameter must all have the same 'buf' parameter"))
 		}
 		p.Add(synchronizer.NewSynchronizationStep())
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("synchronize", create, "Synchronize the number of samples going through each synchronize() step with the same key parameter", []string{"key"})
+	b.RegisterAnalysisParamsErr("synchronize", create, "Synchronize the number of samples going through each synchronize() step with the same key parameter", []string{"key"}, "buf")
 }
 
 func (s *PipelineRateSynchronizer) NewSynchronizationStep() bitflow.SampleProcessor {
@@ -43,7 +52,7 @@ func (s *PipelineRateSynchronizer) NewSynchronizationStep() bitflow.SampleProces
 	}
 	step := &synchronizationStep{
 		synchronizer: s,
-		queue:        make(chan sampleAndHeader, chanSize),
+		queue:        make(chan bitflow.SampleAndHeader, chanSize),
 		running:      true,
 	}
 	s.steps = append(s.steps, step)
@@ -63,7 +72,7 @@ func (s *PipelineRateSynchronizer) process(wg *sync.WaitGroup) {
 		runningSteps := 0
 		for _, step := range s.steps {
 			if step.running {
-				if sample := <-step.queue; sample.valid {
+				if sample := <-step.queue; sample.Sample != nil {
 					step.outputSample(sample)
 					runningSteps++
 				} else {
@@ -78,16 +87,10 @@ func (s *PipelineRateSynchronizer) process(wg *sync.WaitGroup) {
 	}
 }
 
-type sampleAndHeader struct {
-	sample *bitflow.Sample
-	header *bitflow.Header
-	valid  bool
-}
-
 type synchronizationStep struct {
 	bitflow.NoopProcessor
 	synchronizer  *PipelineRateSynchronizer
-	queue         chan sampleAndHeader
+	queue         chan bitflow.SampleAndHeader
 	running       bool
 	closeSinkOnce sync.Once
 	err           error
@@ -111,10 +114,9 @@ func (s *synchronizationStep) Sample(sample *bitflow.Sample, header *bitflow.Hea
 	}
 	s.lastSample = sample
 	s.lastHeader = header
-	s.queue <- sampleAndHeader{
-		sample: sample,
-		header: header,
-		valid:  true,
+	s.queue <- bitflow.SampleAndHeader{
+		Sample: sample,
+		Header: header,
 	}
 	return nil
 }
@@ -132,8 +134,8 @@ func (s *synchronizationStep) CloseSink() {
 	})
 }
 
-func (s *synchronizationStep) outputSample(sample sampleAndHeader) {
-	err := s.NoopProcessor.Sample(sample.sample, sample.header)
+func (s *synchronizationStep) outputSample(sample bitflow.SampleAndHeader) {
+	err := s.NoopProcessor.Sample(sample.Sample, sample.Header)
 	if err != nil && s.err == nil {
 		s.err = err
 	}

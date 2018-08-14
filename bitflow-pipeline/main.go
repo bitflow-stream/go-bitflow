@@ -124,6 +124,7 @@ func register_analyses(b *query.PipelineBuilder) {
 	blockMgr := steps.NewBlockManager()
 	blockMgr.RegisterBlockingProcessor(b)
 	blockMgr.RegisterReleasingProcessor(b)
+	steps.RegisterTagSynchronizer(b)
 
 	// Data output
 	steps.RegisterOutputFiles(b)
@@ -170,6 +171,7 @@ func register_analyses(b *query.PipelineBuilder) {
 	steps.RegisterPickHead(b)
 	steps.RegisterSkipHead(b)
 	steps.RegisterConvexHull(b)
+	steps.RegisterDuplicateTimestampFilter(b)
 
 	// Reorder samples
 	steps.RegisterConvexHullSort(b)
