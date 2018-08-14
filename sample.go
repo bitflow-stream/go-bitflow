@@ -260,6 +260,21 @@ func (sample *Sample) CopyMetadataFrom(other *Sample) {
 	})
 }
 
+// CopyTagsFrom adds the tags of the parameter sample to the set of tags already present in the receiving sample.
+// Colliding tags are overwritten, but other existing tags are not deleted.
+func (sample *Sample) AddTagsFrom(other *Sample) {
+	globalCopyMetadataLock.Lock()
+	defer globalCopyMetadataLock.Unlock()
+
+	sample.lockWrite(func() {
+		other.lockRead(func() {
+			for key, val := range other.tags {
+				sample.setTag(key, val)
+			}
+		})
+	})
+}
+
 // Clone returns a copy of the receiving sample. The metadata (timestamp and tags)
 // is copied deeply, but values are referencing the old values. After using this,
 // the old Sample should either not be used anymore, or the Values slice in the new
