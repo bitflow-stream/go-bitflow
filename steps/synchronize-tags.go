@@ -49,11 +49,11 @@ type TagSynchronizer struct {
 	warnedMissingTag   bool
 	warnedEarlySamples map[string]bool
 	referenceStream    []bitflow.SampleAndHeader
-	streams            map[string]*list.List
+	streams            map[string]*targetStream
 }
 
 func (s *TagSynchronizer) Start(wg *sync.WaitGroup) golib.StopChan {
-	s.streams = make(map[string]*list.List)
+	s.streams = make(map[string]*targetStream)
 	s.warnedEarlySamples = make(map[string]bool)
 	return s.NoopProcessor.Start(wg)
 }
@@ -78,12 +78,12 @@ func (s *TagSynchronizer) Close() {
 
 	// All remaining samples receive the tags from the last reference sample
 	for _, stream := range s.streams {
-		for i := stream.Front(); i != nil; i = i.Next() {
+		for i := stream.samples.Front(); i != nil; i = i.Next() {
 			sample := i.Value.(bitflow.SampleAndHeader)
 			if last != nil {
 				s.copyTags(last, sample.Sample)
 			}
-			stream.Remove(i)
+			stream.samples.Remove(i)
 			err := s.NoopProcessor.Sample(sample.Sample, sample.Header)
 			if err != nil {
 				log.Errorf("Error forwarding last samples in tag-synchronizer: %v", err)
@@ -129,10 +129,10 @@ func (s *TagSynchronizer) pushSample(sample *bitflow.Sample, header *bitflow.Hea
 	} else {
 		stream, ok := s.streams[streamName]
 		if !ok {
-			stream = new(list.List)
+			stream = new(targetStream)
 			s.streams[streamName] = stream
 		}
-		stream.PushBack(bitflow.SampleAndHeader{
+		stream.samples.PushBack(bitflow.SampleAndHeader{
 			Sample: sample,
 			Header: header,
 		})
@@ -151,7 +151,7 @@ func (s *TagSynchronizer) synchronize() error {
 	}
 
 	for streamName, stream := range s.streams {
-		for i := stream.Front(); i != nil; i = i.Next() {
+		for i := stream.samples.Front(); i != nil; i = i.Next() {
 			sample := i.Value.(bitflow.SampleAndHeader)
 			index := sort.Search(len(s.referenceStream), func(i int) bool {
 				return s.referenceStream[i].Time.After(sample.Time)
@@ -170,37 +170,39 @@ func (s *TagSynchronizer) synchronize() error {
 			} else {
 				s.copyTags(s.referenceStream[index-1].Sample, sample.Sample)
 			}
-			stream.Remove(i)
+			stream.position = sample.Time
+			stream.samples.Remove(i)
 			send(sample)
 		}
 	}
 
-	// Find the oldest remaining sample
-	var oldest time.Time
-	for _, stream := range s.streams {
-		if front := stream.Front(); front != nil {
-			sample := front.Value.(bitflow.SampleAndHeader)
-			if oldest.IsZero() || sample.Time.Before(oldest) {
-				oldest = sample.Time
-			}
-		}
-	}
+	// If we have already seen all required streams, flush all reference samples from the past
+	if len(s.streams) >= s.NumTargetStreams {
 
-	// Flush unneeded samples from the reference stream. Can only flush after all target streams have been seen at least once
-	if !oldest.IsZero() && len(s.streams) >= s.NumTargetStreams {
-		r := s.referenceStream
-		for i, sample := range r {
-			// Always keep at least one reference sample to synchronize tags of leftover target streams in the end
-			if i >= len(r) || sample.Time.After(oldest) || len(r) <= 1 {
-				break
+		// Find the oldest target stream position
+		var oldest time.Time
+		for _, stream := range s.streams {
+			if !stream.position.IsZero() && (oldest.IsZero() || stream.position.Before(oldest)) {
+				oldest = stream.position
 			}
-			if i < len(r)-1 {
-				copy(r[i:], r[i+1:])
-			}
-			r = r[:len(r)-1]
-			send(sample)
 		}
-		s.referenceStream = r
+
+		// Flush unneeded samples from the reference stream. Can only flush samples that have been surpassed by ALL target streams.
+		if !oldest.IsZero() {
+			r := s.referenceStream
+			for i, sample := range r {
+				// This will preserve at least one reference sample
+				if i >= len(r)-1 || r[i+1].Time.After(oldest) {
+					break
+				}
+				if i < len(r)-1 {
+					copy(r[i:], r[i+1:])
+				}
+				r = r[:len(r)-1]
+				send(sample)
+			}
+			s.referenceStream = r
+		}
 	}
 	return err.NilOrError()
 }
@@ -209,4 +211,9 @@ func (s *TagSynchronizer) copyTags(from, to *bitflow.Sample) {
 	oldRef := to.Tag(s.StreamIdentifierTag)
 	to.AddTagsFrom(from)
 	to.SetTag(s.StreamIdentifierTag, oldRef)
+}
+
+type targetStream struct {
+	samples  list.List
+	position time.Time
 }
