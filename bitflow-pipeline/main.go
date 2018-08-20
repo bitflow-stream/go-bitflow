@@ -110,6 +110,7 @@ func register_analyses(b *query.PipelineBuilder) {
 
 	// Control flow
 	steps.RegisterNoop(b)
+	steps.RegisterDrop(b)
 	steps.RegisterSleep(b)
 	steps.RegisterForks(b)
 	steps.RegisterExpression(b)
