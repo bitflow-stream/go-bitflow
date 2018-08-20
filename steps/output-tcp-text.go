@@ -25,7 +25,7 @@ func RegisterGraphiteOutput(b *query.PipelineBuilder) {
 func RegisterOpentsdbOutput(b *query.PipelineBuilder) {
 	const max_opentsdb_tags = 8
 
-	fixer := strings.NewReplacer("=", "_", "/", ".", " ", "_", "\t", "_", "\n", "_")
+	fixer := strings.NewReplacer("=", "_", ":", "_", "/", ".", " ", "_", "\t", "_", "\n", "_")
 	factory := &SimpleTextMarshallerFactory{
 		Description: "opentsdb",
 		NameFixer:   fixer,
