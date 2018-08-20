@@ -3,6 +3,7 @@ package steps
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"github.com/antongulenko/go-bitflow"
@@ -13,7 +14,7 @@ import (
 func RegisterGraphiteOutput(b *query.PipelineBuilder) {
 	factory := &SimpleTextMarshallerFactory{
 		Description: "graphite",
-		NameFixer:   strings.NewReplacer("/", ".", " ", "_", "\t", "_", "\n", "_"),
+		NameFixer:   strings.NewReplacer("/", ".", " ", "_", "\t", "_", "\n", "_").Replace,
 		WriteValue: func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error {
 			_, err := fmt.Fprintf(writer, "%v %v %v\n", name, val, sample.Time.Unix())
 			return err
@@ -25,16 +26,22 @@ func RegisterGraphiteOutput(b *query.PipelineBuilder) {
 func RegisterOpentsdbOutput(b *query.PipelineBuilder) {
 	const max_opentsdb_tags = 8
 
-	fixer := strings.NewReplacer("=", "_", ":", "_", "/", ".", " ", "_", "\t", "_", "\n", "_")
+	nameReplacer := strings.NewReplacer("/", ".")          // Convention for bitflow metric names uses slashes, while OpenTSDB uses dots
+	illegalChars := regexp.MustCompile("[^\\p{L}\\d-_./]") // \p{L} matches Unicode letters, \d matches digits. The listed characters are legal, and the entire set is negated.
+	replacementString := "_"
+
 	factory := &SimpleTextMarshallerFactory{
 		Description: "opentsdb",
-		NameFixer:   fixer,
+		NameFixer: func(in string) string {
+			in = nameReplacer.Replace(in)
+			return illegalChars.ReplaceAllLiteralString(in, replacementString)
+		},
 		WriteValue: func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error {
-			_, err := fmt.Fprintf(writer, "put %v %v %v", name, sample.Time.Unix(), val)
+			_, err := fmt.Fprintf(writer, "put %v %v %f", name, sample.Time.Unix(), val)
 			addedTags := 0
 			for _, tag := range sample.SortedTags() {
-				key := fixer.Replace(tag.Key)
-				val := fixer.Replace(tag.Value)
+				key := illegalChars.ReplaceAllLiteralString(tag.Key, replacementString)
+				val := illegalChars.ReplaceAllLiteralString(tag.Value, replacementString)
 				_, err = fmt.Fprintf(writer, " %s=%s", key, val)
 				addedTags++
 				if err != nil || addedTags >= max_opentsdb_tags {
@@ -57,7 +64,7 @@ var _ bitflow.Marshaller = new(SimpleTextMarshaller)
 
 type SimpleTextMarshallerFactory struct {
 	Description string
-	NameFixer   *strings.Replacer
+	NameFixer   func(string) string
 	WriteValue  func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error
 }
 
@@ -103,7 +110,7 @@ func _make_tcp_output(params map[string]string) (*bitflow.TCPSink, error) {
 type SimpleTextMarshaller struct {
 	Description  string
 	MetricPrefix string
-	NameFixer    *strings.Replacer
+	NameFixer    func(string) string
 	WriteValue   func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error
 }
 
@@ -123,7 +130,7 @@ func (o *SimpleTextMarshaller) WriteSample(sample *bitflow.Sample, header *bitfl
 	}
 
 	for i, value := range sample.Values {
-		name := o.NameFixer.Replace(prefix + header.Fields[i])
+		name := o.NameFixer(prefix + header.Fields[i])
 		if err := o.WriteValue(name, float64(value), sample, writer); err != nil {
 			return err
 		}
