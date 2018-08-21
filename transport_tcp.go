@@ -140,7 +140,7 @@ func (conn *TcpWriteConn) logReceivedTraffic(wg *sync.WaitGroup, tcpConn *net.TC
 		line := string(lineBytes)
 		if err != nil {
 			// This most likely means the connection was closed
-			conn.log.Debugf("Error receiving data:", err)
+			conn.log.Debugln("Error receiving data (probably because of closed connection):", err)
 			if !conn.IsRunning() {
 				return
 			}
