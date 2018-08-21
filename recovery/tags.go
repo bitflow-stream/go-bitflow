@@ -1,6 +1,8 @@
 package recovery
 
 import (
+	"fmt"
+
 	"github.com/antongulenko/go-bitflow"
 	log "github.com/sirupsen/logrus"
 )
@@ -13,6 +15,10 @@ type ConfigurableTags struct {
 	NormalStateValue string
 
 	warned bool
+}
+
+func (t ConfigurableTags) String() string {
+	return fmt.Sprintf("node-name: %v, normal-state: %v=%v", t.NodeNameTag, t.StateTag, t.NormalStateValue)
 }
 
 func (t *ConfigurableTags) ParseRecoveryTags(params map[string]string) {

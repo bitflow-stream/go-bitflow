@@ -18,26 +18,9 @@ const (
 	StateUnknown    = State("unknown")
 	StateNormal     = State("normal")
 	StateAnomaly    = State("anomaly")
+	StateNoData     = State("no-data")
 	StateRecovering = State("recovering")
-
-	// Indicates that the entire engine is shutting down
-	StateShutdown = State("shutdown")
 )
-
-type NodeState struct {
-	*SimilarityNode
-	Name         string
-	State        State
-	StateString  string
-	LastUpdate   time.Time
-	LastSample   *bitflow.Sample
-	LastHeader   *bitflow.Header
-	StateChanged time.Time
-
-	anomaly          *Anomaly
-	recoveries       []*Execution
-	stateChangedCond *sync.Cond
-}
 
 type DecisionMaker struct {
 	bitflow.NoopProcessor
@@ -49,10 +32,15 @@ type DecisionMaker struct {
 	History   History
 	Selection Selection
 
+	RecoverNoDataState    bool
 	NoDataTimeout         time.Duration
 	RecoveryFailedTimeout time.Duration
 
 	ConfigurableTags
+
+	now          time.Time
+	shutdown     bool
+	progressCond *sync.Cond
 }
 
 func RegisterRecoveryEngine(b *query.PipelineBuilder) {
@@ -63,6 +51,7 @@ func RegisterRecoveryEngine(b *query.PipelineBuilder) {
 		layerSimilarity := query.FloatParam(params, "layer-simil", 0, false, &err)
 		groupSimilarity := query.FloatParam(params, "group-simil", 0, false, &err)
 		evaluate := query.BoolParam(params, "evaluate", false, true, &err)
+		recoverNoDataState := query.BoolParam(params, "recover-no-data", false, false, &err)
 		if err != nil {
 			return err
 		}
@@ -88,6 +77,7 @@ func RegisterRecoveryEngine(b *query.PipelineBuilder) {
 			evalStep.FillerSamples = query.IntParam(params, "filler-samples", 0, true, &err)
 			evalStep.NormalSamplesBetweenAnomalies = query.IntParam(params, "normal-fillers", 0, true, &err)
 			evalStep.RecoveriesPerState = query.FloatParam(params, "recoveries-per-state", 1, true, &err)
+			evalStep.StoreNormalSamples = query.IntParam(params, "store-normal-samples", 1000, true, &err)
 			if err != nil {
 				return err
 			}
@@ -108,37 +98,40 @@ func RegisterRecoveryEngine(b *query.PipelineBuilder) {
 			NoDataTimeout:         noDataTimeout,
 			RecoveryFailedTimeout: recoveryFailedTimeout,
 			ConfigurableTags:      tags,
+			RecoverNoDataState:    recoverNoDataState,
 		})
 		return nil
 	}, "Recovery Engine based on recommendation system",
 		append([]string{
 			"model", "layer-simil", "group-simil", // Dependency/Similarity Graph
 			"no-data", "recovery-failed", // Timeouts
+			"recover-no-data",
 		}, TagParameterNames...),
-		"avg-recovery-time", "recovery-error-percentage", "num-mock-recoveries", // Mock execution engine
-		"evaluate", "sample-rate", "filler-samples", "normal-fillers", "recoveries-per-state", // Evaluation
+		"avg-recovery-time", "recovery-error-percentage", "num-mock-recoveries", "rand-seed", // Mock execution engine
+		"evaluate", "sample-rate", "filler-samples", "normal-fillers", "recoveries-per-state", "store-normal-samples", // Evaluation
 	)
 }
 
 func (d *DecisionMaker) String() string {
-	return fmt.Sprintf("Recovery-Engine Decision Maker (node-name: %v, normal-state: %v=%v, no-data-timeout: %v, recovery-failed-timeout: %v)",
-		d.NodeNameTag, d.StateTag, d.NormalStateValue, d.NoDataTimeout, d.RecoveryFailedTimeout)
+	return fmt.Sprintf("Recovery-Engine Decision Maker (%v, no-data-timeout: %v, recovery-failed-timeout: %v, recover-no-data: %v)",
+		d.ConfigurableTags, d.NoDataTimeout, d.RecoveryFailedTimeout, d.RecoverNoDataState)
 }
 
 func (d *DecisionMaker) Start(wg *sync.WaitGroup) golib.StopChan {
 	d.state = make(map[string]*NodeState)
 	d.warnedUnknownNodes = make(map[string]bool)
-	for nodeName, node := range d.Graph.Nodes {
-		state := &NodeState{
-			SimilarityNode:   node,
-			State:            StateUnknown,
-			Name:             nodeName,
-			stateChangedCond: sync.NewCond(new(sync.Mutex)),
+	d.progressCond = sync.NewCond(new(sync.Mutex))
+	for nodeName, graphNode := range d.Graph.Nodes {
+		d.state[nodeName] = &NodeState{
+			engine:         d,
+			SimilarityNode: graphNode,
+			LastState:      StateUnknown,
+			state:          StateUnknown,
+			Name:           nodeName,
 		}
-		wg.Add(1)
-		go d.handleStateChangeLoop(wg, state)
-		d.state[nodeName] = state
 	}
+	wg.Add(1)
+	go d.loopHandleUpdates(wg)
 	return d.NoopProcessor.Start(wg)
 }
 
@@ -149,148 +142,158 @@ func (d *DecisionMaker) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 		nodeState, ok := d.state[node]
 		if !ok {
 			if !d.warnedUnknownNodes[node] {
-				log.Warnf("Ignoring data for unknown node with %v=%v and %v=%v", d.NodeNameTag, node, d.StateTag, state)
+				log.Warnf("<%v> Ignoring data for unknown node with %v=%v and %v=%v", d.NodeNameTag, node, d.StateTag, state)
 				d.warnedUnknownNodes[node] = true
 			}
 		} else {
-			nodeState.LastUpdate = now
-			nodeState.StateString = state
 			nodeState.LastSample = sample
 			nodeState.LastHeader = header
+			nodeState.LastUpdate = now
 			if state == d.NormalStateValue {
-				d.setState(now, nodeState, StateNormal)
+				nodeState.LastState = StateNormal
 			} else {
-				if nodeState.State != StateRecovering {
-					// Stay in recovering state until timeout
-					d.setState(now, nodeState, StateAnomaly)
-				}
+				nodeState.LastState = StateAnomaly
 			}
 		}
 	}
-	d.timeTick(now)
+	d.progressTime(now)
 	return d.NoopProcessor.Sample(sample, header)
 }
 
 func (d *DecisionMaker) Close() {
-	for _, state := range d.state {
-		d.setState(state.StateChanged, state, StateShutdown)
-	}
+	d.shutdown = true
+	d.progressTime(d.now) // Wakeup and shutdown all parallel goroutines
+	d.NoopProcessor.Close()
 }
 
-func (d *DecisionMaker) timeTick(now time.Time) {
-	for _, state := range d.state {
-		if !state.LastUpdate.IsZero() && !d.hasData(now, state) {
-			// Receiving no data is counted as anomaly
-			d.setState(now, state, StateAnomaly)
-		} else if state.State == StateRecovering && now.Sub(state.StateChanged) >= d.RecoveryFailedTimeout {
-			d.setState(now, state, StateAnomaly)
+func (d *DecisionMaker) progressTime(now time.Time) {
+	d.progressCond.L.Lock()
+	defer d.progressCond.L.Unlock()
+	d.now = now
+	for _, node := range d.state {
+		if now.Sub(node.LastUpdate) > node.engine.NoDataTimeout {
+			// Not receiving any data from node
+			node.LastState = StateNoData
 		}
 	}
+	d.progressCond.Broadcast()
 }
 
-func (d *DecisionMaker) hasData(now time.Time, state *NodeState) bool {
-	return now.Sub(state.LastUpdate) < d.NoDataTimeout
-}
-
-func (d *DecisionMaker) setState(now time.Time, state *NodeState, newState State) {
-	if newState != state.State {
-		state.State = newState
-		state.StateChanged = now
-		state.stateChangedCond.L.Lock()
-		defer state.stateChangedCond.L.Unlock()
-		state.stateChangedCond.Broadcast()
-	}
-}
-
-func (d *DecisionMaker) handleStateChangeLoop(wg *sync.WaitGroup, node *NodeState) {
+func (d *DecisionMaker) loopHandleUpdates(wg *sync.WaitGroup) {
 	defer wg.Done()
-	oldState := node.State
-	for {
-		// Wait for state change
-		for oldState == node.State {
-			node.stateChangedCond.L.Lock()
-			node.stateChangedCond.Wait()
-			node.stateChangedCond.L.Unlock()
-		}
-		newState := node.State
-		if newState == StateShutdown || d.StopChan.Stopped() {
+	var now time.Time
+	for !d.shutdown {
+		now = d.waitForUpdate(now)
+		if d.shutdown {
 			break
 		}
-
-		d.stateChanged(node.StateChanged, oldState, node)
-		oldState = newState
+		for _, node := range d.state {
+			node.stateUpdated(now)
+		}
 	}
 }
 
-func (d *DecisionMaker) stateChanged(now time.Time, oldState State, state *NodeState) {
-	log.Printf("Node %v switched state %v -> %v (have data: %v)", state.Name, oldState, state.State, d.hasData(now, state))
+func (d *DecisionMaker) waitForUpdate(previousTime time.Time) time.Time {
+	d.progressCond.L.Lock()
+	defer d.progressCond.L.Unlock()
+	for !previousTime.Before(d.now) && !d.shutdown {
+		d.progressCond.Wait()
+	}
+	return d.now
+}
+
+type NodeState struct {
+	*SimilarityNode
+	engine *DecisionMaker
+	Name   string
+
+	// Data updated from received samples
+	LastUpdate time.Time
+	LastSample *bitflow.Sample
+	LastHeader *bitflow.Header
+	LastState  State
+
+	// Internal state
+	state        State
+	stateChanged time.Time
+
+	anomaly    *Anomaly
+	recoveries []*Execution
+}
+
+func (node *NodeState) stateUpdated(now time.Time) {
+	newState := node.LastState
+	if node.state == StateRecovering && newState != StateNormal {
+		// When recovering, stay in that state until the anomaly is resolved or times out
+		if now.Sub(node.stateChanged) < node.engine.RecoveryFailedTimeout {
+			newState = StateRecovering // Recovery has not yet timed out
+		}
+	}
+	node.setState(newState, now)
+}
+
+func (node *NodeState) setState(newState State, now time.Time) {
+	if node.state != newState {
+		oldState := node.state
+		node.state = newState
+		node.stateChanged = now
+		log.Debugf("Node %v switched state %v -> %v", node.Name, oldState, newState)
+		node.handleStateChanged(oldState, now)
+	}
+}
+
+func (node *NodeState) handleStateChanged(oldState State, now time.Time) {
+	newState := node.state
 	switch {
-	case oldState == StateRecovering && state.State == StateNormal:
-		d.recoverySuccessful(now, state)
-	case oldState == StateRecovering && state.State == StateAnomaly:
-		d.recoveryTimedOut(now, state)
-	case state.State == StateAnomaly:
-		if state.anomaly != nil {
-			log.Errorf("State of node %v changed to anomaly, although an anomaly was already active... Discarding old anomaly data.", state.Name)
+	case oldState == StateRecovering && newState == StateNormal:
+		// Recovery successful
+		recovery := node.recoveries[len(node.recoveries)-1]
+		recovery.Ended = now
+		recovery.Successful = true
+		node.engine.History.StoreAnomaly(node.anomaly, node.recoveries)
+		node.anomaly = nil
+		node.recoveries = nil
+	case oldState == StateRecovering && (newState == StateAnomaly || newState == StateNoData):
+		// Recovery timed out. Restart recovery procedure.
+		recovery := node.recoveries[len(node.recoveries)-1]
+		recovery.Ended = now
+		fallthrough
+	case newState == StateAnomaly || newState == StateNoData:
+		if newState == StateAnomaly || node.engine.RecoverNoDataState {
+			if node.anomaly == nil {
+				node.anomaly = &Anomaly{
+					Node:     node.Name,
+					Features: SampleToAnomalyFeatures(node.LastSample, node.LastHeader),
+					Start:    now,
+				}
+			}
+			node.setState(StateRecovering, now)
 		}
-		state.recoveries = nil
-		state.anomaly = &Anomaly{
-			Node:     state.Name,
-			Features: SampleToAnomalyFeatures(state.LastSample, state.LastHeader),
-			Start:    now,
-		}
-		d.runRecovery(now, state)
+	case newState == StateRecovering:
+		node.runRecovery(now)
 	}
 }
 
-func (d *DecisionMaker) getAnomalyFeatures(now time.Time, state *NodeState) []AnomalyFeature {
-	if state.LastHeader == nil || state.LastSample == nil {
-		// No data available... Should usually not happen, but the recovery-action selection will have to deal with that.
-		log.Warnf("No data received yet for node '%v', cannot compute features of anomaly situation", state.Name)
-		return nil
+func (node *NodeState) runRecovery(now time.Time) {
+	recoveryName := node.selectRecovery()
+	if recoveryName == "" {
+		log.Errorf("No recovery available for node %v, state %v", node.Name, node.state)
+		return
 	}
-	return SampleToAnomalyFeatures(state.LastSample, state.LastHeader)
+	duration, err := node.engine.Execution.RunRecovery(node.Name, recoveryName)
+	node.recoveries = append(node.recoveries, &Execution{
+		Node:     node.Name,
+		Recovery: recoveryName,
+		Started:  now,
+		Duration: duration,
+		Error:    err,
+	})
 }
 
-func (d *DecisionMaker) runRecovery(now time.Time, state *NodeState) {
-	for {
-		recoveryName := d.selectRecovery(now, state)
-		duration, err := d.Execution.RunRecovery(state.Name, recoveryName)
-		finished := now.Add(duration)
-		recovery := &Execution{
-			Node:              state.Name,
-			Recovery:          recoveryName,
-			Started:           now,
-			ExecutionFinished: finished,
-		}
-		state.recoveries = append(state.recoveries, recovery)
-		if err != nil {
-			recovery.Error = err.Error()
-			now = finished
-			d.runRecovery(finished, state)
-		} else {
-			// TODO limit the number of retries
-			break
-		}
+func (node *NodeState) selectRecovery() string {
+	possible := node.engine.Execution.PossibleRecoveries(node.Name)
+	if len(possible) == 0 {
+		return ""
 	}
-}
-
-func (d *DecisionMaker) recoverySuccessful(now time.Time, state *NodeState) {
-	recovery := state.recoveries[len(state.recoveries)-1]
-	recovery.Ended = now
-	recovery.Successful = true
-	d.History.StoreAnomaly(state.anomaly, state.recoveries)
-	state.anomaly = nil
-	state.recoveries = nil
-}
-
-func (d *DecisionMaker) recoveryTimedOut(now time.Time, state *NodeState) {
-	recovery := state.recoveries[len(state.recoveries)-1]
-	recovery.Ended = now
-	d.runRecovery(now, state)
-}
-
-func (d *DecisionMaker) selectRecovery(now time.Time, state *NodeState) string {
-	possible := d.Execution.PossibleRecoveries(state.Name)
-	return d.Selection.SelectRecovery(state.SimilarityNode, state.anomaly.Features, possible, d.History)
+	return node.engine.Selection.SelectRecovery(node.SimilarityNode, node.anomaly.Features, possible, node.engine.History)
 }

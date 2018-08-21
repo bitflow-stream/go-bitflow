@@ -20,13 +20,13 @@ type Anomaly struct {
 }
 
 type Execution struct {
-	Node              string
-	Recovery          string
-	Started           time.Time
-	ExecutionFinished time.Time // 0 means it is still running
-	Ended             time.Time // Time when the anomaly was reverted or when this recovery timed out, depening on the Successful flag
-	Successful        bool
-	Error             string // If the recovery failed to execute
+	Node       string
+	Recovery   string
+	Started    time.Time
+	Duration   time.Duration
+	Ended      time.Time // Time when the anomaly was reverted or when this recovery timed out, depending on the Successful flag
+	Successful bool
+	Error      error // If the recovery failed to execute
 }
 
 type AnomalyFeature struct {
