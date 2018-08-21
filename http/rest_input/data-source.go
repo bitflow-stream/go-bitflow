@@ -62,7 +62,7 @@ func (endpoint *RestEndpoint) serve(verb string, path string, logFile string, se
 
 	handlers := gin.HandlersChain{serve}
 	if logFile != "" {
-		handlers = append(handlers, plotHttp.LogGinRequests(logFile, true))
+		handlers = append(handlers, plotHttp.LogGinRequests(logFile, true, true))
 	}
 	endpoint.engine.Handle(verb, path, handlers...)
 	endpoint.paths = append(endpoint.paths, pathStr)
