@@ -24,7 +24,8 @@ import (
 
 const (
 	PlotAxisTime = -1
-	PlotAxisAuto = -2
+	PlotAxisNum  = -2
+	PlotAxisAuto = -3
 	minAxis      = PlotAxisAuto
 
 	PlotWidth  = 20 * vg.Centimeter
@@ -33,11 +34,13 @@ const (
 	numColors      = 100
 	plotTimeFormat = "02.01.2006 15:04:05"
 	plotTimeLabel  = "time"
+	plotNumLabel   = "num"
 
 	ScatterPlot = PlotType(iota)
 	LinePlot
 	LinePointPlot
 	ClusterPlot
+	BoxPlot
 	InvalidPlotType
 )
 
@@ -134,15 +137,19 @@ func (p *PlotProcessor) headerChanged(header *bitflow.Header) error {
 	}
 
 	var xName, yName string
-	if p.x < 0 {
-		xName = plotTimeLabel
-	} else {
+	if p.x == PlotAxisNum {
+		xName = plotNumLabel
+	} else if p.x >= 0 {
 		xName = header.Fields[p.x]
-	}
-	if p.y < 0 {
-		yName = plotTimeLabel
 	} else {
+		xName = plotTimeLabel
+	}
+	if p.y == PlotAxisNum {
+		xName = plotNumLabel
+	} else if p.y >= 0 {
 		yName = header.Fields[p.y]
+	} else {
+		yName = plotTimeLabel
 	}
 
 	if p.xName == "" && p.yName == "" {
@@ -166,21 +173,23 @@ func (p *PlotProcessor) storeSample(sample *bitflow.Sample) {
 			key = "(none)"
 		}
 	}
-
-	var x, y float64
-	if p.x < 0 {
-		x = float64(sample.Time.Unix())
-	} else {
-		x = float64(sample.Values[p.x])
-	}
-	if p.y < 0 {
-		y = float64(sample.Time.Unix())
-	} else {
-		y = float64(sample.Values[p.y])
-	}
-
+	x := p.getVal(p.x, key, sample)
+	y := p.getVal(p.y, key, sample)
 	p.data[key] = append(p.data[key], struct{ X, Y float64 }{x, y})
-	p.radiuses[key] = append(p.radiuses[key], float64(sample.Values[p.radius]))
+	if p.needsRadius() {
+		p.radiuses[key] = append(p.radiuses[key], float64(sample.Values[p.radius]))
+	}
+}
+
+func (p *PlotProcessor) getVal(index int, key string, sample *bitflow.Sample) (res float64) {
+	if index == PlotAxisTime {
+		res = float64(sample.Time.Unix())
+	} else if index == PlotAxisNum {
+		res = float64(len(p.data[key]))
+	} else if index < len(sample.Values) {
+		res = float64(sample.Values[index])
+	}
+	return
 }
 
 func (p *PlotProcessor) Close() {
@@ -306,6 +315,10 @@ func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs, rad
 		return err
 	}
 
+	if p.Type == BoxPlot {
+		return p.fillBoxPlot(plot, plotData)
+	}
+
 	for name, data := range plotData {
 		plotColor := shape.Colors.Next()
 		legend := name != "" && !p.NoLegend
@@ -343,7 +356,7 @@ func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs, rad
 				yErr.Color = plotColor
 				plot.Add(xErr, yErr)
 				if legend {
-					plot.Legend.Add(name, &boxThumnail{color: plotColor})
+					plot.Legend.Add(name, &boxThumbnail{color: plotColor})
 					legend = false
 				}
 			}
@@ -376,11 +389,47 @@ func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs, rad
 	return nil
 }
 
-type boxThumnail struct {
+func (p *Plot) fillBoxPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs) error {
+	for name, data := range plotData {
+		log.Debugf("BoxPlot data key %v, len %v", name, len(data))
+	}
+
+	var maxLen int
+	var values []plotter.Values
+	for i := 0; ; i++ {
+		var newValues plotter.Values
+		for _, data := range plotData {
+			if len(data) > i {
+				newValues = append(newValues, data[i].Y) // Ignore X value, since it is implicitly the index
+			}
+		}
+		if len(newValues) == 0 {
+			break
+		}
+		log.Debugf("BoxPlot bucket %v, len %v", i, len(values))
+		values = append(values, newValues)
+		if maxLen < len(newValues) {
+			maxLen = len(newValues)
+		}
+	}
+
+	minWidth, maxWidth := float64(5), float64(30)
+	for i, values := range values {
+		width := (float64(len(values))/float64(maxLen))*(maxWidth-minWidth) + minWidth
+		box, err := plotter.NewBoxPlot(vg.Length(width), float64(i), values)
+		if err != nil {
+			return err
+		}
+		plot.Add(box)
+	}
+	return nil
+}
+
+type boxThumbnail struct {
 	color color.Color
 }
 
-func (b *boxThumnail) Thumbnail(c *draw.Canvas) {
+func (b *boxThumbnail) Thumbnail(c *draw.Canvas) {
 	points := []vg.Point{
 		{c.Min.X, c.Min.Y},
 		{c.Min.X, c.Max.Y},
@@ -511,7 +560,7 @@ func RegisterPlot(b *query.PipelineBuilder) {
 			OutputFile: params["file"],
 			Type:       ScatterPlot,
 		}
-		if colorName, hasColor := params["colorName"]; hasColor {
+		if colorName, hasColor := params["color"]; hasColor {
 			plot.ColorTag = colorName
 		}
 		var err error
@@ -534,10 +583,15 @@ func RegisterPlot(b *query.PipelineBuilder) {
 				case "linepoint":
 					plot.Type = LinePointPlot
 				case "cluster":
+					plot.SeparatePlots = false
 					plot.Type = ClusterPlot
 					plot.RadiusDimension = 0
 					plot.AxisX = 1
 					plot.AxisY = 2
+				case "box":
+					plot.Type = BoxPlot
+					plot.AxisX = PlotAxisNum
+					plot.AxisY = 0
 				case "separate":
 					plot.SeparatePlots = true
 				case "force_scatter":
@@ -547,7 +601,7 @@ func RegisterPlot(b *query.PipelineBuilder) {
 					plot.AxisX = PlotAxisTime
 					plot.AxisY = 0
 				default:
-					all_flags := []string{"nolegend", "line", "linepoint", "separate", "force_scatter", "force_time"}
+					all_flags := []string{"nolegend", "line", "linepoint", "cluster", "separate", "force_scatter", "force_time"}
 					return fmt.Errorf("Unkown flag: '%v'. The 'flags' parameter is a comma-separated list of flags: %v", part, all_flags)
 				}
 			}
