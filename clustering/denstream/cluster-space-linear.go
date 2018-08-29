@@ -81,3 +81,7 @@ func (s *LinearClusterSpace) UpdateCluster(cluster clustering.SphericalCluster, 
 		s.clusters[basic] = true
 	}
 }
+
+func (s *LinearClusterSpace) checkClusterForOpt(epsilon float64) float64 {
+	return 0
+}

@@ -2,12 +2,17 @@ package denstream
 
 import (
 	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	log "github.com/sirupsen/logrus"
 	"time"
 )
 
 var _ ClusterSpace = new(BirchTreeClusterSpace)
 
 const _maxChildren = 7
+
+var TotalSparseness float64
+var TotalOverlap float64
+var subClusterCount int
 
 type BirchTreeClusterSpace struct {
 	root          *BirchTreeNode
@@ -22,6 +27,7 @@ type BirchTreeNode struct {
 	numChildren int
 	children    []*BirchTreeNode
 	parent      *BirchTreeNode
+	isverified  bool
 }
 
 func (n *BirchTreeNode) isLeaf() bool {
@@ -157,6 +163,20 @@ func (s *BirchTreeClusterSpace) UpdateCluster(cluster clustering.SphericalCluste
 	if do() {
 		s.Insert(cluster)
 	}
+}
+
+func (s *BirchTreeClusterSpace) checkClusterForOpt(epsilon float64) float64 {
+
+	s.traverseSubClusters(s.root, epsilon)
+	log.Println("checkClusterForOpt: ", TotalSparseness, TotalOverlap, subClusterCount)
+
+	clustersapartby := (TotalSparseness + TotalOverlap) / float64(2*subClusterCount)
+
+	TotalSparseness = 0.0
+	TotalOverlap = 0.0
+	subClusterCount = 0
+	s.clearParentFlag(s.root)
+	return clustersapartby
 }
 
 // ========================================================================================================
@@ -349,5 +369,83 @@ func (s *BirchTreeClusterSpace) updateCFofParentNodes(node *BirchTreeNode) {
 			s.addCFtoParentNode(parentNode, parentNode.children[i])
 		}
 		curNode = parentNode
+	}
+}
+
+/////////////////////////Hyperparameter optimisations///////////////////
+func (s *BirchTreeClusterSpace) findCentralCluster(node *BirchTreeNode) (centralCluster *BirchTreeNode) {
+	if node.isLeaf() {
+		return
+	}
+	subClustCenter := node.Coreset.Center()
+	var closestDistance float64
+	// var closestCluster *BirchTreeNode
+	for i := 0; i < node.numChildren; i++ {
+		childClust := node.children[i]
+		dist := clustering.EuclideanDistance(subClustCenter, childClust.Center())
+		if closestDistance == float64(0) || dist < closestDistance {
+			closestDistance = dist
+			centralCluster = childClust
+		}
+	}
+	return
+}
+
+func (s *BirchTreeClusterSpace) isCompactSubCluster(node *BirchTreeNode, epsilon float64) {
+	centralCluster := s.findCentralCluster(node)
+	log.Println("central cluster is", centralCluster.Coreset)
+	subClusterCount++
+	totalDistApart := 0.0
+	countSubclustersApart := 0
+	totalDistOverlap := 0.0
+	countSubclustersOverlap := 0
+
+	for i := 0; i < node.numChildren; i++ {
+		childClust := node.children[i]
+		dist := clustering.EuclideanDistance(centralCluster.Center(), childClust.Center())
+		if dist == 0 {
+			continue
+		}
+
+		gap := dist - 2*epsilon
+		log.Println("child cluster is", childClust.Coreset, dist, gap)
+		if gap > 0 {
+			totalDistApart += gap
+			countSubclustersApart++
+		} else {
+			totalDistOverlap += gap
+			countSubclustersOverlap++
+		}
+	}
+	//avergae sparseness or overlap of each subcluster is summed up
+	// to determine if the radius of the cluster has to increase or decrease
+	if countSubclustersApart > 0 {
+		TotalSparseness += (totalDistApart / (2 * float64(countSubclustersApart)))
+	}
+	if countSubclustersOverlap > 0 {
+		TotalOverlap += (totalDistOverlap / (2 * float64(countSubclustersOverlap)))
+	}
+
+}
+
+func (s *BirchTreeClusterSpace) traverseSubClusters(node *BirchTreeNode, epsilon float64) {
+	if node.isLeaf() && node.parent.isverified == false {
+		s.isCompactSubCluster(node.parent, epsilon)
+		node.parent.isverified = true
+		return
+	}
+	for i := 0; i < node.numChildren; i++ {
+		s.traverseSubClusters(node.children[i], epsilon)
+	}
+}
+
+func (s *BirchTreeClusterSpace) clearParentFlag(node *BirchTreeNode) {
+	if node.isLeaf() && node.parent.isverified == true {
+		log.Println(" clear ParentFlag ", node.parent.Coreset, node.parent.isverified)
+		node.parent.isverified = false
+
+	}
+	for i := 0; i < node.numChildren; i++ {
+		s.clearParentFlag(node.children[i])
 	}
 }

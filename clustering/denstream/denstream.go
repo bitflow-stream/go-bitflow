@@ -3,11 +3,13 @@ package denstream
 
 import (
 	"fmt"
+	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	log "github.com/sirupsen/logrus"
 	"math"
 	"time"
-
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 )
+
+var inputCount int = 0
 
 const (
 	Outlier       = -1
@@ -27,6 +29,7 @@ type ClusterSpace interface {
 	Delete(cluster clustering.SphericalCluster, reason string)
 	TransferCluster(cluster clustering.SphericalCluster, otherSpace ClusterSpace)
 	UpdateCluster(cluster clustering.SphericalCluster, do func() (reinsertCluster bool))
+	checkClusterForOpt(epsilon float64) float64
 }
 
 type DenstreamClusterer struct {
@@ -54,6 +57,7 @@ func (c *DenstreamClusterer) SetDecayTimeUnit(delta time.Duration) {
 }
 
 func (c *DenstreamClusterer) Insert(point []float64, timestamp time.Time) (clusterId int) {
+	inputCount++
 	if c.computedDecayInterval == 0 {
 		// Lazy initialize
 		c.computedDecayInterval = c.decayCheckInterval()
@@ -74,6 +78,13 @@ func (c *DenstreamClusterer) Insert(point []float64, timestamp time.Time) (clust
 		c.periodicCheck(now, delta)
 		c.decayCheckCounter++
 		c.lastPeriodicCheck = now
+	}
+
+	if inputCount%10000 == 0 {
+		epsilondiff := c.pClusters.checkClusterForOpt(c.Epsilon)
+		log.Println("epsilon diff: ", epsilondiff)
+		c.Epsilon += math.Round(epsilondiff*100) / 100
+		log.Println("modified epsilon to ", c.Epsilon)
 	}
 	return
 }

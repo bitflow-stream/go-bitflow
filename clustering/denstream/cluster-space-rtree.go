@@ -97,6 +97,10 @@ func (s *RtreeClusterSpace) UpdateCluster(clust clustering.SphericalCluster, do 
 	}
 }
 
+func (s *RtreeClusterSpace) checkClusterForOpt(epsilon float64) float64 {
+	return 0
+}
+
 func (s *RtreeClusterSpace) clusterDeleteComparator(obj1, obj2 rtreego.Spatial) bool {
 	return obj1.(*RtreeCluster) == obj2.(*RtreeCluster)
 }
