@@ -14,15 +14,11 @@ import (
 
 func RegisterResendStep(b *query.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("resend",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
-			interval, err := time.ParseDuration(params["interval"])
-			if err != nil {
-				return query.ParameterError("interval", err)
-			}
+		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
 			p.Add(&ResendProcessor{
-				Interval: interval,
+				Interval: query.DurationParam(params, "interval", 0, false, &err),
 			})
-			return nil
+			return
 		},
 		"If no new sample is received within the given period of time, resend a copy of it.", []string{"interval"})
 }
@@ -77,4 +73,43 @@ func SendPeriodically(sample *bitflow.Sample, header *bitflow.Header, receiver b
 		}
 	}()
 	return stopper
+}
+
+func RegisterFillUpStep(b *query.PipelineBuilder) {
+	b.RegisterAnalysisParamsErr("fill-up",
+		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+			interval := query.DurationParam(params, "interval", 0, false, &err)
+			stepInterval := query.DurationParam(params, "step-interval", interval, true, &err)
+			p.Add(&FillUpProcessor{
+				MinMissingInterval: interval,
+				StepInterval:       stepInterval,
+			})
+			return
+		},
+		"If the timestamp different between two consecutive samples is larger than the given interval, send copies of the first sample to fill the gap", []string{"interval"}, "step-interval")
+}
+
+type FillUpProcessor struct {
+	bitflow.NoopProcessor
+	MinMissingInterval time.Duration
+	StepInterval       time.Duration
+	previous           *bitflow.Sample
+}
+
+func (p *FillUpProcessor) String() string {
+	return fmt.Sprintf("Fill up samples missing for %v (in intervals of %v)", p.MinMissingInterval, p.StepInterval)
+}
+
+func (p *FillUpProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+	if p.previous != nil && !p.previous.Time.Add(p.MinMissingInterval).After(sample.Time) {
+		for t := p.previous.Time.Add(p.StepInterval); t.Before(sample.Time); t = t.Add(p.StepInterval) {
+			clone := p.previous.DeepClone()
+			clone.Time = t
+			if err := p.NoopProcessor.Sample(clone, header); err != nil {
+				return err
+			}
+		}
+	}
+	p.previous = sample.DeepClone() // Clone necessary because follow-up steps might modify the sample in-place
+	return p.NoopProcessor.Sample(sample, header)
 }

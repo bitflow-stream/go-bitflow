@@ -44,7 +44,7 @@ type DecisionMaker struct {
 }
 
 func RegisterRecoveryEngine(b *query.PipelineBuilder) {
-	b.RegisterAnalysisParamsErr("recovery", func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+	b.RegisterAnalysisParamsErr("recovery", func(p *pipeline.SamplePipeline, params map[string]string) error {
 		var err error
 		noDataTimeout := query.DurationParam(params, "no-data", 0, false, &err)
 		recoveryFailedTimeout := query.DurationParam(params, "recovery-failed", 0, false, &err)
@@ -67,30 +67,41 @@ func RegisterRecoveryEngine(b *query.PipelineBuilder) {
 		if err != nil {
 			return err
 		}
+		selection, err := NewRandomSelectionParams(params)
+		if err != nil {
+			return err
+		}
 
 		if evaluate {
-			evalStep := &EvaluationProcessor{
-				data:      make(map[string]*nodeEvaluationData),
-				Execution: execution,
+			collector := &EvaluationDataCollector{
+				data:               make(map[string]*nodeEvaluationData),
+				StoreNormalSamples: query.IntParam(params, "store-normal-samples", 1000, true, &err),
 			}
-			evalStep.SampleRate = query.DurationParam(params, "sample-rate", 0, true, &err)
-			evalStep.FillerSamples = query.IntParam(params, "filler-samples", 0, true, &err)
-			evalStep.NormalSamplesBetweenAnomalies = query.IntParam(params, "normal-fillers", 0, true, &err)
-			evalStep.RecoveriesPerState = query.FloatParam(params, "recoveries-per-state", 1, true, &err)
-			evalStep.StoreNormalSamples = query.IntParam(params, "store-normal-samples", 1000, true, &err)
+			collector.ParseRecoveryTags(params)
+			evalStep := &EvaluationProcessor{
+				Execution:                     execution,
+				SampleRate:                    query.DurationParam(params, "sample-rate", 0, true, &err),
+				FillerSamples:                 query.IntParam(params, "filler-samples", 0, true, &err),
+				NormalSamplesBetweenAnomalies: query.IntParam(params, "normal-fillers", 0, true, &err),
+				RecoveriesPerState:            query.FloatParam(params, "recoveries-per-state", 1, true, &err),
+				collector:                     collector,
+			}
 			if err != nil {
 				return err
 			}
-			evalStep.ParseRecoveryTags(params)
-			pipeline.Add(evalStep)
+
+			p.Add((&pipeline.BatchProcessor{
+				FlushTags:                   []string{collector.NodeNameTag, collector.StateTag, "anomaly"},
+				SampleTimestampFlushTimeout: 5 * time.Second,
+			}).Add(collector))
+			p.Add(evalStep)
 		}
 
 		history := new(VolatileHistory)
-		selection := new(RandomSelection)
 
 		var tags ConfigurableTags
 		tags.ParseRecoveryTags(params)
-		pipeline.Add(&DecisionMaker{
+		p.Add(&DecisionMaker{
 			Graph:                 graph,
 			Execution:             execution,
 			History:               history,

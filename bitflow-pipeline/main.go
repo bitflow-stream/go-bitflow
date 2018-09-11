@@ -120,6 +120,7 @@ func register_analyses(b *query.PipelineBuilder) {
 	steps.RegisterDecouple(b)
 	steps.RegisterDropErrorsStep(b)
 	steps.RegisterResendStep(b)
+	steps.RegisterFillUpStep(b)
 	steps.RegisterPipelineRateSynchronizer(b)
 	steps.RegisterSubpipelineStreamMerger(b)
 	blockMgr := steps.NewBlockManager()
