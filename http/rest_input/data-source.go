@@ -81,10 +81,11 @@ func (endpoint *RestEndpoint) NewDataSource(outgoingSampleBuffer int) *RestDataS
 type RestDataSource struct {
 	bitflow.AbstractSampleSource
 
-	outgoing chan bitflow.SampleAndHeader
-	stop     golib.StopChan
-	endpoint *RestEndpoint
-	wg       *sync.WaitGroup
+	outgoing  chan bitflow.SampleAndHeader
+	stop      golib.StopChan
+	closeOnce sync.Once
+	endpoint  *RestEndpoint
+	wg        *sync.WaitGroup
 }
 
 func (source *RestDataSource) Endpoint() string {
@@ -108,7 +109,8 @@ func (source *RestDataSource) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (source *RestDataSource) Close() {
-	source.stop.StopFunc(func() {
+	source.closeOnce.Do(func() {
+		source.stop.Stop()
 		close(source.outgoing)
 		source.AbstractSampleSource.CloseSinkParallel(source.wg)
 	})

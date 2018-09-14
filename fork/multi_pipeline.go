@@ -25,7 +25,8 @@ func (m *MultiPipeline) Init(outgoing bitflow.SampleProcessor, closeHook func(),
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		m.waitForPipelines()
+		m.waitForStoppedPipelines()
+		m.subPipelineWg.Wait()
 		closeHook()
 	}()
 }
@@ -93,13 +94,12 @@ func (m *MultiPipeline) stopPipelines() {
 	wg.Wait()
 }
 
-func (m *MultiPipeline) waitForPipelines() {
+func (m *MultiPipeline) waitForStoppedPipelines() {
 	m.stoppedCond.L.Lock()
 	defer m.stoppedCond.L.Unlock()
 	for !m.stopped || m.runningPipelines > 0 {
 		m.stoppedCond.Wait()
 	}
-	m.subPipelineWg.Wait()
 }
 
 func (m *MultiPipeline) LogFinishedPipeline(isPassive bool, err error, prefix string) {
@@ -150,5 +150,5 @@ func (sink *Merger) Sample(sample *bitflow.Sample, header *bitflow.Header) error
 }
 
 func (sink *Merger) Close() {
-	// The actual outgoing sink must be closed after waitForPipelines() returns
+	// The actual outgoing sink must be closed in the closeHook function passed to Init()
 }
