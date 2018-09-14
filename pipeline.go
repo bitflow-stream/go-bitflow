@@ -25,7 +25,7 @@ type SamplePipeline struct {
 // field will be ignored. A new instance of DroppingSampleProcessor is added to the
 // list of Processors to ensure that every step has a valid subsequent step.
 //
-// Additonally, all SampleProcessor instances will be wrapped in small wrapper objects
+// Additionally, all SampleProcessor instances will be wrapped in small wrapper objects
 // that ensure that the samples and headers forwarded between the processors are consistent.
 func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 	firstSource := p.Source
