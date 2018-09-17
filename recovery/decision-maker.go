@@ -228,8 +228,8 @@ type NodeState struct {
 	state        State
 	stateChanged time.Time
 
-	anomaly    *Anomaly
-	recoveries []*Execution
+	anomaly    *AnomalyEvent
+	recoveries []*ExecutionEvent
 }
 
 func (node *NodeState) stateUpdated(now time.Time) {
@@ -272,7 +272,7 @@ func (node *NodeState) handleStateChanged(oldState State, now time.Time) {
 	case newState == StateAnomaly || newState == StateNoData:
 		if newState == StateAnomaly || node.engine.RecoverNoDataState {
 			if node.anomaly == nil {
-				node.anomaly = &Anomaly{
+				node.anomaly = &AnomalyEvent{
 					Node:     node.Name,
 					Features: SampleToAnomalyFeatures(node.LastSample, node.LastHeader),
 					Start:    now,
@@ -292,7 +292,7 @@ func (node *NodeState) runRecovery(now time.Time) {
 		return
 	}
 	duration, err := node.engine.Execution.RunRecovery(node.Name, recoveryName)
-	node.recoveries = append(node.recoveries, &Execution{
+	node.recoveries = append(node.recoveries, &ExecutionEvent{
 		Node:     node.Name,
 		Recovery: recoveryName,
 		Started:  now,

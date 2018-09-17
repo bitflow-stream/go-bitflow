@@ -7,19 +7,23 @@ import (
 )
 
 type History interface {
-	StoreAnomaly(anomaly *Anomaly, executions []*Execution)
-	GetAnomalies(node string) []*Anomaly
-	GetExecutions(anomaly *Anomaly) []*Execution
+	StoreAnomaly(anomaly *AnomalyEvent, executions []*ExecutionEvent)
+	GetAnomalies(node string) []*AnomalyEvent
+	GetExecutions(anomaly *AnomalyEvent) []*ExecutionEvent
 }
 
-type Anomaly struct {
+type AnomalyEvent struct {
 	Node     string
 	Features []AnomalyFeature
 	Start    time.Time
 	End      time.Time
 }
 
-type Execution struct {
+func (e *AnomalyEvent) IsResolved() bool {
+	return e != nil && !e.Start.IsZero() && !e.End.IsZero() && e.End.After(e.Start)
+}
+
+type ExecutionEvent struct {
 	Node       string
 	Recovery   string
 	Started    time.Time
@@ -46,23 +50,23 @@ func SampleToAnomalyFeatures(sample *bitflow.Sample, header *bitflow.Header) []A
 }
 
 type VolatileHistory struct {
-	anomalies  map[string][]*Anomaly
-	executions map[*Anomaly][]*Execution
+	anomalies  map[string][]*AnomalyEvent
+	executions map[*AnomalyEvent][]*ExecutionEvent
 }
 
-func (h *VolatileHistory) StoreAnomaly(anomaly *Anomaly, executions []*Execution) {
+func (h *VolatileHistory) StoreAnomaly(anomaly *AnomalyEvent, executions []*ExecutionEvent) {
 	if h.anomalies == nil {
-		h.anomalies = make(map[string][]*Anomaly)
-		h.executions = make(map[*Anomaly][]*Execution)
+		h.anomalies = make(map[string][]*AnomalyEvent)
+		h.executions = make(map[*AnomalyEvent][]*ExecutionEvent)
 	}
 	h.anomalies[anomaly.Node] = append(h.anomalies[anomaly.Node], anomaly)
 	h.executions[anomaly] = executions
 }
 
-func (h *VolatileHistory) GetAnomalies(node string) []*Anomaly {
+func (h *VolatileHistory) GetAnomalies(node string) []*AnomalyEvent {
 	return h.anomalies[node]
 }
 
-func (h *VolatileHistory) GetExecutions(anomaly *Anomaly) []*Execution {
+func (h *VolatileHistory) GetExecutions(anomaly *AnomalyEvent) []*ExecutionEvent {
 	return h.executions[anomaly]
 }
