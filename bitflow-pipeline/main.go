@@ -23,8 +23,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow-pipeline/query"
 	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	antlrscript "github.com/antongulenko/go-bitflow-pipeline/bitflowcli/script"
 )
-
 
 func main() {
 	flag.Usage = func() {
@@ -42,25 +42,27 @@ func do_main() int {
 	scriptFile := ""
 	flag.StringVar(&scriptFile, "f", "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 
-	queryBuilder := query.NewPipelineBuilder()
-	plugin.RegisterPluginDataSource(&queryBuilder.Endpoints)
+	newScriptBuilder := antlrscript.NewProcessorRegistry()
+	oldScriptBuilder := query.NewPipelineBuilder()
+	queryBuilder := builder.MultiRegistryBuilder{Registries: []builder.ProcessorRegistry{newScriptBuilder, oldScriptBuilder}}
+	plugin.RegisterPluginDataSource(&oldScriptBuilder.Endpoints)
 	register_analyses(queryBuilder)
 
 	bitflow.RegisterGolibFlags()
-	queryBuilder.Endpoints.RegisterFlags()
+	oldScriptBuilder.Endpoints.RegisterFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
 	if *printCapabilities {
-		queryBuilder.PrintJsonCapabilities(os.Stdout)
+		oldScriptBuilder.PrintJsonCapabilities(os.Stdout)
 		return 0
 	}
 	if *printAnalyses {
-		fmt.Printf("Available analysis steps:\n%v\n", queryBuilder.PrintAllAnalyses())
+		fmt.Printf("Available analysis steps:\n%v\n", oldScriptBuilder.PrintAllAnalyses())
 		return 0
 	}
 
-	script := strings.TrimSpace(strings.Join(flag.Args(), " "))
-	if scriptFile != "" && script != "" {
+	rawScript := strings.TrimSpace(strings.Join(flag.Args(), " "))
+	if scriptFile != "" && rawScript != "" {
 		golib.Fatalln("Please provide a bitflow pipeline script either via -f or as parameter, not both.")
 	}
 	if scriptFile != "" {
@@ -68,18 +70,20 @@ func do_main() int {
 		if err != nil {
 			golib.Fatalf("Error reading bitflow script file %v: %v", scriptFile, err)
 		}
-		script = string(scriptBytes)
+		rawScript = string(scriptBytes)
 	}
-	if script == "" {
+	if rawScript == "" {
 		golib.Fatalln("Please provide a bitflow pipeline script via -f or directly as parameter.")
 	}
 
 	var pipe *pipeline.SamplePipeline
 	var err error
 	if *useNewScript {
-		pipe, err = make_pipeline_new(queryBuilder, script)
+		pipe, err = make_pipeline_new(newScriptBuilder, rawScript)
+		log.Info("Running using new script implementation (ANTLR)")
 	} else {
-		pipe, err = make_pipeline_old(queryBuilder, script)
+		pipe, err = make_pipeline_old(oldScriptBuilder, rawScript)
+		log.Info("Running using previous script implementation (query package)")
 	}
 	if err != nil {
 		log.Errorln(err)
@@ -104,10 +108,10 @@ func make_pipeline_old(queryBuilder *query.PipelineBuilder, script string) (*pip
 	return queryBuilder.MakePipeline(pipe)
 }
 
-func make_pipeline_new(builder *query.PipelineBuilder, script string) (*pipeline.SamplePipeline, error) {
-	return nil, fmt.Errorf("The new script parser is not yet implemented") //TODO
+func make_pipeline_new(registry *antlrscript.ProcessorRegistry, script string) (*pipeline.SamplePipeline, error) {
+	s, err := antlrscript.NewAntlrBitflowParser(registry).ParseScript(script)
+	return s, err.NilOrError()
 }
-
 
 func register_analyses(b builder.PipelineBuilder) {
 

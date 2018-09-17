@@ -30,8 +30,8 @@ type AnalysisRegistration struct {
 }
 
 type Options struct {
-	RequiredParams          []string
-	OptionalParams          []string
+	RequiredParams []string
+	OptionalParams []string
 	// SupportBatchProcessing, if true this Processor can be called with batches
 	SupportBatchProcessing bool
 	// EnforceBatchProcessing, if true this Processor can ONLY be called with batches
@@ -74,7 +74,6 @@ func GetOpts(options []Option) Options {
 }
 
 type ProcessorRegistry interface {
-
 	RegisterAnalysisParamsErr(name string, setupPipeline AnalysisFunc, description string, options ...Option)
 
 	RegisterAnalysisParams(name string, setupPipeline func(pipeline *pipeline.SamplePipeline, params map[string]string), description string, options ...Option)
@@ -164,7 +163,6 @@ func FloatParam(params map[string]string, name string, defaultVal float64, hasDe
 	}
 }
 
-
 func BoolParam(params map[string]string, name string, defaultVal bool, hasDefault bool, err *error) bool {
 	if *err != nil {
 		return false
@@ -182,5 +180,40 @@ func BoolParam(params map[string]string, name string, defaultVal bool, hasDefaul
 	} else {
 		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
 		return false
+	}
+}
+
+// Proxy to register steps in multiple registries at once.
+type MultiRegistryBuilder struct {
+	Registries []ProcessorRegistry
+}
+
+func (m MultiRegistryBuilder) RegisterAnalysisParamsErr(name string, setupPipeline AnalysisFunc, description string, options ...Option) {
+	for _, r := range m.Registries {
+		r.RegisterAnalysisParamsErr(name, setupPipeline, description, options...)
+	}
+}
+
+func (m MultiRegistryBuilder) RegisterAnalysisParams(name string, setupPipeline func(pipeline *pipeline.SamplePipeline, params map[string]string), description string, options ...Option) {
+	for _, r := range m.Registries {
+		r.RegisterAnalysisParams(name, setupPipeline, description, options...)
+	}
+}
+
+func (m MultiRegistryBuilder) RegisterAnalysis(name string, setupPipeline func(pipeline *pipeline.SamplePipeline), description string, options ...Option) {
+	for _, r := range m.Registries {
+		r.RegisterAnalysis(name, setupPipeline, description, options...)
+	}
+}
+
+func (m MultiRegistryBuilder) RegisterAnalysisErr(name string, setupPipeline func(pipeline *pipeline.SamplePipeline) error, description string, options ...Option) {
+	for _, r := range m.Registries {
+		r.RegisterAnalysisErr(name, setupPipeline, description, options...)
+	}
+}
+
+func (m MultiRegistryBuilder) RegisterFork(name string, createFork ForkFunc, description string, options ...Option) {
+	for _, r := range m.Registries {
+		r.RegisterFork(name, createFork, description, options...)
 	}
 }
