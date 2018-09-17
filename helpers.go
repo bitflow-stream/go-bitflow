@@ -7,7 +7,7 @@ import (
 	"regexp"
 
 	"github.com/antongulenko/go-bitflow"
-	"github.com/gonum/matrix/mat64"
+	"gonum.org/v1/gonum/mat"
 )
 
 func ValuesToVector(input []bitflow.Value) []float64 {
@@ -44,11 +44,11 @@ func IsValidNumber(val float64) bool {
 	return !math.IsNaN(val) && !math.IsInf(val, 0)
 }
 
-func FillSampleFromMatrix(s *bitflow.Sample, row int, mat *mat64.Dense) {
+func FillSampleFromMatrix(s *bitflow.Sample, row int, mat *mat.Dense) {
 	FillSample(s, mat.RawRowView(row))
 }
 
-func FillSamplesFromMatrix(s []*bitflow.Sample, mat *mat64.Dense) {
+func FillSamplesFromMatrix(s []*bitflow.Sample, mat *mat.Dense) {
 	for i, sample := range s {
 		FillSampleFromMatrix(sample, i, mat)
 	}
