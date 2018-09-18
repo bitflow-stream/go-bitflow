@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sort"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -25,7 +25,7 @@ func NewMultiHeaderMerger() *MultiHeaderMerger {
 	}
 }
 
-func RegisterMergeHeaders(b *query.PipelineBuilder) {
+func RegisterMergeHeaders(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("merge_headers",
 		func(p *pipeline.SamplePipeline) {
 			p.Add(NewMultiHeaderMerger())

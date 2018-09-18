@@ -1,8 +1,9 @@
 package clustering
 
 import (
-	"fmt"
 	"math"
+
+	"gonum.org/v1/gonum/floats"
 )
 
 func VectorSquared(p []float64, componentFactor float64) float64 {
@@ -15,6 +16,7 @@ func VectorSquared(p []float64, componentFactor float64) float64 {
 	return res
 }
 
+// aka magnitude
 func VectorLength(p []float64) float64 {
 	var res float64
 	for _, v := range p {
@@ -24,14 +26,9 @@ func VectorLength(p []float64) float64 {
 }
 
 func EuclideanDistance(a, b []float64) float64 {
-	if len(a) != len(b) {
-		panic(fmt.Sprintf("Mismatched point dimensions for euclidean distance: %v vs %v", len(a), len(b)))
-	}
-	var res float64
-	for i, v1 := range a {
-		v2 := b[i]
-		diff := v1 - v2
-		res += diff * diff
-	}
-	return math.Sqrt(res)
+	return floats.Distance(a, b, 2)
+}
+
+func CosineSimilarity(a, b []float64) float64 {
+	return floats.Dot(a, b) / (VectorLength(a) * VectorLength(b))
 }

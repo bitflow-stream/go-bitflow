@@ -3,7 +3,7 @@ package plugin
 import (
 	"sync"
 
-	bitflow "github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
 )
 
@@ -14,10 +14,10 @@ type SampleSourcePluginImplementation struct {
 
 	wg     sync.WaitGroup
 	source bitflow.SampleSource
-	sink   PluginDataSink
+	sink   DataSink
 }
 
-func (s *SampleSourcePluginImplementation) Start(params map[string]string, dataSink PluginDataSink) {
+func (s *SampleSourcePluginImplementation) Start(params map[string]string, dataSink DataSink) {
 	source, err := s.Create(params)
 	if err != nil {
 		dataSink.Error(err)
@@ -58,13 +58,13 @@ func (s *SampleSourcePluginImplementation) Close() {
 
 type pluginSinkAdapter struct {
 	bitflow.AbstractSampleProcessor
-	sink PluginDataSink
+	sink DataSink
 	wg   *sync.WaitGroup
 }
 
 func (p *pluginSinkAdapter) Start(_ *sync.WaitGroup) (_ golib.StopChan) {
 	// This should never be called, since this implementating of SampleProcessor
-	// only forwards the Sample() and Close() invokations to the PluginDataSink
+	// only forwards the Sample() and Close() invokations to the DataSink
 	return
 }
 
@@ -74,7 +74,7 @@ func (p *pluginSinkAdapter) Sample(sample *bitflow.Sample, header *bitflow.Heade
 }
 
 func (p *pluginSinkAdapter) Close() {
-	p.wg.Done() // This will trigger the goroutine created in Start(), which will forward the Close() invokation to the PluginDataSink
+	p.wg.Done() // This will trigger the goroutine created in Start(), which will forward the Close() invokation to the DataSink
 }
 
 func (p *pluginSinkAdapter) String() string {

@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
@@ -32,7 +32,7 @@ type SubprocessRunner struct {
 	stderr bytes.Buffer
 }
 
-func RegisterSubprocessRunner(b *query.PipelineBuilder) {
+func RegisterSubprocessRunner(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		cmd := pipeline.SplitShellCommand(params["cmd"])
 		format, ok := params["format"]
@@ -57,7 +57,7 @@ func RegisterSubprocessRunner(b *query.PipelineBuilder) {
 		p.Add(runner)
 		return nil
 	}
-	b.RegisterAnalysisParamsErr("subprocess", create, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", []string{"cmd"}, "format")
+	b.RegisterAnalysisParamsErr("subprocess", create, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", reg.RequiredParams("cmd"), reg.OptionalParams("format"))
 }
 
 func (r *SubprocessRunner) Configure(marshallingFormat string, f *bitflow.EndpointFactory) error {

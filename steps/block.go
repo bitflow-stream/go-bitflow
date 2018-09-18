@@ -3,9 +3,9 @@ package steps
 import (
 	"fmt"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 )
 
@@ -97,18 +97,18 @@ func (m *BlockManager) NewReleaser(key string) *ReleasingProcessor {
 	}
 }
 
-func (m *BlockManager) RegisterBlockingProcessor(b *query.PipelineBuilder) {
+func (m *BlockManager) RegisterBlockingProcessor(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("block", func(p *pipeline.SamplePipeline, params map[string]string) error {
 		if err := AddDecoupleStep(p, params); err != nil {
 			return err
 		}
 		p.Add(m.NewBlocker(params["key"]))
 		return nil
-	}, "Block further processing of the samples until a release() with the same key is closed. Creates a new goroutine, input buffer size must be specified.", []string{"key", "buf"})
+	}, "Block further processing of the samples until a release() with the same key is closed. Creates a new goroutine, input buffer size must be specified.", reg.RequiredParams("key", "buf"))
 }
 
-func (m *BlockManager) RegisterReleasingProcessor(b *query.PipelineBuilder) {
+func (m *BlockManager) RegisterReleasingProcessor(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("releaseOnClose", func(p *pipeline.SamplePipeline, params map[string]string) {
 		p.Add(m.NewReleaser(params["key"]))
-	}, "When this step is closed, release all instances of block() with the same key value", []string{"key"})
+	}, "When this step is closed, release all instances of block() with the same key value", reg.OptionalParams("key"))
 }

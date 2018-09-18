@@ -8,29 +8,29 @@ import (
 	"sync"
 	"text/tabwriter"
 
-	bitflow "github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
 
 type GroupedEvaluation struct {
 	bitflow.NoopProcessor
-	groups         map[string]EvaluationStats
+	groups         map[string]Stats
 	ignoredSamples map[string]int
 
-	EvaluationTags
+	ConfigurableTags
 	TsvHeader string
-	NewGroup  func(name string) EvaluationStats
+	NewGroup  func(name string) Stats
 }
 
-type EvaluationTags struct {
+type ConfigurableTags struct {
 	EvaluateTag        string // "evaluate"
 	DoEvaluate         string // "true"
 	EvalGroupsTag      string // "evalGroups"
 	EvalGroupSeparator string // "|"
 }
 
-func (e *EvaluationTags) SetEvaluationTags(params map[string]string) {
+func (e *ConfigurableTags) SetEvaluationTags(params map[string]string) {
 	e.EvaluateTag = params["evaluateTag"]
 	if e.EvaluateTag == "" {
 		e.EvaluateTag = "evaluate"
@@ -49,12 +49,12 @@ func (e *EvaluationTags) SetEvaluationTags(params map[string]string) {
 	}
 }
 
-func (e *EvaluationTags) String() string {
+func (e *ConfigurableTags) String() string {
 	return fmt.Sprintf("evaluate tag: \"%v\", evaluate value: \"%v\", groups tag: \"%v\", groups separator: \"%v\"",
 		e.EvaluateTag, e.DoEvaluate, e.EvalGroupsTag, e.EvalGroupSeparator)
 }
 
-type EvaluationStats interface {
+type Stats interface {
 	Evaluate(sample *bitflow.Sample, header *bitflow.Header)
 	TSV() string
 }
@@ -94,7 +94,7 @@ func (p *GroupedEvaluation) PrintResults() {
 }
 
 func (p *GroupedEvaluation) Start(wg *sync.WaitGroup) golib.StopChan {
-	p.groups = make(map[string]EvaluationStats)
+	p.groups = make(map[string]Stats)
 	p.ignoredSamples = make(map[string]int)
 	return p.NoopProcessor.Start(wg)
 }

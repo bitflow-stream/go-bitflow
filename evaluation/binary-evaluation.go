@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 )
 
@@ -21,7 +21,7 @@ type BinaryEvaluationProcessor struct {
 
 func (p *BinaryEvaluationProcessor) String() string {
 	return fmt.Sprintf("binary classification evaluation (evaluation: [%v], binary evaluation: [%v])",
-		&p.EvaluationTags, &p.BinaryEvaluationTags)
+		&p.ConfigurableTags, &p.BinaryEvaluationTags)
 }
 
 func (p *BinaryEvaluationProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
@@ -30,7 +30,7 @@ func (p *BinaryEvaluationProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	return p.GroupedEvaluation.Start(wg)
 }
 
-func (p *BinaryEvaluationProcessor) newGroup(groupName string) EvaluationStats {
+func (p *BinaryEvaluationProcessor) newGroup(groupName string) Stats {
 	return &BinaryEvaluationStats{
 		Tags: &p.BinaryEvaluationTags,
 	}
@@ -42,14 +42,14 @@ type BinaryEvaluationTags struct {
 	AnomalyValue string // "anomaly", All other values (or missing values) considered not anomaly
 }
 
-func RegisterBinaryEvaluation(b *query.PipelineBuilder) {
+func RegisterBinaryEvaluation(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) {
 		eval := new(BinaryEvaluationProcessor)
 		eval.SetBinaryEvaluationTags(params)
 		eval.SetEvaluationTags(params)
 		p.Add(eval)
 	}
-	b.RegisterAnalysisParams("binary_evaluation", create, "Evaluate 'expected' and 'predicted' tags, separate evaluation by |-separated fields in 'evalGroups' tag", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator")
+	b.RegisterAnalysisParams("binary_evaluation", create, "Evaluate 'expected' and 'predicted' tags, separate evaluation by |-separated fields in 'evalGroups' tag", reg.OptionalParams("expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator"))
 }
 
 func (e *BinaryEvaluationTags) SetBinaryEvaluationTags(params map[string]string) {

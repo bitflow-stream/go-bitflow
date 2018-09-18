@@ -9,17 +9,17 @@ import (
 	"strconv"
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 )
 
-func RegisterLoggingSteps(b *query.PipelineBuilder) {
+func RegisterLoggingSteps(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("print_header", print_header, "Print every changing header to the log")
-	b.RegisterAnalysisParams("print_tags", print_tags, "When done processing, print every encountered value of the given tag", []string{"tag"})
-	b.RegisterAnalysisParams("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", []string{"tag"})
+	b.RegisterAnalysisParams("print_tags", print_tags, "When done processing, print every encountered value of the given tag", reg.RequiredParams("tag"))
+	b.RegisterAnalysisParams("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", reg.RequiredParams("tag"))
 	b.RegisterAnalysis("print_timerange", print_time_range, "When done processing, print the first and last encountered timestamp")
-	b.RegisterAnalysisParamsErr("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", []string{}, "buckets")
+	b.RegisterAnalysisParamsErr("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", reg.OptionalParams("buckets"))
 	b.RegisterAnalysis("count_invalid", count_invalid, "When done processing, print the number of invalid metric values and samples containing such values (NaN, -/+ infinity, ...)")
 	b.RegisterAnalysis("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
 }
@@ -161,19 +161,23 @@ func print_timeline(p *pipeline.SamplePipeline, params map[string]string) error 
 		var err error
 		numBuckets, err = strconv.ParseUint(bucketsStr, 10, 64)
 		if err != nil {
-			return query.ParameterError("buckets", err)
+			return reg.ParameterError("buckets", err)
 		}
 	}
 	if numBuckets <= 0 {
 		numBuckets = 1
 	}
 
-	p.Batch(&pipeline.SimpleBatchProcessingStep{
+	var times []time.Time
+	p.Add(&pipeline.SimpleProcessor{
 		Description: fmt.Sprintf("Print timeline (len %v)", numBuckets),
-		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+			times = append(times, sample.Time)
+			return sample, header, nil
+		},
+		OnClose: func() {
 			var from, to time.Time
-			for _, sample := range samples {
-				t := sample.Time
+			for _, t := range times {
 				if from.IsZero() || to.IsZero() {
 					from = t
 					to = t
@@ -193,9 +197,9 @@ func print_timeline(p *pipeline.SamplePipeline, params map[string]string) error 
 				bucketEnds[i] = from.Add(time.Duration(i+1) * bucketDuration)
 			}
 			bucketEnds[numBuckets-1] = to // No rounding error
-			for _, sample := range samples {
+			for _, t := range times {
 				index := sort.Search(len(buckets), func(n int) bool {
-					return !sample.Time.After(bucketEnds[n])
+					return !t.After(bucketEnds[n])
 				})
 				buckets[index]++
 			}
@@ -220,7 +224,6 @@ func print_timeline(p *pipeline.SamplePipeline, params map[string]string) error 
 			log.Println("[Timeline]: Duration:", duration)
 			log.Println("[Timeline]: One bucket:", bucketDuration)
 			log.Println("[Timeline]:", timeline.String())
-			return header, samples, nil
 		},
 	})
 	return nil

@@ -10,20 +10,21 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/script"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/script_go"
 	"github.com/antongulenko/go-bitflow-pipeline/clustering/dbscan"
 	"github.com/antongulenko/go-bitflow-pipeline/clustering/denstream"
 	"github.com/antongulenko/go-bitflow-pipeline/evaluation"
 	"github.com/antongulenko/go-bitflow-pipeline/http"
 	"github.com/antongulenko/go-bitflow-pipeline/http_tags"
 	"github.com/antongulenko/go-bitflow-pipeline/plugin"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline/recovery"
 	"github.com/antongulenko/go-bitflow-pipeline/regression"
 	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
-
-var builder = query.NewPipelineBuilder()
 
 func main() {
 	flag.Usage = func() {
@@ -36,42 +37,50 @@ func main() {
 func do_main() int {
 	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
 	printPipeline := flag.Bool("print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
-	printCapabilities := flag.Bool("capabilities", false, "Print the capablities of this pipeline in JSON form and exit.")
+	printCapabilities := flag.Bool("capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
+	useNewScript := flag.Bool("new", false, "Use the new script parser for processing the input script.")
 	scriptFile := ""
 	flag.StringVar(&scriptFile, "f", "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 
-	plugin.RegisterPluginDataSource(&builder.Endpoints)
-	register_analyses(builder)
-
+	registry := reg.NewProcessorRegistry()
+	plugin.RegisterPluginDataSource(&registry.Endpoints)
+	register_analyses(registry)
 	bitflow.RegisterGolibFlags()
-	builder.Endpoints.RegisterFlags()
+	registry.Endpoints.RegisterFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
 	if *printCapabilities {
-		builder.PrintJsonCapabilities(os.Stdout)
+		registry.PrintJsonCapabilities(os.Stdout)
 		return 0
 	}
 	if *printAnalyses {
-		fmt.Printf("Available analysis steps:\n%v\n", builder.PrintAllAnalyses())
+		fmt.Printf("Available analysis steps:\n%v\n", registry.PrintAllAnalyses())
 		return 0
 	}
 
-	script := strings.TrimSpace(strings.Join(flag.Args(), " "))
-	if scriptFile != "" && script != "" {
+	rawScript := strings.TrimSpace(strings.Join(flag.Args(), " "))
+	if scriptFile != "" && rawScript != "" {
 		golib.Fatalln("Please provide a bitflow pipeline script either via -f or as parameter, not both.")
 	}
 	if scriptFile != "" {
 		scriptBytes, err := ioutil.ReadFile(scriptFile)
 		if err != nil {
-			golib.Fatalf("Error reading bitflow script file $v: %v", scriptFile, err)
+			golib.Fatalf("Error reading bitflow script file %v: %v", scriptFile, err)
 		}
-		script = string(scriptBytes)
+		rawScript = string(scriptBytes)
 	}
-	if script == "" {
+	if rawScript == "" {
 		golib.Fatalln("Please provide a bitflow pipeline script via -f or directly as parameter.")
 	}
 
-	pipe, err := make_pipeline(script)
+	var pipe *pipeline.SamplePipeline
+	var err error
+	if *useNewScript {
+		log.Println("Running using new ANTLR script implementation")
+		pipe, err = make_pipeline_new(registry, rawScript)
+	} else {
+		pipe, err = make_pipeline_old(registry, rawScript)
+	}
 	if err != nil {
 		log.Errorln(err)
 		golib.Fatalln("Use -print-analyses to print all available analysis steps.")
@@ -86,20 +95,26 @@ func do_main() int {
 	return pipe.StartAndWait()
 }
 
-func make_pipeline(script string) (*pipeline.SamplePipeline, error) {
-	parser := query.NewParser(bytes.NewReader([]byte(script)))
+func make_pipeline_old(registry reg.ProcessorRegistry, scriptStr string) (*pipeline.SamplePipeline, error) {
+	queryBuilder := script_go.PipelineBuilder{registry}
+	parser := script_go.NewParser(bytes.NewReader([]byte(scriptStr)))
 	pipe, err := parser.Parse()
 	if err != nil {
 		return nil, err
 	}
-	return builder.MakePipeline(pipe)
+	return queryBuilder.MakePipeline(pipe)
 }
 
-func register_analyses(b *query.PipelineBuilder) {
+func make_pipeline_new(registry reg.ProcessorRegistry, scriptStr string) (*pipeline.SamplePipeline, error) {
+	s, err := script.NewAntlrBitflowParser(registry).ParseScript(scriptStr)
+	return s, err.NilOrError()
+}
+
+func register_analyses(b reg.ProcessorRegistry) {
 
 	// Control flow
-	RegisterTaggingAnalyses(b)
 	steps.RegisterNoop(b)
+	steps.RegisterDrop(b)
 	steps.RegisterSleep(b)
 	steps.RegisterForks(b)
 	steps.RegisterExpression(b)
@@ -107,16 +122,20 @@ func register_analyses(b *query.PipelineBuilder) {
 	steps.RegisterMergeHeaders(b)
 	steps.RegisterGenericBatch(b)
 	steps.RegisterDecouple(b)
+	steps.RegisterDropErrorsStep(b)
 	steps.RegisterResendStep(b)
+	steps.RegisterFillUpStep(b)
 	steps.RegisterPipelineRateSynchronizer(b)
 	steps.RegisterSubpipelineStreamMerger(b)
 	blockMgr := steps.NewBlockManager()
 	blockMgr.RegisterBlockingProcessor(b)
 	blockMgr.RegisterReleasingProcessor(b)
+	steps.RegisterTagSynchronizer(b)
 
 	// Data output
 	steps.RegisterOutputFiles(b)
 	steps.RegisterGraphiteOutput(b)
+	steps.RegisterOpentsdbOutput(b)
 
 	// Logging, output metadata
 	steps.RegisterStoreStats(b)
@@ -158,6 +177,7 @@ func register_analyses(b *query.PipelineBuilder) {
 	steps.RegisterPickHead(b)
 	steps.RegisterSkipHead(b)
 	steps.RegisterConvexHull(b)
+	steps.RegisterDuplicateTimestampFilter(b)
 
 	// Reorder samples
 	steps.RegisterConvexHullSort(b)
@@ -168,7 +188,7 @@ func register_analyses(b *query.PipelineBuilder) {
 	steps.RegisterSetCurrentTime(b)
 	steps.RegisterTaggingProcessor(b)
 	http_tags.RegisterHttpTagger(b)
-	steps.RegisterInjectionInfoTagger(b)
+	steps.RegisterTargetTagSplitter(b)
 	steps.RegisterPauseTagger(b)
 
 	// Add/Remove/Rename/Reorder generic metrics
@@ -183,4 +203,5 @@ func register_analyses(b *query.PipelineBuilder) {
 	// Special
 	steps.RegisterSphere(b)
 	steps.RegisterAppendTimeDifference(b)
+	recovery.RegisterRecoveryEngine(b)
 }

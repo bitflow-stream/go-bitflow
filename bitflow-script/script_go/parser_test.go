@@ -1,4 +1,4 @@
-package query
+package script_go
 
 import (
 	"bytes"

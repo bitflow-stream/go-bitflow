@@ -1,12 +1,10 @@
-package query
+package script_go
 
 import (
 	"fmt"
 	"strconv"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/fork"
 )
 
 const MultiplexForkName = "multiplex"
@@ -18,31 +16,14 @@ type PipelineVerification interface {
 	VerifyFork(name Token, params map[string]string) error
 }
 
-func RegisterMultiplexFork(builder *PipelineBuilder) {
-	builder.RegisterFork(MultiplexForkName, createMultiplexFork, "Basic fork forwarding samples to all subpipelines. Subpipeline keys are ignored.", []string{})
-}
-
-func createMultiplexFork(subpipelines []Subpipeline, _ map[string]string) (fork.ForkDistributor, error) {
-	var res fork.MultiplexDistributor
-	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpipelines))
-	var err error
-	for i, pipe := range subpipelines {
-		res.Subpipelines[i], err = pipe.Build()
-		if err != nil {
-			return nil, err
-		}
-	}
-	return &res, nil
-}
-
 func strTok(str string) Token {
 	return Token{Type: STR, Lit: str}
 }
 
 var emptyEndpointToken = strTok(string(bitflow.EmptyEndpoint) + "://-")
 
-func (pipe Pipeline) Transform(verify PipelineVerification) (Pipeline, error) {
-	res, err := pipe.transform(verify, true)
+func (p Pipeline) Transform(verify PipelineVerification) (Pipeline, error) {
+	res, err := p.transform(verify, true)
 	if err == nil {
 		switch res[0].(type) {
 		case Input, MultiInput:
@@ -54,19 +35,20 @@ func (pipe Pipeline) Transform(verify PipelineVerification) (Pipeline, error) {
 	return res, err
 }
 
-func (pipe Pipeline) transform(verify PipelineVerification, isInput bool) (Pipeline, error) {
-	if len(pipe) == 0 {
+//noinspection GoAssignmentToReceiver
+func (p Pipeline) transform(verify PipelineVerification, isInput bool) (Pipeline, error) {
+	if len(p) == 0 {
 		return nil, ParserError{
-			Pos:     pipe.Pos(),
+			Pos:     p.Pos(),
 			Message: "Empty pipeline is not allowed",
 		}
 	}
 	var res Pipeline
 	var err error
 
-	switch input := pipe[0].(type) {
+	switch input := p[0].(type) {
 	case Input:
-		pipe = pipe[1:]
+		p = p[1:]
 		inputs := make([]string, len(input))
 		for i, in := range input {
 			inputs[i] = in.Content()
@@ -79,7 +61,7 @@ func (pipe Pipeline) transform(verify PipelineVerification, isInput bool) (Pipel
 		res = append(res, input)
 	case Pipelines:
 		if isInput {
-			pipe = pipe[1:]
+			p = p[1:]
 			newInput, err := input.transformMultiInput(verify)
 			if err != nil {
 				return nil, err
@@ -87,7 +69,7 @@ func (pipe Pipeline) transform(verify PipelineVerification, isInput bool) (Pipel
 			res = append(res, newInput)
 		}
 	}
-	for _, step := range pipe {
+	for _, step := range p {
 		var newStep PipelineStep
 		switch step := step.(type) {
 		case Output:
@@ -113,9 +95,9 @@ func (pipe Pipeline) transform(verify PipelineVerification, isInput bool) (Pipel
 	return res, err
 }
 
-func (pipes Pipelines) transformMultiInput(verify PipelineVerification) (MultiInput, error) {
-	res := MultiInput{Pipelines: make(Pipelines, len(pipes))}
-	for i, subPipe := range pipes {
+func (p Pipelines) transformMultiInput(verify PipelineVerification) (MultiInput, error) {
+	res := MultiInput{Pipelines: make(Pipelines, len(p))}
+	for i, subPipe := range p {
 		subPipe, err := subPipe.transform(verify, true)
 		if err != nil {
 			return MultiInput{}, err
@@ -136,9 +118,9 @@ func (step Step) transformStep(verify PipelineVerification) (Step, error) {
 	return step, err
 }
 
-func (pipes Pipelines) transformMultiplex(verify PipelineVerification) (Fork, error) {
-	newPipes := make(Pipelines, len(pipes))
-	for i, pipe := range pipes {
+func (p Pipelines) transformMultiplex(verify PipelineVerification) (Fork, error) {
+	newPipes := make(Pipelines, len(p))
+	for i, pipe := range p {
 		newPipes[i] = append(Pipeline{Input{strTok(strconv.Itoa(i))}}, pipe...)
 	}
 	return Fork{

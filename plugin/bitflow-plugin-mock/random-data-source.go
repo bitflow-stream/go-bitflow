@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
 )
 

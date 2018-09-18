@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"sync"
 
-	bitflow "github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline/http"
 	"github.com/antongulenko/golib"
 	"github.com/gin-gonic/gin"
@@ -62,18 +62,18 @@ func (endpoint *RestEndpoint) serve(verb string, path string, logFile string, se
 
 	handlers := gin.HandlersChain{serve}
 	if logFile != "" {
-		handlers = append(handlers, plotHttp.LogGinRequests(logFile, true))
+		handlers = append(handlers, plotHttp.LogGinRequests(logFile, true, true))
 	}
 	endpoint.engine.Handle(verb, path, handlers...)
 	endpoint.paths = append(endpoint.paths, pathStr)
 }
 
-func (e *RestEndpoint) NewDataSource(outgoingSampleBuffer int) *RestDataSource {
+func (endpoint *RestEndpoint) NewDataSource(outgoingSampleBuffer int) *RestDataSource {
 	stopper := golib.NewStopChan()
-	e.stoppers = append(e.stoppers, stopper)
+	endpoint.stoppers = append(endpoint.stoppers, stopper)
 	return &RestDataSource{
 		outgoing: make(chan bitflow.SampleAndHeader, outgoingSampleBuffer),
-		endpoint: e,
+		endpoint: endpoint,
 		stop:     stopper,
 	}
 }
@@ -81,10 +81,11 @@ func (e *RestEndpoint) NewDataSource(outgoingSampleBuffer int) *RestDataSource {
 type RestDataSource struct {
 	bitflow.AbstractSampleSource
 
-	outgoing chan bitflow.SampleAndHeader
-	stop     golib.StopChan
-	endpoint *RestEndpoint
-	wg       *sync.WaitGroup
+	outgoing  chan bitflow.SampleAndHeader
+	stop      golib.StopChan
+	closeOnce sync.Once
+	endpoint  *RestEndpoint
+	wg        *sync.WaitGroup
 }
 
 func (source *RestDataSource) Endpoint() string {
@@ -108,7 +109,8 @@ func (source *RestDataSource) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (source *RestDataSource) Close() {
-	source.stop.StopFunc(func() {
+	source.closeOnce.Do(func() {
+		source.stop.Stop()
 		close(source.outgoing)
 		source.AbstractSampleSource.CloseSinkParallel(source.wg)
 	})
@@ -126,7 +128,7 @@ func (source *RestDataSource) sinkSamples(wg *sync.WaitGroup) {
 type RestReplyHelpers struct {
 }
 
-func (RestReplyHelpers) ReplySuccess(context *gin.Context, message string) {
+func (h RestReplyHelpers) ReplySuccess(context *gin.Context, message string) {
 	context.Writer.Header().Set("Content-Type", "text/plain")
 	_, err := context.Writer.WriteString(message + "\n")
 	if err != nil {
@@ -134,7 +136,7 @@ func (RestReplyHelpers) ReplySuccess(context *gin.Context, message string) {
 	}
 }
 
-func (RestReplyHelpers) ReplyGenericError(context *gin.Context, errorMessage string) {
+func (h RestReplyHelpers) ReplyGenericError(context *gin.Context, errorMessage string) {
 	log.Warnln("REST:", errorMessage)
 	_, err := context.Writer.WriteString(errorMessage + "\n")
 	context.Writer.WriteHeader(http.StatusBadRequest)

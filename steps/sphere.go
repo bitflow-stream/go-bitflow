@@ -9,24 +9,24 @@ import (
 	"sync"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
 
-func RegisterSphere(b *query.PipelineBuilder) {
+func RegisterSphere(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		var err error
 		points, err := strconv.Atoi(params["points"])
 		if err != nil {
-			return query.ParameterError("points", err)
+			return reg.ParameterError("points", err)
 		}
 		seed := int64(1)
 		if seedStr, ok := params["seed"]; ok {
 			seed, err = strconv.ParseInt(seedStr, 10, 64)
 			if err != nil {
-				return query.ParameterError("seed", err)
+				return reg.ParameterError("seed", err)
 			}
 		}
 		radiusStr, hasRadius := params["radius"]
@@ -43,18 +43,18 @@ func RegisterSphere(b *query.PipelineBuilder) {
 			sphere.RadiusMetric = -1
 			sphere.Radius, err = strconv.ParseFloat(radiusStr, 64)
 			if err != nil {
-				return query.ParameterError("radius", err)
+				return reg.ParameterError("radius", err)
 			}
 		} else {
 			sphere.RadiusMetric, err = strconv.Atoi(radiusMetricStr)
 			if err != nil {
-				return query.ParameterError("radius_metric", err)
+				return reg.ParameterError("radius_metric", err)
 			}
 		}
 		p.Add(sphere)
 		return nil
 	}
-	b.RegisterAnalysisParamsErr("sphere", create, "Treat every sample as the center of a multi-dimensional sphere, and output a number of random points on the hull of the resulting sphere. The radius can either be fixed or given as one of the metrics", []string{"points"}, "seed", "radius", "radius_metric")
+	b.RegisterAnalysisParamsErr("sphere", create, "Treat every sample as the center of a multi-dimensional sphere, and output a number of random points on the hull of the resulting sphere. The radius can either be fixed or given as one of the metrics", reg.RequiredParams("points"), reg.OptionalParams("seed", "radius", "radius_metric"))
 }
 
 type SpherePoints struct {

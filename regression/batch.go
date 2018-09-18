@@ -22,7 +22,7 @@ func (reg *LinearRegressionBatchProcessor) ProcessBatch(header *bitflow.Header, 
 		return nil, nil, err
 	}
 	if mse, err := regression.MeanSquaredError(regression.TrainData); err != nil {
-		log.Warnln("Failed to evaluate trained regression (%v): %v", regression.FormulaString(), err)
+		log.Warnf("Failed to evaluate trained regression (%v): %v\n", regression.FormulaString(), err)
 	} else {
 		log.Printf("Linear Regression MSE %g: %v", mse, regression.FormulaString())
 	}
@@ -94,7 +94,7 @@ func (brute *LinearRegressionBruteForce) computeRegressions(wg *sync.WaitGroup, 
 		reg.Header = header
 		reg.Vars = vars
 		if err := reg.Fit(samples); err != nil {
-			log.Warnln("Failed to fit regression (%v): %v", vars, err)
+			log.Warnf("Failed to fit regression (%v): %v\n", vars, err)
 			continue
 		}
 		if !reg.IsValid() {
@@ -102,7 +102,7 @@ func (brute *LinearRegressionBruteForce) computeRegressions(wg *sync.WaitGroup, 
 			continue
 		}
 		if mse, err := reg.MeanSquaredError(reg.TrainData); err != nil {
-			log.Warnln("Failed to evaluate trained regression (%v, %v): %v", vars, reg.FormulaString(), err)
+			log.Warnf("Failed to evaluate trained regression (%v, %v): %v\n", vars, reg.FormulaString(), err)
 			continue
 		} else {
 			brute.resultChan <- EvaluatedLinearRegression{reg, mse}

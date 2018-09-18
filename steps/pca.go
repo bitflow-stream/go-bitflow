@@ -10,18 +10,18 @@ import (
 	"strconv"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
-	"github.com/gonum/matrix/mat64"
-	"github.com/gonum/stat"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
+	"gonum.org/v1/gonum/mat"
+	"gonum.org/v1/gonum/stat"
 )
 
 const DefaultContainedVariance = 0.99
 
-func SamplesToMatrix(samples []*bitflow.Sample) mat64.Matrix {
+func SamplesToMatrix(samples []*bitflow.Sample) mat.Matrix {
 	if len(samples) < 1 {
-		return mat64.NewDense(0, 0, nil)
+		return mat.NewDense(0, 0, nil)
 	}
 	cols := len(samples[0].Values)
 	values := make([]float64, len(samples)*cols)
@@ -32,11 +32,11 @@ func SamplesToMatrix(samples []*bitflow.Sample) mat64.Matrix {
 			index++
 		}
 	}
-	return mat64.NewDense(len(samples), cols, values)
+	return mat.NewDense(len(samples), cols, values)
 }
 
 type PCAModel struct {
-	Vectors            *mat64.Dense
+	Vectors            *mat.Dense
 	RawVariances       []float64
 	ContainedVariances []float64
 }
@@ -48,7 +48,8 @@ func (model *PCAModel) ComputeModel(samples []*bitflow.Sample) error {
 	if !ok {
 		return errors.New("PCA model could not be computed")
 	}
-	model.Vectors, model.RawVariances = pc.Vectors(nil), pc.Vars(nil)
+	pc.VarsTo(model.RawVariances)
+	pc.VectorsTo(model.Vectors)
 
 	model.ContainedVariances = make([]float64, len(model.RawVariances))
 	var sum float64
@@ -117,7 +118,7 @@ func (model *PCAModel) Load(filename string) (err error) {
 }
 
 func (model *PCAModel) Project(numComponents int) *PCAProjection {
-	vectors := model.Vectors.View(0, 0, len(model.ContainedVariances), numComponents)
+	vectors := model.Vectors.Slice(0, len(model.ContainedVariances), 0, numComponents)
 	return &PCAProjection{
 		Model:      model,
 		Vectors:    vectors,
@@ -146,18 +147,18 @@ func (model *PCAModel) ProjectHeader(variance float64, header *bitflow.Header) (
 
 type PCAProjection struct {
 	Model      *PCAModel
-	Vectors    mat64.Matrix
+	Vectors    mat.Matrix
 	Components int
 }
 
-func (model *PCAProjection) Matrix(matrix mat64.Matrix) *mat64.Dense {
-	var result mat64.Dense
+func (model *PCAProjection) Matrix(matrix mat.Matrix) *mat.Dense {
+	var result mat.Dense
 	result.Mul(matrix, model.Vectors)
 	return &result
 }
 
 func (model *PCAProjection) Vector(vec []float64) []float64 {
-	matrix := model.Matrix(mat64.NewDense(1, len(vec), vec))
+	matrix := model.Matrix(mat.NewDense(1, len(vec), vec))
 	return matrix.RawRowView(0)
 }
 
@@ -266,7 +267,7 @@ func ComputeAndProjectPCA(containedVariance float64) pipeline.BatchProcessingSte
 	}
 }
 
-func RegisterPCA(b *query.PipelineBuilder) {
+func RegisterPCA(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
@@ -274,18 +275,20 @@ func RegisterPCA(b *query.PipelineBuilder) {
 		}
 		return err
 	}
-	b.RegisterAnalysisParamsErr("pca", create, "Create a PCA model of a batch of samples and project all samples into a number of principal components with a total contained variance given by the parameter", []string{"var"})
+	b.RegisterAnalysisParamsErr("pca", create, "Create a PCA model of a batch of samples and project all samples into a number of principal components with a total contained variance given by the parameter",
+		reg.RequiredParams("var"), reg.SupportBatch())
 }
 
-func RegisterPCAStore(b *query.PipelineBuilder) {
+func RegisterPCAStore(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("pca_store",
 		func(p *pipeline.SamplePipeline, params map[string]string) {
 			p.Batch(StorePCAModel(params["file"]))
 		},
-		"Create a PCA model of a batch of samples and store it to the given file", []string{"file"})
+		"Create a PCA model of a batch of samples and store it to the given file",
+		reg.RequiredParams("file"), reg.SupportBatch())
 }
 
-func RegisterPCALoad(b *query.PipelineBuilder) {
+func RegisterPCALoad(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
@@ -297,10 +300,11 @@ func RegisterPCALoad(b *query.PipelineBuilder) {
 		}
 		return err
 	}
-	b.RegisterAnalysisParamsErr("pca_load", create, "Load a PCA model from the given file and project all samples into a number of principal components with a total contained variance given by the parameter", []string{"var", "file"})
+	b.RegisterAnalysisParamsErr("pca_load", create, "Load a PCA model from the given file and project all samples into a number of principal components with a total contained variance given by the parameter",
+		reg.RequiredParams("var", "file"), reg.SupportBatch())
 }
 
-func RegisterPCALoadStream(b *query.PipelineBuilder) {
+func RegisterPCALoadStream(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
@@ -312,13 +316,13 @@ func RegisterPCALoadStream(b *query.PipelineBuilder) {
 		}
 		return err
 	}
-	b.RegisterAnalysisParamsErr("pca_load_stream", create, "Like pca_load, but process every sample individually, instead of batching them up", []string{"var", "file"})
+	b.RegisterAnalysisParamsErr("pca_load_stream", create, "Like pca_load, but process every sample individually, instead of batching them up", reg.RequiredParams("var", "file"))
 }
 
 func parse_pca_variance(params map[string]string) (float64, error) {
 	variance, err := strconv.ParseFloat(params["var"], 64)
 	if err != nil {
-		err = query.ParameterError("var", err)
+		err = reg.ParameterError("var", err)
 	}
 	return variance, err
 }

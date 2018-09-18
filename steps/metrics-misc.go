@@ -6,13 +6,13 @@ import (
 	"strconv"
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
-func RegisterSetCurrentTime(b *query.PipelineBuilder) {
+func RegisterSetCurrentTime(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("set_time",
 		func(p *pipeline.SamplePipeline) {
 			p.Add(&pipeline.SimpleProcessor{
@@ -26,7 +26,7 @@ func RegisterSetCurrentTime(b *query.PipelineBuilder) {
 		"Set the timestamp on every processed sample to the current time")
 }
 
-func RegisterAppendTimeDifference(b *query.PipelineBuilder) {
+func RegisterAppendTimeDifference(b reg.ProcessorRegistry) {
 	fieldName := "time-difference"
 	var checker bitflow.HeaderChecker
 	var outHeader *bitflow.Header
@@ -53,7 +53,7 @@ func RegisterAppendTimeDifference(b *query.PipelineBuilder) {
 		"Append the time difference to the previous sample as a metric")
 }
 
-func RegisterStripMetrics(b *query.PipelineBuilder) {
+func RegisterStripMetrics(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("strip",
 		func(p *pipeline.SamplePipeline) {
 			p.Add(&pipeline.SimpleProcessor{
@@ -66,7 +66,7 @@ func RegisterStripMetrics(b *query.PipelineBuilder) {
 		"Remove all metrics, only keeping the timestamp and the tags of eacy sample")
 }
 
-func RegisterParseTags(b *query.PipelineBuilder) {
+func RegisterParseTags(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("parse_tags",
 		func(p *pipeline.SamplePipeline, params map[string]string) {
 			var checker bitflow.HeaderChecker
@@ -104,5 +104,5 @@ func RegisterParseTags(b *query.PipelineBuilder) {
 				},
 			})
 		},
-		"Append metrics based on tag values. Keys are new metric names, values are tag names", nil)
+		"Append metrics based on tag values. Keys are new metric names, values are tag names")
 }

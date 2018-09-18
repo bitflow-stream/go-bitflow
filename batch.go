@@ -2,19 +2,33 @@ package pipeline
 
 import (
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
 
 type BatchProcessor struct {
 	bitflow.NoopProcessor
-	checker      bitflow.HeaderChecker
-	samples      []*bitflow.Sample
-	lastFlushTag string
+	checker  bitflow.HeaderChecker
+	samples  []*bitflow.Sample
+	shutdown bool
 
-	Steps    []BatchProcessingStep
-	FlushTag string // If set, flush every time this tag changes
+	Steps []BatchProcessingStep
+
+	FlushTimeout                time.Duration // If > 0, flush when no new samples are received for the given duration. The wall-time is used for this (not sample timestamps)
+	SampleTimestampFlushTimeout time.Duration // If > 0, flush when a sample is received with a timestamp jump bigger than this
+	lastAutoFlushError          error
+	lastSample                  time.Time // Wall time when receiving last sample
+	lastSampleTimestamp         time.Time // Timestamp of last sample
+
+	FlushTags     []string // If set, flush every time any of these tags change
+	lastFlushTags []string
+	flushHeader   *bitflow.Header
+	flushTrigger  *golib.TimeoutCond // Used to trigger flush and to notify about finished flush. Relies on Sample()/Close() being synchronized externally.
+	flushError    error
 }
 
 type BatchProcessingStep interface {
@@ -49,39 +63,115 @@ func (p *BatchProcessor) ContainedStringers() []fmt.Stringer {
 	return res
 }
 
-func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (p *BatchProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
+	p.flushTrigger = golib.NewTimeoutCond(new(sync.Mutex))
+	wg.Add(1)
+	go p.loopFlush(wg)
+	return p.NoopProcessor.Start(wg)
+}
+
+func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) (err error) {
 	oldHeader := p.checker.LastHeader
 	flush := p.checker.InitializedHeaderChanged(header)
-	if p.FlushTag != "" {
-		val := sample.Tag(p.FlushTag)
-		if oldHeader != nil {
-			flush = flush || val != p.lastFlushTag
+	if len(p.FlushTags) > 0 {
+		values := make([]string, len(p.FlushTags))
+		for i, tag := range p.FlushTags {
+			values[i] = sample.Tag(tag)
+			if oldHeader != nil && len(p.lastFlushTags) > i && p.lastFlushTags[i] != values[i] {
+				flush = true
+			}
 		}
-		p.lastFlushTag = val
+		p.lastFlushTags = values
+	}
+	if p.SampleTimestampFlushTimeout > 0 {
+		if !p.lastSampleTimestamp.IsZero() && sample.Time.Sub(p.lastSampleTimestamp) >= p.SampleTimestampFlushTimeout {
+			flush = true
+		}
+		p.lastSampleTimestamp = sample.Time
 	}
 	if flush {
-		if err := p.flush(oldHeader); err != nil {
-			return err
+		err = p.triggerFlush(oldHeader, false)
+	}
+	if p.FlushTimeout > 0 {
+		p.lastSample = time.Now()
+		if err == nil {
+			err = p.lastAutoFlushError
 		}
+		p.lastAutoFlushError = nil
 	}
 	p.samples = append(p.samples, sample)
-	return nil
+	return
 }
 
 func (p *BatchProcessor) Close() {
-	defer p.CloseSink()
+	defer p.NoopProcessor.Close()
 	header := p.checker.LastHeader
 	if header == nil {
 		log.Warnln(p.String(), "received no samples")
-	} else if len(p.samples) > 0 {
-		if err := p.flush(header); err != nil {
-			p.Error(err)
-		}
+	}
+	if err := p.triggerFlush(header, true); err != nil {
+		p.Error(err)
 	}
 }
 
-func (p *BatchProcessor) flush(header *bitflow.Header) error {
+func (p *BatchProcessor) triggerFlush(header *bitflow.Header, shutdown bool) error {
+	p.flushTrigger.L.Lock()
+	defer p.flushTrigger.L.Unlock()
+	p.flushHeader = header
+	p.flushTrigger.Broadcast()
+	p.shutdown = shutdown
+	for p.flushHeader != nil {
+		p.flushTrigger.Wait() // Will be notified after flush is finished
+	}
+	res := p.flushError
+	p.flushError = nil
+	return res
+}
+
+func (p *BatchProcessor) loopFlush(wg *sync.WaitGroup) {
+	defer wg.Done()
+	for p.waitAndExecuteFlush() {
+	}
+}
+
+func (p *BatchProcessor) waitAndExecuteFlush() bool {
+	p.flushTrigger.L.Lock()
+	defer p.flushTrigger.L.Unlock()
+	for p.flushHeader == nil && !p.shutdown && !p.flushTimedOut() {
+		if p.FlushTimeout > 0 {
+			p.flushTrigger.WaitTimeout(p.FlushTimeout)
+		} else {
+			p.flushTrigger.Wait()
+		}
+	}
+	if p.flushHeader == nil && !p.shutdown {
+		// Automatic flush after timeout
+		err := p.executeFlush(p.checker.LastHeader)
+		if err != nil {
+			log.Errorf("%v: Error during automatic flush (will be returned when next sample arrives): %v", p, err)
+			p.lastAutoFlushError = fmt.Errorf("Error during previous auto-flush: %v", err)
+		}
+		p.lastSample = time.Now()
+	} else {
+		p.flushError = p.executeFlush(p.flushHeader)
+		p.flushTrigger.Broadcast()
+	}
+	p.flushHeader = nil
+	return !p.shutdown
+}
+
+func (p *BatchProcessor) flushTimedOut() bool {
+	if p.FlushTimeout <= 0 || p.lastSample.IsZero() {
+		return false
+	}
+	return time.Now().Sub(p.lastSample) >= p.FlushTimeout
+}
+
+func (p *BatchProcessor) executeFlush(header *bitflow.Header) error {
 	samples := p.samples
+	if len(samples) == 0 || header == nil {
+		return nil
+	}
 	p.samples = nil // Allow garbage collection
 	if samples, header, err := p.executeSteps(samples, header); err != nil {
 		return err
@@ -125,8 +215,14 @@ func (p *BatchProcessor) String() string {
 		extra = ""
 	}
 	flushed := ""
-	if p.FlushTag != "" {
-		flushed = ", flushed with " + p.FlushTag
+	if len(p.FlushTags) > 0 {
+		flushed = fmt.Sprintf(", flushed with tags %v", p.FlushTags)
+	}
+	if p.FlushTimeout > 0 {
+		flushed += fmt.Sprintf(", auto-flushed after %v", p.FlushTimeout)
+	}
+	if p.SampleTimestampFlushTimeout > 0 {
+		flushed += fmt.Sprintf(", flushed when sample timestamp difference over %v", p.SampleTimestampFlushTimeout)
 	}
 	return fmt.Sprintf("BatchProcessor (%v step%s%s)", len(p.Steps), extra, flushed)
 }

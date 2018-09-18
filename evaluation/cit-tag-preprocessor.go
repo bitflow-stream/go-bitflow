@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
@@ -29,13 +29,13 @@ var (
 type CitTagsPreprocessor struct {
 	bitflow.NoopProcessor
 
-	EvaluationTags
+	ConfigurableTags
 	BinaryEvaluationTags
 	NormalTagValue string
 	TrainingEnd    time.Time
 }
 
-func RegisterCitTagsPreprocessor(b *query.PipelineBuilder) {
+func RegisterCitTagsPreprocessor(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		proc := &CitTagsPreprocessor{
 			NormalTagValue: params["normalValue"],
@@ -43,7 +43,7 @@ func RegisterCitTagsPreprocessor(b *query.PipelineBuilder) {
 		if trainingEndStr, ok := params["trainingEnd"]; ok {
 			trainingEnd, err := time.Parse(golib.SimpleTimeLayout, trainingEndStr)
 			if err != nil {
-				return query.ParameterError("trainingEnd", err)
+				return reg.ParameterError("trainingEnd", err)
 			}
 			proc.TrainingEnd = trainingEnd
 		}
@@ -55,12 +55,12 @@ func RegisterCitTagsPreprocessor(b *query.PipelineBuilder) {
 		p.Add(proc)
 		return nil
 	}
-	b.RegisterAnalysisParamsErr("preprocess_cit_tags", create, "Process 'host', 'cls' and 'target' tags into more useful information.", []string{}, "expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "trainingEnd", "normalValue")
+	b.RegisterAnalysisParamsErr("preprocess_cit_tags", create, "Process 'host', 'cls' and 'target' tags into more useful information.", reg.OptionalParams("expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "trainingEnd", "normalValue"))
 }
 
 func (p *CitTagsPreprocessor) String() string {
 	return fmt.Sprintf("tags preprocessor (training end: %v, normal tag value: \"%v\", evaluation: [%v], binary evaluation: [%v])",
-		p.TrainingEnd, p.NormalTagValue, &p.EvaluationTags, &p.BinaryEvaluationTags)
+		p.TrainingEnd, p.NormalTagValue, &p.ConfigurableTags, &p.BinaryEvaluationTags)
 }
 
 func (p *CitTagsPreprocessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

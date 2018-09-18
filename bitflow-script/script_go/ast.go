@@ -1,4 +1,4 @@
-package query
+package script_go
 
 type Node interface {
 	Pos() Token
@@ -39,8 +39,8 @@ type Fork struct {
 	Pipelines Pipelines
 }
 
-func (p Fork) Pos() Token {
-	return p.Name
+func (f Fork) Pos() Token {
+	return f.Name
 }
 
 type Step struct {
@@ -48,13 +48,13 @@ type Step struct {
 	Params map[Token]Token
 }
 
-func (p Step) Pos() Token {
-	return p.Name
+func (step Step) Pos() Token {
+	return step.Name
 }
 
-func (p Step) ParamsMap() map[string]string {
-	res := make(map[string]string, len(p.Params))
-	for key, value := range p.Params {
+func (step Step) ParamsMap() map[string]string {
+	res := make(map[string]string, len(step.Params))
+	for key, value := range step.Params {
 		res[key.Content()] = value.Content()
 	}
 	return res

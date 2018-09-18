@@ -4,9 +4,9 @@ import (
 	"sort"
 	"strings"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -55,7 +55,7 @@ func (sorter *SampleSorter) String() string {
 	return "Sort: " + strings.Join(all, ", ")
 }
 
-func RegisterSampleSorter(b *query.PipelineBuilder) {
+func RegisterSampleSorter(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("sort",
 		func(p *pipeline.SamplePipeline, params map[string]string) {
 			var tags []string
@@ -64,5 +64,7 @@ func RegisterSampleSorter(b *query.PipelineBuilder) {
 			}
 			p.Batch(&SampleSorter{tags})
 		},
-		"Sort a batch of samples based on the values of the given comma-separated tags. The default criterion is the timestmap", []string{}, "tags")
+		"Sort a batch of samples based on the values of the given comma-separated tags. The default criterion is the timestmap",
+		reg.OptionalParams("tags"),
+		reg.SupportBatch())
 }

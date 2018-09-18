@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"sync"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/ktye/fft"
 	log "github.com/sirupsen/logrus"
 )
@@ -31,12 +31,13 @@ var (
 	warningLock        sync.Mutex
 )
 
-func RegisterFFT(b *query.PipelineBuilder) {
+func RegisterFFT(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("fft",
 		func(p *pipeline.SamplePipeline) {
 			p.Batch(new(BatchFft))
 		},
-		"Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result")
+		"Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result",
+		reg.SupportBatch())
 }
 
 type BatchFft struct {

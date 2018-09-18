@@ -5,8 +5,8 @@ import (
 	"sort"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -103,8 +103,8 @@ type AngleBasedSort struct {
 	Points    []Point
 }
 
-func (p AngleBasedSort) Len() int {
-	return len(p.Points)
+func (s AngleBasedSort) Len() int {
+	return len(s.Points)
 }
 
 func (s AngleBasedSort) Swap(i, j int) {
@@ -112,12 +112,12 @@ func (s AngleBasedSort) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
-func (p AngleBasedSort) Less(i, j int) bool {
-	a, b := p.Points[i], p.Points[j]
-	z := crossProductZ(p.Reference, a, b)
+func (s AngleBasedSort) Less(i, j int) bool {
+	a, b := s.Points[i], s.Points[j]
+	z := crossProductZ(s.Reference, a, b)
 	if z == 0 {
 		// Collinear points: use distance to reference as second argument
-		return p.Reference.Distance(a) < p.Reference.Distance(b)
+		return s.Reference.Distance(a) < s.Reference.Distance(b)
 	}
 	return z > 0
 }
@@ -159,18 +159,20 @@ func BatchConvexHull(sortOnly bool) pipeline.BatchProcessingStep {
 	}
 }
 
-func RegisterConvexHull(b *query.PipelineBuilder) {
+func RegisterConvexHull(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("convex_hull",
 		func(p *pipeline.SamplePipeline) {
 			p.Batch(BatchConvexHull(false))
 		},
-		"Filter out the convex hull for a two-dimensional batch of samples")
+		"Filter out the convex hull for a two-dimensional batch of samples",
+		reg.SupportBatch())
 }
 
-func RegisterConvexHullSort(b *query.PipelineBuilder) {
+func RegisterConvexHullSort(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("convex_hull_sort",
 		func(p *pipeline.SamplePipeline) {
 			p.Batch(BatchConvexHull(true))
 		},
-		"Sort a two-dimensional batch of samples in order around their center")
+		"Sort a two-dimensional batch of samples in order around their center",
+		reg.SupportBatch())
 }

@@ -7,6 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Requirement: go get github.com/mjibson/esc
+//go:generate esc -o static_files_generated.go -pkg plotHttp -prefix static/ static
+
 func (p *HttpPlotter) serve() error {
 	engine := golib.NewGinEngine()
 	index := template.New("index")

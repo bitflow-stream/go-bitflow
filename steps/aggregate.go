@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
@@ -197,7 +197,7 @@ func FeatureWindowSlope(stats *FeatureWindowStats) bitflow.Value {
 	return back - front
 }
 
-func RegisterAggregateAvg(b *query.PipelineBuilder) {
+func RegisterAggregateAvg(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("avg",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			agg, err := create_aggregator(params)
@@ -207,10 +207,10 @@ func RegisterAggregateAvg(b *query.PipelineBuilder) {
 			p.Add(agg.AddAvg("_avg"))
 			return nil
 		},
-		"Add an average metric for every incoming metric. Optional parameter: duration or number of samples", []string{}, "window")
+		"Add an average metric for every incoming metric. Optional parameter: duration or number of samples", reg.OptionalParams("window"))
 }
 
-func RegisterAggregateSlope(b *query.PipelineBuilder) {
+func RegisterAggregateSlope(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("slope",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			agg, err := create_aggregator(params)
@@ -220,7 +220,7 @@ func RegisterAggregateSlope(b *query.PipelineBuilder) {
 			p.Add(agg.AddSlope("_slope"))
 			return nil
 		},
-		"Add a slope metric for every incoming metric. Optional parameter: duration or number of samples", []string{}, "window")
+		"Add a slope metric for every incoming metric. Optional parameter: duration or number of samples", reg.OptionalParams("window"))
 }
 
 func create_aggregator(params map[string]string) (*FeatureAggregator, error) {
@@ -236,5 +236,5 @@ func create_aggregator(params map[string]string) (*FeatureAggregator, error) {
 	if err2 == nil {
 		return &FeatureAggregator{WindowSize: num}, nil
 	}
-	return nil, query.ParameterError("window", golib.MultiError{err1, err2})
+	return nil, reg.ParameterError("window", golib.MultiError{err1, err2})
 }

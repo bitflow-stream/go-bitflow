@@ -4,29 +4,41 @@ import (
 	"errors"
 	"fmt"
 
-	bitflow "github.com/antongulenko/go-bitflow"
-	pipeline "github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
 )
 
-func RegisterOutputFiles(b *query.PipelineBuilder) {
+func RegisterOutputFiles(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		filename := params["file"]
 		if filename == "" {
-			return query.ParameterError("file", errors.New("Missing required parameter"))
+			return reg.ParameterError("file", errors.New("Missing required parameter"))
 		}
 		delete(params, "file")
 
+		var err error
+		parallelize := reg.IntParam(params, "parallelize", 0, true, &err)
+		if err != nil {
+			return err
+		}
+		delete(params, "parallelize")
+
 		distributor, err := _make_multi_file_pipeline_builder(params)
-		distributor.Template = filename
 		if err == nil {
+			distributor.Template = filename
+			if parallelize > 0 {
+				distributor.ExtendSubpipelines = func(fileName string, pipe *pipeline.SamplePipeline) {
+					pipe.Add(&DecouplingProcessor{ChannelBuffer: parallelize})
+				}
+			}
 			p.Add(&fork.SampleFork{Distributor: distributor})
 		}
 		return err
 	}
 
-	b.RegisterAnalysisParamsErr("output_files", create, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values", nil)
+	b.RegisterAnalysisParamsErr("output_files", create, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values")
 }
 
 func _make_multi_file_pipeline_builder(params map[string]string) (*fork.MultiFileDistributor, error) {
