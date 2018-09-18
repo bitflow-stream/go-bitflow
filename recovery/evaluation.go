@@ -2,12 +2,11 @@ package recovery
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -15,52 +14,37 @@ var (
 	evaluationFillerHeader = &bitflow.Header{Fields: []string{}} // Empty header for samples to progress the time in the DecisionMaker
 )
 
-type EvaluationProcessor struct {
-	bitflow.NoopProcessor
+type EvaluationDataCollector struct {
 	ConfigurableTags
-	Execution *MockExecutionEngine
-
-	StoreNormalSamples            int
-	NormalSamplesBetweenAnomalies int
-	FillerSamples                 int           // Number of samples to send between two real evaluation samples
-	SampleRate                    time.Duration // Time progression between samples (both real and filler samples)
-
-	RecoveriesPerState float64 // >1 means there are "non-functioning" recoveries, <1 means some recoveries handle multiple states
-
-	data map[string]*nodeEvaluationData // Key: node name
-	now  time.Time
-
-	currentAnomaly *EvaluatedAnomalyEvent
+	data               map[string]*nodeEvaluationData // Key: node name
+	StoreNormalSamples int
 }
 
-type nodeEvaluationData struct {
-	name      string
-	anomalies []*EvaluatedAnomalyEvent
-	normal    []*bitflow.SampleAndHeader
-
-	previousReceivedState string // Used in storeEvaluationSample() to separate anomaly events
-	normalIndex           int    // When sending normal data, continuously loop through the slice of normal samples
-}
-
-func (p *EvaluationProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
-	p.Execution.Events = p.executionEventCallback
-	return p.NoopProcessor.Start(wg)
-}
-
-func (p *EvaluationProcessor) String() string {
-	return fmt.Sprintf("Evaluate decision maker (%v, sample-rate %v, store-normal-samples: %v, filler-samples %v, normal-samples %v, recoveries-per-state %v)",
-		p.ConfigurableTags, p.SampleRate, p.StoreNormalSamples, p.FillerSamples, p.NormalSamplesBetweenAnomalies, p.RecoveriesPerState)
-}
-
-func (p *EvaluationProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	node, state := p.GetRecoveryTags(sample)
-	if node != "" && state != "" {
-		p.storeEvaluationSample(node, state, sample, header)
+func (p *EvaluationDataCollector) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+	var node, state string
+	for _, sample := range samples {
+		newNode, newState := p.GetRecoveryTags(sample)
+		if node == "" || state == "" {
+			node, state = newNode, newState
+		} else if newNode != node || newState != state {
+			log.Warnf("Dropping batch, which contains multiple values for tags %v (%v and %v) and %v (%v and %v)",
+				p.NodeNameTag, node, newNode, p.StateTag, state, newState)
+			node = ""
+			state = ""
+			break
+		}
 	}
-	return nil
+	if node != "" && state != "" {
+		p.storeEvaluationEvent(node, state, samples, header)
+	}
+	return header, nil, nil
 }
 
-func (p *EvaluationProcessor) storeEvaluationSample(node, state string, sample *bitflow.Sample, header *bitflow.Header) {
+func (p *EvaluationDataCollector) String() string {
+	return fmt.Sprintf("Collect evaluation data (%v, store-normal-samples: %v)", p.ConfigurableTags, p.StoreNormalSamples)
+}
+
+func (p *EvaluationDataCollector) storeEvaluationEvent(node, state string, samples []*bitflow.Sample, header *bitflow.Header) {
 	data, ok := p.data[node]
 	if !ok {
 		data = &nodeEvaluationData{
@@ -69,27 +53,74 @@ func (p *EvaluationProcessor) storeEvaluationSample(node, state string, sample *
 		p.data[node] = data
 	}
 	if state == p.NormalStateValue {
-		if len(data.normal) < p.StoreNormalSamples {
+		for _, sample := range samples {
+			if len(data.normal) >= p.StoreNormalSamples {
+				break
+			}
 			data.normal = append(data.normal, &bitflow.SampleAndHeader{
 				Sample: sample,
 				Header: header,
 			})
 		}
 	} else {
-		if state != data.previousReceivedState {
-			// A new anomaly has started
-			data.anomalies = append(data.anomalies, &EvaluatedAnomalyEvent{
-				node:  node,
-				state: state,
+		anomaly := &EvaluatedAnomalyEvent{
+			node:  node,
+			state: state,
+		}
+		for _, sample := range samples {
+			anomaly.samples = append(anomaly.samples, &bitflow.SampleAndHeader{
+				Sample: sample,
+				Header: header,
 			})
 		}
-		anomaly := data.anomalies[len(data.anomalies)-1]
-		anomaly.samples = append(anomaly.samples, &bitflow.SampleAndHeader{
-			Sample: sample,
-			Header: header,
-		})
+		data.anomalies = append(data.anomalies, anomaly)
 	}
-	data.previousReceivedState = state
+}
+
+type nodeEvaluationData struct {
+	name      string
+	anomalies []*EvaluatedAnomalyEvent
+	normal    []*bitflow.SampleAndHeader
+
+	normalIndex int // When sending normal data, continuously loop through the slice of normal samples
+}
+
+type EvaluatedAnomalyEvent struct {
+	samples          []*bitflow.SampleAndHeader
+	node             string
+	state            string
+	expectedRecovery string
+
+	resolved           bool
+	history            []RecoveringAttempt
+	start              time.Time
+	end                time.Time
+	sentAnomalySamples int
+}
+
+type RecoveringAttempt struct {
+	recovery string
+	success  bool
+	duration time.Duration
+}
+
+type EvaluationProcessor struct {
+	bitflow.NoopProcessor
+	Execution *MockExecutionEngine
+	collector *EvaluationDataCollector
+
+	NormalSamplesBetweenAnomalies int
+	FillerSamples                 int           // Number of samples to send between two real evaluation samples
+	SampleRate                    time.Duration // Time progression between samples (both real and filler samples)
+	RecoveriesPerState            float64       // >1 means there are "non-functioning" recoveries, <1 means some recoveries handle multiple states
+
+	now            time.Time
+	currentAnomaly *EvaluatedAnomalyEvent
+}
+
+func (p *EvaluationProcessor) String() string {
+	return fmt.Sprintf("Evaluate decision maker (sample-rate %v, filler-samples %v, normal-samples %v, recoveries-per-state %v)",
+		p.SampleRate, p.FillerSamples, p.NormalSamplesBetweenAnomalies, p.RecoveriesPerState)
 }
 
 func (p *EvaluationProcessor) Close() {
@@ -100,31 +131,31 @@ func (p *EvaluationProcessor) Close() {
 }
 
 func (p *EvaluationProcessor) runEvaluation() {
-	log.Printf("Received evaluation data for %v node(s):", len(p.data))
-	for name, data := range p.data {
-		log.Printf(" - %v: %v anomalies (normal samples: %v)", name, len(data.anomalies), len(data.normal))
-	}
+	p.Execution.Events = p.executionEventCallback
 
+	log.Printf("Received evaluation data for %v node(s):", len(p.collector.data))
+	p.iterate(func(nodeName string, node *nodeEvaluationData) {
+		log.Printf(" - %v: %v anomalies (normal samples: %v)", nodeName, len(node.anomalies), len(node.normal))
+	})
 	states, numRecoveries := p.assignExpectedRecoveries()
-
 	log.Printf("Running evaluation of %v total states and %v total recoveries:", len(states), numRecoveries)
 	for state, recovery := range states {
 		log.Printf(" - %v recovered by %v", state, recovery)
 	}
 
-	for nodeName, node := range p.data {
+	p.iterate(func(nodeName string, node *nodeEvaluationData) {
 		if len(node.normal) == 0 {
-			log.Errorf("Cannot evaluate node %v: no normal data sample available", nodeName)
-			continue
+			log.Warnf("Cannot evaluate node %v: no normal data sample available", nodeName)
+			return
 		}
 		if len(node.anomalies) == 0 {
-			log.Errorf("Cannot evaluate node %v: no anomaly data available", nodeName)
-			continue
+			log.Warnf("Cannot evaluate node %v: no anomaly data available", nodeName)
+			return
 		}
 
 		for i, anomaly := range node.anomalies {
 			if len(anomaly.samples) == 0 {
-				log.Errorf("Cannot evaluate event %v of %v for node %v (state %v): no anomaly events", i+1, len(node.anomalies), nodeName, anomaly.state)
+				log.Warnf("Cannot evaluate event %v of %v for node %v (state %v): no anomaly events", i+1, len(node.anomalies), nodeName, anomaly.state)
 				continue
 			}
 
@@ -144,16 +175,16 @@ func (p *EvaluationProcessor) runEvaluation() {
 				p.sendNormalSample(node)
 			}
 		}
-	}
+	})
 }
 
 func (p *EvaluationProcessor) assignExpectedRecoveries() (map[string]string, int) {
 	allStates := make(map[string]bool)
-	for _, node := range p.data {
+	p.iterate(func(nodeName string, node *nodeEvaluationData) {
 		for _, anomaly := range node.anomalies {
 			allStates[anomaly.state] = true
 		}
-	}
+	})
 	numStates := len(allStates)
 	numRecoveries := int(p.RecoveriesPerState * float64(numStates))
 	p.Execution.SetNumRecoveries(numRecoveries)
@@ -165,7 +196,7 @@ func (p *EvaluationProcessor) assignExpectedRecoveries() (map[string]string, int
 
 	// TODO allow different recoveries for different node layers/groups. Requires access to similarity or dependency model
 	stateRecoveries := make(map[string]string)
-	for _, node := range p.data {
+	p.iterate(func(nodeName string, node *nodeEvaluationData) {
 		for _, anomaly := range node.anomalies {
 			state := anomaly.state
 			recovery, ok := stateRecoveries[state]
@@ -175,7 +206,7 @@ func (p *EvaluationProcessor) assignExpectedRecoveries() (map[string]string, int
 			}
 			anomaly.expectedRecovery = recovery
 		}
-	}
+	})
 	return stateRecoveries, numRecoveries
 }
 
@@ -190,11 +221,11 @@ func (p *EvaluationProcessor) sendSample(sample *bitflow.SampleAndHeader, node *
 	}
 
 	// Send normal-behavior samples for all other nodes
-	for _, data := range p.data {
-		if data != node {
-			p.sendNormalSample(data)
+	p.iterate(func(nodeName string, otherNode *nodeEvaluationData) {
+		if otherNode != node {
+			p.sendNormalSample(otherNode)
 		}
-	}
+	})
 
 	// Send some filler samples to progress the time between real samples
 	for i := 0; i < p.FillerSamples; i++ {
@@ -240,30 +271,18 @@ func (p *EvaluationProcessor) executionEventCallback(node string, recovery strin
 	})
 }
 
-type EvaluatedAnomalyEvent struct {
-	samples          []*bitflow.SampleAndHeader
-	node             string
-	state            string
-	expectedRecovery string
-
-	resolved           bool
-	history            []RecoveringAttempt
-	start              time.Time
-	end                time.Time
-	sentAnomalySamples int
-}
-
-type RecoveringAttempt struct {
-	recovery string
-	success  bool
-	duration time.Duration
-}
-
 func (p *EvaluationProcessor) outputResults() {
 	log.Println("Evaluation finished, now outputting results")
-	header := &bitflow.Header{Fields: []string{"event_nr", "num_events", "resolved", "recovery_attempts", "anomaly_samples", "recovery_duration_seconds", "recovery_sample_time_seconds"}}
+	header := &bitflow.Header{Fields: []string{"node_event", "total_node_events", "state_event", "total_state_events", "resolved", "recovery_attempts", "anomaly_samples", "recovery_duration_seconds", "recovery_sample_time_seconds"}}
 	now := time.Now()
-	for nodeName, node := range p.data {
+
+	p.iterate(func(nodeName string, node *nodeEvaluationData) {
+		stateCounters := make(map[string]int)
+		totalStateCounters := make(map[string]int)
+		for _, anomaly := range node.anomalies {
+			totalStateCounters[anomaly.state] = totalStateCounters[anomaly.state] + 1
+		}
+
 		for i, anomaly := range node.anomalies {
 			resolved := 1
 			if !anomaly.resolved {
@@ -273,12 +292,15 @@ func (p *EvaluationProcessor) outputResults() {
 			for _, recovery := range anomaly.history {
 				totalDuration += recovery.duration
 			}
+			stateCounters[anomaly.state] = stateCounters[anomaly.state] + 1
 
 			sample := &bitflow.Sample{
 				Time: now,
 				Values: []bitflow.Value{
-					bitflow.Value(i),
+					bitflow.Value(i + 1),
 					bitflow.Value(len(node.anomalies)),
+					bitflow.Value(stateCounters[anomaly.state]),
+					bitflow.Value(totalStateCounters[anomaly.state]),
 					bitflow.Value(resolved),
 					bitflow.Value(len(anomaly.history)),
 					bitflow.Value(anomaly.sentAnomalySamples),
@@ -290,11 +312,23 @@ func (p *EvaluationProcessor) outputResults() {
 			}
 			sample.SetTag("node", nodeName)
 			sample.SetTag("state", anomaly.state)
+			sample.SetTag("node-state", nodeName+"-"+anomaly.state)
 			sample.SetTag("resolved", strconv.FormatBool(anomaly.resolved))
 			sample.SetTag("evaluation-results", "true")
 			if err := p.NoopProcessor.Sample(sample, header); err != nil {
 				log.Errorf("Error sending evaluation result sample for node %v, state %v (nr %v of %v): %v", nodeName, anomaly.state, i, len(node.anomalies), err)
 			}
 		}
+	})
+}
+
+func (p *EvaluationProcessor) iterate(do func(nodeName string, node *nodeEvaluationData)) {
+	nodes := make([]string, 0, len(p.collector.data))
+	for name := range p.collector.data {
+		nodes = append(nodes, name)
+	}
+	sort.Strings(nodes)
+	for _, nodeName := range nodes {
+		do(nodeName, p.collector.data[nodeName])
 	}
 }

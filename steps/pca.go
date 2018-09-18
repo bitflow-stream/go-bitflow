@@ -11,17 +11,17 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/gonum/matrix/mat64"
-	"github.com/gonum/stat"
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	log "github.com/sirupsen/logrus"
+	"gonum.org/v1/gonum/mat"
+	"gonum.org/v1/gonum/stat"
 )
 
 const DefaultContainedVariance = 0.99
 
-func SamplesToMatrix(samples []*bitflow.Sample) mat64.Matrix {
+func SamplesToMatrix(samples []*bitflow.Sample) mat.Matrix {
 	if len(samples) < 1 {
-		return mat64.NewDense(0, 0, nil)
+		return mat.NewDense(0, 0, nil)
 	}
 	cols := len(samples[0].Values)
 	values := make([]float64, len(samples)*cols)
@@ -32,11 +32,11 @@ func SamplesToMatrix(samples []*bitflow.Sample) mat64.Matrix {
 			index++
 		}
 	}
-	return mat64.NewDense(len(samples), cols, values)
+	return mat.NewDense(len(samples), cols, values)
 }
 
 type PCAModel struct {
-	Vectors            *mat64.Dense
+	Vectors            *mat.Dense
 	RawVariances       []float64
 	ContainedVariances []float64
 }
@@ -48,7 +48,8 @@ func (model *PCAModel) ComputeModel(samples []*bitflow.Sample) error {
 	if !ok {
 		return errors.New("PCA model could not be computed")
 	}
-	model.Vectors, model.RawVariances = pc.Vectors(nil), pc.Vars(nil)
+	pc.VarsTo(model.RawVariances)
+	pc.VectorsTo(model.Vectors)
 
 	model.ContainedVariances = make([]float64, len(model.RawVariances))
 	var sum float64
@@ -117,7 +118,7 @@ func (model *PCAModel) Load(filename string) (err error) {
 }
 
 func (model *PCAModel) Project(numComponents int) *PCAProjection {
-	vectors := model.Vectors.View(0, 0, len(model.ContainedVariances), numComponents)
+	vectors := model.Vectors.Slice(0, len(model.ContainedVariances), 0, numComponents)
 	return &PCAProjection{
 		Model:      model,
 		Vectors:    vectors,
@@ -146,18 +147,18 @@ func (model *PCAModel) ProjectHeader(variance float64, header *bitflow.Header) (
 
 type PCAProjection struct {
 	Model      *PCAModel
-	Vectors    mat64.Matrix
+	Vectors    mat.Matrix
 	Components int
 }
 
-func (model *PCAProjection) Matrix(matrix mat64.Matrix) *mat64.Dense {
-	var result mat64.Dense
+func (model *PCAProjection) Matrix(matrix mat.Matrix) *mat.Dense {
+	var result mat.Dense
 	result.Mul(matrix, model.Vectors)
 	return &result
 }
 
 func (model *PCAProjection) Vector(vec []float64) []float64 {
-	matrix := model.Matrix(mat64.NewDense(1, len(vec), vec))
+	matrix := model.Matrix(mat.NewDense(1, len(vec), vec))
 	return matrix.RawRowView(0)
 }
 
@@ -284,7 +285,7 @@ func RegisterPCAStore(b builder.PipelineBuilder) {
 			p.Batch(StorePCAModel(params["file"]))
 		},
 		"Create a PCA model of a batch of samples and store it to the given file",
-		builder.RequiredParams("file"),builder.SupportBatch())
+		builder.RequiredParams("file"), builder.SupportBatch())
 }
 
 func RegisterPCALoad(b builder.PipelineBuilder) {

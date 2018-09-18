@@ -11,11 +11,11 @@ func RegisterGenericBatch(b builder.PipelineBuilder) {
 			timeout := builder.DurationParam(params, "timeout", 0, true, &err)
 			if err == nil {
 				p.Add(&pipeline.BatchProcessor{
-					FlushTag:     params["tag"],
+					FlushTags:    []string{params["tag"]},
 					FlushTimeout: timeout,
 				})
 			}
 			return
 		},
-		"Collect samples and flush them when the given tag changes its value. Affects the follow-up analysis step, if it is also a batch analysis", builder.RequiredParams("tag"), builder.OptionalParams("timeout"))
+		"Collect samples and flush them on different events (wall time/sample time/tag change/number of samples). Affects the follow-up analysis step, if it is also a batch analysis", builder.RequiredParams("tag"), builder.OptionalParams("timeout"))
 }

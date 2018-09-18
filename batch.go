@@ -18,15 +18,17 @@ type BatchProcessor struct {
 
 	Steps []BatchProcessingStep
 
-	FlushTimeout       time.Duration // If > 0, flush when no new samples are received for the given duration. The wall-time is used for this (not sample timestamps)
-	lastAutoFlushError error
-	lastSample         time.Time
+	FlushTimeout                time.Duration // If > 0, flush when no new samples are received for the given duration. The wall-time is used for this (not sample timestamps)
+	SampleTimestampFlushTimeout time.Duration // If > 0, flush when a sample is received with a timestamp jump bigger than this
+	lastAutoFlushError          error
+	lastSample                  time.Time // Wall time when receiving last sample
+	lastSampleTimestamp         time.Time // Timestamp of last sample
 
-	FlushTag     string // If set, flush every time this tag changes
-	lastFlushTag string
-	flushHeader  *bitflow.Header
-	flushTrigger *golib.TimeoutCond // Used to trigger flush and to notify about finished flush. Relies on Sample()/Close() being synchronized externally.
-	flushError   error
+	FlushTags     []string // If set, flush every time any of these tags change
+	lastFlushTags []string
+	flushHeader   *bitflow.Header
+	flushTrigger  *golib.TimeoutCond // Used to trigger flush and to notify about finished flush. Relies on Sample()/Close() being synchronized externally.
+	flushError    error
 }
 
 type BatchProcessingStep interface {
@@ -71,12 +73,21 @@ func (p *BatchProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) (err error) {
 	oldHeader := p.checker.LastHeader
 	flush := p.checker.InitializedHeaderChanged(header)
-	if p.FlushTag != "" {
-		val := sample.Tag(p.FlushTag)
-		if oldHeader != nil {
-			flush = flush || val != p.lastFlushTag
+	if len(p.FlushTags) > 0 {
+		values := make([]string, len(p.FlushTags))
+		for i, tag := range p.FlushTags {
+			values[i] = sample.Tag(tag)
+			if oldHeader != nil && len(p.lastFlushTags) > i && p.lastFlushTags[i] != values[i] {
+				flush = true
+			}
 		}
-		p.lastFlushTag = val
+		p.lastFlushTags = values
+	}
+	if p.SampleTimestampFlushTimeout > 0 {
+		if !p.lastSampleTimestamp.IsZero() && sample.Time.Sub(p.lastSampleTimestamp) >= p.SampleTimestampFlushTimeout {
+			flush = true
+		}
+		p.lastSampleTimestamp = sample.Time
 	}
 	if flush {
 		err = p.triggerFlush(oldHeader, false)
@@ -204,11 +215,14 @@ func (p *BatchProcessor) String() string {
 		extra = ""
 	}
 	flushed := ""
-	if p.FlushTag != "" {
-		flushed = fmt.Sprintf(", flushed with tag '%v'", p.FlushTag)
+	if len(p.FlushTags) > 0 {
+		flushed = fmt.Sprintf(", flushed with tags %v", p.FlushTags)
 	}
 	if p.FlushTimeout > 0 {
 		flushed += fmt.Sprintf(", auto-flushed after %v", p.FlushTimeout)
+	}
+	if p.SampleTimestampFlushTimeout > 0 {
+		flushed += fmt.Sprintf(", flushed when sample timestamp difference over %v", p.SampleTimestampFlushTimeout)
 	}
 	return fmt.Sprintf("BatchProcessor (%v step%s%s)", len(p.Steps), extra, flushed)
 }

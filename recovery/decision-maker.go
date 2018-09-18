@@ -7,9 +7,9 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/builder"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type State string
@@ -44,7 +44,7 @@ type DecisionMaker struct {
 }
 
 func RegisterRecoveryEngine(b builder.PipelineBuilder) {
-	b.RegisterAnalysisParamsErr("recovery", func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+	b.RegisterAnalysisParamsErr("recovery", func(p *pipeline.SamplePipeline, params map[string]string) error {
 		var err error
 
 		noDataTimeout := builder.DurationParam(params, "no-data", 0, false, &err)
@@ -68,30 +68,41 @@ func RegisterRecoveryEngine(b builder.PipelineBuilder) {
 		if err != nil {
 			return err
 		}
+		selection, err := NewRandomSelectionParams(params)
+		if err != nil {
+			return err
+		}
 
 		if evaluate {
-			evalStep := &EvaluationProcessor{
-				data:      make(map[string]*nodeEvaluationData),
-				Execution: execution,
+			collector := &EvaluationDataCollector{
+				data:               make(map[string]*nodeEvaluationData),
+				StoreNormalSamples: builder.IntParam(params, "store-normal-samples", 1000, true, &err),
 			}
-			evalStep.SampleRate = builder.DurationParam(params, "sample-rate", 0, true, &err)
-			evalStep.FillerSamples = builder.IntParam(params, "filler-samples", 0, true, &err)
-			evalStep.NormalSamplesBetweenAnomalies = builder.IntParam(params, "normal-fillers", 0, true, &err)
-			evalStep.RecoveriesPerState = builder.FloatParam(params, "recoveries-per-state", 1, true, &err)
-			evalStep.StoreNormalSamples = builder.IntParam(params, "store-normal-samples", 1000, true, &err)
+			collector.ParseRecoveryTags(params)
+			evalStep := &EvaluationProcessor{
+				Execution:                     execution,
+				SampleRate:                    builder.DurationParam(params, "sample-rate", 0, true, &err),
+				FillerSamples:                 builder.IntParam(params, "filler-samples", 0, true, &err),
+				NormalSamplesBetweenAnomalies: builder.IntParam(params, "normal-fillers", 0, true, &err),
+				RecoveriesPerState:            builder.FloatParam(params, "recoveries-per-state", 1, true, &err),
+				collector:                     collector,
+			}
 			if err != nil {
 				return err
 			}
-			evalStep.ParseRecoveryTags(params)
-			pipeline.Add(evalStep)
+
+			p.Add((&pipeline.BatchProcessor{
+				FlushTags:                   []string{collector.NodeNameTag, collector.StateTag, "anomaly"},
+				SampleTimestampFlushTimeout: 5 * time.Second,
+			}).Add(collector))
+			p.Add(evalStep)
 		}
 
 		history := new(VolatileHistory)
-		selection := new(RandomSelection)
 
 		var tags ConfigurableTags
 		tags.ParseRecoveryTags(params)
-		pipeline.Add(&DecisionMaker{
+		p.Add(&DecisionMaker{
 			Graph:                 graph,
 			Execution:             execution,
 			History:               history,
@@ -105,11 +116,11 @@ func RegisterRecoveryEngine(b builder.PipelineBuilder) {
 	}, "Recovery Engine based on recommendation system",
 		builder.RequiredParams(append([]string{
 			"model", "layer-simil", "group-simil", // Dependency/Similarity Graph
-			"no-data", "recovery-failed",          // Timeouts
+			"no-data", "recovery-failed", // Timeouts
 			"recover-no-data",
 		}, TagParameterNames...)...),
 		builder.OptionalParams(
-			"avg-recovery-time", "recovery-error-percentage", "num-mock-recoveries", "rand-seed",                          // Mock execution engine
+			"avg-recovery-time", "recovery-error-percentage", "num-mock-recoveries", "rand-seed", // Mock execution engine
 			"evaluate", "sample-rate", "filler-samples", "normal-fillers", "recoveries-per-state", "store-normal-samples", // Evaluation
 		))
 
@@ -221,8 +232,8 @@ type NodeState struct {
 	state        State
 	stateChanged time.Time
 
-	anomaly    *Anomaly
-	recoveries []*Execution
+	anomaly    *AnomalyEvent
+	recoveries []*ExecutionEvent
 }
 
 func (node *NodeState) stateUpdated(now time.Time) {
@@ -265,7 +276,7 @@ func (node *NodeState) handleStateChanged(oldState State, now time.Time) {
 	case newState == StateAnomaly || newState == StateNoData:
 		if newState == StateAnomaly || node.engine.RecoverNoDataState {
 			if node.anomaly == nil {
-				node.anomaly = &Anomaly{
+				node.anomaly = &AnomalyEvent{
 					Node:     node.Name,
 					Features: SampleToAnomalyFeatures(node.LastSample, node.LastHeader),
 					Start:    now,
@@ -285,7 +296,7 @@ func (node *NodeState) runRecovery(now time.Time) {
 		return
 	}
 	duration, err := node.engine.Execution.RunRecovery(node.Name, recoveryName)
-	node.recoveries = append(node.recoveries, &Execution{
+	node.recoveries = append(node.recoveries, &ExecutionEvent{
 		Node:     node.Name,
 		Recovery: recoveryName,
 		Started:  now,

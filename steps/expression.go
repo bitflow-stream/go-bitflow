@@ -3,6 +3,7 @@ package steps
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/Knetic/govaluate"
@@ -134,6 +135,14 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 				}
 			}
 			return nil, fmt.Errorf("set_timestamp() needs 1 float64 parameter, but received: %v", printParamStrings(arguments))
+		},
+		"floor": func(arguments ...interface{}) (interface{}, error) {
+			if len(arguments) == 1 {
+				if numArg, ok := arguments[0].(float64); ok {
+					return math.Floor(numArg), nil
+				}
+			}
+			return nil, fmt.Errorf("floor() needs 1 float64 parameter, but received: %v", printParamStrings(arguments))
 		},
 	}
 }
