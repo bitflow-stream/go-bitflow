@@ -9,19 +9,19 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterHttpPlotter(b builder.PipelineBuilder) {
+func RegisterHttpPlotter(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		windowSize := 100
 		if windowStr, ok := params["window"]; ok {
 			var err error
 			windowSize, err = strconv.Atoi(windowStr)
 			if err != nil {
-				return builder.ParameterError("window", err)
+				return reg.ParameterError("window", err)
 			}
 		}
 		useLocalStatic := false
@@ -30,14 +30,14 @@ func RegisterHttpPlotter(b builder.PipelineBuilder) {
 			if static == "true" {
 				useLocalStatic = true
 			} else {
-				return builder.ParameterError("local_static", errors.New("The only accepted value is 'true'"))
+				return reg.ParameterError("local_static", errors.New("The only accepted value is 'true'"))
 			}
 		}
 		p.Add(NewHttpPlotter(params["endpoint"], windowSize, useLocalStatic))
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("http", create, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", builder.RequiredParams("endpoint"), builder.OptionalParams("window", "local_static"))
+	b.RegisterAnalysisParamsErr("http", create, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", reg.RequiredParams("endpoint"), reg.OptionalParams("window", "local_static"))
 }
 
 func NewHttpPlotter(endpoint string, windowSize int, useLocalStatic bool) *HttpPlotter {

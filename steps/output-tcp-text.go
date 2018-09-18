@@ -8,10 +8,10 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 )
 
-func RegisterGraphiteOutput(b builder.PipelineBuilder) {
+func RegisterGraphiteOutput(b reg.ProcessorRegistry) {
 	factory := &SimpleTextMarshallerFactory{
 		Description: "graphite",
 		NameFixer:   strings.NewReplacer("/", ".", " ", "_", "\t", "_", "\n", "_").Replace,
@@ -23,7 +23,7 @@ func RegisterGraphiteOutput(b builder.PipelineBuilder) {
 	b.RegisterAnalysisParamsErr("graphite", factory.createTcpOutput, "Send metrics and/or tags to the given Graphite endpoint. Required parameter: 'target'. Optional: 'prefix'")
 }
 
-func RegisterOpentsdbOutput(b builder.PipelineBuilder) {
+func RegisterOpentsdbOutput(b reg.ProcessorRegistry) {
 	const max_opentsdb_tags = 8
 
 	nameReplacer := strings.NewReplacer("/", ".")          // Convention for bitflow metric names uses slashes, while OpenTSDB uses dots
@@ -71,7 +71,7 @@ type SimpleTextMarshallerFactory struct {
 func (f *SimpleTextMarshallerFactory) createTcpOutput(p *pipeline.SamplePipeline, params map[string]string) error {
 	target, hasTarget := params["target"]
 	if !hasTarget {
-		return builder.ParameterError("target", fmt.Errorf("Missing required parameter"))
+		return reg.ParameterError("target", fmt.Errorf("Missing required parameter"))
 	}
 	prefix := params["prefix"]
 	delete(params, "target")

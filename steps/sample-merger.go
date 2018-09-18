@@ -10,8 +10,8 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type SynchronizedStreamMerger struct {
@@ -34,7 +34,7 @@ type SynchronizedStreamMerger struct {
 	samples         []queueElem // Reused slice to avoid reallocations
 }
 
-func RegisterSubpipelineStreamMerger(b builder.PipelineBuilder) {
+func RegisterSubpipelineStreamMerger(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		intervalStr := params["interval"]
 		tag := params["tag"]
@@ -42,11 +42,11 @@ func RegisterSubpipelineStreamMerger(b builder.PipelineBuilder) {
 		debug := params["debug"] == "true"
 		num, err := strconv.Atoi(numStr)
 		if err != nil {
-			return builder.ParameterError("num", err)
+			return reg.ParameterError("num", err)
 		}
 		interval, err := time.ParseDuration(intervalStr)
 		if err != nil {
-			return builder.ParameterError("interval", err)
+			return reg.ParameterError("interval", err)
 		}
 
 		merger := &SynchronizedStreamMerger{
@@ -91,7 +91,7 @@ func RegisterSubpipelineStreamMerger(b builder.PipelineBuilder) {
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("merge_streams", create, "Merge multiple streams, identified by a given tag. Output samples are generated in a given interval, all incoming metrics are averaged within that window, incoming metric names are prefixes with the respective tag value.", builder.RequiredParams("tag", "num", "interval"))
+	b.RegisterAnalysisParamsErr("merge_streams", create, "Merge multiple streams, identified by a given tag. Output samples are generated in a given interval, all incoming metrics are averaged within that window, incoming metric names are prefixes with the respective tag value.", reg.RequiredParams("tag", "num", "interval"))
 }
 
 func (p *SynchronizedStreamMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

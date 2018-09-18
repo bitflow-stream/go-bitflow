@@ -3,10 +3,10 @@ package steps
 import (
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 )
 
-func RegisterNoop(b builder.PipelineBuilder) {
+func RegisterNoop(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("noop",
 		func(p *pipeline.SamplePipeline) {
 			p.Add(new(NoopProcessor))

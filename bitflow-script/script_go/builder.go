@@ -1,29 +1,31 @@
-package query
+package script_go
 
 import (
 	"fmt"
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
-	builderPackage "github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type PipelineBuilder struct {
-	Endpoints bitflow.EndpointFactory
-
-	analysis_registry map[string]registeredAnalysis
-	fork_registry     map[string]registeredFork
+	reg.ProcessorRegistry
 }
 
-func NewPipelineBuilder() *PipelineBuilder {
-	builder := &PipelineBuilder{
-		Endpoints:         *bitflow.NewEndpointFactory(),
-		analysis_registry: make(map[string]registeredAnalysis),
-		fork_registry:     make(map[string]registeredFork),
-	}
-	RegisterMultiplexFork(builder)
-	return builder
+type subpipeline struct {
+	keys []string
+
+	builder *PipelineBuilder
+	pipe    Pipeline
+}
+
+func (s *subpipeline) Keys() []string {
+	return s.keys
+}
+
+func (s *subpipeline) Build() (*pipeline.SamplePipeline, error) {
+	return s.builder.makePipelineTail(s.pipe)
 }
 
 func (b PipelineBuilder) MakePipeline(pipe Pipeline) (*pipeline.SamplePipeline, error) {
@@ -108,12 +110,12 @@ func (b PipelineBuilder) addStep(pipe *pipeline.SamplePipeline, step Step) error
 	return err
 }
 
-func (b PipelineBuilder) getAnalysis(name_tok Token) (registeredAnalysis, error) {
+func (b PipelineBuilder) getAnalysis(name_tok Token) (reg.RegisteredAnalysis, error) {
 	name := name_tok.Content()
-	if analysis, ok := b.analysis_registry[name]; ok {
+	if analysis, ok := b.GetAnalysis(name); ok {
 		return analysis, nil
 	} else {
-		return registeredAnalysis{}, ParserError{
+		return reg.RegisteredAnalysis{}, ParserError{
 			Pos:     name_tok,
 			Message: fmt.Sprintf("Pipeline step '%v' is unknown", name),
 		}
@@ -140,11 +142,11 @@ func (b PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) error {
 		err = forkStep.Params.Verify(params)
 		if err == nil {
 			subpipelines := b.prepareSubpipelines(f.Pipelines)
-			subpipes := make([]builderPackage.Subpipeline,len(subpipelines))
-			for i := range subpipelines{
-				subpipes[i] = &subpipelines[i]
+			regSubpipelines := make([]reg.Subpipeline, len(subpipelines))
+			for i, subpipeline := range subpipelines {
+				regSubpipelines[i] = &subpipeline
 			}
-			distributor, err = forkStep.Func(subpipes, params)
+			distributor, err = forkStep.Func(regSubpipelines, params)
 		}
 	}
 	if err != nil {
@@ -159,20 +161,20 @@ func (b PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) error {
 	return nil
 }
 
-func (b PipelineBuilder) getFork(name_tok Token) (registeredFork, error) {
+func (b PipelineBuilder) getFork(name_tok Token) (reg.RegisteredFork, error) {
 	name := name_tok.Content()
-	if res, ok := b.fork_registry[name]; ok {
+	if res, ok := b.GetFork(name); ok {
 		return res, nil
 	} else {
-		return registeredFork{}, ParserError{
+		return reg.RegisteredFork{}, ParserError{
 			Pos:     name_tok,
 			Message: fmt.Sprintf("Pipeline fork '%v' is unknown", name),
 		}
 	}
 }
 
-func (b PipelineBuilder) prepareSubpipelines(pipelines Pipelines) []Subpipeline {
-	res := make([]Subpipeline, len(pipelines))
+func (b PipelineBuilder) prepareSubpipelines(pipelines Pipelines) []subpipeline {
+	res := make([]subpipeline, len(pipelines))
 	for i, pipe := range pipelines {
 		inputs := pipe[0].(Input)
 		res[i].keys = make([]string, len(inputs))

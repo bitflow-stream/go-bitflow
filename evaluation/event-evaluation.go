@@ -8,10 +8,10 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 const EventEvaluationTsvHeader = BinaryEvaluationTsvHeader + "\tAnomalies\tDetected\tAvg Detection Time\tFalse Alarms\tAvg False Alarm Duration"
@@ -61,7 +61,7 @@ type EventEvaluationProcessor struct {
 	AbstractAnomalyEventProcessor
 }
 
-func RegisterEventEvaluation(b builder.PipelineBuilder) {
+func RegisterEventEvaluation(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) {
 		eval := new(EventEvaluationProcessor)
 		eval.BatchKeyTag = params["batchTag"]
@@ -69,7 +69,7 @@ func RegisterEventEvaluation(b builder.PipelineBuilder) {
 		eval.SetEvaluationTags(params)
 		p.Add(eval)
 	}
-	b.RegisterAnalysisParams("event_evaluation", create, "Like binary_evaluation, but add evaluation metrics for individual anomaly events", builder.OptionalParams("expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "batchTag"))
+	b.RegisterAnalysisParams("event_evaluation", create, "Like binary_evaluation, but add evaluation metrics for individual anomaly events", reg.OptionalParams("expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "batchTag"))
 }
 
 func (p *EventEvaluationProcessor) String() string {
@@ -248,7 +248,7 @@ func (p *AnomalySmoothing) anomalyStateChanged(t time.Time) {
 	p.stateChanged = time.Time{}
 }
 
-func RegisterAnomalySmoothing(b builder.PipelineBuilder) {
+func RegisterAnomalySmoothing(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		proc := new(AnomalySmoothing)
 		proc.SetBinaryEvaluationTags(params)
@@ -261,7 +261,7 @@ func RegisterAnomalySmoothing(b builder.PipelineBuilder) {
 			var err error
 			smoothingDuration, err = time.ParseDuration(smoothingDurationStr)
 			if err != nil {
-				return builder.ParameterError("interval", err)
+				return reg.ParameterError("interval", err)
 			}
 		}
 		proc.SetBinaryEvaluationTags(params)
@@ -270,5 +270,5 @@ func RegisterAnomalySmoothing(b builder.PipelineBuilder) {
 		p.Add(proc)
 		return nil
 	}
-	b.RegisterAnalysisParamsErr("smooth_anomalies", create, "Smooth the switching between anomalies and non-anomalies. Switch when one state stabilizes for a given time.", builder.OptionalParams("batchTag", "interval", "expectedTag", "predictedTag", "anomalyValue")) // Missing: "normalValue", ""
+	b.RegisterAnalysisParamsErr("smooth_anomalies", create, "Smooth the switching between anomalies and non-anomalies. Switch when one state stabilizes for a given time.", reg.OptionalParams("batchTag", "interval", "expectedTag", "predictedTag", "anomalyValue")) // Missing: "normalValue", ""
 }

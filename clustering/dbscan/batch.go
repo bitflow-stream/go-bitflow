@@ -5,9 +5,9 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/go-onlinestats"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type BatchClusterer struct {
@@ -48,7 +48,7 @@ func (c *BatchClusterer) String() string {
 		c.Eps, c.MinPts, c.TreeMinChildren, c.TreeMaxChildren, c.TreePointWidth)
 }
 
-func RegisterDbscan(b builder.PipelineBuilder) {
+func RegisterDbscan(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline) {
 		p.Batch(&BatchClusterer{
 			Dbscan:          Dbscan{Eps: 0.1, MinPts: 5},
@@ -57,12 +57,12 @@ func RegisterDbscan(b builder.PipelineBuilder) {
 			TreePointWidth:  0.0001,
 		})
 	}
-	b.RegisterAnalysis("dbscan", create, "Perform a dbscan clustering on a batch of samples",builder.SupportBatch())
+	b.RegisterAnalysis("dbscan", create, "Perform a dbscan clustering on a batch of samples", reg.SupportBatch())
 }
 
-func RegisterDbscanParallel(b builder.PipelineBuilder) {
+func RegisterDbscanParallel(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline) {
 		p.Batch(&ParallelDbscanBatchClusterer{Eps: 0.3, MinPts: 5})
 	}
-	b.RegisterAnalysis("dbscan_parallel", create, "Perform a parallel dbscan clustering on a batch of samples",builder.SupportBatch())
+	b.RegisterAnalysis("dbscan_parallel", create, "Perform a parallel dbscan clustering on a batch of samples", reg.SupportBatch())
 }

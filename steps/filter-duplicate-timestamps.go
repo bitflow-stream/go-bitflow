@@ -6,14 +6,14 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 )
 
-func RegisterDuplicateTimestampFilter(b builder.PipelineBuilder) {
+func RegisterDuplicateTimestampFilter(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("filter-duplicate-timestamps",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			var err error
-			interval := builder.DurationParam(params, "interval", 0, false, &err)
+			interval := reg.DurationParam(params, "interval", 0, false, &err)
 			if err != nil {
 				return err
 			}
@@ -31,5 +31,5 @@ func RegisterDuplicateTimestampFilter(b builder.PipelineBuilder) {
 			}
 			p.Add(processor)
 			return nil
-		}, "Filter samples that follow each other too closely", builder.RequiredParams("interval"))
+		}, "Filter samples that follow each other too closely", reg.RequiredParams("interval"))
 }

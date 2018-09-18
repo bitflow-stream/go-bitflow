@@ -5,19 +5,19 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/antongulenko/go-bitflow-pipeline/fork"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/antongulenko/go-bitflow-pipeline/fork"
 )
 
 // This function is placed in this package to avoid circular dependency between the fork and the query package.
-func RegisterForks(b builder.PipelineBuilder) {
+func RegisterForks(b reg.ProcessorRegistry) {
 	b.RegisterFork("rr", fork_round_robin, "The round-robin fork distributes the samples to the subpipelines based on weights. The pipeline selector keys must be positive integers denoting the weight of the respective pipeline.")
-	b.RegisterFork("fork_tag", fork_tag, "Fork based on the values of the given tag", builder.RequiredParams("tag"), builder.OptionalParams("regex", "exact"))
-	b.RegisterFork("fork_tag_template", fork_tag_template, "Fork based on a template string, placeholders like ${xxx} are replaced by tag values.", builder.RequiredParams("template"), builder.OptionalParams("regex", "exact"))
+	b.RegisterFork("fork_tag", fork_tag, "Fork based on the values of the given tag", reg.RequiredParams("tag"), reg.OptionalParams("regex", "exact"))
+	b.RegisterFork("fork_tag_template", fork_tag_template, "Fork based on a template string, placeholders like ${xxx} are replaced by tag values.", reg.RequiredParams("template"), reg.OptionalParams("regex", "exact"))
 }
 
-func fork_round_robin(subpipelines []builder.Subpipeline, _ map[string]string) (fork.Distributor, error) {
+func fork_round_robin(subpipelines []reg.Subpipeline, _ map[string]string) (fork.Distributor, error) {
 	res := new(fork.RoundRobinDistributor)
 	res.Weights = make([]int, len(subpipelines))
 	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpipelines))
@@ -44,14 +44,14 @@ func fork_round_robin(subpipelines []builder.Subpipeline, _ map[string]string) (
 	return res, nil
 }
 
-func fork_tag(subpipelines []builder.Subpipeline, params map[string]string) (fork.Distributor, error) {
+func fork_tag(subpipelines []reg.Subpipeline, params map[string]string) (fork.Distributor, error) {
 	tag := params["tag"]
 	delete(params, "tag")
 	params["template"] = "${" + tag + "}"
 	return fork_tag_template(subpipelines, params)
 }
 
-func fork_tag_template(subpipelines []builder.Subpipeline, params map[string]string) (fork.Distributor, error) {
+func fork_tag_template(subpipelines []reg.Subpipeline, params map[string]string) (fork.Distributor, error) {
 	wildcardPipelines := make(map[string]func() ([]*pipeline.SamplePipeline, error))
 	var keysArray []string
 	for _, pipe := range subpipelines {
@@ -72,8 +72,8 @@ func fork_tag_template(subpipelines []builder.Subpipeline, params map[string]str
 		},
 		RegexDistributor: fork.RegexDistributor{
 			Pipelines:  wildcardPipelines,
-			ExactMatch: builder.BoolParam(params, "exact", false, true, &err),
-			RegexMatch: builder.BoolParam(params, "regex", false, true, &err),
+			ExactMatch: reg.BoolParam(params, "exact", false, true, &err),
+			RegexMatch: reg.BoolParam(params, "regex", false, true, &err),
 		},
 	}
 	if err == nil {
@@ -83,7 +83,7 @@ func fork_tag_template(subpipelines []builder.Subpipeline, params map[string]str
 }
 
 type wildcardSubpipeline struct {
-	p builder.Subpipeline
+	p reg.Subpipeline
 }
 
 func (m wildcardSubpipeline) build() ([]*pipeline.SamplePipeline, error) {

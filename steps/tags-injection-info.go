@@ -6,13 +6,13 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 // TODO move this to a plugin
 
-func RegisterTargetTagSplitter(b builder.PipelineBuilder) {
+func RegisterTargetTagSplitter(b reg.ProcessorRegistry) {
 	const (
 		targetTag          = "target"
 		targetTagSeparator = "|"

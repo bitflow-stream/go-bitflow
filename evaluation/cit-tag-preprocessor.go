@@ -7,9 +7,9 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 var (
@@ -35,7 +35,7 @@ type CitTagsPreprocessor struct {
 	TrainingEnd    time.Time
 }
 
-func RegisterCitTagsPreprocessor(b builder.PipelineBuilder) {
+func RegisterCitTagsPreprocessor(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		proc := &CitTagsPreprocessor{
 			NormalTagValue: params["normalValue"],
@@ -43,7 +43,7 @@ func RegisterCitTagsPreprocessor(b builder.PipelineBuilder) {
 		if trainingEndStr, ok := params["trainingEnd"]; ok {
 			trainingEnd, err := time.Parse(golib.SimpleTimeLayout, trainingEndStr)
 			if err != nil {
-				return builder.ParameterError("trainingEnd", err)
+				return reg.ParameterError("trainingEnd", err)
 			}
 			proc.TrainingEnd = trainingEnd
 		}
@@ -55,7 +55,7 @@ func RegisterCitTagsPreprocessor(b builder.PipelineBuilder) {
 		p.Add(proc)
 		return nil
 	}
-	b.RegisterAnalysisParamsErr("preprocess_cit_tags", create, "Process 'host', 'cls' and 'target' tags into more useful information.", builder.OptionalParams("expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "trainingEnd", "normalValue"))
+	b.RegisterAnalysisParamsErr("preprocess_cit_tags", create, "Process 'host', 'cls' and 'target' tags into more useful information.", reg.OptionalParams("expectedTag", "predictedTag", "anomalyValue", "evaluateTag", "evaluateValue", "groupsTag", "groupsSeparator", "trainingEnd", "normalValue"))
 }
 
 func (p *CitTagsPreprocessor) String() string {

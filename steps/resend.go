@@ -7,20 +7,20 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
 
-func RegisterResendStep(b builder.PipelineBuilder) {
+func RegisterResendStep(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("resend",
 		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
 			p.Add(&ResendProcessor{
-				Interval: builder.DurationParam(params, "interval", 0, false, &err),
+				Interval: reg.DurationParam(params, "interval", 0, false, &err),
 			})
 			return
 		},
-		"If no new sample is received within the given period of time, resend a copy of it.", builder.RequiredParams("interval"))
+		"If no new sample is received within the given period of time, resend a copy of it.", reg.RequiredParams("interval"))
 }
 
 type ResendProcessor struct {
@@ -75,11 +75,11 @@ func SendPeriodically(sample *bitflow.Sample, header *bitflow.Header, receiver b
 	return stopper
 }
 
-func RegisterFillUpStep(b builder.PipelineBuilder) {
+func RegisterFillUpStep(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("fill-up",
 		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
-			interval := builder.DurationParam(params, "interval", 0, false, &err)
-			stepInterval := builder.DurationParam(params, "step-interval", interval, true, &err)
+			interval := reg.DurationParam(params, "interval", 0, false, &err)
+			stepInterval := reg.DurationParam(params, "step-interval", interval, true, &err)
 			p.Add(&FillUpProcessor{
 				MinMissingInterval: interval,
 				StepInterval:       stepInterval,
@@ -87,7 +87,7 @@ func RegisterFillUpStep(b builder.PipelineBuilder) {
 			return
 		},
 		"If the timestamp different between two consecutive samples is larger than the given interval, send copies of the first sample to fill the gap",
-		builder.RequiredParams("interval"), builder.OptionalParams("step-interval"))
+		reg.RequiredParams("interval"), reg.OptionalParams("step-interval"))
 }
 
 type FillUpProcessor struct {

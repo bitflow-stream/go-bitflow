@@ -5,18 +5,18 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterDropErrorsStep(b builder.PipelineBuilder) {
+func RegisterDropErrorsStep(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("drop_errors",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			var err error
-			logDebug := builder.BoolParam(params, "log-debug", false, true, &err)
-			logInfo := builder.BoolParam(params, "log-info", false, true, &err)
-			logWarn := builder.BoolParam(params, "log-warn", false, true, &err)
-			logError := builder.BoolParam(params, "log", !(logDebug || logInfo || logWarn), true, &err) // Enable by default if no other log level was selected
+			logDebug := reg.BoolParam(params, "log-debug", false, true, &err)
+			logInfo := reg.BoolParam(params, "log-info", false, true, &err)
+			logWarn := reg.BoolParam(params, "log-warn", false, true, &err)
+			logError := reg.BoolParam(params, "log", !(logDebug || logInfo || logWarn), true, &err) // Enable by default if no other log level was selected
 			if err == nil {
 				p.Add(&DropErrorsProcessor{
 					LogError:   logError,
@@ -27,7 +27,7 @@ func RegisterDropErrorsStep(b builder.PipelineBuilder) {
 			}
 			return err
 		},
-		"All errors of subsequent processing steps are only logged and not forwarded to the steps before. By default, the errors are logged (can be disabled).", builder.OptionalParams( "log", "log-debug", "log-info", "log-warn"))
+		"All errors of subsequent processing steps are only logged and not forwarded to the steps before. By default, the errors are logged (can be disabled).", reg.OptionalParams("log", "log-debug", "log-info", "log-warn"))
 }
 
 type DropErrorsProcessor struct {

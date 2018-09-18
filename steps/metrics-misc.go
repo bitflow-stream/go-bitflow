@@ -8,11 +8,11 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterSetCurrentTime(b builder.PipelineBuilder) {
+func RegisterSetCurrentTime(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("set_time",
 		func(p *pipeline.SamplePipeline) {
 			p.Add(&pipeline.SimpleProcessor{
@@ -26,7 +26,7 @@ func RegisterSetCurrentTime(b builder.PipelineBuilder) {
 		"Set the timestamp on every processed sample to the current time")
 }
 
-func RegisterAppendTimeDifference(b builder.PipelineBuilder) {
+func RegisterAppendTimeDifference(b reg.ProcessorRegistry) {
 	fieldName := "time-difference"
 	var checker bitflow.HeaderChecker
 	var outHeader *bitflow.Header
@@ -53,7 +53,7 @@ func RegisterAppendTimeDifference(b builder.PipelineBuilder) {
 		"Append the time difference to the previous sample as a metric")
 }
 
-func RegisterStripMetrics(b builder.PipelineBuilder) {
+func RegisterStripMetrics(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("strip",
 		func(p *pipeline.SamplePipeline) {
 			p.Add(&pipeline.SimpleProcessor{
@@ -66,7 +66,7 @@ func RegisterStripMetrics(b builder.PipelineBuilder) {
 		"Remove all metrics, only keeping the timestamp and the tags of eacy sample")
 }
 
-func RegisterParseTags(b builder.PipelineBuilder) {
+func RegisterParseTags(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("parse_tags",
 		func(p *pipeline.SamplePipeline, params map[string]string) {
 			var checker bitflow.HeaderChecker

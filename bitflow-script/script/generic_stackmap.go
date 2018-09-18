@@ -1,13 +1,14 @@
 package script // Bitflow
 
 import (
-	"reflect"
 	"fmt"
+	"reflect"
 )
+
 /**
 StackMap maps from a string-key to a stack fo interface{}, type safety must be handled by the user.
 StackMap is not safe for concurrent use.
- */
+*/
 type StackMap map[string][]interface{}
 
 func (s StackMap) Len(key string) int {

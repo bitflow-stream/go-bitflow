@@ -6,8 +6,8 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 // Graham Scan for computing the convex hull of a point set
@@ -159,20 +159,20 @@ func BatchConvexHull(sortOnly bool) pipeline.BatchProcessingStep {
 	}
 }
 
-func RegisterConvexHull(b builder.PipelineBuilder) {
+func RegisterConvexHull(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("convex_hull",
 		func(p *pipeline.SamplePipeline) {
 			p.Batch(BatchConvexHull(false))
 		},
 		"Filter out the convex hull for a two-dimensional batch of samples",
-		builder.SupportBatch())
+		reg.SupportBatch())
 }
 
-func RegisterConvexHullSort(b builder.PipelineBuilder) {
+func RegisterConvexHullSort(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("convex_hull_sort",
 		func(p *pipeline.SamplePipeline) {
 			p.Batch(BatchConvexHull(true))
 		},
 		"Sort a two-dimensional batch of samples in order around their center",
-		builder.SupportBatch())
+		reg.SupportBatch())
 }

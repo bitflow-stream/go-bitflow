@@ -3,7 +3,7 @@ package recovery
 import (
 	"math/rand"
 
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 	"github.com/antongulenko/golib"
 )
@@ -18,7 +18,7 @@ type RandomSelection struct {
 
 func NewRandomSelectionParams(params map[string]string) (*RandomSelection, error) {
 	var err error
-	randSeed := builder.IntParam(params, "rand-seed", 1, true, &err)
+	randSeed := reg.IntParam(params, "rand-seed", 1, true, &err)
 	return NewRandomSelection(randSeed), err
 }
 

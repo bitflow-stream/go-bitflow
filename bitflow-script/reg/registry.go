@@ -1,4 +1,4 @@
-package script
+package reg
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
 )
 
@@ -14,20 +13,22 @@ const (
 	MultiplexForkName = "multiplex"
 )
 
-var _ builder.PipelineBuilder = NewProcessorRegistry()
+type AnalysisFunc func(pipeline *pipeline.SamplePipeline, params map[string]string) error
 
-type registeredAnalysis struct {
+type ForkFunc func(subpiplines []Subpipeline, params map[string]string) (fork.Distributor, error)
+
+type RegisteredAnalysis struct {
 	Name                     string
-	Func                     builder.AnalysisFunc
+	Func                     AnalysisFunc
 	Description              string
 	Params                   registeredParameters
 	SupportsBatchProcessing  bool
 	SupportsStreamProcessing bool
 }
 
-type registeredFork struct {
+type RegisteredFork struct {
 	Name        string
-	Func        builder.ForkFunc
+	Func        ForkFunc
 	Description string
 	Params      registeredParameters
 }
@@ -37,56 +38,50 @@ type registeredParameters struct {
 	optional []string
 }
 
-type Subpipeline struct {
-	keys []string
-	pipe *pipeline.SamplePipeline
+type Subpipeline interface {
+	Build() (*pipeline.SamplePipeline, error)
+	Keys() []string
 }
 
-func (s *Subpipeline) Keys() []string {
-	return s.keys
-}
-
-func (s *Subpipeline) Build() (*pipeline.SamplePipeline, error) {
-	return s.pipe, nil
-}
-
+// Avoid having to specify a pointer to a ProcessorRegistry at many locations.
 type ProcessorRegistry struct {
+	*ProcessorRegistryImpl
+}
+
+type ProcessorRegistryImpl struct {
 	Endpoints bitflow.EndpointFactory
 
-	analysisRegistry map[string]registeredAnalysis
-	forkRegistry     map[string]registeredFork
+	analysisRegistry map[string]RegisteredAnalysis
+	forkRegistry     map[string]RegisteredFork
 }
 
-func NewProcessorRegistry() *ProcessorRegistry {
-	registry := &ProcessorRegistry{
-		Endpoints:        *bitflow.NewEndpointFactory(),
-		analysisRegistry: make(map[string]registeredAnalysis),
-		forkRegistry:     make(map[string]registeredFork),
+func NewProcessorRegistry() ProcessorRegistry {
+	return ProcessorRegistry{
+		ProcessorRegistryImpl: &ProcessorRegistryImpl{
+			Endpoints:        *bitflow.NewEndpointFactory(),
+			analysisRegistry: make(map[string]RegisteredAnalysis),
+			forkRegistry:     make(map[string]RegisteredFork),
+		},
 	}
-	return registry
 }
 
-func (reg ProcessorRegistry) getAnalysis(name string) (analysisProcessor registeredAnalysis, ok bool) {
-	analysisProcessor, ok = reg.analysisRegistry[name]
+func (r *ProcessorRegistryImpl) GetAnalysis(name string) (analysisProcessor RegisteredAnalysis, ok bool) {
+	analysisProcessor, ok = r.analysisRegistry[name]
 	return
 }
 
-func (reg ProcessorRegistry) getFork(name string) (fork registeredFork, ok bool) {
-	fork, ok = reg.forkRegistry[name]
+func (r *ProcessorRegistryImpl) GetFork(name string) (fork RegisteredFork, ok bool) {
+	fork, ok = r.forkRegistry[name]
 	return
 }
 
-func parameterError(name string, err error) error {
-	return fmt.Errorf("Failed to parse '%v' parameter: %v", name, err)
-}
-
-func (reg *ProcessorRegistry) RegisterAnalysisParamsErr(name string, setupPipeline builder.AnalysisFunc, description string, options ...builder.Option) {
-	if _, ok := reg.analysisRegistry[name]; ok {
+func (r *ProcessorRegistryImpl) RegisterAnalysisParamsErr(name string, setupPipeline AnalysisFunc, description string, options ...Option) {
+	if _, ok := r.analysisRegistry[name]; ok {
 		panic("Analysis already registered: " + name)
 	}
-	opts := builder.GetOpts(options)
+	opts := GetOpts(options)
 	params := registeredParameters{opts.RequiredParams, opts.OptionalParams}
-	reg.analysisRegistry[name] = registeredAnalysis{
+	r.analysisRegistry[name] = RegisteredAnalysis{
 		Name:                     name,
 		Func:                     setupPipeline,
 		Description:              params.makeDescription(description),
@@ -96,32 +91,32 @@ func (reg *ProcessorRegistry) RegisterAnalysisParamsErr(name string, setupPipeli
 	}
 }
 
-func (reg *ProcessorRegistry) RegisterAnalysisParams(name string, setupPipeline func(pipeline *pipeline.SamplePipeline, params map[string]string), description string, options ...builder.Option) {
-	reg.RegisterAnalysisParamsErr(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+func (r *ProcessorRegistryImpl) RegisterAnalysisParams(name string, setupPipeline func(pipeline *pipeline.SamplePipeline, params map[string]string), description string, options ...Option) {
+	r.RegisterAnalysisParamsErr(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 		setupPipeline(pipeline, params)
 		return nil
 	}, description, options...)
 }
 
-func (reg *ProcessorRegistry) RegisterAnalysis(name string, setupPipeline func(pipeline *pipeline.SamplePipeline), description string, options ...builder.Option) {
-	reg.RegisterAnalysisParams(name, func(pipeline *pipeline.SamplePipeline, _ map[string]string) {
+func (r *ProcessorRegistryImpl) RegisterAnalysis(name string, setupPipeline func(pipeline *pipeline.SamplePipeline), description string, options ...Option) {
+	r.RegisterAnalysisParams(name, func(pipeline *pipeline.SamplePipeline, _ map[string]string) {
 		setupPipeline(pipeline)
 	}, description, options...)
 }
 
-func (reg *ProcessorRegistry) RegisterAnalysisErr(name string, setupPipeline func(pipeline *pipeline.SamplePipeline) error, description string, options ...builder.Option) {
-	reg.RegisterAnalysisParamsErr(name, func(pipeline *pipeline.SamplePipeline, _ map[string]string) error {
+func (r *ProcessorRegistryImpl) RegisterAnalysisErr(name string, setupPipeline func(pipeline *pipeline.SamplePipeline) error, description string, options ...Option) {
+	r.RegisterAnalysisParamsErr(name, func(pipeline *pipeline.SamplePipeline, _ map[string]string) error {
 		return setupPipeline(pipeline)
 	}, description, options...)
 }
 
-func (reg *ProcessorRegistry) RegisterFork(name string, createFork builder.ForkFunc, description string, options ...builder.Option) {
-	if _, ok := reg.forkRegistry[name]; ok {
+func (r *ProcessorRegistryImpl) RegisterFork(name string, createFork ForkFunc, description string, options ...Option) {
+	if _, ok := r.forkRegistry[name]; ok {
 		panic("Fork already registered: " + name)
 	}
-	opts := builder.GetOpts(options)
+	opts := GetOpts(options)
 	params := registeredParameters{opts.RequiredParams, opts.OptionalParams}
-	reg.forkRegistry[name] = registeredFork{name, createFork, params.makeDescription(description), params}
+	r.forkRegistry[name] = RegisteredFork{name, createFork, params.makeDescription(description), params}
 }
 
 func (params registeredParameters) Verify(input map[string]string) error {
@@ -180,9 +175,9 @@ func (slice AvailableProcessorSlice) Swap(i, j int) {
 	slice[i], slice[j] = slice[j], slice[i]
 }
 
-func (reg ProcessorRegistry) GetAvailableProcessors() AvailableProcessorSlice {
-	all := make(AvailableProcessorSlice, 0, len(reg.analysisRegistry))
-	for _, step := range reg.analysisRegistry {
+func (r ProcessorRegistryImpl) GetAvailableProcessors() AvailableProcessorSlice {
+	all := make(AvailableProcessorSlice, 0, len(r.analysisRegistry))
+	for _, step := range r.analysisRegistry {
 		if step.Func == nil {
 			continue
 		}
@@ -194,16 +189,16 @@ func (reg ProcessorRegistry) GetAvailableProcessors() AvailableProcessorSlice {
 			OptionalParams: step.Params.optional,
 		})
 	}
-	for _, fork := range reg.forkRegistry {
-		if fork.Func == nil {
+	for _, registeredFork := range r.forkRegistry {
+		if registeredFork.Func == nil {
 			continue
 		}
 		all = append(all, AvailableProcessor{
-			Name:           fork.Name,
+			Name:           registeredFork.Name,
 			IsFork:         true,
-			Description:    fork.Description,
-			RequiredParams: fork.Params.required,
-			OptionalParams: fork.Params.optional,
+			Description:    registeredFork.Description,
+			RequiredParams: registeredFork.Params.required,
+			OptionalParams: registeredFork.Params.optional,
 		})
 	}
 	sort.Sort(all)
@@ -211,11 +206,11 @@ func (reg ProcessorRegistry) GetAvailableProcessors() AvailableProcessorSlice {
 }
 
 // default Fork
-func RegisterMultiplexFork(builder builder.PipelineBuilder) {
+func RegisterMultiplexFork(builder ProcessorRegistry) {
 	builder.RegisterFork(MultiplexForkName, createMultiplexFork, "Basic fork forwarding samples to all subpipelines. Subpipeline keys are ignored.")
 }
 
-func createMultiplexFork(subpipelines []builder.Subpipeline, _ map[string]string) (fork.Distributor, error) {
+func createMultiplexFork(subpipelines []Subpipeline, _ map[string]string) (fork.Distributor, error) {
 	var res fork.MultiplexDistributor
 	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpipelines))
 	var err error

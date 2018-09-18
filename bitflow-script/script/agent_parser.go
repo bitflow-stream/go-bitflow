@@ -8,13 +8,13 @@ import (
 	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
+	internal "github.com/antongulenko/go-bitflow-pipeline/bitflow-script/script/internal"
+	"github.com/antongulenko/go-bitflow-pipeline/fork"
 	"github.com/antongulenko/golib"
 	"github.com/bugsnag/bugsnag-go/errors"
-	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline/fork"
-	internal "github.com/antongulenko/go-bitflow-pipeline/bitflowcli/script/internal"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 var emptyTokenMap = make(map[token]token)
@@ -24,13 +24,26 @@ type BitflowScriptParser interface {
 	ParseScript(script string) (*pipeline.SamplePipeline, golib.MultiError)
 }
 
-func NewAntlrBitflowParser(b *ProcessorRegistry) BitflowScriptParser {
+func NewAntlrBitflowParser(b reg.ProcessorRegistry) BitflowScriptParser {
 	r := new(AntlrBitflowListener)
 	r.endpointFactory = bitflow.NewEndpointFactory()
 	r.registry = b
 	r.resetListener()
-	RegisterMultiplexFork(b)
+	reg.RegisterMultiplexFork(b)
 	return r
+}
+
+type subpipeline struct {
+	keys []string
+	pipe *pipeline.SamplePipeline
+}
+
+func (s *subpipeline) Build() (*pipeline.SamplePipeline, error) {
+	return s.pipe, nil
+}
+
+func (s *subpipeline) Keys() []string {
+	return s.keys
 }
 
 type ParserError struct {
@@ -54,7 +67,7 @@ type AntlrBitflowListener struct {
 	internal.BaseBitflowListener
 	state           StackMap
 	endpointFactory *bitflow.EndpointFactory
-	registry        *ProcessorRegistry
+	registry        reg.ProcessorRegistry
 	errors          []error
 }
 
@@ -99,16 +112,16 @@ func (s *AntlrBitflowListener) ExitFork(ctx *internal.ForkContext) {
 	forkParams := s.state.Pop("params").(map[token]token)
 	params := convertParams(forkParams)
 
-	var subpipelines []*Subpipeline
+	var subpipelines []*subpipeline
 	s.state.PopAll("fork_subpipelines", &subpipelines)
 	//
-	//if forkName.Lit == "" {
+	// if forkName.Lit == "" {
 	//	// default to multiplex, if no name is given
 	//	forkName.Lit = MultiplexForkName
 	//	params[MultiplexForkParam] = strconv.Itoa(len(subPipes))
-	//}
+	// }
 
-	forkStep, ok := s.registry.getFork(forkName.Lit)
+	forkStep, ok := s.registry.GetFork(forkName.Lit)
 	if !ok {
 		s.pushError(ParserError{
 			Pos:     forkName,
@@ -119,11 +132,11 @@ func (s *AntlrBitflowListener) ExitFork(ctx *internal.ForkContext) {
 	var distributor fork.Distributor
 	err := forkStep.Params.Verify(params)
 	if err == nil {
-		subpipes := make([]builder.Subpipeline, len(subpipelines))
-		for i := range subpipelines {
-			subpipes[i] = subpipelines[i]
+		regSubpipelines := make([]reg.Subpipeline, len(subpipelines))
+		for i, subpipeline := range subpipelines {
+			regSubpipelines[i] = subpipeline
 		}
-		distributor, err = forkStep.Func(subpipes, params)
+		distributor, err = forkStep.Func(regSubpipelines, params)
 	}
 	if err != nil {
 		s.pushError(ParserError{
@@ -189,7 +202,7 @@ func (s *AntlrBitflowListener) ExitSubPipeline(ctx *internal.SubPipelineContext)
 		subpipeName = strconv.Itoa(s.state.Len("fork_subpipelines") + 1)
 	}
 	pipe := s.state.Pop("pipeline").(*pipeline.SamplePipeline)
-	subpipe := &Subpipeline{keys: []string{subpipeName}, pipe: pipe}
+	subpipe := &subpipeline{keys: []string{subpipeName}, pipe: pipe}
 	s.state.Push("fork_subpipelines", subpipe)
 }
 
@@ -200,7 +213,7 @@ func (s *AntlrBitflowListener) ExitTransform(ctx *internal.TransformContext) {
 	transformParams := s.state.PopOrDefault("params", emptyTokenMap).(map[token]token)
 	isBatched := s.state.PeekOrDefault("is_batched", false).(bool)
 
-	regAnalysis, ok := s.registry.getAnalysis(procName.Lit)
+	regAnalysis, ok := s.registry.GetAnalysis(procName.Lit)
 	if !ok {
 		s.pushError(ParserError{
 			Pos:     procName,
@@ -319,7 +332,7 @@ func stripQuotes(in string) string {
 // EnterWindow is called when production window is entered.
 func (s *AntlrBitflowListener) EnterWindow(ctx *internal.WindowContext) {
 	isBatched := s.state.PeekOrDefault("is_batched", false).(bool)
-	if isBatched{
+	if isBatched {
 		t := token{
 			Start: ctx.GetStart().GetStart(),
 			End:   ctx.GetStop().GetStop(),

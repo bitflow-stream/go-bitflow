@@ -1,13 +1,10 @@
-package query
+package script_go
 
 import (
 	"fmt"
 	"strconv"
 
 	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/fork"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 const MultiplexForkName = "multiplex"
@@ -17,23 +14,6 @@ type PipelineVerification interface {
 	VerifyOutput(output string) error
 	VerifyStep(name Token, params map[string]string) error
 	VerifyFork(name Token, params map[string]string) error
-}
-
-func RegisterMultiplexFork(builder *PipelineBuilder) {
-	builder.RegisterFork(MultiplexForkName, createMultiplexFork, "Basic fork forwarding samples to all subpipelines. Subpipeline keys are ignored.")
-}
-
-func createMultiplexFork(subpipelines []builder.Subpipeline, _ map[string]string) (fork.Distributor, error) {
-	var res fork.MultiplexDistributor
-	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpipelines))
-	var err error
-	for i, pipe := range subpipelines {
-		res.Subpipelines[i], err = pipe.Build()
-		if err != nil {
-			return nil, err
-		}
-	}
-	return &res, nil
 }
 
 func strTok(str string) Token {

@@ -6,20 +6,20 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterOutputFiles(b builder.PipelineBuilder) {
+func RegisterOutputFiles(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		filename := params["file"]
 		if filename == "" {
-			return builder.ParameterError("file", errors.New("Missing required parameter"))
+			return reg.ParameterError("file", errors.New("Missing required parameter"))
 		}
 		delete(params, "file")
 
 		var err error
-		parallelize := builder.IntParam(params, "parallelize", 0, true, &err)
+		parallelize := reg.IntParam(params, "parallelize", 0, true, &err)
 		if err != nil {
 			return err
 		}

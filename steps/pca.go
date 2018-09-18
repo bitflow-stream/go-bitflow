@@ -11,7 +11,7 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat"
@@ -267,7 +267,7 @@ func ComputeAndProjectPCA(containedVariance float64) pipeline.BatchProcessingSte
 	}
 }
 
-func RegisterPCA(b builder.PipelineBuilder) {
+func RegisterPCA(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
@@ -276,19 +276,19 @@ func RegisterPCA(b builder.PipelineBuilder) {
 		return err
 	}
 	b.RegisterAnalysisParamsErr("pca", create, "Create a PCA model of a batch of samples and project all samples into a number of principal components with a total contained variance given by the parameter",
-		builder.RequiredParams("var"), builder.SupportBatch())
+		reg.RequiredParams("var"), reg.SupportBatch())
 }
 
-func RegisterPCAStore(b builder.PipelineBuilder) {
+func RegisterPCAStore(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("pca_store",
 		func(p *pipeline.SamplePipeline, params map[string]string) {
 			p.Batch(StorePCAModel(params["file"]))
 		},
 		"Create a PCA model of a batch of samples and store it to the given file",
-		builder.RequiredParams("file"), builder.SupportBatch())
+		reg.RequiredParams("file"), reg.SupportBatch())
 }
 
-func RegisterPCALoad(b builder.PipelineBuilder) {
+func RegisterPCALoad(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
@@ -301,10 +301,10 @@ func RegisterPCALoad(b builder.PipelineBuilder) {
 		return err
 	}
 	b.RegisterAnalysisParamsErr("pca_load", create, "Load a PCA model from the given file and project all samples into a number of principal components with a total contained variance given by the parameter",
-		builder.RequiredParams("var", "file"), builder.SupportBatch())
+		reg.RequiredParams("var", "file"), reg.SupportBatch())
 }
 
-func RegisterPCALoadStream(b builder.PipelineBuilder) {
+func RegisterPCALoadStream(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
@@ -316,13 +316,13 @@ func RegisterPCALoadStream(b builder.PipelineBuilder) {
 		}
 		return err
 	}
-	b.RegisterAnalysisParamsErr("pca_load_stream", create, "Like pca_load, but process every sample individually, instead of batching them up", builder.RequiredParams("var", "file"))
+	b.RegisterAnalysisParamsErr("pca_load_stream", create, "Like pca_load, but process every sample individually, instead of batching them up", reg.RequiredParams("var", "file"))
 }
 
 func parse_pca_variance(params map[string]string) (float64, error) {
 	variance, err := strconv.ParseFloat(params["var"], 64)
 	if err != nil {
-		err = builder.ParameterError("var", err)
+		err = reg.ParameterError("var", err)
 	}
 	return variance, err
 }

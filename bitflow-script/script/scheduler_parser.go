@@ -1,15 +1,13 @@
 package script // Bitflow
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 
-	"fmt"
-
-	"reflect"
-
 	"github.com/antlr/antlr4/runtime/Go/antlr"
+	internal "github.com/antongulenko/go-bitflow-pipeline/bitflow-script/script/internal"
 	"github.com/antongulenko/golib"
-	internal "github.com/antongulenko/go-bitflow-pipeline/bitflowcli/script/internal"
 )
 
 type Index int
@@ -193,7 +191,6 @@ func (s *AntlrBitflowScriptScheduleListener) EnterSubPipeline(ctx *internal.SubP
 func (s *AntlrBitflowScriptScheduleListener) ExitSubPipeline(ctx *internal.SubPipelineContext) {
 }
 
-
 // EnterSub_pipeline is called when production sub_pipeline is entered.
 func (s *AntlrBitflowScriptScheduleListener) EnterWindowSubPipeline(ctx *internal.WindowSubPipelineContext) {
 }
@@ -224,10 +221,8 @@ func (s *AntlrBitflowScriptScheduleListener) EnterPipelineName(ctx *internal.Pip
 func (s *AntlrBitflowScriptScheduleListener) ExitParameter(ctx *internal.ParameterContext) {
 }
 
-
 func (s *AntlrBitflowScriptScheduleListener) EnterWindow(ctx *internal.WindowContext) {
 
 }
 func (s *AntlrBitflowScriptScheduleListener) ExitWindow(ctx *internal.WindowContext) {
 }
-

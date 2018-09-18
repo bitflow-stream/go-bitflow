@@ -6,8 +6,8 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/go-bitflow-pipeline/clustering/denstream"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type AnomalyClusterTagger struct {
@@ -41,7 +41,7 @@ func (p *AnomalyClusterTagger) Sample(sample *bitflow.Sample, header *bitflow.He
 	return p.NoopProcessor.Sample(sample, header)
 }
 
-func RegisterAnomalyClusterTagger(b builder.PipelineBuilder) {
+func RegisterAnomalyClusterTagger(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		proc := &AnomalyClusterTagger{
 			NormalTagValue: params["normalValue"],
@@ -49,7 +49,7 @@ func RegisterAnomalyClusterTagger(b builder.PipelineBuilder) {
 		if treatNormalStr, ok := params["treatOutliersAsNormal"]; ok {
 			treatNormal, err := strconv.ParseBool(treatNormalStr)
 			if err != nil {
-				return builder.ParameterError("treatOutliersAsNormal", err)
+				return reg.ParameterError("treatOutliersAsNormal", err)
 			}
 			proc.TreatOutliersAsNormal = treatNormal
 		}
@@ -60,5 +60,5 @@ func RegisterAnomalyClusterTagger(b builder.PipelineBuilder) {
 		p.Add(proc)
 		return nil
 	}
-	b.RegisterAnalysisParamsErr("cluster_tag", create, "Translate 'cluster' tag into predicted=normal (for cluster >= 0) or predicted=anomaly (for cluster == -1 and cluster == -2)", builder.OptionalParams("predictedTag", "anomalyValue", "normalValue", "treatOutliersAsNormal"))
+	b.RegisterAnalysisParamsErr("cluster_tag", create, "Translate 'cluster' tag into predicted=normal (for cluster >= 0) or predicted=anomaly (for cluster == -1 and cluster == -2)", reg.OptionalParams("predictedTag", "anomalyValue", "normalValue", "treatOutliersAsNormal"))
 }

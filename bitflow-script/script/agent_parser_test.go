@@ -1,16 +1,16 @@
-package script_test
+package script
 
 import (
-	"github.com/antongulenko/go-bitflow-pipeline/bitflowcli/script"
-	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/bugsnag/bugsnag-go/errors"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
-	"testing"
-	"github.com/stretchr/testify/assert"
-	"strings"
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/antongulenko/go-bitflow"
+	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/antongulenko/go-bitflow-pipeline/steps"
+	"github.com/bugsnag/bugsnag-go/errors"
+	"github.com/stretchr/testify/assert"
 )
 
 type testOutputCatcher struct {
@@ -98,9 +98,9 @@ func TestParseScript_withWindowInWindow_shouldReturnError(t *testing.T) {
 	assert.True(t, strings.Contains(errs.Error(), "Window inside Window is not allowed."))
 }
 
-func createTestParser() (script.BitflowScriptParser, *testOutputCatcher) {
+func createTestParser() (BitflowScriptParser, *testOutputCatcher) {
 	out := &testOutputCatcher{}
-	registry := script.NewProcessorRegistry()
+	registry := reg.NewProcessorRegistry()
 	registry.RegisterAnalysisParamsErr("normal_transform",
 		func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "normal_transform")
@@ -117,19 +117,19 @@ func createTestParser() (script.BitflowScriptParser, *testOutputCatcher) {
 		func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "required_param_transform")
 			return nil
-		}, "a transform requiring a parameter", builder.RequiredParams("requiredParam"))
+		}, "a transform requiring a parameter", reg.RequiredParams("requiredParam"))
 
 	registry.RegisterAnalysisParamsErr("batch_supporting_transform",
 		func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "batch_supporting_transform")
 			return nil
-		}, "a batch supporting transform", builder.SupportBatch())
+		}, "a batch supporting transform", reg.SupportBatch())
 
 	registry.RegisterAnalysisParamsErr("batch_enforcing_transform",
 		func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "batch_enforcing_transform")
 			return nil
-		}, "a batch enforcing transform", builder.EnforceBatch())
+		}, "a batch enforcing transform", reg.EnforceBatch())
 	steps.RegisterNoop(registry)
-	return script.NewAntlrBitflowParser(registry), out
+	return NewAntlrBitflowParser(registry), out
 }

@@ -3,10 +3,10 @@ package steps
 import (
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 )
 
-func RegisterDrop(b builder.PipelineBuilder) {
+func RegisterDrop(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("drop",
 		func(p *pipeline.SamplePipeline) {
 			p.Add(&pipeline.SimpleProcessor{

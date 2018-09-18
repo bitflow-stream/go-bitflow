@@ -9,26 +9,26 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
-func RegisterTagSynchronizer(b builder.PipelineBuilder) {
+func RegisterTagSynchronizer(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("synchronize_tags",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			var err error
 			synchro := new(TagSynchronizer)
 			synchro.StreamIdentifierTag = params["identifier"]
 			synchro.ReferenceStream = params["reference"]
-			synchro.NumTargetStreams = builder.IntParam(params, "num", 0, false, &err)
+			synchro.NumTargetStreams = reg.IntParam(params, "num", 0, false, &err)
 			if err == nil {
 				p.Add(synchro)
 			}
 			return err
 		},
 		"Split samples into streams identified by a given tag,",
-		builder.RequiredParams("identifier", "reference", "num"))
+		reg.RequiredParams("identifier", "reference", "num"))
 }
 
 // This processor copies tags from a "reference" sample stream to a number of "target" sample streams.

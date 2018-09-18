@@ -5,10 +5,10 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 )
 
-func RegisterTaggingProcessor(b builder.PipelineBuilder) {
+func RegisterTaggingProcessor(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) {
 		p.Add(NewTaggingProcessor(params))
 	}

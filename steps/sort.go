@@ -6,8 +6,8 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 // Sort based on given Tags, use Timestamp as last sort criterion
@@ -55,7 +55,7 @@ func (sorter *SampleSorter) String() string {
 	return "Sort: " + strings.Join(all, ", ")
 }
 
-func RegisterSampleSorter(b builder.PipelineBuilder) {
+func RegisterSampleSorter(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("sort",
 		func(p *pipeline.SamplePipeline, params map[string]string) {
 			var tags []string
@@ -65,6 +65,6 @@ func RegisterSampleSorter(b builder.PipelineBuilder) {
 			p.Batch(&SampleSorter{tags})
 		},
 		"Sort a batch of samples based on the values of the given comma-separated tags. The default criterion is the timestmap",
-		builder.OptionalParams("tags"),
-		builder.SupportBatch())
+		reg.OptionalParams("tags"),
+		reg.SupportBatch())
 }

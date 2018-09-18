@@ -7,7 +7,7 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
@@ -43,16 +43,16 @@ type DecisionMaker struct {
 	progressCond *sync.Cond
 }
 
-func RegisterRecoveryEngine(b builder.PipelineBuilder) {
+func RegisterRecoveryEngine(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("recovery", func(p *pipeline.SamplePipeline, params map[string]string) error {
 		var err error
 
-		noDataTimeout := builder.DurationParam(params, "no-data", 0, false, &err)
-		recoveryFailedTimeout := builder.DurationParam(params, "recovery-failed", 0, false, &err)
-		layerSimilarity := builder.FloatParam(params, "layer-simil", 0, false, &err)
-		groupSimilarity := builder.FloatParam(params, "group-simil", 0, false, &err)
-		evaluate := builder.BoolParam(params, "evaluate", false, true, &err)
-		recoverNoDataState := builder.BoolParam(params, "recover-no-data", false, false, &err)
+		noDataTimeout := reg.DurationParam(params, "no-data", 0, false, &err)
+		recoveryFailedTimeout := reg.DurationParam(params, "recovery-failed", 0, false, &err)
+		layerSimilarity := reg.FloatParam(params, "layer-simil", 0, false, &err)
+		groupSimilarity := reg.FloatParam(params, "group-simil", 0, false, &err)
+		evaluate := reg.BoolParam(params, "evaluate", false, true, &err)
+		recoverNoDataState := reg.BoolParam(params, "recover-no-data", false, false, &err)
 		if err != nil {
 			return err
 		}
@@ -60,7 +60,7 @@ func RegisterRecoveryEngine(b builder.PipelineBuilder) {
 		dependencyModelFile := params["model"]
 		dependencyModel, err := LoadDependencyModel(dependencyModelFile)
 		if err != nil {
-			return builder.ParameterError("model", err)
+			return reg.ParameterError("model", err)
 		}
 		graph := dependencyModel.BuildSimilarityGraph(groupSimilarity, layerSimilarity)
 
@@ -76,15 +76,15 @@ func RegisterRecoveryEngine(b builder.PipelineBuilder) {
 		if evaluate {
 			collector := &EvaluationDataCollector{
 				data:               make(map[string]*nodeEvaluationData),
-				StoreNormalSamples: builder.IntParam(params, "store-normal-samples", 1000, true, &err),
+				StoreNormalSamples: reg.IntParam(params, "store-normal-samples", 1000, true, &err),
 			}
 			collector.ParseRecoveryTags(params)
 			evalStep := &EvaluationProcessor{
 				Execution:                     execution,
-				SampleRate:                    builder.DurationParam(params, "sample-rate", 0, true, &err),
-				FillerSamples:                 builder.IntParam(params, "filler-samples", 0, true, &err),
-				NormalSamplesBetweenAnomalies: builder.IntParam(params, "normal-fillers", 0, true, &err),
-				RecoveriesPerState:            builder.FloatParam(params, "recoveries-per-state", 1, true, &err),
+				SampleRate:                    reg.DurationParam(params, "sample-rate", 0, true, &err),
+				FillerSamples:                 reg.IntParam(params, "filler-samples", 0, true, &err),
+				NormalSamplesBetweenAnomalies: reg.IntParam(params, "normal-fillers", 0, true, &err),
+				RecoveriesPerState:            reg.FloatParam(params, "recoveries-per-state", 1, true, &err),
 				collector:                     collector,
 			}
 			if err != nil {
@@ -114,12 +114,12 @@ func RegisterRecoveryEngine(b builder.PipelineBuilder) {
 		})
 		return nil
 	}, "Recovery Engine based on recommendation system",
-		builder.RequiredParams(append([]string{
+		reg.RequiredParams(append([]string{
 			"model", "layer-simil", "group-simil", // Dependency/Similarity Graph
 			"no-data", "recovery-failed", // Timeouts
 			"recover-no-data",
 		}, TagParameterNames...)...),
-		builder.OptionalParams(
+		reg.OptionalParams(
 			"avg-recovery-time", "recovery-error-percentage", "num-mock-recoveries", "rand-seed", // Mock execution engine
 			"evaluate", "sample-rate", "filler-samples", "normal-fillers", "recoveries-per-state", "store-normal-samples", // Evaluation
 		))

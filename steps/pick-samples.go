@@ -6,15 +6,15 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 )
 
-func RegisterPickPercent(b builder.PipelineBuilder) {
+func RegisterPickPercent(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("pick",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			pick_percentage, err := strconv.ParseFloat(params["percent"], 64)
 			if err != nil {
-				return builder.ParameterError("percent", err)
+				return reg.ParameterError("percent", err)
 			}
 			counter := float64(0)
 			p.Add(&SampleFilter{
@@ -30,14 +30,14 @@ func RegisterPickPercent(b builder.PipelineBuilder) {
 			})
 			return nil
 		},
-		"Forward only a percentage of samples, parameter is in the range 0..1", builder.OptionalParams("percent"))
+		"Forward only a percentage of samples, parameter is in the range 0..1", reg.OptionalParams("percent"))
 }
 
-func RegisterPickHead(b builder.PipelineBuilder) {
+func RegisterPickHead(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("head",
 		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
-			doClose := builder.BoolParam(params, "close", false, true, &err)
-			num := builder.IntParam(params, "num", 0, false, &err)
+			doClose := reg.BoolParam(params, "close", false, true, &err)
+			num := reg.IntParam(params, "num", 0, false, &err)
 			if err == nil {
 				processed := 0
 				proc := &pipeline.SimpleProcessor{
@@ -58,13 +58,13 @@ func RegisterPickHead(b builder.PipelineBuilder) {
 			}
 			return
 		},
-		"Forward only a number of the first processed samples. The whole pipeline is closed afterwards, unless close=false is given.", builder.RequiredParams("num"), builder.OptionalParams("close"))
+		"Forward only a number of the first processed samples. The whole pipeline is closed afterwards, unless close=false is given.", reg.RequiredParams("num"), reg.OptionalParams("close"))
 }
 
-func RegisterSkipHead(b builder.PipelineBuilder) {
+func RegisterSkipHead(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("skip",
 		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
-			num := builder.IntParam(params, "num", 0, false, &err)
+			num := reg.IntParam(params, "num", 0, false, &err)
 			if err == nil {
 				dropped := 0
 				p.Add(&pipeline.SimpleProcessor{
@@ -81,5 +81,5 @@ func RegisterSkipHead(b builder.PipelineBuilder) {
 			}
 			return
 		},
-		"Drop a number of samples in the beginning", builder.OptionalParams("num"))
+		"Drop a number of samples in the beginning", reg.OptionalParams("num"))
 }

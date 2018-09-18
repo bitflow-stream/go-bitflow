@@ -10,6 +10,9 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/script"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/script_go"
 	"github.com/antongulenko/go-bitflow-pipeline/clustering/dbscan"
 	"github.com/antongulenko/go-bitflow-pipeline/clustering/denstream"
 	"github.com/antongulenko/go-bitflow-pipeline/evaluation"
@@ -21,9 +24,6 @@ import (
 	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/query"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
-	antlrscript "github.com/antongulenko/go-bitflow-pipeline/bitflowcli/script"
 )
 
 func main() {
@@ -37,27 +37,24 @@ func main() {
 func do_main() int {
 	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
 	printPipeline := flag.Bool("print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
-	printCapabilities := flag.Bool("capabilities", false, "Print the capablities of this pipeline in JSON form and exit.")
+	printCapabilities := flag.Bool("capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
 	useNewScript := flag.Bool("new", false, "Use the new script parser for processing the input script.")
 	scriptFile := ""
 	flag.StringVar(&scriptFile, "f", "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 
-	newScriptBuilder := antlrscript.NewProcessorRegistry()
-	oldScriptBuilder := query.NewPipelineBuilder()
-	queryBuilder := builder.MultiRegistryBuilder{Registries: []builder.ProcessorRegistry{newScriptBuilder, oldScriptBuilder}}
-	plugin.RegisterPluginDataSource(&oldScriptBuilder.Endpoints)
-	register_analyses(queryBuilder)
-
+	registry := reg.NewProcessorRegistry()
+	plugin.RegisterPluginDataSource(&registry.Endpoints)
+	register_analyses(registry)
 	bitflow.RegisterGolibFlags()
-	oldScriptBuilder.Endpoints.RegisterFlags()
+	registry.Endpoints.RegisterFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
 	if *printCapabilities {
-		oldScriptBuilder.PrintJsonCapabilities(os.Stdout)
+		registry.PrintJsonCapabilities(os.Stdout)
 		return 0
 	}
 	if *printAnalyses {
-		fmt.Printf("Available analysis steps:\n%v\n", oldScriptBuilder.PrintAllAnalyses())
+		fmt.Printf("Available analysis steps:\n%v\n", registry.PrintAllAnalyses())
 		return 0
 	}
 
@@ -79,11 +76,10 @@ func do_main() int {
 	var pipe *pipeline.SamplePipeline
 	var err error
 	if *useNewScript {
-		pipe, err = make_pipeline_new(newScriptBuilder, rawScript)
-		log.Info("Running using new script implementation (ANTLR)")
+		log.Println("Running using new ANTLR script implementation")
+		pipe, err = make_pipeline_new(registry, rawScript)
 	} else {
-		pipe, err = make_pipeline_old(oldScriptBuilder, rawScript)
-		log.Info("Running using previous script implementation (query package)")
+		pipe, err = make_pipeline_old(registry, rawScript)
 	}
 	if err != nil {
 		log.Errorln(err)
@@ -99,8 +95,9 @@ func do_main() int {
 	return pipe.StartAndWait()
 }
 
-func make_pipeline_old(queryBuilder *query.PipelineBuilder, script string) (*pipeline.SamplePipeline, error) {
-	parser := query.NewParser(bytes.NewReader([]byte(script)))
+func make_pipeline_old(registry reg.ProcessorRegistry, scriptStr string) (*pipeline.SamplePipeline, error) {
+	queryBuilder := script_go.PipelineBuilder{registry}
+	parser := script_go.NewParser(bytes.NewReader([]byte(scriptStr)))
 	pipe, err := parser.Parse()
 	if err != nil {
 		return nil, err
@@ -108,12 +105,12 @@ func make_pipeline_old(queryBuilder *query.PipelineBuilder, script string) (*pip
 	return queryBuilder.MakePipeline(pipe)
 }
 
-func make_pipeline_new(registry *antlrscript.ProcessorRegistry, script string) (*pipeline.SamplePipeline, error) {
-	s, err := antlrscript.NewAntlrBitflowParser(registry).ParseScript(script)
+func make_pipeline_new(registry reg.ProcessorRegistry, scriptStr string) (*pipeline.SamplePipeline, error) {
+	s, err := script.NewAntlrBitflowParser(registry).ParseScript(scriptStr)
 	return s, err.NilOrError()
 }
 
-func register_analyses(b builder.PipelineBuilder) {
+func register_analyses(b reg.ProcessorRegistry) {
 
 	// Control flow
 	steps.RegisterNoop(b)

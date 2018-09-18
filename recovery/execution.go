@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 )
 
 type ExecutionEngine interface {
@@ -29,10 +29,10 @@ type MockExecutionEngine struct {
 
 func NewMockExecution(params map[string]string) (*MockExecutionEngine, error) {
 	var err error
-	numRecoveries := builder.IntParam(params, "num-mock-recoveries", 0, false, &err)
-	recoveryErrorPercentage := builder.FloatParam(params, "recovery-error-percentage", 0, false, &err)
-	avgRecTime := builder.DurationParam(params, "avg-recovery-time", 0, false, &err)
-	randSeed := builder.IntParam(params, "rand-seed", 1, true, &err)
+	numRecoveries := reg.IntParam(params, "num-mock-recoveries", 0, false, &err)
+	recoveryErrorPercentage := reg.FloatParam(params, "recovery-error-percentage", 0, false, &err)
+	avgRecTime := reg.DurationParam(params, "avg-recovery-time", 0, false, &err)
+	randSeed := reg.IntParam(params, "rand-seed", 1, true, &err)
 
 	if err != nil {
 		return nil, err

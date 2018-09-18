@@ -11,6 +11,7 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
 	"github.com/lucasb-eyer/go-colorful"
 	log "github.com/sirupsen/logrus"
@@ -19,7 +20,6 @@ import (
 	"gonum.org/v1/plot/plotutil"
 	"gonum.org/v1/plot/vg"
 	"gonum.org/v1/plot/vg/draw"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 const (
@@ -36,7 +36,7 @@ const (
 	plotTimeLabel  = "time"
 	plotNumLabel   = "num"
 
-	ScatterPlot     = PlotType(iota)
+	ScatterPlot = PlotType(iota)
 	LinePlot
 	LinePointPlot
 	ClusterPlot
@@ -540,7 +540,7 @@ func (g *DashesGenerator) Next() []vg.Length {
 	return dashes
 }
 
-func RegisterPlot(b builder.PipelineBuilder) {
+func RegisterPlot(b reg.ProcessorRegistry) {
 	setPlotBoundParam := func(outErr *error, params map[string]string, paramName string, target **float64) {
 		param, hasParam := params[paramName]
 		if *outErr == nil && hasParam {
@@ -610,5 +610,5 @@ func RegisterPlot(b builder.PipelineBuilder) {
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("plot", create, "Plot a batch of samples to a given filename. The file ending denotes the file type", builder.RequiredParams("file"), builder.OptionalParams("color", "flags", "xMin", "xMax", "yMin", "yMax"))
+	b.RegisterAnalysisParamsErr("plot", create, "Plot a batch of samples to a given filename. The file ending denotes the file type", reg.RequiredParams("file"), reg.OptionalParams("color", "flags", "xMin", "xMax", "yMin", "yMax"))
 }

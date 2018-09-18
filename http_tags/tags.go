@@ -10,9 +10,9 @@ import (
 
 	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
-	"github.com/antongulenko/go-bitflow-pipeline/builder"
 )
 
 type HttpTagger struct {
@@ -47,7 +47,7 @@ func NewStandaloneHttpTagger(pathPrefix string, endpoint string) *HttpTagger {
 	return tagger
 }
 
-func RegisterHttpTagger(b builder.PipelineBuilder) {
+func RegisterHttpTagger(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
 		tagger := NewStandaloneHttpTagger("/api", params["listen"])
 		if defaultTagStr, ok := params["default"]; ok {
@@ -55,7 +55,7 @@ func RegisterHttpTagger(b builder.PipelineBuilder) {
 			for _, part := range parts {
 				tagParts := strings.Split(part, "=")
 				if len(tagParts) != 2 {
-					return builder.ParameterError("default", errors.New("Format must be 'key1=value1,key2=value2,...'. Received: "+defaultTagStr))
+					return reg.ParameterError("default", errors.New("Format must be 'key1=value1,key2=value2,...'. Received: "+defaultTagStr))
 				}
 				tagger.currentHttpTags[tagParts[0]] = tagParts[1]
 			}
@@ -64,7 +64,7 @@ func RegisterHttpTagger(b builder.PipelineBuilder) {
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("listen_tags", create, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", builder.RequiredParams("listen"),builder.OptionalParams("default"))
+	b.RegisterAnalysisParamsErr("listen_tags", create, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", reg.RequiredParams("listen"), reg.OptionalParams("default"))
 }
 
 func (tagger *HttpTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
