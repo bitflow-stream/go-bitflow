@@ -26,12 +26,34 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const BitflowScriptSuffix = ".bf"
+
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <flags> <bitflow script>\nAll flags must be defined before the first non-flag parameter.\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
+	fix_arguments()
 	os.Exit(do_main())
+}
+
+func fix_arguments() {
+	isHashbang := golib.IsHashbangExecution()
+	if isHashbang {
+		golib.ParseHashbangArgs() // Ignore error
+	}
+	if !isHashbang && len(os.Args) == 2 && strings.HasSuffix(os.Args[1], BitflowScriptSuffix) {
+		// Special case when passing a single existing .bf file as parameter: Treat it as a script
+		info, err := os.Stat(os.Args[1])
+		isHashbang = err == nil && info.Mode().IsRegular()
+	}
+	if isHashbang {
+		// Insert -f before the script file, if necessary
+		n := len(os.Args)
+		if os.Args[n-2] != "-f" {
+			os.Args = append(os.Args[:n-1], "-f", os.Args[n-1])
+		}
+	}
 }
 
 func do_main() int {
@@ -73,14 +95,12 @@ func do_main() int {
 		golib.Fatalln("Please provide a bitflow pipeline script via -f or directly as parameter.")
 	}
 
-	var pipe *pipeline.SamplePipeline
-	var err error
+	make_pipeline := make_pipeline_old
 	if *useNewScript {
 		log.Println("Running using new ANTLR script implementation")
-		pipe, err = make_pipeline_new(registry, rawScript)
-	} else {
-		pipe, err = make_pipeline_old(registry, rawScript)
+		make_pipeline = make_pipeline_new
 	}
+	pipe, err := make_pipeline(registry, rawScript)
 	if err != nil {
 		log.Errorln(err)
 		golib.Fatalln("Use -print-analyses to print all available analysis steps.")
