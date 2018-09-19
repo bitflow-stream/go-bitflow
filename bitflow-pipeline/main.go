@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -26,32 +27,29 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const BitflowScriptSuffix = ".bf"
+const (
+	fileFlag            = "f"
+	BitflowScriptSuffix = ".bf"
+)
 
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <flags> <bitflow script>\nAll flags must be defined before the first non-flag parameter.\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
-	fix_arguments()
+	fix_arguments(&os.Args)
 	os.Exit(do_main())
 }
 
-func fix_arguments() {
-	isHashbang := golib.IsHashbangExecution()
-	if isHashbang {
-		golib.ParseHashbangArgs() // Ignore error
-	}
-	if !isHashbang && len(os.Args) == 2 && strings.HasSuffix(os.Args[1], BitflowScriptSuffix) {
-		// Special case when passing a single existing .bf file as parameter: Treat it as a script
-		info, err := os.Stat(os.Args[1])
-		isHashbang = err == nil && info.Mode().IsRegular()
-	}
-	if isHashbang {
+func fix_arguments(argsPtr *[]string) {
+	if n := golib.ParseHashbangArgs(argsPtr); n > 0 {
 		// Insert -f before the script file, if necessary
-		n := len(os.Args)
-		if os.Args[n-2] != "-f" {
-			os.Args = append(os.Args[:n-1], "-f", os.Args[n-1])
+		args := *argsPtr
+		if args[n-1] != "-"+fileFlag && args[n-1] != "--"+fileFlag {
+			args = append(args, "") // Extend by one entry
+			copy(args[n+1:], args[n:])
+			args[n] = "-" + fileFlag
+			*argsPtr = args
 		}
 	}
 }
@@ -62,7 +60,7 @@ func do_main() int {
 	printCapabilities := flag.Bool("capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
 	useNewScript := flag.Bool("new", false, "Use the new script parser for processing the input script.")
 	scriptFile := ""
-	flag.StringVar(&scriptFile, "f", "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
+	flag.StringVar(&scriptFile, fileFlag, "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 
 	registry := reg.NewProcessorRegistry()
 	plugin.RegisterPluginDataSource(&registry.Endpoints)
@@ -80,21 +78,8 @@ func do_main() int {
 		return 0
 	}
 
-	rawScript := strings.TrimSpace(strings.Join(flag.Args(), " "))
-	if scriptFile != "" && rawScript != "" {
-		golib.Fatalln("Please provide a bitflow pipeline script either via -f or as parameter, not both.")
-	}
-	if scriptFile != "" {
-		scriptBytes, err := ioutil.ReadFile(scriptFile)
-		if err != nil {
-			golib.Fatalf("Error reading bitflow script file %v: %v", scriptFile, err)
-		}
-		rawScript = string(scriptBytes)
-	}
-	if rawScript == "" {
-		golib.Fatalln("Please provide a bitflow pipeline script via -f or directly as parameter.")
-	}
-
+	rawScript, err := get_script(flag.Args(), scriptFile)
+	golib.Checkerr(err)
 	make_pipeline := make_pipeline_old
 	if *useNewScript {
 		log.Println("Running using new ANTLR script implementation")
@@ -113,6 +98,33 @@ func do_main() int {
 		return 0
 	}
 	return pipe.StartAndWait()
+}
+
+func get_script(parsedArgs []string, scriptFile string) (string, error) {
+	if scriptFile != "" && len(parsedArgs) > 0 {
+		return "", errors.New("Please provide a bitflow pipeline script either via -f or as parameter, not both.")
+	}
+	if len(parsedArgs) == 1 && strings.HasSuffix(parsedArgs[0], BitflowScriptSuffix) {
+		// Special case when passing a single existing .bf file as positional argument: Treat it as a script file
+		info, err := os.Stat(parsedArgs[0])
+		if err == nil && info.Mode().IsRegular() {
+			scriptFile = parsedArgs[0]
+		}
+	}
+	var rawScript string
+	if scriptFile != "" {
+		scriptBytes, err := ioutil.ReadFile(scriptFile)
+		if err != nil {
+			return "", fmt.Errorf("Error reading bitflow script file %v: %v", scriptFile, err)
+		}
+		rawScript = string(scriptBytes)
+	} else {
+		rawScript = strings.TrimSpace(strings.Join(parsedArgs, " "))
+	}
+	if rawScript == "" {
+		return "", errors.New("Please provide a bitflow pipeline script via -f or directly as parameter.")
+	}
+	return rawScript, nil
 }
 
 func make_pipeline_old(registry reg.ProcessorRegistry, scriptStr string) (*pipeline.SamplePipeline, error) {

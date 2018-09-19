@@ -179,10 +179,12 @@ func (p *BatchProcessor) executeFlush(header *bitflow.Header) error {
 		if header == nil {
 			return fmt.Errorf("Cannot flush %v samples because nil-header was returned by last batch processing step", len(samples))
 		}
-		log.Println("Flushing", len(samples), "batched samples with", len(header.Fields), "metrics")
-		for _, sample := range samples {
-			if err := p.NoopProcessor.Sample(sample, header); err != nil {
-				return fmt.Errorf("Error flushing batch: %v", err)
+		if len(samples) > 0 {
+			log.Println("Flushing", len(samples), "batched samples with", len(header.Fields), "metrics")
+			for _, sample := range samples {
+				if err := p.NoopProcessor.Sample(sample, header); err != nil {
+					return fmt.Errorf("Error flushing batch: %v", err)
+				}
 			}
 		}
 		return nil
@@ -191,7 +193,7 @@ func (p *BatchProcessor) executeFlush(header *bitflow.Header) error {
 
 func (p *BatchProcessor) executeSteps(samples []*bitflow.Sample, header *bitflow.Header) ([]*bitflow.Sample, *bitflow.Header, error) {
 	if len(p.Steps) > 0 {
-		log.Println("Executing", len(p.Steps), "batch processing step(s)")
+		log.Debugln("Executing", len(p.Steps), "batch processing step(s)")
 		for i, step := range p.Steps {
 			if len(samples) == 0 {
 				log.Warnln("Cannot execute remaining", len(p.Steps)-i, "batch step(s) because the batch with", len(header.Fields), "has no samples")
