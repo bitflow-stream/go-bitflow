@@ -143,8 +143,8 @@ func (b PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) error {
 		if err == nil {
 			subpipelines := b.prepareSubpipelines(f.Pipelines)
 			regSubpipelines := make([]reg.Subpipeline, len(subpipelines))
-			for i, subpipeline := range subpipelines {
-				regSubpipelines[i] = &subpipeline
+			for i := range subpipelines {
+				regSubpipelines[i] = &subpipelines[i]
 			}
 			distributor, err = forkStep.Func(regSubpipelines, params)
 		}

@@ -29,7 +29,6 @@ func NewAntlrBitflowParser(b reg.ProcessorRegistry) BitflowScriptParser {
 	r.endpointFactory = bitflow.NewEndpointFactory()
 	r.registry = b
 	r.resetListener()
-	reg.RegisterMultiplexFork(b)
 	return r
 }
 

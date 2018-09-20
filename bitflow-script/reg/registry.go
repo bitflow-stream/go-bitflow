@@ -56,13 +56,15 @@ type ProcessorRegistryImpl struct {
 }
 
 func NewProcessorRegistry() ProcessorRegistry {
-	return ProcessorRegistry{
+	reg := ProcessorRegistry{
 		ProcessorRegistryImpl: &ProcessorRegistryImpl{
 			Endpoints:        *bitflow.NewEndpointFactory(),
 			analysisRegistry: make(map[string]RegisteredAnalysis),
 			forkRegistry:     make(map[string]RegisteredFork),
 		},
 	}
+	RegisterMultiplexFork(reg)
+	return reg
 }
 
 func (r *ProcessorRegistryImpl) GetAnalysis(name string) (analysisProcessor RegisteredAnalysis, ok bool) {
