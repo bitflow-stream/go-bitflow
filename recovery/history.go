@@ -1,6 +1,8 @@
 package recovery
 
 import (
+	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/antongulenko/go-bitflow"
@@ -69,4 +71,21 @@ func (h *VolatileHistory) GetAnomalies(node string) []*AnomalyEvent {
 
 func (h *VolatileHistory) GetExecutions(anomaly *AnomalyEvent) []*ExecutionEvent {
 	return h.executions[anomaly]
+}
+
+func (h *VolatileHistory) String() string {
+	var buf bytes.Buffer
+	for node, events := range h.anomalies {
+		fmt.Fprintf(&buf, " - Node %v\n", node)
+		for eventNr, event := range events {
+			fmt.Fprintf(&buf, "   - %v. state (%v - %v)\n", eventNr, event.Start, event.End)
+			for executionNr, execution := range h.executions[event] {
+				fmt.Fprintf(&buf, "     - %v. execution: %v (success %v, %v - %v, duration %v, error: %v)\n",
+					executionNr, execution.Recovery, execution.Successful,
+					execution.Started.Format(bitflow.TextMarshallerDateFormat), execution.Ended.Format(bitflow.TextMarshallerDateFormat),
+					execution.Duration, execution.Error)
+			}
+		}
+	}
+	return buf.String()
 }

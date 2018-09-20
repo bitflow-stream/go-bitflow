@@ -91,11 +91,20 @@ type EvaluatedAnomalyEvent struct {
 	state            string
 	expectedRecovery string
 
-	resolved           bool
-	history            []RecoveringAttempt
-	start              time.Time
-	end                time.Time
-	sentAnomalySamples int
+	resolved            bool
+	normalStateDetected bool
+	history             []RecoveringAttempt
+	start               time.Time
+	end                 time.Time
+	sentAnomalySamples  int
+}
+
+func (e *EvaluatedAnomalyEvent) attemptedRecoveries() map[string]int {
+	res := make(map[string]int)
+	for _, attempt := range e.history {
+		res[attempt.recovery] = res[attempt.recovery] + 1
+	}
+	return res
 }
 
 type RecoveringAttempt struct {
@@ -109,18 +118,18 @@ type EvaluationProcessor struct {
 	Execution *MockExecutionEngine
 	collector *EvaluationDataCollector
 
-	NormalSamplesBetweenAnomalies int
-	FillerSamples                 int           // Number of samples to send between two real evaluation samples
-	SampleRate                    time.Duration // Time progression between samples (both real and filler samples)
-	RecoveriesPerState            float64       // >1 means there are "non-functioning" recoveries, <1 means some recoveries handle multiple states
+	FillerSamples       int           // Number of samples to send between two real evaluation samples
+	SampleRate          time.Duration // Time progression between samples (both real and filler samples)
+	RecoveriesPerState  float64       // >1 means there are "non-functioning" recoveries, <1 means some recoveries handle multiple states
+	MaxRecoveryAttempts int           // After this number of recoveries, give up waiting for the correct recovery
 
 	now            time.Time
 	currentAnomaly *EvaluatedAnomalyEvent
 }
 
 func (p *EvaluationProcessor) String() string {
-	return fmt.Sprintf("Evaluate decision maker (sample-rate %v, filler-samples %v, normal-samples %v, recoveries-per-state %v)",
-		p.SampleRate, p.FillerSamples, p.NormalSamplesBetweenAnomalies, p.RecoveriesPerState)
+	return fmt.Sprintf("Evaluate decision maker (sample-rate %v, filler-samples %v, recoveries-per-state %v)",
+		p.SampleRate, p.FillerSamples, p.RecoveriesPerState)
 }
 
 func (p *EvaluationProcessor) Close() {
@@ -128,54 +137,6 @@ func (p *EvaluationProcessor) Close() {
 	p.runEvaluation()
 	p.outputResults()
 	p.NoopProcessor.Close()
-}
-
-func (p *EvaluationProcessor) runEvaluation() {
-	p.Execution.Events = p.executionEventCallback
-
-	log.Printf("Received evaluation data for %v node(s):", len(p.collector.data))
-	p.iterate(func(nodeName string, node *nodeEvaluationData) {
-		log.Printf(" - %v: %v anomalies (normal samples: %v)", nodeName, len(node.anomalies), len(node.normal))
-	})
-	states, numRecoveries := p.assignExpectedRecoveries()
-	log.Printf("Running evaluation of %v total states and %v total recoveries:", len(states), numRecoveries)
-	for state, recovery := range states {
-		log.Printf(" - %v recovered by %v", state, recovery)
-	}
-
-	p.iterate(func(nodeName string, node *nodeEvaluationData) {
-		if len(node.normal) == 0 {
-			log.Warnf("Cannot evaluate node %v: no normal data sample available", nodeName)
-			return
-		}
-		if len(node.anomalies) == 0 {
-			log.Warnf("Cannot evaluate node %v: no anomaly data available", nodeName)
-			return
-		}
-
-		for i, anomaly := range node.anomalies {
-			if len(anomaly.samples) == 0 {
-				log.Warnf("Cannot evaluate event %v of %v for node %v (state %v): no anomaly events", i+1, len(node.anomalies), nodeName, anomaly.state)
-				continue
-			}
-
-			log.Printf("Evaluating node %v event %v of %v (%v samples, state %v)...", nodeName, i+1, len(node.anomalies), len(anomaly.samples), anomaly.state)
-			p.currentAnomaly = anomaly
-			sampleIndex := 0
-			anomaly.start = p.now
-			for !anomaly.resolved {
-				// Loop through all anomaly samples until the anomaly is resolved.
-				// Not accurate for evolving anomalies like memory leaks...
-				p.sendSample(anomaly.samples[sampleIndex%len(anomaly.samples)], node)
-				sampleIndex++
-			}
-			anomaly.end = p.now
-			anomaly.sentAnomalySamples = sampleIndex
-			for i := 0; i < p.NormalSamplesBetweenAnomalies; i++ {
-				p.sendNormalSample(node)
-			}
-		}
-	})
 }
 
 func (p *EvaluationProcessor) assignExpectedRecoveries() (map[string]string, int) {
@@ -210,53 +171,97 @@ func (p *EvaluationProcessor) assignExpectedRecoveries() (map[string]string, int
 	return stateRecoveries, numRecoveries
 }
 
-func (p *EvaluationProcessor) sendSample(sample *bitflow.SampleAndHeader, node *nodeEvaluationData) {
-	sample.Sample.Time = p.progressTime()
+func (p *EvaluationProcessor) runEvaluation() {
+	p.Execution.Events = p.executionEventCallback
 
-	// Send the given sample for the given node
-	err := p.NoopProcessor.Sample(sample.Sample, sample.Header)
-	if err != nil {
-		log.Errorf("DecisionMaker evaluation: error sending evaluation sample for node %v: %v", node.name, err)
-		return
+	log.Printf("Received evaluation data for %v node(s):", len(p.collector.data))
+	p.iterate(func(nodeName string, node *nodeEvaluationData) {
+		log.Printf(" - %v: %v anomalies (normal samples: %v)", nodeName, len(node.anomalies), len(node.normal))
+	})
+	states, numRecoveries := p.assignExpectedRecoveries()
+	log.Printf("Running evaluation of %v total states and %v total recoveries:", len(states), numRecoveries)
+	for state, recovery := range states {
+		log.Printf(" - %v recovered by %v", state, recovery)
 	}
+
+	p.iterate(func(nodeName string, node *nodeEvaluationData) {
+		if len(node.normal) == 0 {
+			log.Warnf("Cannot evaluate node %v: no normal data sample available", nodeName)
+			return
+		}
+		if len(node.anomalies) == 0 {
+			log.Warnf("Cannot evaluate node %v: no anomaly data available", nodeName)
+			return
+		}
+
+		for i, anomaly := range node.anomalies {
+			if len(anomaly.samples) == 0 {
+				log.Warnf("Cannot evaluate event %v of %v for node %v (state %v): no anomaly samples", i+1, len(node.anomalies), nodeName, anomaly.state)
+				continue
+			}
+
+			log.Printf("Evaluating node %v event %v of %v (%v samples, state %v)...", nodeName, i+1, len(node.anomalies), len(anomaly.samples), anomaly.state)
+			p.currentAnomaly = anomaly
+			sampleIndex := 0
+			anomaly.start = p.now
+			for !anomaly.resolved && len(anomaly.history) < p.MaxRecoveryAttempts {
+				// Loop through all anomaly samples until the anomaly is resolved.
+				// Not accurate for evolving anomalies like memory leaks...
+				p.sendAnomalySample(anomaly.samples[sampleIndex%len(anomaly.samples)], node)
+				sampleIndex++
+			}
+			if len(anomaly.history) >= p.MaxRecoveryAttempts {
+				// This is undesirable, since the recovery engine will think that the last recovery was successful
+				log.Warnf("Recovery of anomaly %v (nr %v) of node %v timed out after %v attempts. Expected %v, but attempted recoveries: %v",
+					anomaly.state, i+1, nodeName, len(anomaly.history), anomaly.expectedRecovery, anomaly.attemptedRecoveries())
+			}
+			anomaly.end = p.now
+			anomaly.sentAnomalySamples = sampleIndex
+
+			for !anomaly.normalStateDetected {
+				p.sendNormalSample(node, true)
+			}
+		}
+	})
+}
+
+func (p *EvaluationProcessor) sendAnomalySample(sample *bitflow.SampleAndHeader, node *nodeEvaluationData) {
+	p.doSendSample(sample, true)
 
 	// Send normal-behavior samples for all other nodes
 	p.iterate(func(nodeName string, otherNode *nodeEvaluationData) {
-		if otherNode != node {
-			p.sendNormalSample(otherNode)
+		if otherNode != node && len(otherNode.normal) > 0 {
+			p.sendNormalSample(otherNode, false)
 		}
 	})
 
 	// Send some filler samples to progress the time between real samples
 	for i := 0; i < p.FillerSamples; i++ {
-		fillerSample := &bitflow.Sample{
-			Time:   p.progressTime(),
-			Values: []bitflow.Value{}, // No values in filler samples
-		}
-		err := p.NoopProcessor.Sample(fillerSample, evaluationFillerHeader)
-		if err != nil {
-			log.Errorf("DecisionMaker evaluation: error sending filler sample %v of %v: %v", i, p.FillerSamples, err)
-			return
-		}
+		p.doSendSample(&bitflow.SampleAndHeader{Sample: &bitflow.Sample{Values: []bitflow.Value{}}, Header: evaluationFillerHeader}, true)
 	}
 }
 
-func (p *EvaluationProcessor) sendNormalSample(node *nodeEvaluationData) {
+func (p *EvaluationProcessor) sendNormalSample(node *nodeEvaluationData, progressTime bool) {
 	if len(node.normal) == 0 {
+		log.Errorf("Cannot send normal data for node %v: no normal samples available", node.name)
 		return
 	}
 	normal := node.normal[node.normalIndex%len(node.normal)]
 	node.normalIndex++
-	err := p.NoopProcessor.Sample(normal.Sample, normal.Header)
-	if err != nil {
-		log.Errorf("DecisionMaker evaluation: error sending normal-behavior sample nr %v for node %v: %v", node.normal, node.name, err)
-	}
+	p.doSendSample(normal, progressTime)
 }
 
-func (p *EvaluationProcessor) progressTime() time.Time {
-	res := p.now
-	p.now = res.Add(p.SampleRate)
-	return res
+func (p *EvaluationProcessor) doSendSample(sample *bitflow.SampleAndHeader, progressTime bool) {
+	t := p.now
+	if progressTime {
+		t = t.Add(p.SampleRate)
+		p.now = t
+	}
+	sample.Sample.Time = t
+	err := p.NoopProcessor.Sample(sample.Sample, sample.Header)
+	if err != nil {
+		log.Errorf("DecisionMaker evaluation: error sending sample: %v", err)
+	}
 }
 
 func (p *EvaluationProcessor) executionEventCallback(node string, recovery string, success bool, duration time.Duration) {
@@ -269,6 +274,12 @@ func (p *EvaluationProcessor) executionEventCallback(node string, recovery strin
 		duration: duration,
 		success:  success,
 	})
+}
+
+func (p *EvaluationProcessor) nodeStateChangeCallback(nodeName string, oldState, newState State, timestamp time.Time) {
+	if p.currentAnomaly.node == nodeName && newState == StateNormal {
+		p.currentAnomaly.normalStateDetected = true
+	}
 }
 
 func (p *EvaluationProcessor) outputResults() {

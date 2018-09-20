@@ -36,6 +36,8 @@ type DecisionMaker struct {
 	NoDataTimeout         time.Duration
 	RecoveryFailedTimeout time.Duration
 
+	NodeStateChangeCallback func(nodeName string, oldState, newState State, timestamp time.Time)
+
 	ConfigurableTags
 
 	now          time.Time
@@ -53,6 +55,7 @@ func RegisterRecoveryEngine(b reg.ProcessorRegistry) {
 		groupSimilarity := reg.FloatParam(params, "group-simil", 0, false, &err)
 		evaluate := reg.BoolParam(params, "evaluate", false, true, &err)
 		recoverNoDataState := reg.BoolParam(params, "recover-no-data", false, false, &err)
+		randomSelection := reg.BoolParam(params, "random-selection", false, true, &err)
 		if err != nil {
 			return err
 		}
@@ -68,41 +71,22 @@ func RegisterRecoveryEngine(b reg.ProcessorRegistry) {
 		if err != nil {
 			return err
 		}
-		selection, err := NewRandomSelectionParams(params)
+		var selection Selection
+		if randomSelection {
+			selection, err = NewRandomSelectionParams(params)
+		} else {
+			selection = new(RecommendingSelection)
+		}
 		if err != nil {
 			return err
-		}
-
-		if evaluate {
-			collector := &EvaluationDataCollector{
-				data:               make(map[string]*nodeEvaluationData),
-				StoreNormalSamples: reg.IntParam(params, "store-normal-samples", 1000, true, &err),
-			}
-			collector.ParseRecoveryTags(params)
-			evalStep := &EvaluationProcessor{
-				Execution:                     execution,
-				SampleRate:                    reg.DurationParam(params, "sample-rate", 0, true, &err),
-				FillerSamples:                 reg.IntParam(params, "filler-samples", 0, true, &err),
-				NormalSamplesBetweenAnomalies: reg.IntParam(params, "normal-fillers", 0, true, &err),
-				RecoveriesPerState:            reg.FloatParam(params, "recoveries-per-state", 1, true, &err),
-				collector:                     collector,
-			}
-			if err != nil {
-				return err
-			}
-
-			p.Add((&pipeline.BatchProcessor{
-				FlushTags:                   []string{collector.NodeNameTag, collector.StateTag, "anomaly"},
-				SampleTimestampFlushTimeout: 5 * time.Second,
-			}).Add(collector))
-			p.Add(evalStep)
 		}
 
 		history := new(VolatileHistory)
 
 		var tags ConfigurableTags
 		tags.ParseRecoveryTags(params)
-		p.Add(&DecisionMaker{
+
+		engine := &DecisionMaker{
 			Graph:                 graph,
 			Execution:             execution,
 			History:               history,
@@ -111,7 +95,35 @@ func RegisterRecoveryEngine(b reg.ProcessorRegistry) {
 			RecoveryFailedTimeout: recoveryFailedTimeout,
 			ConfigurableTags:      tags,
 			RecoverNoDataState:    recoverNoDataState,
-		})
+		}
+
+		if evaluate {
+			collector := &EvaluationDataCollector{
+				data:               make(map[string]*nodeEvaluationData),
+				StoreNormalSamples: reg.IntParam(params, "store-normal-samples", 1000, true, &err),
+				ConfigurableTags:   tags,
+			}
+			evalStep := &EvaluationProcessor{
+				Execution:           execution,
+				SampleRate:          reg.DurationParam(params, "sample-rate", 0, true, &err),
+				FillerSamples:       reg.IntParam(params, "filler-samples", 0, true, &err),
+				RecoveriesPerState:  reg.FloatParam(params, "recoveries-per-state", 1, true, &err),
+				MaxRecoveryAttempts: reg.IntParam(params, "max-recoveries", 500, true, &err),
+				collector:           collector,
+			}
+			if err != nil {
+				return err
+			}
+
+			engine.NodeStateChangeCallback = evalStep.nodeStateChangeCallback
+			p.Add((&pipeline.BatchProcessor{
+				FlushTags:                   []string{collector.NodeNameTag, collector.StateTag, "anomaly"},
+				SampleTimestampFlushTimeout: 5 * time.Second,
+			}).Add(collector))
+			p.Add(evalStep)
+		}
+
+		p.Add(engine)
 		return nil
 	}, "Recovery Engine based on recommendation system",
 		reg.RequiredParams(append([]string{
@@ -121,7 +133,8 @@ func RegisterRecoveryEngine(b reg.ProcessorRegistry) {
 		}, TagParameterNames...)...),
 		reg.OptionalParams(
 			"avg-recovery-time", "recovery-error-percentage", "num-mock-recoveries", "rand-seed", // Mock execution engine
-			"evaluate", "sample-rate", "filler-samples", "normal-fillers", "recoveries-per-state", "store-normal-samples", // Evaluation
+			"evaluate", "max-recoveries", "sample-rate", "filler-samples", "recoveries-per-state", "store-normal-samples", // Evaluation
+			"random-selection", // Selection
 		))
 
 }
@@ -156,7 +169,6 @@ func (d *DecisionMaker) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 		nodeState, ok := d.state[node]
 		if !ok {
 			if !d.warnedUnknownNodes[node] {
-				//log.Warnf("<%v> Ignoring data for unknown node with %v=%v and %v=%v", d.NodeNameTag, node, d.StateTag, state)
 				log.Warnf("Ignoring data for unknown node with %v=%v and %v=%v", d.NodeNameTag, node, d.StateTag, state)
 				d.warnedUnknownNodes[node] = true
 			}
@@ -185,6 +197,7 @@ func (d *DecisionMaker) progressTime(now time.Time) {
 	d.progressCond.L.Lock()
 	defer d.progressCond.L.Unlock()
 	d.now = now
+
 	for _, node := range d.state {
 		if now.Sub(node.LastUpdate) > node.engine.NoDataTimeout {
 			// Not receiving any data from node
@@ -254,6 +267,9 @@ func (node *NodeState) setState(newState State, now time.Time) {
 		node.stateChanged = now
 		log.Debugf("Node %v switched state %v -> %v", node.Name, oldState, newState)
 		node.handleStateChanged(oldState, now)
+		if callback := node.engine.NodeStateChangeCallback; callback != nil {
+			callback(node.Name, oldState, newState, now)
+		}
 	}
 }
 
@@ -265,6 +281,7 @@ func (node *NodeState) handleStateChanged(oldState State, now time.Time) {
 		recovery := node.recoveries[len(node.recoveries)-1]
 		recovery.Ended = now
 		recovery.Successful = true
+		node.anomaly.End = now
 		node.engine.History.StoreAnomaly(node.anomaly, node.recoveries)
 		node.anomaly = nil
 		node.recoveries = nil

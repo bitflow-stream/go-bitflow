@@ -1,6 +1,8 @@
 package recovery
 
 import (
+	"fmt"
+	"log"
 	"math/rand"
 
 	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
@@ -40,7 +42,13 @@ func (r *RecommendingSelection) SelectRecovery(node *SimilarityNode, anomalyFeat
 	rankedEvents := r.rankHistoricEvents(history, node, anomalyFeatures)
 	recoveries := r.collectWeightedRecoveryInfo(rankedEvents, history, possibleRecoveries)
 	rankedRecoveries := r.rankRecoveries(recoveries)
-	return rankedRecoveries[0].Item.(string)
+
+	log.Println("===================== SELECTION DONE =====================")
+	for _, recovery := range rankedRecoveries {
+		log.Printf("Score %v: %v", recovery.Rank, recovery.Item)
+	}
+
+	return rankedRecoveries[0].Item.(weightedRecoveryInfo).name
 }
 
 func (r *RecommendingSelection) rankHistoricEvents(history History, node *SimilarityNode, anomalyFeatures []AnomalyFeature) golib.RankedSlice {
@@ -57,8 +65,33 @@ func (r *RecommendingSelection) rankHistoricEvents(history History, node *Simila
 		similarity := r.anomalyEventSimilarity(event.Features, anomalyFeatures)
 		rankedEvents.Append(similarity, event)
 	}
-	rankedEvents.Sort()
+	normalizeRanks(rankedEvents)
+	rankedEvents.SortReverse() // TODO maybe cut off events with a similarity that is too low
 	return rankedEvents
+}
+
+type weightedRecoveryInfo struct {
+	name string
+
+	overallWeight float64
+	successWeight float64
+
+	executionSuccess float64
+	recoverySuccess  float64 // Recovery efficiency on successful execution
+	overallSuccess   float64 // Successful execution and recovery
+
+	duration           float64 // Seconds, for all executions
+	successfulDuration float64 // Seconds, in case of successful execution
+
+	// Un-weighted counters
+	executions           int
+	successfulExecutions int
+	successfulRecoveries int
+}
+
+func (i weightedRecoveryInfo) String() string {
+	return fmt.Sprintf("%v: %v/%v executions successful (%v recoveries) execution success %.2f%%, recovery success %.2f%%, overall success %.2f%%, duration %.2fs, success duration %.2fs",
+		i.name, i.successfulExecutions, i.executions, i.successfulRecoveries, i.executionSuccess*100, i.recoverySuccess*100, i.overallSuccess*100, i.duration, i.successfulDuration)
 }
 
 func (r *RecommendingSelection) collectWeightedRecoveryInfo(rankedEvents golib.RankedSlice, history History, possibleRecoveries []string) []weightedRecoveryInfo {
@@ -71,11 +104,9 @@ func (r *RecommendingSelection) collectWeightedRecoveryInfo(rankedEvents golib.R
 
 	// Compute a number of weighted average values for each recovery action, using the anomaly similarity as weights
 	// Values include: success rate, duration
-	var totalSimilarityWeight float64
 	for _, event := range rankedEvents {
 		anomaly := event.Item.(*AnomalyEvent)
 		weight := event.Rank
-		totalSimilarityWeight += weight
 		executions := history.GetExecutions(anomaly)
 		for _, execution := range executions {
 			index, ok := recoveryNames[execution.Recovery]
@@ -83,26 +114,45 @@ func (r *RecommendingSelection) collectWeightedRecoveryInfo(rankedEvents golib.R
 				// The recovery has been executed in the past, but is not available for the presently given anomaly
 				continue
 			}
+			rec := &recoveries[index]
 
-			// Success rate
-			var successFactor float64
-			if execution.Successful && execution.Error == nil {
-				successFactor = 1
-			} else {
-				successFactor = 0
-			}
-			recoveries[index].success += successFactor * weight
+			executionSuccess := execution.Error == nil
+			overallSuccess := executionSuccess && execution.Successful
+			rec.overallWeight += weight
 
-			// Duration
+			rec.executionSuccess += weight * asFloat(executionSuccess)
+			rec.overallSuccess += weight * asFloat(overallSuccess)
 			durationSeconds := execution.Duration.Seconds()
-			recoveries[index].duration += durationSeconds * weight
+			rec.duration += weight * durationSeconds
+			rec.executions++
+
+			if executionSuccess {
+				rec.successWeight += weight
+				rec.recoverySuccess += weight * asFloat(execution.Successful)
+				rec.successfulDuration += weight * durationSeconds
+				rec.successfulExecutions++
+			}
+			if overallSuccess {
+				rec.successfulRecoveries++
+			}
 		}
 	}
-	for index := range recoveries {
-		recoveries[index].success /= totalSimilarityWeight
-		recoveries[index].duration /= totalSimilarityWeight
+	for i := range recoveries {
+		rec := &recoveries[i]
+		rec.overallSuccess /= rec.overallWeight
+		rec.executionSuccess /= rec.overallWeight
+		rec.duration /= rec.overallWeight
+		rec.successfulDuration /= rec.successWeight
+		rec.recoverySuccess /= rec.successWeight
 	}
 	return recoveries
+}
+
+func asFloat(b bool) float64 {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func (r *RecommendingSelection) anomalyEventSimilarity(anomaly1 []AnomalyFeature, anomaly2 []AnomalyFeature) float64 {
@@ -132,24 +182,46 @@ func (r *RecommendingSelection) anomalyEventSimilarity(anomaly1 []AnomalyFeature
 }
 
 func (r *RecommendingSelection) rankRecoveries(recoveries []weightedRecoveryInfo) golib.RankedSlice {
-	result := make(golib.RankedSlice, 0, len(recoveries))
+	result := make(golib.RankedSlice, len(recoveries))
 	for i, recovery := range recoveries {
-		score := r.computeRecoveryScore(recovery)
-		result[i].Item = recovery.name
+		score := recovery.computeScore()
+		result[i].Item = recovery
 		result[i].Rank = score
 	}
+	result.SortReverse()
 	return result
 }
 
-func (r *RecommendingSelection) computeRecoveryScore(recovery weightedRecoveryInfo) float64 {
-
+func (i weightedRecoveryInfo) computeScore() float64 {
 	// TODO take other aspects into account: duration, curiosity
 
-	return recovery.success
+	if i.executions == 0 {
+		return 0.6
+	}
+
+	return i.overallSuccess
 }
 
-type weightedRecoveryInfo struct {
-	name     string
-	success  float64
-	duration float64 // Seconds
+func normalizeRanks(s golib.RankedSlice) {
+	if len(s) == 0 {
+		return
+	}
+	min := s[0].Rank
+	max := min
+	for _, item := range s[1:] {
+		if item.Rank < min {
+			min = item.Rank
+		}
+		if item.Rank > max {
+			max = item.Rank
+		}
+	}
+	diff := max - min
+	for _, item := range s {
+		if diff == 0 {
+			item.Rank = 0.5
+		} else {
+			item.Rank = (item.Rank - min) / diff
+		}
+	}
 }
