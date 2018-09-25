@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/antongulenko/golib"
 )
 
 const (
@@ -319,30 +321,12 @@ func (sample *Sample) Resize(newSize int) bool {
 // If all the checks fail, the last resort is to compare all the fields string-by-string.
 func (h *Header) Equals(other *Header) bool {
 	switch {
-	case h == other:
-		return true
 	case h == nil && other == nil:
 		return true
 	case h == nil || other == nil:
 		return false
-	case len(h.Fields) != len(other.Fields):
-		return false
-	case len(h.Fields) == 0:
-		return true
 	}
-	if len(h.Fields) >= 1 {
-		// Compare the array backing the Fields slices
-		if &(h.Fields[0]) == &(other.Fields[0]) {
-			return true
-		}
-	}
-	// Last resort: compare every string pair
-	for i := range h.Fields {
-		if h.Fields[i] != other.Fields[i] {
-			return false
-		}
-	}
-	return true
+	return golib.EqualStrings(h.Fields, other.Fields)
 }
 
 // SampleMetadata is a helper type containing the timestamp and the tags of a Sample.
