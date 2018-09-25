@@ -10,14 +10,20 @@ import (
 )
 
 type MinMaxScaling struct {
+	Min float64
+	Max float64
 }
 
 func RegisterMinMaxScaling(b reg.ProcessorRegistry) {
-	b.RegisterAnalysis("scale_min_max",
-		func(p *pipeline.SamplePipeline) {
-			p.Batch(new(MinMaxScaling))
+	b.RegisterAnalysisParamsErr("scale_min_max",
+		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+			p.Batch(&MinMaxScaling{
+				Min: reg.FloatParam(params, "min", 0, true, &err),
+				Max: reg.FloatParam(params, "max", 1, true, &err),
+			})
+			return
 		},
-		"Normalize a batch of samples using a min-max scale",
+		"Normalize a batch of samples using a min-max scale. The output value range is 0..1 by default, but can be customized.",
 		reg.SupportBatch())
 }
 
@@ -46,10 +52,13 @@ func GetMinMax(header *bitflow.Header, samples []*bitflow.Sample) ([]float64, []
 	return min, max
 }
 
-func scaleMinMax(val, min, max float64) float64 {
+func scaleMinMax(val, min, max, outputMin, outputMax float64) float64 {
 	res := (val - min) / (max - min)
-	if !pipeline.IsValidNumber(res) {
-		res = 0.5 // Zero standard-deviation -> pick the middle between 0 and 1
+	if pipeline.IsValidNumber(res) {
+		// res is now in 0..1, transpose it within the range outputMin..outputMax
+		res = res*(outputMax-outputMin) + outputMin
+	} else {
+		res = (outputMax + outputMin) / 2 // min == max -> pick the middle
 	}
 	return res
 }
@@ -58,7 +67,7 @@ func (s *MinMaxScaling) ProcessBatch(header *bitflow.Header, samples []*bitflow.
 	min, max := GetMinMax(header, samples)
 	for _, sample := range samples {
 		for i, val := range sample.Values {
-			res := scaleMinMax(float64(val), min[i], max[i])
+			res := scaleMinMax(float64(val), min[i], max[i], s.Min, s.Max)
 			sample.Values[i] = bitflow.Value(res)
 		}
 	}
@@ -88,8 +97,7 @@ func scaleStddev(val float64, stats FeatureStats) float64 {
 	if !pipeline.IsValidNumber(res) {
 		// Special case for zero standard deviation: fallback to min-max scaling
 		min, max := stats.Min, stats.Max
-		res = scaleMinMax(float64(val), min, max)
-		res = (res - 0.5) * 2 // Value range: -1..1
+		res = scaleMinMax(float64(val), min, max, -1, 1)
 	}
 	return res
 }

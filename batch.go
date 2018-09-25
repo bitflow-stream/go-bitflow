@@ -230,12 +230,23 @@ func (p *BatchProcessor) String() string {
 }
 
 func (p *BatchProcessor) MergeProcessor(other bitflow.SampleProcessor) bool {
-	if otherBatch, ok := other.(*BatchProcessor); !ok {
-		return false
-	} else {
+	if otherBatch, ok := other.(*BatchProcessor); ok && p.compatibleParameters(otherBatch) {
 		p.Steps = append(p.Steps, otherBatch.Steps...)
 		return true
+	} else {
+		return false
 	}
+}
+
+func (p *BatchProcessor) compatibleParameters(other *BatchProcessor) bool {
+	if (other.FlushTimeout != 0 && other.FlushTimeout != p.FlushTimeout) ||
+		(other.SampleTimestampFlushTimeout != 0 && other.SampleTimestampFlushTimeout != p.SampleTimestampFlushTimeout) {
+		return false
+	}
+	if len(other.FlushTags) == 0 {
+		return true
+	}
+	return golib.EqualStrings(p.FlushTags, other.FlushTags)
 }
 
 // ==================== Simple implementation ====================
