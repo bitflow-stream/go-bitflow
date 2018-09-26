@@ -52,7 +52,7 @@ func GetMinMax(header *bitflow.Header, samples []*bitflow.Sample) ([]float64, []
 	return min, max
 }
 
-func scaleMinMax(val, min, max, outputMin, outputMax float64) float64 {
+func ScaleMinMax(val, min, max, outputMin, outputMax float64) float64 {
 	res := (val - min) / (max - min)
 	if pipeline.IsValidNumber(res) {
 		// res is now in 0..1, transpose it within the range outputMin..outputMax
@@ -67,7 +67,7 @@ func (s *MinMaxScaling) ProcessBatch(header *bitflow.Header, samples []*bitflow.
 	min, max := GetMinMax(header, samples)
 	for _, sample := range samples {
 		for i, val := range sample.Values {
-			res := scaleMinMax(float64(val), min[i], max[i], s.Min, s.Max)
+			res := ScaleMinMax(float64(val), min[i], max[i], s.Min, s.Max)
 			sample.Values[i] = bitflow.Value(res)
 		}
 	}
@@ -91,13 +91,11 @@ func GetStats(header *bitflow.Header, samples []*bitflow.Sample) []FeatureStats 
 	return res
 }
 
-func scaleStddev(val float64, stats FeatureStats) float64 {
-	m, s := stats.Mean(), stats.Stddev()
-	res := (val - m) / s
+func ScaleStddev(val float64, mean, stddev, min, max float64) float64 {
+	res := (val - mean) / stddev
 	if !pipeline.IsValidNumber(res) {
 		// Special case for zero standard deviation: fallback to min-max scaling
-		min, max := stats.Min, stats.Max
-		res = scaleMinMax(float64(val), min, max, -1, 1)
+		res = ScaleMinMax(float64(val), min, max, -1, 1)
 	}
 	return res
 }
@@ -106,7 +104,7 @@ func (s *StandardizationScaling) ProcessBatch(header *bitflow.Header, samples []
 	stats := GetStats(header, samples)
 	for _, sample := range samples {
 		for i, val := range sample.Values {
-			res := scaleStddev(float64(val), stats[i])
+			res := stats[i].ScaleStddev(float64(val))
 			sample.Values[i] = bitflow.Value(res)
 		}
 	}

@@ -75,7 +75,7 @@ func RegisterRecoveryEngine(b reg.ProcessorRegistry) {
 		if randomSelection {
 			selection, err = NewRandomSelectionParams(params)
 		} else {
-			selection = new(RecommendingSelection)
+			selection, err = NewRecommendingSelection(params)
 		}
 		if err != nil {
 			return err
@@ -99,23 +99,24 @@ func RegisterRecoveryEngine(b reg.ProcessorRegistry) {
 
 		if evaluate {
 			collector := &EvaluationDataCollector{
-				data:               make(map[string]*nodeEvaluationData),
-				StoreNormalSamples: reg.IntParam(params, "store-normal-samples", 1000, true, &err),
-				ConfigurableTags:   tags,
+				ConfigurableTags: tags,
 			}
 			evalStep := &EvaluationProcessor{
-				Execution:           execution,
-				SampleRate:          reg.DurationParam(params, "sample-rate", 0, true, &err),
-				FillerSamples:       reg.IntParam(params, "filler-samples", 0, true, &err),
-				RecoveriesPerState:  reg.FloatParam(params, "recoveries-per-state", 1, true, &err),
-				MaxRecoveryAttempts: reg.IntParam(params, "max-recoveries", 500, true, &err),
-				collector:           collector,
+				ConfigurableTags:       tags,
+				Execution:              execution,
+				StoreNormalSamples:     reg.IntParam(params, "store-normal-samples", 1000, true, &err),
+				PauseBetweenAnomalies:  reg.DurationParam(params, "time-between-anomalies", time.Hour, true, &err),
+				AnomalyRecoveryTimeout: engine.RecoveryFailedTimeout,
+				RecoveriesPerState:     reg.FloatParam(params, "recoveries-per-state", 1, true, &err),
+				MaxRecoveryAttempts:    reg.IntParam(params, "max-recoveries", 500, true, &err),
+				data:                   make(map[string]*nodeEvaluationData),
 			}
 			if err != nil {
 				return err
 			}
-
+			collector.StoreEvaluationEvent = evalStep.storeEvaluationEvent
 			engine.NodeStateChangeCallback = evalStep.nodeStateChangeCallback
+
 			p.Add((&pipeline.BatchProcessor{
 				FlushTags:                   []string{collector.NodeNameTag, collector.StateTag, "anomaly"},
 				SampleTimestampFlushTimeout: 5 * time.Second,
@@ -133,10 +134,11 @@ func RegisterRecoveryEngine(b reg.ProcessorRegistry) {
 		}, TagParameterNames...)...),
 		reg.OptionalParams(
 			"avg-recovery-time", "recovery-error-percentage", "num-mock-recoveries", "rand-seed", // Mock execution engine
-			"evaluate", "max-recoveries", "sample-rate", "filler-samples", "recoveries-per-state", "store-normal-samples", // Evaluation
-			"random-selection", // Selection
+			"evaluate", "max-recoveries", "time-between-anomalies", "recoveries-per-state", "store-normal-samples", // Evaluation
+			"random-selection",                                           // Random selection
+			"max-curiosity", "curiosity-growth", "curiosity-growth-time", // Recommending selection
+			"similarity-scale-stddev", "similarity-scale-min-max", "similarity-scale-from", "similarity-scale-to", "similarity-normalize-similarities", // Recommending selection: similarity computation
 		))
-
 }
 
 func (d *DecisionMaker) String() string {
@@ -245,8 +247,8 @@ type NodeState struct {
 	state        State
 	stateChanged time.Time
 
-	anomaly    *AnomalyEvent
-	recoveries []*ExecutionEvent
+	previousExecution *ExecutionEvent
+	execution         *ExecutionEvent
 }
 
 func (node *NodeState) stateUpdated(now time.Time) {
@@ -265,7 +267,7 @@ func (node *NodeState) setState(newState State, now time.Time) {
 		oldState := node.state
 		node.state = newState
 		node.stateChanged = now
-		log.Debugf("Node %v switched state %v -> %v", node.Name, oldState, newState)
+		log.Debugf("Node %v switched state %v -> %v at %v", node.Name, oldState, newState, now.Format("2006-01-02 15:04:05.999"))
 		node.handleStateChanged(oldState, now)
 		if callback := node.engine.NodeStateChangeCallback; callback != nil {
 			callback(node.Name, oldState, newState, now)
@@ -278,26 +280,25 @@ func (node *NodeState) handleStateChanged(oldState State, now time.Time) {
 	switch {
 	case oldState == StateRecovering && newState == StateNormal:
 		// Recovery successful
-		recovery := node.recoveries[len(node.recoveries)-1]
-		recovery.Ended = now
-		recovery.Successful = true
-		node.anomaly.End = now
-		node.engine.History.StoreAnomaly(node.anomaly, node.recoveries)
-		node.anomaly = nil
-		node.recoveries = nil
+		node.execution.Successful = true
+		node.storeExecution(now)
+		node.previousExecution = nil
 	case oldState == StateRecovering && (newState == StateAnomaly || newState == StateNoData):
-		// Recovery timed out. Restart recovery procedure.
-		recovery := node.recoveries[len(node.recoveries)-1]
-		recovery.Ended = now
+		// Recovery timed out. Store execution and restart recovery procedure.
+		node.storeExecution(now)
+		node.previousExecution = node.execution
 		fallthrough
 	case newState == StateAnomaly || newState == StateNoData:
 		if newState == StateAnomaly || node.engine.RecoverNoDataState {
-			if node.anomaly == nil {
-				node.anomaly = &AnomalyEvent{
-					Node:     node.Name,
-					Features: SampleToAnomalyFeatures(node.LastSample, node.LastHeader),
-					Start:    now,
-				}
+			node.execution = &ExecutionEvent{
+				Node:              node.Name,
+				AnomalyStarted:    now,
+				AnomalyFeatures:   SampleToAnomalyFeatures(node.LastSample, node.LastHeader),
+				PreviousExecution: node.previousExecution,
+			}
+			if node.previousExecution != nil {
+				node.execution.PreviousAttempts = node.previousExecution.PreviousAttempts + 1
+				node.execution.AnomalyStarted = node.previousExecution.AnomalyStarted
 			}
 			node.setState(StateRecovering, now)
 		}
@@ -306,26 +307,29 @@ func (node *NodeState) handleStateChanged(oldState State, now time.Time) {
 	}
 }
 
+func (node *NodeState) storeExecution(now time.Time) {
+	node.execution.Ended = now
+	node.engine.History.StoreExecution(node.execution)
+	node.execution = nil
+}
+
 func (node *NodeState) runRecovery(now time.Time) {
-	recoveryName := node.selectRecovery()
+	recoveryName := node.selectRecovery(now)
 	if recoveryName == "" {
 		log.Errorf("No recovery available for node %v, state %v", node.Name, node.state)
 		return
 	}
 	duration, err := node.engine.Execution.RunRecovery(node.Name, recoveryName)
-	node.recoveries = append(node.recoveries, &ExecutionEvent{
-		Node:     node.Name,
-		Recovery: recoveryName,
-		Started:  now,
-		Duration: duration,
-		Error:    err,
-	})
+	node.execution.Started = now
+	node.execution.Recovery = recoveryName
+	node.execution.ExecutionDuration = duration
+	node.execution.Error = err
 }
 
-func (node *NodeState) selectRecovery() string {
+func (node *NodeState) selectRecovery(now time.Time) string {
 	possible := node.engine.Execution.PossibleRecoveries(node.Name)
 	if len(possible) == 0 {
 		return ""
 	}
-	return node.engine.Selection.SelectRecovery(node.SimilarityNode, node.anomaly.Features, possible, node.engine.History)
+	return node.engine.Selection.SelectRecovery(now, node.SimilarityNode, node.execution.AnomalyFeatures, possible, node.engine.History)
 }

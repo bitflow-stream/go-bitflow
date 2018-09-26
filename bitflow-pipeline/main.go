@@ -236,4 +236,5 @@ func register_analyses(b reg.ProcessorRegistry) {
 	steps.RegisterSphere(b)
 	steps.RegisterAppendTimeDifference(b)
 	recovery.RegisterRecoveryEngine(b)
+	recovery.RegisterEventSimilarityEvaluation(b)
 }

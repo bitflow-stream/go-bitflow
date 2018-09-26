@@ -9,30 +9,26 @@ import (
 )
 
 type History interface {
-	StoreAnomaly(anomaly *AnomalyEvent, executions []*ExecutionEvent)
-	GetAnomalies(node string) []*AnomalyEvent
-	GetExecutions(anomaly *AnomalyEvent) []*ExecutionEvent
-}
-
-type AnomalyEvent struct {
-	Node     string
-	Features []AnomalyFeature
-	Start    time.Time
-	End      time.Time
-}
-
-func (e *AnomalyEvent) IsResolved() bool {
-	return e != nil && !e.Start.IsZero() && !e.End.IsZero() && e.End.After(e.Start)
+	StoreExecution(execution *ExecutionEvent)
+	GetExecutions(node string) []*ExecutionEvent
 }
 
 type ExecutionEvent struct {
-	Node       string
-	Recovery   string
-	Started    time.Time
-	Duration   time.Duration
-	Ended      time.Time // Time when the anomaly was reverted or when this recovery timed out, depending on the Successful flag
-	Successful bool
-	Error      error // If the recovery failed to execute
+	Node string
+
+	// Anomaly
+	AnomalyFeatures   AnomalyData
+	AnomalyStarted    time.Time // Copied from PreviousExecution, if PreviousAttempts > 0
+	PreviousAttempts  int
+	PreviousExecution *ExecutionEvent
+
+	// This Recovery Execution
+	Recovery          string
+	Started           time.Time
+	ExecutionDuration time.Duration // As reported by the ExecutionEngine
+	Ended             time.Time     // Time when the anomaly was recovered or when this recovery timed out, depending on the Successful flag
+	Error             error         // If the recovery failed to execute
+	Successful        bool          // True, if the anomaly was resolved
 }
 
 type AnomalyFeature struct {
@@ -40,8 +36,10 @@ type AnomalyFeature struct {
 	Value float64
 }
 
-func SampleToAnomalyFeatures(sample *bitflow.Sample, header *bitflow.Header) []AnomalyFeature {
-	res := make([]AnomalyFeature, len(header.Fields))
+type AnomalyData []AnomalyFeature
+
+func SampleToAnomalyFeatures(sample *bitflow.Sample, header *bitflow.Header) AnomalyData {
+	res := make(AnomalyData, len(header.Fields))
 	for i, field := range header.Fields {
 		res[i] = AnomalyFeature{
 			Name:  field,
@@ -52,38 +50,37 @@ func SampleToAnomalyFeatures(sample *bitflow.Sample, header *bitflow.Header) []A
 }
 
 type VolatileHistory struct {
-	anomalies  map[string][]*AnomalyEvent
-	executions map[*AnomalyEvent][]*ExecutionEvent
+	executions map[string][]*ExecutionEvent
 }
 
-func (h *VolatileHistory) StoreAnomaly(anomaly *AnomalyEvent, executions []*ExecutionEvent) {
-	if h.anomalies == nil {
-		h.anomalies = make(map[string][]*AnomalyEvent)
-		h.executions = make(map[*AnomalyEvent][]*ExecutionEvent)
+func (h *VolatileHistory) StoreExecution(execution *ExecutionEvent) {
+	if h.executions == nil {
+		h.executions = make(map[string][]*ExecutionEvent)
 	}
-	h.anomalies[anomaly.Node] = append(h.anomalies[anomaly.Node], anomaly)
-	h.executions[anomaly] = executions
+	h.executions[execution.Node] = append(h.executions[execution.Node], execution)
 }
 
-func (h *VolatileHistory) GetAnomalies(node string) []*AnomalyEvent {
-	return h.anomalies[node]
-}
-
-func (h *VolatileHistory) GetExecutions(anomaly *AnomalyEvent) []*ExecutionEvent {
-	return h.executions[anomaly]
+func (h *VolatileHistory) GetExecutions(node string) []*ExecutionEvent {
+	return h.executions[node]
 }
 
 func (h *VolatileHistory) String() string {
+	dateFmt := "2006-01-02 15:04:05.999"
 	var buf bytes.Buffer
-	for node, events := range h.anomalies {
+	for node, events := range h.executions {
 		fmt.Fprintf(&buf, " - Node %v\n", node)
+		anomalyCounter := 0
 		for eventNr, event := range events {
-			fmt.Fprintf(&buf, "   - %v. state (%v - %v)\n", eventNr, event.Start, event.End)
-			for executionNr, execution := range h.executions[event] {
-				fmt.Fprintf(&buf, "     - %v. execution: %v (success %v, %v - %v, duration %v, error: %v)\n",
-					executionNr, execution.Recovery, execution.Successful,
-					execution.Started.Format(bitflow.TextMarshallerDateFormat), execution.Ended.Format(bitflow.TextMarshallerDateFormat),
-					execution.Duration, execution.Error)
+			if event.PreviousExecution == nil {
+				fmt.Fprintf(&buf, "   - %v. anomaly (start %v)\n", anomalyCounter, event.AnomalyStarted.Format(dateFmt))
+				anomalyCounter++
+			}
+			fmt.Fprintf(&buf, "     - %v. attempt (%v total): %v (success %v, %v - %v, duration %v, error: %v)\n",
+				event.PreviousAttempts+1, eventNr+1, event.Recovery, event.Successful,
+				event.Started.Format(dateFmt), event.Ended.Format(dateFmt),
+				event.ExecutionDuration, event.Error)
+			if event.Successful {
+				fmt.Fprintf(&buf, "  - Recovered after %v", event.Ended.Sub(event.AnomalyStarted))
 			}
 		}
 	}
