@@ -1,1 +1,0 @@
-./test_data -> shuffle() -> rr(){1 -> head(num=2);2 -> head(num=5)}->histogram()->
