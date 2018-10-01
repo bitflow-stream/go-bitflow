@@ -2,12 +2,14 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"io/ioutil"
-	"os"
-	"testing"
 )
 
 const (
@@ -58,13 +60,13 @@ func (suite *scriptIntegrationTestSuite) SetT(t *testing.T) {
 
 func (suite *scriptIntegrationTestSuite) SetupSuite() {
 	var err error
-	suite.sampleDataFile, err = ioutil.TempFile(os.TempDir(), "sample_data-*")
+	suite.sampleDataFile, err = ioutil.TempFile(os.TempDir(), "sample-data-")
 	suite.NoError(err)
-	suite.sampleScriptFile, err = ioutil.TempFile(os.TempDir(), "test-script-*")
+	suite.sampleScriptFile, err = ioutil.TempFile(os.TempDir(), "test-script-")
 	suite.NoError(err)
 	uid, err := uuid.NewV4()
 	suite.NoError(err)
-	suite.sampleOutputFileName = os.TempDir() + "test-output-" + uid.String()
+	suite.sampleOutputFileName = filepath.Join(os.TempDir(), "test-output-"+uid.String())
 	suite.NoError(err)
 
 	suite.sampleDataFile.WriteString(testData)
@@ -75,14 +77,14 @@ func (suite *scriptIntegrationTestSuite) SetupSuite() {
 }
 
 func (suite *scriptIntegrationTestSuite) TearDownSuite() {
-	os.Remove(suite.sampleDataFile.Name())
-	os.Remove(suite.sampleScriptFile.Name())
-	os.Remove(suite.sampleOutputFileName)
+	suite.NoError(os.Remove(suite.sampleDataFile.Name()))
+	suite.NoError(os.Remove(suite.sampleScriptFile.Name()))
+	suite.NoError(os.Remove(suite.sampleOutputFileName))
 }
 
 func (suite *scriptIntegrationTestSuite) TestScriptExecutionWithFirstImplementation() {
 	resultCode := executeMain([]string{"bitflow-pipeline", "-f", suite.sampleScriptFile.Name()})
-	suite.Equal(resultCode,0)
+	suite.Equal(resultCode, 0)
 	content, err := ioutil.ReadFile(suite.sampleOutputFileName)
 	suite.NoError(err)
 	suite.Equal(expectedOutput, string(content))
@@ -90,7 +92,7 @@ func (suite *scriptIntegrationTestSuite) TestScriptExecutionWithFirstImplementat
 
 func (suite *scriptIntegrationTestSuite) TestScriptExecutionWithNewImplementation() {
 	resultCode := executeMain([]string{"bitflow-pipeline", "-new", "-f", suite.sampleScriptFile.Name()})
-	suite.Equal(resultCode,0)
+	suite.Equal(resultCode, 0)
 	content, err := ioutil.ReadFile(suite.sampleOutputFileName)
 	suite.NoError(err)
 	suite.Equal(expectedOutput, string(content))
@@ -102,4 +104,3 @@ func executeMain(args []string) int {
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	return c
 }
-
