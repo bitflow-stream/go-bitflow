@@ -3,6 +3,7 @@ package script
 // See README for details about implementation approach
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	internal "github.com/antongulenko/go-bitflow-pipeline/bitflow-script/script/internal"
 	"github.com/antongulenko/go-bitflow-pipeline/fork"
 	"github.com/antongulenko/golib"
-	"github.com/bugsnag/bugsnag-go/errors"
 )
 
 var emptyTokenMap = make(map[token]token)
@@ -107,18 +107,12 @@ func (s *AntlrBitflowListener) ParseScript(script string) (pipe *pipeline.Sample
 // ExitFork is called when production fork is exited.
 func (s *AntlrBitflowListener) ExitFork(ctx *internal.ForkContext) {
 	pipe := s.pipe()
-	forkName := s.state.Pop("processor_name").(token)
+	forkName := s.state.PopOrDefault("processor_name",token{}).(token)
 	forkParams := s.state.Pop("params").(map[token]token)
 	params := convertParams(forkParams)
 
 	var subpipelines []*subpipeline
 	s.state.PopAll("fork_subpipelines", &subpipelines)
-	//
-	// if forkName.Lit == "" {
-	//	// default to multiplex, if no name is given
-	//	forkName.Lit = MultiplexForkName
-	//	params[MultiplexForkParam] = strconv.Itoa(len(subPipes))
-	// }
 
 	forkStep, ok := s.registry.GetFork(forkName.Lit)
 	if !ok {
@@ -257,7 +251,7 @@ func (s *AntlrBitflowListener) ExitParameter(ctx *internal.ParameterContext) {
 	if ctx.GetChildCount() != 3 {
 		msg := fmt.Sprintf("Invalid parameter. "+
 			"Parameters must be given in the form of <key>=<value>, but was %v", ctx.GetText())
-		s.pushError(errors.New(msg, 0))
+		s.pushError(errors.New(msg))
 	}
 	key := ctx.GetChild(0).(*antlr.TerminalNodeImpl)
 	val := ctx.GetChild(2).(*antlr.TerminalNodeImpl)
@@ -303,15 +297,6 @@ func (s *AntlrBitflowListener) ExitOutput(ctx *internal.OutputContext) {
 // ExitOutputFork is called when production outputFork is exited.
 func (s *AntlrBitflowListener) ExitOutputFork(ctx *internal.OutputForkContext) {
 	// Nothing to do, all Outputs are chained to the end of pipeline
-}
-
-// ExitPipeline_name is called when production pipeline_name is exited.
-func (s *AntlrBitflowListener) ExitPipelineName(ctx *internal.PipelineNameContext) {
-	s.state.Push("pipeline_name", token{
-		Start: ctx.GetStart().GetStart(),
-		End:   ctx.GetStop().GetStop(),
-		Lit:   ctx.GetText(),
-	})
 }
 
 func (s *AntlrBitflowListener) pipe() *pipeline.SamplePipeline {

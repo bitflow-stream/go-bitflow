@@ -31,7 +31,7 @@ func TestParseScript_withFileInputAndOutput_shouldHaveFileSourceAndFileSink(t *t
 }
 
 func TestParseScript_withMultiFileInputAndOutput_shouldHaveFileSourceAndFileSink(t *testing.T) {
-	testScript := "./in; ./in2 -> noop() -> ./out"
+	testScript := "./in; ./in2 -> noop(none=5) -> ./out"
 	parser, _ := createTestParser()
 
 	pipe, errs := parser.ParseScript(testScript)

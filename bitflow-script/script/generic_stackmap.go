@@ -14,6 +14,7 @@ type StackMap map[string][]interface{}
 func (s StackMap) Len(key string) int {
 	return len(s[key])
 }
+
 func (s StackMap) Push(key string, st interface{}) {
 	_, ok := s[key]
 	if !ok {
