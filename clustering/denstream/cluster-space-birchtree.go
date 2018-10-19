@@ -2,7 +2,7 @@ package denstream
 
 import (
 	"github.com/antongulenko/go-bitflow-pipeline/clustering"
-	log "github.com/sirupsen/logrus"
+	// log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -71,7 +71,6 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 			}
 			curNode = nearestNode
 			nearestNode = nil
-
 		}
 		nearestCluster = curNode
 	}
@@ -168,7 +167,6 @@ func (s *BirchTreeClusterSpace) UpdateCluster(cluster clustering.SphericalCluste
 func (s *BirchTreeClusterSpace) checkClusterForOpt(epsilon float64) float64 {
 
 	s.traverseSubClusters(s.root, epsilon)
-	log.Println("checkClusterForOpt: ", TotalSparseness, TotalOverlap, subClusterCount)
 
 	clustersapartby := (TotalSparseness + TotalOverlap) / float64(2*subClusterCount)
 
@@ -393,7 +391,6 @@ func (s *BirchTreeClusterSpace) findCentralCluster(node *BirchTreeNode) (central
 
 func (s *BirchTreeClusterSpace) isCompactSubCluster(node *BirchTreeNode, epsilon float64) {
 	centralCluster := s.findCentralCluster(node)
-	log.Println("central cluster is", centralCluster.Coreset)
 	subClusterCount++
 	totalDistApart := 0.0
 	countSubclustersApart := 0
@@ -408,7 +405,6 @@ func (s *BirchTreeClusterSpace) isCompactSubCluster(node *BirchTreeNode, epsilon
 		}
 
 		gap := dist - 2*epsilon
-		log.Println("child cluster is", childClust.Coreset, dist, gap)
 		if gap > 0 {
 			totalDistApart += gap
 			countSubclustersApart++
@@ -441,7 +437,6 @@ func (s *BirchTreeClusterSpace) traverseSubClusters(node *BirchTreeNode, epsilon
 
 func (s *BirchTreeClusterSpace) clearParentFlag(node *BirchTreeNode) {
 	if node.isLeaf() && node.parent.isverified == true {
-		log.Println(" clear ParentFlag ", node.parent.Coreset, node.parent.isverified)
 		node.parent.isverified = false
 
 	}

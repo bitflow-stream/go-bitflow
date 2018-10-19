@@ -10,6 +10,11 @@ import (
 )
 
 var inputCount int = 0
+var enableEpsilonOpt bool = true //config
+var coldStart = true
+var dmin float64 = math.MaxFloat64
+var minNumClusters int = 20 //config
+var hmt = 0
 
 const (
 	Outlier       = -1
@@ -56,7 +61,11 @@ func (c *Clusterer) SetDecayTimeUnit(delta time.Duration) {
 	c.HistoryFading = math.Log(c.MaxOutlierWeight/(c.MaxOutlierWeight-1)) / (delta.Seconds() * 1000)
 }
 
-func (c *Clusterer) Insert(point []float64, timestamp time.Time) (clusterId int) {
+func (c *DenstreamClusterer) SetEpsilon(eps float64) {
+	c.Epsilon = eps
+}
+
+func (c *DenstreamClusterer) Insert(point []float64, timestamp time.Time) (clusterId int) {
 	inputCount++
 	if c.computedDecayInterval == 0 {
 		// Lazy initialize
@@ -79,7 +88,7 @@ func (c *Clusterer) Insert(point []float64, timestamp time.Time) (clusterId int)
 		c.decayCheckCounter++
 		c.lastPeriodicCheck = now
 	}
-
+	//Add Seema - Check periodically for epsilon after cold start
 	if inputCount%10000 == 0 {
 		epsilondiff := c.pClusters.checkClusterForOpt(c.Epsilon)
 		log.Println("epsilon diff: ", epsilondiff)
@@ -107,6 +116,18 @@ func (c *Clusterer) GetCluster(point []float64) (clusterId int) {
 
 func (c *Clusterer) insertPoint(point []float64) int {
 	// 1. try to merge into closest p-cluster. check if new radius small enough.
+	if enableEpsilonOpt && coldStart {
+		if c.pClusters.NumClusters()+c.oClusters.NumClusters() < minNumClusters {
+			// 	dist := clustering.EuclideanDistance(point, nearestClust.Center())
+			// 	if dist != 0 && dist < dmin {
+			// 		dmin = dist
+			// 	}
+			log.Println("inputcount:", inputCount, c.pClusters.NumClusters()+c.oClusters.NumClusters())
+			return NewOutlier
+		}
+		c.doEpsilonCheck(point)
+
+	}
 	clust := c.mergeNearest(point, c.pClusters)
 	if clust != nil {
 		return clust.Id()
@@ -130,6 +151,7 @@ func (c *Clusterer) insertPoint(point []float64) int {
 func (c *Clusterer) testMergeNearest(point []float64, space ClusterSpace) (testCluster clustering.SphericalCluster, realCluster clustering.SphericalCluster) {
 	realCluster = space.NearestCluster(point)
 	if realCluster != nil {
+
 		testCluster = realCluster.Clone() // Copy the cluster to check the radius after mergin the incoming point
 		testCluster.Merge(point)
 		if radius := testCluster.Radius(); radius > c.Epsilon {
@@ -192,4 +214,68 @@ func (c *Clusterer) periodicCheck(curTime time.Time, delta time.Duration) {
 			return clust.W() >= minWeight
 		})
 	})
+
+}
+
+func (c *DenstreamClusterer) adjustEpsilon() {
+	epsilondiff := 0.0
+	if c.pClusters.NumClusters() > c.oClusters.NumClusters() {
+		epsilondiff = c.pClusters.checkClusterForOpt(c.Epsilon)
+	} else {
+		epsilondiff = c.oClusters.checkClusterForOpt(c.Epsilon)
+	}
+
+	log.Println("epsilon diff: ", epsilondiff)
+	c.Epsilon += math.Round(epsilondiff*100) / 100
+	log.Println("modified epsilon to ", c.Epsilon)
+}
+
+func (c *DenstreamClusterer) doEpsilonCheck(point []float64) { /*, nearestClust clustering.SphericalCluster) {*/
+	//coldstart
+	log.Println("doEpsilonCheck", c.Epsilon, inputCount)
+	if inputCount == minNumClusters+1 {
+
+		c.adjustEpsilon()
+		log.Println("minNumclusters reached eps=", c.Epsilon)
+		// coldStart = false
+	}
+
+	if c.pClusters.NumClusters()+c.oClusters.NumClusters() >= minNumClusters && (inputCount < 1000 && inputCount%100 == 0) {
+		c.adjustEpsilon()
+	}
+	if inputCount > 1000 {
+		coldStart = false
+	}
+
+	// if c.pClusters.NumClusters()+c.oClusters.NumClusters() < minNumClusters {
+	// 	dist := clustering.EuclideanDistance(point, nearestClust.Center())
+	// 	if dist != 0 && dist < dmin {
+	// 		dmin = dist
+	// 	}
+	// 	return NewOutlier
+	// }
+
+	//Find the minimum distance between 2 points and set epsilon as minimum distance
+	/*if c.pClusters.NumClusters()+c.oClusters.NumClusters() < minNumClusters {
+
+		if dist == 0 && dmin == math.MaxFloat64 {
+			c.SetEpsilon(math.MaxFloat64)
+		}
+		if dist != 0 && dist < dmin {
+			dmin = dist
+			c.SetEpsilon(dmin / 2)
+		}
+		log.Println("doEpsilonCheck: ", c.Epsilon, c.pClusters.NumClusters()+c.oClusters.NumClusters())
+	}*/
+
+	// if c.pClusters.NumClusters()+c.oClusters.NumClusters() == minNumClusters {
+	// 	c.adjustEpsilon()
+	// }
+	// if c.pClusters.NumClusters()+c.oClusters.NumClusters() >= minNumClusters && inputCount%100 == 0 && hmt <= 30 {
+	// 	log.Println("adjust Epsilon")
+	// 	hmt++
+	// 	c.adjustEpsilon()
+	// }
+	//based on a function
+	//every 10k points
 }
