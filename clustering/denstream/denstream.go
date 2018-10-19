@@ -61,11 +61,11 @@ func (c *Clusterer) SetDecayTimeUnit(delta time.Duration) {
 	c.HistoryFading = math.Log(c.MaxOutlierWeight/(c.MaxOutlierWeight-1)) / (delta.Seconds() * 1000)
 }
 
-func (c *DenstreamClusterer) SetEpsilon(eps float64) {
+func (c *Clusterer) SetEpsilon(eps float64) {
 	c.Epsilon = eps
 }
 
-func (c *DenstreamClusterer) Insert(point []float64, timestamp time.Time) (clusterId int) {
+func (c *Clusterer) Insert(point []float64, timestamp time.Time) (clusterId int) {
 	inputCount++
 	if c.computedDecayInterval == 0 {
 		// Lazy initialize
@@ -217,7 +217,7 @@ func (c *Clusterer) periodicCheck(curTime time.Time, delta time.Duration) {
 
 }
 
-func (c *DenstreamClusterer) adjustEpsilon() {
+func (c *Clusterer) adjustEpsilon() {
 	epsilondiff := 0.0
 	if c.pClusters.NumClusters() > c.oClusters.NumClusters() {
 		epsilondiff = c.pClusters.checkClusterForOpt(c.Epsilon)
@@ -230,7 +230,7 @@ func (c *DenstreamClusterer) adjustEpsilon() {
 	log.Println("modified epsilon to ", c.Epsilon)
 }
 
-func (c *DenstreamClusterer) doEpsilonCheck(point []float64) { /*, nearestClust clustering.SphericalCluster) {*/
+func (c *Clusterer) doEpsilonCheck(point []float64) { /*, nearestClust clustering.SphericalCluster) {*/
 	//coldstart
 	log.Println("doEpsilonCheck", c.Epsilon, inputCount)
 	if inputCount == minNumClusters+1 {
