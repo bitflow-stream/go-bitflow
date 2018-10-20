@@ -36,12 +36,6 @@ const (
 )
 
 var (
-	allFormatsMap = map[MarshallingFormat]bool{
-		TextFormat:   true,
-		CsvFormat:    true,
-		BinaryFormat: true,
-	}
-
 	stdTransportTarget = "-"
 	binaryFileSuffix   = ".bin"
 )
@@ -111,6 +105,10 @@ type EndpointFactory struct {
 	// map keys and values.
 	CustomDataSinks map[EndpointType]func(string) (SampleProcessor, error)
 
+	// Marshallers can be filled by client code before EndpointFactory.CreateOutput or similar
+	// methods to allow custom marshalling formats in output files, network connections and so on.
+	Marshallers map[MarshallingFormat]func() Marshaller
+
 	// CustomGeneralFlags, CustomInputFlags and CustomOutputFlags lets client code
 	// register custom command line flags that configure aspects of endpoints created
 	// through CustomDataSources and CustomDataSinks.
@@ -129,12 +127,14 @@ func NewEndpointFactory() *EndpointFactory {
 func (f *EndpointFactory) Clear() {
 	f.CustomDataSources = make(map[EndpointType]func(string) (SampleSource, error))
 	f.CustomDataSinks = make(map[EndpointType]func(string) (SampleProcessor, error))
+	f.Marshallers = make(map[MarshallingFormat]func() Marshaller)
 	f.CustomGeneralFlags = nil
 	f.CustomInputFlags = nil
 	f.CustomOutputFlags = nil
 }
 
 func RegisterDefaults(factory *EndpointFactory) {
+	RegisterBuiltinMarshallers(factory)
 	RegisterConsoleBoxOutput(factory)
 	RegisterEmptyInputOutput(factory)
 }
@@ -145,6 +145,18 @@ func RegisterEmptyInputOutput(factory *EndpointFactory) {
 	}
 	factory.CustomDataSources[EmptyEndpoint] = func(string) (SampleSource, error) {
 		return new(EmptySampleSource), nil
+	}
+}
+
+func RegisterBuiltinMarshallers(factory *EndpointFactory) {
+	factory.Marshallers[TextFormat] = func() Marshaller {
+		return TextMarshaller{}
+	}
+	factory.Marshallers[CsvFormat] = func() Marshaller {
+		return CsvMarshaller{}
+	}
+	factory.Marshallers[BinaryFormat] = func() Marshaller {
+		return BinaryMarshaller{}
 	}
 }
 
@@ -273,7 +285,7 @@ func (f *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 	var result SampleSource
 	inputType := UndefinedEndpoint
 	for _, input := range inputs {
-		endpoint, err := ParseEndpointDescription(input, false)
+		endpoint, err := f.ParseEndpointDescription(input, false)
 		if err != nil {
 			return nil, err
 		}
@@ -281,7 +293,7 @@ func (f *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 			return nil, fmt.Errorf("Format cannot be specified for data input: %v", input)
 		}
 		if result == nil {
-			reader := f.Reader(endpoint.Unmarshaller())
+			reader := f.Reader(nil) // nil as Unmarshaller makes the SampleSource auto-detect the format
 			if f.FlagSourceTag != "" {
 				reader.Handler = sourceTagger(f.FlagSourceTag)
 			}
@@ -362,12 +374,18 @@ func (f *EndpointFactory) Writer() SampleWriter {
 // and the configuration flags in the EndpointFactory.
 func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 	var resultSink SampleProcessor
-	endpoint, err := ParseEndpointDescription(output, true)
+	endpoint, err := f.ParseEndpointDescription(output, true)
 	if err != nil {
 		return nil, err
 	}
+	var marshaller Marshaller
+	if format := endpoint.OutputFormat(); format != UndefinedFormat {
+		marshaller, err = f.CreateMarshaller(format)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var marshallingSink *AbstractMarshallingSampleOutput
-	marshaller := endpoint.OutputFormat().Marshaller()
 	switch endpoint.Type {
 	case StdEndpoint:
 		sink := NewConsoleSink()
@@ -429,6 +447,14 @@ func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 	return resultSink, nil
 }
 
+func (f *EndpointFactory) CreateMarshaller(format MarshallingFormat) (Marshaller, error) {
+	factory, ok := f.Marshallers[format]
+	if !ok {
+		return nil, fmt.Errorf("Unknown marshaller format: %v", format)
+	}
+	return factory(), nil
+}
+
 // IsConsoleOutput returns true if the given processor will output to the standard output when started.
 func IsConsoleOutput(sink SampleProcessor) bool {
 	writer, ok1 := sink.(*WriterSink)
@@ -443,13 +469,6 @@ type EndpointDescription struct {
 	Type         EndpointType
 	IsCustomType bool
 	Target       string
-}
-
-// Unmarshaller creates an Unmarshaller object that is able to read data from the
-// described endpoint.
-func (e EndpointDescription) Unmarshaller() Unmarshaller {
-	// The nil Unmarshaller makes the SampleSource implementations auto-detect the format.
-	return nil
 }
 
 // OutputFormat returns the MarshallingFormat that should be used when sending
@@ -484,28 +503,12 @@ func (e EndpointDescription) DefaultOutputFormat() MarshallingFormat {
 	}
 }
 
-// Marshaller returns a Marshaller object that is able to marshall data for sending
-// it to the described endpoint.
-func (format MarshallingFormat) Marshaller() Marshaller {
-	switch format {
-	case TextFormat:
-		return TextMarshaller{}
-	case CsvFormat:
-		return CsvMarshaller{}
-	case BinaryFormat:
-		return BinaryMarshaller{}
-	default:
-		// This can occur with custom endpoints, where the Format is set as UndefinedFormat
-		return nil
-	}
-}
-
 // ParseEndpointDescription parses the given string to an EndpointDescription object.
 // The string can be one of two forms: the URL-style description will be parsed by
 // ParseUrlEndpointDescription, other descriptions will be parsed by GuessEndpointDescription.
-func ParseEndpointDescription(endpoint string, isOutput bool) (EndpointDescription, error) {
+func (f *EndpointFactory) ParseEndpointDescription(endpoint string, isOutput bool) (EndpointDescription, error) {
 	if strings.Contains(endpoint, "://") {
-		return ParseUrlEndpointDescription(endpoint)
+		return f.ParseUrlEndpointDescription(endpoint)
 	} else {
 		guessed, err := GuessEndpointDescription(endpoint)
 		// Special case: Correct the default output transport type for standard output to ConsoleBoxEndpoint
@@ -526,7 +529,7 @@ func ParseEndpointDescription(endpoint string, isOutput bool) (EndpointDescripti
 // One of the format and transport parts must be specified, optionally both.
 // If one of format or transport is missing, it will be guessed.
 // The order does not matter. The 'target' part must not be empty.
-func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err error) {
+func (f *EndpointFactory) ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err error) {
 	urlParts := strings.SplitN(endpoint, "://", 2)
 	if len(urlParts) != 2 || urlParts[0] == "" || urlParts[1] == "" {
 		err = fmt.Errorf("Invalid URL endpoint: %v", endpoint)
@@ -535,7 +538,8 @@ func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err 
 	target := urlParts[1]
 	res.Target = target
 	for _, part := range strings.Split(urlParts[0], "+") {
-		if allFormatsMap[MarshallingFormat(part)] {
+		// TODO unclean: this parsing method is used for both marshalling/unmarshalling endpoints
+		if f.isMarshallingFormat(part) {
 			if res.Format != "" {
 				err = fmt.Errorf("Multiple formats defined in: %v", endpoint)
 				return
@@ -576,6 +580,11 @@ func ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err 
 		err = fmt.Errorf("Cannot define the data format for transport '%v'", res.Type)
 	}
 	return
+}
+
+func (f *EndpointFactory) isMarshallingFormat(formatName string) bool {
+	_, ok := f.Marshallers[MarshallingFormat(formatName)]
+	return ok
 }
 
 // GuessEndpointDescription guesses the transport type and format of the given endpoint target.

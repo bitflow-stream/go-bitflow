@@ -31,7 +31,7 @@ func TestPipelineTestSuite(t *testing.T) {
 
 func (suite *PipelineTestSuite) TestGuessEndpoint() {
 	compareX := func(endpoint string, format MarshallingFormat, typ EndpointType, isCustom bool, isOutput bool) {
-		desc, err := ParseEndpointDescription(endpoint, isOutput)
+		desc, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, isOutput)
 		suite.NoError(err)
 		suite.Equal(EndpointDescription{Format: UndefinedFormat, Type: typ, Target: endpoint, IsCustomType: isCustom}, desc)
 		suite.Equal(format, desc.OutputFormat())
@@ -40,7 +40,7 @@ func (suite *PipelineTestSuite) TestGuessEndpoint() {
 		compareX(endpoint, format, typ, false, false)
 	}
 	compareErr2 := func(endpoint string, errStr string) {
-		desc, err := ParseEndpointDescription(endpoint, false)
+		desc, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, false)
 		suite.Error(err)
 		suite.Contains(err.Error(), errStr)
 		suite.Equal(EndpointDescription{Format: UndefinedFormat, Type: UndefinedEndpoint, Target: endpoint}, desc)
@@ -83,7 +83,7 @@ func (suite *PipelineTestSuite) TestGuessEndpoint() {
 
 func (suite *PipelineTestSuite) TestUrlEndpoint() {
 	compare := func(endpoint string, format MarshallingFormat, outputFormat MarshallingFormat, typ EndpointType, target string) {
-		desc, err := ParseEndpointDescription(endpoint, false)
+		desc, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, false)
 		suite.NoError(err)
 		isCustom := typ == ConsoleBoxEndpoint
 		suite.Equal(EndpointDescription{Format: format, Type: typ, Target: target, IsCustomType: isCustom}, desc)
@@ -152,7 +152,7 @@ func (suite *PipelineTestSuite) TestUrlEndpoint() {
 
 func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 	err := func(endpoint string, errStr string) {
-		_, err := ParseEndpointDescription(endpoint, false)
+		_, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, false)
 		suite.Error(err)
 		suite.Contains(err.Error(), errStr)
 	}
