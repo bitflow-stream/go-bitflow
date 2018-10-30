@@ -142,7 +142,7 @@ func create_denstream_step(p *pipeline.SamplePipeline, params map[string]string,
 	if enableEpsTuningStr, ok := params["enableEpsTuning"]; ok {
 		enableEpsTuning, err = strconv.ParseBool(enableEpsTuningStr)
 		if err != nil {
-			err = query.ParameterError("enableEpsTuning", err)
+			err = reg.ParameterError("enableEpsTuning", err)
 			return
 		}
 	}
@@ -154,7 +154,7 @@ func create_denstream_step(p *pipeline.SamplePipeline, params map[string]string,
 	if epsColdStartStr, ok := params["epsColdStart"]; ok {
 		epsColdStart, err = strconv.ParseBool(epsColdStartStr)
 		if err != nil {
-			err = query.ParameterError("epsColdStart", err)
+			err = reg.ParameterError("epsColdStart", err)
 			return
 		}
 	}
@@ -169,7 +169,7 @@ func create_denstream_step(p *pipeline.SamplePipeline, params map[string]string,
 	if minNumClustersStr, ok := params["minNumClusters"]; ok {
 		minNumClusters, err = strconv.Atoi(minNumClustersStr)
 		if err != nil {
-			err = query.ParameterError("minNumClusters", err)
+			err = reg.ParameterError("minNumClusters", err)
 			return
 		}
 	}

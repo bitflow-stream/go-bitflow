@@ -122,8 +122,8 @@ func (c *Clusterer) GetCluster(point []float64) (clusterId int) {
 
 func (c *Clusterer) insertPoint(point []float64) int {
 	// 1. try to merge into closest p-cluster. check if new radius small enough.
-	if enableEpsilonOpt && coldStart {
-		if c.pClusters.NumClusters()+c.oClusters.NumClusters() < minNumClusters {
+	if c.EnableEpsTuning && c.ColdStart {
+		if c.pClusters.NumClusters()+c.oClusters.NumClusters() < c.MinNumClusters {
 			// 	dist := clustering.EuclideanDistance(point, nearestClust.Center())
 			// 	if dist != 0 && dist < dmin {
 			// 		dmin = dist
@@ -239,18 +239,18 @@ func (c *Clusterer) adjustEpsilon() {
 func (c *Clusterer) doEpsilonCheck(point []float64) { /*, nearestClust clustering.SphericalCluster) {*/
 	//coldstart
 	log.Println("doEpsilonCheck", c.Epsilon, inputCount)
-	if inputCount == minNumClusters+1 {
+	if inputCount == c.MinNumClusters+1 {
 
 		c.adjustEpsilon()
 		log.Println("minNumclusters reached eps=", c.Epsilon)
 		// coldStart = false
 	}
 
-	if c.pClusters.NumClusters()+c.oClusters.NumClusters() >= minNumClusters && (inputCount < 1000 && inputCount%100 == 0) {
+	if c.pClusters.NumClusters()+c.oClusters.NumClusters() >= c.MinNumClusters && (inputCount < 1000 && inputCount%100 == 0) {
 		c.adjustEpsilon()
 	}
 	if inputCount > 1000 {
-		coldStart = false
+		c.ColdStart = false
 	}
 
 	// if c.pClusters.NumClusters()+c.oClusters.NumClusters() < minNumClusters {
@@ -286,38 +286,7 @@ func (c *Clusterer) doEpsilonCheck(point []float64) { /*, nearestClust clusterin
 	//every 10k points
 }
 
-func (c *DenstreamClusterer) adjustEpsilon() {
-	epsilondiff := 0.0
-	if c.pClusters.NumClusters() > c.oClusters.NumClusters() {
-		epsilondiff = c.pClusters.checkClusterForOpt(c.Epsilon)
-	} else {
-		epsilondiff = c.oClusters.checkClusterForOpt(c.Epsilon)
-	}
-
-	log.Println("epsilon diff: ", epsilondiff)
-	c.Epsilon += (math.Round(epsilondiff*100) / 100)
-	log.Println("modified epsilon to ", c.Epsilon)
-}
-
-func (c *DenstreamClusterer) doEpsilonCheck() { /*, nearestClust clustering.SphericalCluster) {*/
-	//coldstart
-	if inputCount == c.MinNumClusters+1 {
-
-		c.adjustEpsilon()
-		log.Println("minNumclusters reached eps=", c.Epsilon)
-		// coldStart = false
-	}
-
-	if c.pClusters.NumClusters()+c.oClusters.NumClusters() >= c.MinNumClusters && (inputCount < 1000 && inputCount%100 == 0) {
-		c.adjustEpsilon()
-	}
-	if inputCount > 1000 {
-		c.ColdStart = false
-	}
-
-}
-
-func (c *DenstreamClusterer) doMaxOutlierWeightCheck() {
+func (c *Clusterer) doMaxOutlierWeightCheck() {
 
 	pClusterWeight := c.pClusters.TotalWeight()
 	oClusterWeight := c.oClusters.TotalWeight()
