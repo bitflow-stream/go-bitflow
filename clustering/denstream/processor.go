@@ -136,6 +136,42 @@ func create_denstream_step(p *pipeline.SamplePipeline, params map[string]string,
 			err = reg.ParameterError("eps", err)
 			return
 		}
+
+	}
+	enableEpsTuning := false
+	if enableEpsTuningStr, ok := params["enableEpsTuning"]; ok {
+		enableEpsTuning, err = strconv.ParseBool(enableEpsTuningStr)
+		if err != nil {
+			err = query.ParameterError("enableEpsTuning", err)
+			return
+		}
+	}
+	if enableEpsTuning == false && eps == 0.0 {
+		eps = 0.1
+	}
+
+	epsColdStart := false
+	if epsColdStartStr, ok := params["epsColdStart"]; ok {
+		epsColdStart, err = strconv.ParseBool(epsColdStartStr)
+		if err != nil {
+			err = query.ParameterError("epsColdStart", err)
+			return
+		}
+	}
+	if enableEpsTuning == true && epsColdStart == false && eps == 0.0 {
+		eps = 0.1
+	}
+	// else if enableEpsTuning == true && epsColdStart == true {
+	// 	eps = 0.0
+	// }
+
+	minNumClusters := 20
+	if minNumClustersStr, ok := params["minNumClusters"]; ok {
+		minNumClusters, err = strconv.Atoi(minNumClustersStr)
+		if err != nil {
+			err = query.ParameterError("minNumClusters", err)
+			return
+		}
 	}
 
 	lambda := 0.0000000001 // 0.0001 -> Decay check every 37 minutes
@@ -180,6 +216,9 @@ func create_denstream_step(p *pipeline.SamplePipeline, params map[string]string,
 			HistoryFading:    lambda,
 			MaxOutlierWeight: maxOutlierWeight,
 			Epsilon:          eps,
+			EnableEpsTuning:  enableEpsTuning,
+			ColdStart:        epsColdStart,
+			MinNumClusters:   minNumClusters,
 		},
 		OutputStateModulo:    debug,
 		FlushClustersAtClose: outputClusters,
@@ -205,7 +244,7 @@ func create_denstream_step(p *pipeline.SamplePipeline, params map[string]string,
 	return nil
 }
 
-var optionalParameters = []string{"eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters", "trainTag", "trainTagValue"}
+var optionalParameters = []string{"eps", "lambda", "maxOutlierWeight", "debug", "decay", "output-clusters", "trainTag", "trainTagValue", "enableEpsTuning", "epsColdStart", "minNumClusters"}
 
 func RegisterDenstream(b reg.ProcessorRegistry) {
 	create := func(p *pipeline.SamplePipeline, params map[string]string) (err error) {

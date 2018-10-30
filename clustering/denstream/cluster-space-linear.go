@@ -28,6 +28,9 @@ func (s *LinearClusterSpace) NumClusters() int {
 	return len(s.clusters)
 }
 
+func (s *LinearClusterSpace) TotalWeight() float64 {
+	return 0
+}
 func (s *LinearClusterSpace) NearestCluster(point []float64) (nearestCluster clustering.SphericalCluster) {
 	var closestDistance float64
 	for clust := range s.clusters {

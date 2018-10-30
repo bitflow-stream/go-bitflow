@@ -25,6 +25,10 @@ func (s *RtreeClusterSpace) Init(numDimensions, minChildren, maxChildren int) {
 	s.tree = rtreego.NewTree(numDimensions, minChildren, maxChildren)
 }
 
+func (s *RtreeClusterSpace) TotalWeight() float64 {
+	return 0
+}
+
 func (s *RtreeClusterSpace) NumClusters() int {
 	return len(s.clusters)
 }

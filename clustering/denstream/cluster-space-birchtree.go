@@ -53,6 +53,10 @@ func (s *BirchTreeClusterSpace) NumClusters() int {
 	return s.totalClusters
 }
 
+func (s *BirchTreeClusterSpace) TotalWeight() float64 {
+	return s.root.Coreset.W()
+}
+
 func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster clustering.SphericalCluster) {
 	//check root, if root is empty add a child, insert and update root. If not empty, then increment root and all the nodes along the traversal
 	var closestDistance float64
