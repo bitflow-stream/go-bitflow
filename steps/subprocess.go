@@ -61,7 +61,12 @@ func RegisterSubprocessRunner(b reg.ProcessorRegistry) {
 }
 
 func (r *SubprocessRunner) Configure(marshallingFormat string, f *bitflow.EndpointFactory) error {
-	r.Marshaller = bitflow.MarshallingFormat(marshallingFormat).Marshaller()
+	format := bitflow.MarshallingFormat(marshallingFormat)
+	var err error
+	r.Marshaller, err = bitflow.DefaultEndpointFactory.CreateMarshaller(format)
+	if err != nil {
+		return err
+	}
 	if r.Marshaller == nil {
 		return fmt.Errorf("Unknown marshalling format: %v", marshallingFormat)
 	}
