@@ -55,6 +55,14 @@ func (stats *FeatureStats) Push(values ...float64) {
 	}
 }
 
+func (stats *FeatureStats) ScaleMinMax(val float64, outputMin, outputMax float64) float64 {
+	return ScaleMinMax(val, stats.Min, stats.Max, outputMin, outputMax)
+}
+
+func (stats *FeatureStats) ScaleStddev(val float64) float64 {
+	return ScaleStddev(val, stats.Mean(), stats.Stddev(), stats.Min, stats.Max)
+}
+
 func (stats *StoreStats) Sample(inSample *bitflow.Sample, header *bitflow.Header) error {
 	for index, field := range header.Fields {
 		val := inSample.Values[index]
