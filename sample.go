@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	tagStringEscaper = strings.NewReplacer(
+	TagStringEscaper = strings.NewReplacer(
 		tag_equals, tag_replacement,
 		tag_separator, tag_replacement,
 		string(BinarySeparator), tag_replacement,
@@ -207,7 +207,7 @@ func (sample *Sample) TagString() (res string) {
 }
 
 func escapeTagString(str string) string {
-	return tagStringEscaper.Replace(str)
+	return TagStringEscaper.Replace(str)
 }
 
 // ParseTagString parses a string in the format produced by TagString().
