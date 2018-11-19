@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/antongulenko/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow"
 )
 
 type History interface {

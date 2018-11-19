@@ -3,8 +3,8 @@ package plugin
 import (
 	"sync"
 
-	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow"
 )
 
 type SampleSourceFactory func(map[string]string) (bitflow.SampleSource, error)

@@ -3,7 +3,7 @@ package steps
 import (
 	"testing"
 
-	"github.com/antongulenko/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow"
 )
 
 type compare struct {

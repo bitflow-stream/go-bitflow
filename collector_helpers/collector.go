@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/fork"
-	"github.com/antongulenko/go-bitflow-pipeline/http_tags"
-	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
+	"github.com/bitflow-stream/go-bitflow-pipeline/http_tags"
+	"github.com/bitflow-stream/go-bitflow-pipeline/steps"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 )

@@ -6,8 +6,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
 )
 
 type Selection interface {

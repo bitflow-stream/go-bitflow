@@ -1,7 +1,7 @@
 package denstream
 
 import (
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
 	// log "github.com/sirupsen/logrus"
 	"time"
 )

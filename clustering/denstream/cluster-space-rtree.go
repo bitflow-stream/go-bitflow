@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
 	"github.com/dhconnelly/rtreego"
 )
 

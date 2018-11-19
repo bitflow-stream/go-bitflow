@@ -3,7 +3,7 @@ package pipeline
 import (
 	"fmt"
 
-	"github.com/antongulenko/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow"
 )
 
 // MergeableProcessor is an extension of bitflow.SampleProcessor, that also allows

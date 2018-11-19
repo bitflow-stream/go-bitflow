@@ -6,7 +6,7 @@ import (
 	"math"
 	"regexp"
 
-	"github.com/antongulenko/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow"
 	"gonum.org/v1/gonum/mat"
 )
 

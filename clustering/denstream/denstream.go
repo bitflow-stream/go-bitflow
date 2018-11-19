@@ -3,10 +3,11 @@ package denstream
 
 import (
 	"fmt"
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
-	log "github.com/sirupsen/logrus"
 	"math"
 	"time"
+
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
+	log "github.com/sirupsen/logrus"
 )
 
 var inputCount int = 0

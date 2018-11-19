@@ -1,13 +1,14 @@
 package denstream
 
 import (
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	"testing"
+	"time"
+
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
 	// log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"testing"
-	"time"
 )
 
 type birchTestSuite struct {

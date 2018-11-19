@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
-	"github.com/antongulenko/go-bitflow-pipeline/fork"
+	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
 )
 
 // This function is placed in this package to avoid circular dependency between the fork and the query package.

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
 	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline"
 )
 
 type MultiMetricSource struct {

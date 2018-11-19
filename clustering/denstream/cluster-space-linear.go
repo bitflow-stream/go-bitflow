@@ -3,7 +3,7 @@ package denstream
 import (
 	"time"
 
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
 )
 
 var _ ClusterSpace = new(LinearClusterSpace)

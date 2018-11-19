@@ -3,8 +3,8 @@ package dbscan
 import (
 	"fmt"
 
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
 	"github.com/dhconnelly/rtreego"
 	log "github.com/sirupsen/logrus"
 )

@@ -3,8 +3,8 @@ package fork
 import (
 	"sync"
 
-	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow"
 	log "github.com/sirupsen/logrus"
 )
 
