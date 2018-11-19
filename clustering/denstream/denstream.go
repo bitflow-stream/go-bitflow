@@ -6,8 +6,14 @@ import (
 	"math"
 	"time"
 
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
+	log "github.com/sirupsen/logrus"
 )
+
+var inputCount int = 0
+
+var dmin float64 = math.MaxFloat64
+var percentageNoise = 5.0
 
 const (
 	Outlier       = -1
@@ -18,6 +24,7 @@ const (
 
 type ClusterSpace interface {
 	NumClusters() int
+	TotalWeight() float64
 
 	NearestCluster(point []float64) clustering.SphericalCluster
 	ClustersDo(func(cluster clustering.SphericalCluster))
@@ -27,6 +34,7 @@ type ClusterSpace interface {
 	Delete(cluster clustering.SphericalCluster, reason string)
 	TransferCluster(cluster clustering.SphericalCluster, otherSpace ClusterSpace)
 	UpdateCluster(cluster clustering.SphericalCluster, do func() (reinsertCluster bool))
+	checkClusterForOpt(epsilon float64) float64
 }
 
 type Clusterer struct {
@@ -36,6 +44,9 @@ type Clusterer struct {
 	HistoryFading    float64 // "λ" in the paper. >0. The higher it is, the less important are history points.
 	Epsilon          float64 // "ε" in the paper. >0. The epsilon neighborhood makes core objects merge into one density area.
 	MaxOutlierWeight float64 // "βµ" in the paper. [0..µ]. Minimum weight of a p-cluster.
+	EnableEpsTuning  bool
+	ColdStart        bool
+	MinNumClusters   int
 
 	lastPeriodicCheck     time.Time
 	computedDecayInterval time.Duration
@@ -53,7 +64,12 @@ func (c *Clusterer) SetDecayTimeUnit(delta time.Duration) {
 	c.HistoryFading = math.Log(c.MaxOutlierWeight/(c.MaxOutlierWeight-1)) / (delta.Seconds() * 1000)
 }
 
+func (c *Clusterer) SetEpsilon(eps float64) {
+	c.Epsilon = eps
+}
+
 func (c *Clusterer) Insert(point []float64, timestamp time.Time) (clusterId int) {
+	inputCount++
 	if c.computedDecayInterval == 0 {
 		// Lazy initialize
 		c.computedDecayInterval = c.decayCheckInterval()
@@ -74,6 +90,17 @@ func (c *Clusterer) Insert(point []float64, timestamp time.Time) (clusterId int)
 		c.periodicCheck(now, delta)
 		c.decayCheckCounter++
 		c.lastPeriodicCheck = now
+	}
+	//Add Seema - Check periodically for epsilon after cold start
+	if inputCount%10000 == 0 {
+		epsilondiff := c.pClusters.checkClusterForOpt(c.Epsilon)
+		log.Println("epsilon diff: ", epsilondiff)
+		c.Epsilon += math.Round(epsilondiff*100) / 100
+		log.Println("modified epsilon to ", c.Epsilon)
+		log.Println("Pcluster: Weight and Cluster", c.pClusters.TotalWeight(), c.pClusters.NumClusters())
+		log.Println("Ocluster: Weight and Cluster", c.oClusters.TotalWeight(), c.oClusters.NumClusters())
+		log.Println("modified Maxoutlierweight", c.pClusters.TotalWeight()/float64(c.pClusters.NumClusters()))
+		c.doMaxOutlierWeightCheck()
 	}
 	return
 }
@@ -96,6 +123,18 @@ func (c *Clusterer) GetCluster(point []float64) (clusterId int) {
 
 func (c *Clusterer) insertPoint(point []float64) int {
 	// 1. try to merge into closest p-cluster. check if new radius small enough.
+	if c.EnableEpsTuning && c.ColdStart {
+		if c.pClusters.NumClusters()+c.oClusters.NumClusters() < c.MinNumClusters {
+			// 	dist := clustering.EuclideanDistance(point, nearestClust.Center())
+			// 	if dist != 0 && dist < dmin {
+			// 		dmin = dist
+			// 	}
+			log.Println("inputcount:", inputCount, c.pClusters.NumClusters()+c.oClusters.NumClusters())
+			return NewOutlier
+		}
+		c.doEpsilonCheck(point)
+
+	}
 	clust := c.mergeNearest(point, c.pClusters)
 	if clust != nil {
 		return clust.Id()
@@ -119,6 +158,7 @@ func (c *Clusterer) insertPoint(point []float64) int {
 func (c *Clusterer) testMergeNearest(point []float64, space ClusterSpace) (testCluster clustering.SphericalCluster, realCluster clustering.SphericalCluster) {
 	realCluster = space.NearestCluster(point)
 	if realCluster != nil {
+
 		testCluster = realCluster.Clone() // Copy the cluster to check the radius after mergin the incoming point
 		testCluster.Merge(point)
 		if radius := testCluster.Radius(); radius > c.Epsilon {
@@ -181,4 +221,83 @@ func (c *Clusterer) periodicCheck(curTime time.Time, delta time.Duration) {
 			return clust.W() >= minWeight
 		})
 	})
+
+}
+
+func (c *Clusterer) adjustEpsilon() {
+	epsilondiff := 0.0
+	if c.pClusters.NumClusters() > c.oClusters.NumClusters() {
+		epsilondiff = c.pClusters.checkClusterForOpt(c.Epsilon)
+	} else {
+		epsilondiff = c.oClusters.checkClusterForOpt(c.Epsilon)
+	}
+
+	log.Println("epsilon diff: ", epsilondiff)
+	c.Epsilon += math.Round(epsilondiff*100) / 100
+	log.Println("modified epsilon to ", c.Epsilon)
+}
+
+func (c *Clusterer) doEpsilonCheck(point []float64) { /*, nearestClust clustering.SphericalCluster) {*/
+	//coldstart
+	log.Println("doEpsilonCheck", c.Epsilon, inputCount)
+	if inputCount == c.MinNumClusters+1 {
+
+		c.adjustEpsilon()
+		log.Println("minNumclusters reached eps=", c.Epsilon)
+		// coldStart = false
+	}
+
+	if c.pClusters.NumClusters()+c.oClusters.NumClusters() >= c.MinNumClusters && (inputCount < 1000 && inputCount%100 == 0) {
+		c.adjustEpsilon()
+	}
+	if inputCount > 1000 {
+		c.ColdStart = false
+	}
+
+	// if c.pClusters.NumClusters()+c.oClusters.NumClusters() < minNumClusters {
+	// 	dist := clustering.EuclideanDistance(point, nearestClust.Center())
+	// 	if dist != 0 && dist < dmin {
+	// 		dmin = dist
+	// 	}
+	// 	return NewOutlier
+	// }
+
+	//Find the minimum distance between 2 points and set epsilon as minimum distance
+	/*if c.pClusters.NumClusters()+c.oClusters.NumClusters() < minNumClusters {
+
+		if dist == 0 && dmin == math.MaxFloat64 {
+			c.SetEpsilon(math.MaxFloat64)
+		}
+		if dist != 0 && dist < dmin {
+			dmin = dist
+			c.SetEpsilon(dmin / 2)
+		}
+		log.Println("doEpsilonCheck: ", c.Epsilon, c.pClusters.NumClusters()+c.oClusters.NumClusters())
+	}*/
+
+	// if c.pClusters.NumClusters()+c.oClusters.NumClusters() == minNumClusters {
+	// 	c.adjustEpsilon()
+	// }
+	// if c.pClusters.NumClusters()+c.oClusters.NumClusters() >= minNumClusters && inputCount%100 == 0 && hmt <= 30 {
+	// 	log.Println("adjust Epsilon")
+	// 	hmt++
+	// 	c.adjustEpsilon()
+	// }
+	//based on a function
+	//every 10k points
+}
+
+func (c *Clusterer) doMaxOutlierWeightCheck() {
+
+	pClusterWeight := c.pClusters.TotalWeight()
+	oClusterWeight := c.oClusters.TotalWeight()
+
+	currOutlierPercentage := (oClusterWeight / (pClusterWeight + oClusterWeight)) * 100
+	log.Println("currOutlierPercentage: ", currOutlierPercentage)
+	if currOutlierPercentage > percentageNoise {
+		c.MaxOutlierWeight--
+	} else if currOutlierPercentage < percentageNoise {
+		c.MaxOutlierWeight++
+	}
+	log.Println("modified MaxOutlierWeight: ", c.MaxOutlierWeight)
 }

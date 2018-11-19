@@ -3,7 +3,7 @@ package recovery
 import (
 	"fmt"
 
-	"github.com/antongulenko/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow"
 	log "github.com/sirupsen/logrus"
 )
 

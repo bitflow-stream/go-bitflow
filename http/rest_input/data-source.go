@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline/http"
 	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline/http"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )

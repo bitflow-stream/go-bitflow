@@ -8,12 +8,12 @@ import (
 	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
-	internal "github.com/antongulenko/go-bitflow-pipeline/bitflow-script/script/internal"
-	"github.com/antongulenko/go-bitflow-pipeline/fork"
 	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
+	internal "github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/script/internal"
+	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
 	"github.com/bugsnag/bugsnag-go/errors"
 )
 

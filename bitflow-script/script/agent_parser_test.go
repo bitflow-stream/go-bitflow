@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
-	"github.com/antongulenko/go-bitflow-pipeline/steps"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/bitflow-stream/go-bitflow-pipeline/steps"
 	"github.com/bugsnag/bugsnag-go/errors"
 	"github.com/stretchr/testify/assert"
 )

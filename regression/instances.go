@@ -3,8 +3,8 @@ package regression
 import (
 	"fmt"
 
-	"github.com/antongulenko/go-bitflow"
 	"github.com/antongulenko/golearn/base"
+	"github.com/bitflow-stream/go-bitflow"
 )
 
 type SubHeader struct {

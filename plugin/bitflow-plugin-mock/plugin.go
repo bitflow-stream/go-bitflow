@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline/plugin"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline/plugin"
 	log "github.com/sirupsen/logrus"
 )
 

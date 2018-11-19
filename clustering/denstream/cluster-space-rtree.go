@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
 	"github.com/dhconnelly/rtreego"
 )
 
@@ -23,6 +23,10 @@ func NewRtreeClusterSpace(numDimensions, minChildren, maxChildren int) *RtreeClu
 func (s *RtreeClusterSpace) Init(numDimensions, minChildren, maxChildren int) {
 	s.clusters = make(map[*RtreeCluster]bool)
 	s.tree = rtreego.NewTree(numDimensions, minChildren, maxChildren)
+}
+
+func (s *RtreeClusterSpace) TotalWeight() float64 {
+	return 0
 }
 
 func (s *RtreeClusterSpace) NumClusters() int {
@@ -95,6 +99,10 @@ func (s *RtreeClusterSpace) UpdateCluster(clust clustering.SphericalCluster, do 
 	if do() {
 		s.tree.Insert(r)
 	}
+}
+
+func (s *RtreeClusterSpace) checkClusterForOpt(epsilon float64) float64 {
+	return 0
 }
 
 func (s *RtreeClusterSpace) clusterDeleteComparator(obj1, obj2 rtreego.Spatial) bool {

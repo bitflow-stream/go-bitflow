@@ -1,10 +1,10 @@
 package recovery
 
 import (
-	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
-	"github.com/antongulenko/go-bitflow-pipeline/steps"
 	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
+	"github.com/bitflow-stream/go-bitflow-pipeline/steps"
 )
 
 type SimilarityComputation struct {

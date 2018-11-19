@@ -9,9 +9,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
 	log "github.com/sirupsen/logrus"
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat"

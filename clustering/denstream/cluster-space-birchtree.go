@@ -1,14 +1,18 @@
 package denstream
 
 import (
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
+	// log "github.com/sirupsen/logrus"
 	"time"
-
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 )
 
 var _ ClusterSpace = new(BirchTreeClusterSpace)
 
-const _maxChildren = 3
+const _maxChildren = 7
+
+var TotalSparseness float64
+var TotalOverlap float64
+var subClusterCount int
 
 type BirchTreeClusterSpace struct {
 	root          *BirchTreeNode
@@ -23,6 +27,7 @@ type BirchTreeNode struct {
 	numChildren int
 	children    []*BirchTreeNode
 	parent      *BirchTreeNode
+	isverified  bool
 }
 
 func (n *BirchTreeNode) isLeaf() bool {
@@ -48,12 +53,15 @@ func (s *BirchTreeClusterSpace) NumClusters() int {
 	return s.totalClusters
 }
 
+func (s *BirchTreeClusterSpace) TotalWeight() float64 {
+	return s.root.Coreset.W()
+}
+
 func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster clustering.SphericalCluster) {
 	//check root, if root is empty add a child, insert and update root. If not empty, then increment root and all the nodes along the traversal
 	var closestDistance float64
 	var nearestNode *BirchTreeNode
 	curNode := s.root
-
 	if curNode.numChildren != 0 {
 		//do this until you reach a leaf
 		for !curNode.isLeaf() {
@@ -67,7 +75,6 @@ func (s *BirchTreeClusterSpace) NearestCluster(point []float64) (nearestCluster 
 			}
 			curNode = nearestNode
 			nearestNode = nil
-
 		}
 		nearestCluster = curNode
 	}
@@ -91,7 +98,6 @@ func (s *BirchTreeClusterSpace) NewCluster(point []float64, creationTime time.Ti
 
 func (s *BirchTreeClusterSpace) Insert(cluster clustering.SphericalCluster) {
 	//create a new node and embed the cluster
-
 	newChildNode := cluster.(*BirchTreeNode)
 	newChildNode.SetId(s.nextClusterId)
 	s.nextClusterId++
@@ -100,9 +106,9 @@ func (s *BirchTreeClusterSpace) Insert(cluster clustering.SphericalCluster) {
 	}
 
 	nearestParentNode := s.root
-	if nearestParentNode.numChildren < _maxChildren {
-		s.addCFtoParentNode(nearestParentNode, newChildNode)
+	if nearestParentNode.numChildren == 0 {
 		s.addChild(nearestParentNode, newChildNode)
+		s.addCFtoParentNode(nearestParentNode, newChildNode)
 	} else {
 		nearestNode := nearestParentNode
 		//identify the node where newnode can be insterted as a leaf, if the num of children is max, then split the node
@@ -111,14 +117,32 @@ func (s *BirchTreeClusterSpace) Insert(cluster clustering.SphericalCluster) {
 			nearestchildIdx := s.findNearestChildNode(nearestNode, newChildNode)
 			nearestNode = nearestNode.children[nearestchildIdx]
 		}
-		s.addNode(nearestParentNode, newChildNode)
+
+		if nearestParentNode.numChildren < _maxChildren {
+			s.addChild(nearestParentNode, newChildNode)
+			s.addCFtoParentNodes(nearestParentNode, newChildNode)
+		} else {
+			s.addNode(nearestParentNode, newChildNode)
+			s.updateCFofParentNodes(newChildNode)
+		}
 	}
 	s.totalClusters++
 }
 
 func (s *BirchTreeClusterSpace) Delete(cluster clustering.SphericalCluster, reason string) {
+
 	node := cluster.(*BirchTreeNode)
 	parentNode := node.parent
+
+	if node == s.root {
+		return
+	}
+	if parentNode == s.root {
+		s.delCFfromParentNode(parentNode, *node)
+		s.deleteChild(parentNode, node)
+		s.totalClusters--
+		return
+	}
 	if parentNode.numChildren == 1 {
 		// Last child -> immediately delete the parent instead
 		s.Delete(parentNode, reason)
@@ -127,13 +151,8 @@ func (s *BirchTreeClusterSpace) Delete(cluster clustering.SphericalCluster, reas
 		s.deleteChild(parentNode, node)
 		s.totalClusters--
 
-		curNode := parentNode
-		for curNode != s.root && curNode.numChildren == 0 {
-			parentNode = curNode.parent
-			s.deleteChild(parentNode, curNode)
-			curNode = curNode.parent
-		}
 	}
+
 }
 
 func (s *BirchTreeClusterSpace) TransferCluster(cluster clustering.SphericalCluster, otherSpace ClusterSpace) {
@@ -142,12 +161,24 @@ func (s *BirchTreeClusterSpace) TransferCluster(cluster clustering.SphericalClus
 }
 
 func (s *BirchTreeClusterSpace) UpdateCluster(cluster clustering.SphericalCluster, do func() (reinsertCluster bool)) {
-	node := cluster.(*BirchTreeNode)
-	parentNode := node.parent
-	s.delCFfromParentNodes(parentNode, node)
+
+	s.Delete(cluster, "Update")
 	if do() {
-		s.addCFtoParentNodes(parentNode, node)
+		s.Insert(cluster)
 	}
+}
+
+func (s *BirchTreeClusterSpace) checkClusterForOpt(epsilon float64) float64 {
+
+	s.traverseSubClusters(s.root, epsilon)
+
+	clustersapartby := (TotalSparseness + TotalOverlap) / float64(2*subClusterCount)
+
+	TotalSparseness = 0.0
+	TotalOverlap = 0.0
+	subClusterCount = 0
+	s.clearParentFlag(s.root)
+	return clustersapartby
 }
 
 // ========================================================================================================
@@ -176,7 +207,6 @@ func (s *BirchTreeClusterSpace) traverseTree(node *BirchTreeNode, do func(cluste
 func (s *BirchTreeClusterSpace) addNode(node *BirchTreeNode, childNode *BirchTreeNode) {
 	if node.numChildren < _maxChildren {
 		s.addChild(node, childNode)
-		s.addCFtoParentNodes(node, childNode)
 	} else {
 
 		parentNode := node.parent
@@ -184,13 +214,15 @@ func (s *BirchTreeClusterSpace) addNode(node *BirchTreeNode, childNode *BirchTre
 			//var newRoot *BirchTreeNode
 			parentNode = s.createNewNode()
 			s.addChild(parentNode, node)
+			s.addCFtoParentNode(parentNode, node)
 			s.root = parentNode
 		}
-
 		s.addNode(parentNode, s.splitNode(node, childNode))
 	}
 }
+
 func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) (newBrother *BirchTreeNode) {
+
 	numChildren := parentNode.numChildren
 	children := parentNode.children
 
@@ -219,9 +251,7 @@ func (s *BirchTreeClusterSpace) splitNode(parentNode *BirchTreeNode, newNode *Bi
 				farthest = dist[i][numChildren]
 			}
 		}
-
 		s.resetNode(parentNode, s.numDimensions)
-
 		newBrother = s.createNewNode()
 
 		for i := 0; i < numChildren; i++ {
@@ -258,7 +288,7 @@ func (s *BirchTreeClusterSpace) findNearestChildNode(nearestNode *BirchTreeNode,
 	for idx := 0; idx < nearestNode.numChildren; idx++ {
 		childClust := nearestNode.children[idx]
 
-		dist := clustering.EuclideanDistance(cluster.Center(), childClust.Center())
+		dist := clustering.EuclideanDistance(cluster.Center(), childClust.Center()) - childClust.Radius()
 		if nearestChildIdx == -1 || dist < closestDistance {
 			nearestChildIdx = idx
 			closestDistance = dist
@@ -285,14 +315,16 @@ func (s *BirchTreeClusterSpace) addChild(node *BirchTreeNode, childNode *BirchTr
 }
 
 func (s *BirchTreeClusterSpace) deleteChild(parentNode *BirchTreeNode, child *BirchTreeNode) {
+
 	for i := 0; i < parentNode.numChildren; i++ {
-		if parentNode.children[i].Id() == child.Id() {
+		if parentNode.children[i] == child {
 			parentNode.children[i] = nil
 			parentNode.children = append(parentNode.children[:i], parentNode.children[i+1:]...)
 			parentNode.children = append(parentNode.children, nil)
 			parentNode.numChildren--
 		}
 	}
+
 }
 
 func (s *BirchTreeClusterSpace) addCFtoParentNodes(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
@@ -308,6 +340,7 @@ func (s *BirchTreeClusterSpace) addCFtoParentNodes(parentNode *BirchTreeNode, ne
 
 func (s *BirchTreeClusterSpace) addCFtoParentNode(parentNode *BirchTreeNode, newNode *BirchTreeNode) {
 	parentNode.MergeCoreset(&newNode.Coreset)
+
 }
 
 func (s *BirchTreeClusterSpace) delCFfromParentNode(parentNode *BirchTreeNode, delNode BirchTreeNode) {
@@ -322,5 +355,96 @@ func (s *BirchTreeClusterSpace) delCFfromParentNodes(parentNode *BirchTreeNode, 
 			break
 		}
 		parentNode = curNode.parent
+	}
+}
+
+func (s *BirchTreeClusterSpace) updateCFofParentNodes(node *BirchTreeNode) {
+
+	curNode := node
+	for {
+		parentNode := curNode.parent
+		if parentNode == nil {
+			break
+		}
+		parentNode.Reset()
+		for i := 0; i < parentNode.numChildren; i++ {
+			s.addCFtoParentNode(parentNode, parentNode.children[i])
+		}
+		curNode = parentNode
+	}
+}
+
+/////////////////////////Hyperparameter optimisations///////////////////
+func (s *BirchTreeClusterSpace) findCentralCluster(node *BirchTreeNode) (centralCluster *BirchTreeNode) {
+	if node.isLeaf() {
+		return
+	}
+	subClustCenter := node.Coreset.Center()
+	var closestDistance float64
+	// var closestCluster *BirchTreeNode
+	for i := 0; i < node.numChildren; i++ {
+		childClust := node.children[i]
+		dist := clustering.EuclideanDistance(subClustCenter, childClust.Center())
+		if closestDistance == float64(0) || dist < closestDistance {
+			closestDistance = dist
+			centralCluster = childClust
+		}
+	}
+	return
+}
+
+func (s *BirchTreeClusterSpace) isCompactSubCluster(node *BirchTreeNode, epsilon float64) {
+	centralCluster := s.findCentralCluster(node)
+	subClusterCount++
+	totalDistApart := 0.0
+	countSubclustersApart := 0
+	totalDistOverlap := 0.0
+	countSubclustersOverlap := 0
+
+	for i := 0; i < node.numChildren; i++ {
+		childClust := node.children[i]
+		dist := clustering.EuclideanDistance(centralCluster.Center(), childClust.Center())
+		if dist == 0 {
+			continue
+		}
+
+		gap := dist - 2*epsilon
+		if gap > 0 {
+			totalDistApart += gap
+			countSubclustersApart++
+		} else {
+			totalDistOverlap += gap
+			countSubclustersOverlap++
+		}
+	}
+	//avergae sparseness or overlap of each subcluster is summed up
+	// to determine if the radius of the cluster has to increase or decrease
+	if countSubclustersApart > 0 {
+		TotalSparseness += (totalDistApart / (2 * float64(countSubclustersApart)))
+	}
+	if countSubclustersOverlap > 0 {
+		TotalOverlap += (totalDistOverlap / (2 * float64(countSubclustersOverlap)))
+	}
+
+}
+
+func (s *BirchTreeClusterSpace) traverseSubClusters(node *BirchTreeNode, epsilon float64) {
+	if node.isLeaf() && node.parent.isverified == false {
+		s.isCompactSubCluster(node.parent, epsilon)
+		node.parent.isverified = true
+		return
+	}
+	for i := 0; i < node.numChildren; i++ {
+		s.traverseSubClusters(node.children[i], epsilon)
+	}
+}
+
+func (s *BirchTreeClusterSpace) clearParentFlag(node *BirchTreeNode) {
+	if node.isLeaf() && node.parent.isverified == true {
+		node.parent.isverified = false
+
+	}
+	for i := 0; i < node.numChildren; i++ {
+		s.clearParentFlag(node.children[i])
 	}
 }

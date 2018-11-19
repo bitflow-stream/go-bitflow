@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Knetic/govaluate"
-	"github.com/antongulenko/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow"
 )
 
 type Expression struct {

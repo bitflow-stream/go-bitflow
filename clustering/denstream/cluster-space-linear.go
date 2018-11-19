@@ -3,7 +3,7 @@ package denstream
 import (
 	"time"
 
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
 )
 
 var _ ClusterSpace = new(LinearClusterSpace)
@@ -28,6 +28,9 @@ func (s *LinearClusterSpace) NumClusters() int {
 	return len(s.clusters)
 }
 
+func (s *LinearClusterSpace) TotalWeight() float64 {
+	return 0
+}
 func (s *LinearClusterSpace) NearestCluster(point []float64) (nearestCluster clustering.SphericalCluster) {
 	var closestDistance float64
 	for clust := range s.clusters {
@@ -80,4 +83,8 @@ func (s *LinearClusterSpace) UpdateCluster(cluster clustering.SphericalCluster, 
 	if do() {
 		s.clusters[basic] = true
 	}
+}
+
+func (s *LinearClusterSpace) checkClusterForOpt(epsilon float64) float64 {
+	return 0
 }

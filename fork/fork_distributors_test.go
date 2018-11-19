@@ -3,8 +3,8 @@ package fork
 import (
 	"testing"
 
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )

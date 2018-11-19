@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
 )
 
 type RandomSelection struct {

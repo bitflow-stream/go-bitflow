@@ -5,10 +5,10 @@ import (
 	"sync"
 
 	parallel_dbscan "github.com/antongulenko/go-DBSCAN"
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/clustering"
 	"github.com/antongulenko/go-onlinestats"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow-pipeline/clustering"
 	log "github.com/sirupsen/logrus"
 )
 

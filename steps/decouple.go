@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/antongulenko/go-bitflow"
-	"github.com/antongulenko/go-bitflow-pipeline"
-	"github.com/antongulenko/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
 )
 
 // Decouple the incoming samples from the MetricSink through a
