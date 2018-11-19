@@ -60,15 +60,17 @@ func do_main() int {
 	printCapabilities := flag.Bool("capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
 	useNewScript := flag.Bool("new", false, "Use the new script parser for processing the input script.")
 	scriptFile := ""
+	var pluginPaths golib.StringSlice
+	flag.Var(&pluginPaths, "p", "Plugins to load for additional functionality")
 	flag.StringVar(&scriptFile, fileFlag, "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
-
 	registry := reg.NewProcessorRegistry()
-	plugin.RegisterPluginDataSource(&registry.Endpoints)
 	register_analyses(registry)
 	bitflow.RegisterGolibFlags()
 	registry.Endpoints.RegisterFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
+	golib.Checkerr(load_plugins(registry, pluginPaths))
+
 	if *printCapabilities {
 		registry.PrintJsonCapabilities(os.Stdout)
 		return 0
@@ -140,6 +142,15 @@ func make_pipeline_old(registry reg.ProcessorRegistry, scriptStr string) (*pipel
 func make_pipeline_new(registry reg.ProcessorRegistry, scriptStr string) (*pipeline.SamplePipeline, error) {
 	s, err := script.NewAntlrBitflowParser(registry).ParseScript(scriptStr)
 	return s, err.NilOrError()
+}
+
+func load_plugins(registry reg.ProcessorRegistry, pluginPaths []string) error {
+	for _, path := range pluginPaths {
+		if err := plugin.LoadPlugin(registry, path); err != nil {
+			return fmt.Errorf("Failed to load plugin %v: %v", path, err)
+		}
+	}
+	return nil
 }
 
 func register_analyses(b reg.ProcessorRegistry) {
