@@ -59,7 +59,7 @@ type PlotProcessor struct {
 	ColorTag        string
 	SeparatePlots   bool // If true, every ColorTag value will create a new plot
 
-	// If not nil, will override the automatially suggested bounds for the respective axis
+	// If not nil, will override the automatically suggested bounds for the respective axis
 	ForceXmin *float64
 	ForceXmax *float64
 	ForceYmin *float64

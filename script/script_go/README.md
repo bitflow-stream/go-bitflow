@@ -88,9 +88,9 @@ The kind of source is detected automatically from the string:
 - A single hyphen `-` is interpreted as standard input or output.
 - Any other string is interpreted as a file for writing or reading.
 
-If the automatic data store type is not desired, it can be explicitely specified with a URL-like notation:
+If the automatic data store type is not desired, it can be explicitly specified with a URL-like notation:
 * `tcp://xxx` will interpret the rest of the string as a TCP endpoint to actively connect to (can also be a single port without hostname, in which case it will connect to localhost)
-* `listen://xxx` will interpret the string as a local TCP endpoint to listen on (can include an IP address or hostname for unambiguation)
+* `listen://xxx` will interpret the string as a local TCP endpoint to listen on (can include an IP address or hostname for disambiguation)
 * `file://xxx` will force read or write to a file
 * `empty://xxx` will produce no input or output, the rest of the string is ignored (useful in rare cases)
 * `std://-` will read or write from standard input or output, only valid with the `-` string

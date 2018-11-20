@@ -34,7 +34,7 @@ func (p *PipelineArray) build() []Subpipeline {
 
 type RoundRobinDistributor struct {
 	PipelineArray
-	Weights []int // Optionally define weights for the pielines (same order as pipelines). Only values >= 1 will be counted. Default weight is 1.
+	Weights []int // Optionally define weights for the pipelines (same order as pipelines). Only values >= 1 will be counted. Default weight is 1.
 
 	nextPipe      int
 	weightCounter int

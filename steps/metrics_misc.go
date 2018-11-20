@@ -63,7 +63,7 @@ func RegisterStripMetrics(b reg.ProcessorRegistry) {
 				},
 			})
 		},
-		"Remove all metrics, only keeping the timestamp and the tags of eacy sample")
+		"Remove all metrics, only keeping the timestamp and the tags of each sample")
 }
 
 func RegisterParseTags(b reg.ProcessorRegistry) {

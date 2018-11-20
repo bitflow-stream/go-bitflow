@@ -1,4 +1,4 @@
-package script // Bitflow
+package script
 
 import (
 	"fmt"

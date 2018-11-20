@@ -14,7 +14,7 @@ import (
 )
 
 // TODO result modes: real part OR imaginary part OR both OR magnitude. Also, keep original values or not.
-// TODO parameterize if the absolute value of the result should be used? What else is optional?
+// TODO parametrize if the absolute value of the result should be used? What else is optional?
 // TODO renaming of computed output metrics (prefix/suffix)
 // TODO allow filtering the metrics that get computed
 // TODO inverse FFT (for different input data modes)
@@ -27,8 +27,8 @@ var (
 	fftCache     = make(map[int]*fft.FFT)
 	fftCacheLock sync.Mutex
 
-	warnedRadixResizes = make(map[int]bool)
-	warningLock        sync.Mutex
+	warnedResizedRadixes = make(map[int]bool)
+	warningLock          sync.Mutex
 )
 
 func RegisterFFT(b reg.ProcessorRegistry) {
@@ -64,7 +64,7 @@ type BatchFft struct {
 	// If this is <= 0, the sampling frequency will be computed automatically from the timestamps of the first and last input sample, and the total number of samples.
 	SamplingFrequency float64
 
-	// FatalErrors can be set to true to return errors that occurr when processing a batch.
+	// FatalErrors can be set to true to return errors that occur when processing a batch.
 	// Otherwise, the error will be printed as a warning and an empty result batch will be produced.
 	FatalErrors bool
 }
@@ -87,9 +87,9 @@ func getFft(num int) (*fft.FFT, error) {
 func warnFftRadixResize(oldSize, newSize int) {
 	warningLock.Lock()
 	defer warningLock.Unlock()
-	if !warnedRadixResizes[oldSize] {
+	if !warnedResizedRadixes[oldSize] {
 		log.Warnf("Radix-2 FFT computation changes number of processed samples from %v to %v", oldSize, newSize)
-		warnedRadixResizes[oldSize] = true
+		warnedResizedRadixes[oldSize] = true
 	}
 }
 

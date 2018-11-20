@@ -64,7 +64,7 @@ func RegisterSampleSorter(b reg.ProcessorRegistry) {
 			}
 			p.Batch(&SampleSorter{tags})
 		},
-		"Sort a batch of samples based on the values of the given comma-separated tags. The default criterion is the timestmap",
+		"Sort a batch of samples based on the values of the given comma-separated tags. The default criterion is the timestamp.",
 		reg.OptionalParams("tags"),
 		reg.SupportBatch())
 }

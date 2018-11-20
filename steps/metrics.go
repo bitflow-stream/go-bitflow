@@ -331,7 +331,7 @@ func RegisterVarianceMetricsFilter(b reg.ProcessorRegistry) {
 			}
 			return err
 		},
-		"In a batch of samples, filter out the metrics with a variance lower than the given theshold (based on the weighted stdev of the population, stddev/mean)",
+		"In a batch of samples, filter out the metrics with a variance lower than the given threshold (based on the weighted stddev of the population, stddev/mean)",
 		reg.RequiredParams("min"), reg.SupportBatch())
 }
 

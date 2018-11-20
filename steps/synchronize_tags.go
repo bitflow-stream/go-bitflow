@@ -18,12 +18,12 @@ func RegisterTagSynchronizer(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("synchronize_tags",
 		func(p *pipeline.SamplePipeline, params map[string]string) error {
 			var err error
-			synchro := new(TagSynchronizer)
-			synchro.StreamIdentifierTag = params["identifier"]
-			synchro.ReferenceStream = params["reference"]
-			synchro.NumTargetStreams = reg.IntParam(params, "num", 0, false, &err)
+			synchronizer := new(TagSynchronizer)
+			synchronizer.StreamIdentifierTag = params["identifier"]
+			synchronizer.ReferenceStream = params["reference"]
+			synchronizer.NumTargetStreams = reg.IntParam(params, "num", 0, false, &err)
 			if err == nil {
-				p.Add(synchro)
+				p.Add(synchronizer)
 			}
 			return err
 		},

@@ -152,7 +152,7 @@ func (s *sinkMultiplexer) Sample(sample *bitflow.Sample, header *bitflow.Header)
 	case 1:
 		return s.sinks[0].Sample(sample, header)
 	default:
-		// The samples are not forwarded in parallel. Parllelism between pipelines can be achieved by decoupling steps on each subpipeline.
+		// The samples are not forwarded in parallel. Parallelism between pipelines can be achieved by decoupling steps on each subpipeline.
 		var errors golib.MultiError
 		for _, sink := range s.sinks {
 			// The DeepClone() is necessary since the forks might change the sample

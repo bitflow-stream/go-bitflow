@@ -80,8 +80,8 @@ func (brute *LinearRegressionBruteForce) ProcessBatch(header *bitflow.Header, sa
 	close(brute.resultChan)
 	resultWg.Wait()
 
-	for _, reg := range brute.results {
-		log.Printf("MSE %g: %v", reg.MSE, reg.FormulaString())
+	for _, regression := range brute.results {
+		log.Printf("MSE %g: %v", regression.MSE, regression.FormulaString())
 	}
 	log.Println("Computed", brute.numCombinations, "regressions,", brute.invalidRegressions, "ignored,", len(brute.results), "valid")
 
@@ -104,22 +104,22 @@ func (brute *LinearRegressionBruteForce) generateVarCombinations(wg *sync.WaitGr
 func (brute *LinearRegressionBruteForce) computeRegressions(wg *sync.WaitGroup, varChan <-chan []int, header *bitflow.Header, samples []*bitflow.Sample) {
 	defer wg.Done()
 	for vars := range varChan {
-		var reg LinearRegression
-		reg.Header = header
-		reg.Vars = vars
-		if err := reg.Fit(samples); err != nil {
+		var regression LinearRegression
+		regression.Header = header
+		regression.Vars = vars
+		if err := regression.Fit(samples); err != nil {
 			log.Warnf("Failed to fit regression (%v): %v\n", vars, err)
 			continue
 		}
-		if !reg.IsValid() {
+		if !regression.IsValid() {
 			atomic.AddUint64(&brute.invalidRegressions, 1)
 			continue
 		}
-		if mse, err := reg.MeanSquaredError(reg.TrainData); err != nil {
-			log.Warnf("Failed to evaluate trained regression (%v, %v): %v\n", vars, reg.FormulaString(), err)
+		if mse, err := regression.MeanSquaredError(regression.TrainData); err != nil {
+			log.Warnf("Failed to evaluate trained regression (%v, %v): %v\n", vars, regression.FormulaString(), err)
 			continue
 		} else {
-			brute.resultChan <- EvaluatedLinearRegression{reg, mse}
+			brute.resultChan <- EvaluatedLinearRegression{regression, mse}
 		}
 	}
 }
@@ -149,7 +149,7 @@ func (slice SortedRegressions) Swap(i, j int) {
 
 func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearRegression, error) {
 	fieldNumbers := make([]int, len(fieldNames))
-	var reg LinearRegression
+	var regression LinearRegression
 	for i, searching := range fieldNames {
 		found := false
 		for j, field := range header.Fields {
@@ -159,12 +159,12 @@ func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearReg
 			}
 		}
 		if !found {
-			return reg, fmt.Errorf("Could not find header field '%v'", searching)
+			return regression, fmt.Errorf("Could not find header field '%v'", searching)
 		}
 	}
-	reg.Header = header
-	reg.Vars = fieldNumbers
-	return reg, nil
+	regression.Header = header
+	regression.Vars = fieldNumbers
+	return regression, nil
 }
 
 func RegisterLinearRegression(b reg.ProcessorRegistry) {
