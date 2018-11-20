@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"plugin"
 
-	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -15,26 +15,26 @@ type BitflowPlugin interface {
 	Name() string
 }
 
-func LoadPlugin(registry reg.ProcessorRegistry, path string) error {
+func LoadPlugin(registry reg.ProcessorRegistry, path string) (string, error) {
 	return LoadPluginSymbol(registry, path, BitflowPluginSymbol)
 }
 
-func LoadPluginSymbol(registry reg.ProcessorRegistry, path string, symbol string) error {
+func LoadPluginSymbol(registry reg.ProcessorRegistry, path string, symbol string) (string, error) {
 	log.Debugln("Loading plugin", path)
 	openedPlugin, err := plugin.Open(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	symbolObject, err := openedPlugin.Lookup(symbol)
 	if err != nil {
-		return err
+		return "", err
 	}
 	sourcePlugin, ok := symbolObject.(*BitflowPlugin)
 	if !ok || sourcePlugin == nil {
-		return fmt.Errorf("Symbol '%v' from plugin '%v' has type %T instead of plugin.BitflowPlugin",
+		return "", fmt.Errorf("Symbol '%v' from plugin '%v' has type %T instead of plugin.BitflowPlugin",
 			symbol, path, symbolObject)
 	}
 	p := *sourcePlugin
 	log.Debugf("Initializing plugin '%v' loaded from symbol '%v' in %v...", p.Name(), symbol, path)
-	return p.Init(registry)
+	return p.Name(), p.Init(registry)
 }

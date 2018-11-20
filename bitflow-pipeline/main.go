@@ -12,18 +12,11 @@ import (
 	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow"
 	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
-	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/script"
-	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/script_go"
-	"github.com/bitflow-stream/go-bitflow-pipeline/clustering/dbscan"
-	"github.com/bitflow-stream/go-bitflow-pipeline/clustering/denstream"
-	"github.com/bitflow-stream/go-bitflow-pipeline/evaluation"
-	"github.com/bitflow-stream/go-bitflow-pipeline/http"
-	"github.com/bitflow-stream/go-bitflow-pipeline/http_tags"
 	"github.com/bitflow-stream/go-bitflow-pipeline/plugin"
-	"github.com/bitflow-stream/go-bitflow-pipeline/recovery"
-	"github.com/bitflow-stream/go-bitflow-pipeline/regression"
-	"github.com/bitflow-stream/go-bitflow-pipeline/steps"
+	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow-pipeline/script/script"
+	"github.com/bitflow-stream/go-bitflow-pipeline/script/script_go"
+	defaultPlugin "github.com/bitflow-stream/go-bitflow-pipeline/steps/bitflow-plugin-default-steps"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -64,7 +57,6 @@ func do_main() int {
 	flag.Var(&pluginPaths, "p", "Plugins to load for additional functionality")
 	flag.StringVar(&scriptFile, fileFlag, "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 	registry := reg.NewProcessorRegistry()
-	register_analyses(registry)
 	bitflow.RegisterGolibFlags()
 	registry.Endpoints.RegisterFlags()
 	flag.Parse()
@@ -145,107 +137,16 @@ func make_pipeline_new(registry reg.ProcessorRegistry, scriptStr string) (*pipel
 }
 
 func load_plugins(registry reg.ProcessorRegistry, pluginPaths []string) error {
+	loadedNames := make(map[string]bool)
 	for _, path := range pluginPaths {
-		if err := plugin.LoadPlugin(registry, path); err != nil {
+		if name, err := plugin.LoadPlugin(registry, path); err != nil {
 			return fmt.Errorf("Failed to load plugin %v: %v", path, err)
+		} else {
+			loadedNames[name] = true
 		}
 	}
-	return nil
-}
 
-func register_analyses(b reg.ProcessorRegistry) {
-
-	// Control flow
-	steps.RegisterNoop(b)
-	steps.RegisterDrop(b)
-	steps.RegisterSleep(b)
-	steps.RegisterForks(b)
-	steps.RegisterExpression(b)
-	steps.RegisterSubprocessRunner(b)
-	steps.RegisterMergeHeaders(b)
-	steps.RegisterGenericBatch(b)
-	steps.RegisterDecouple(b)
-	steps.RegisterDropErrorsStep(b)
-	steps.RegisterResendStep(b)
-	steps.RegisterFillUpStep(b)
-	steps.RegisterPipelineRateSynchronizer(b)
-	steps.RegisterSubpipelineStreamMerger(b)
-	blockMgr := steps.NewBlockManager()
-	blockMgr.RegisterBlockingProcessor(b)
-	blockMgr.RegisterReleasingProcessor(b)
-	steps.RegisterTagSynchronizer(b)
-
-	// Data output
-	steps.RegisterOutputFiles(b)
-	steps.RegisterGraphiteOutput(b)
-	steps.RegisterOpentsdbOutput(b)
-
-	// Logging, output metadata
-	steps.RegisterStoreStats(b)
-	steps.RegisterLoggingSteps(b)
-
-	// Visualization
-	plotHttp.RegisterHttpPlotter(b)
-	steps.RegisterPlot(b)
-
-	// Basic Math
-	steps.RegisterFFT(b)
-	steps.RegisterRMS(b)
-	regression.RegisterLinearRegression(b)
-	regression.RegisterLinearRegressionBruteForce(b)
-	steps.RegisterPCA(b)
-	steps.RegisterPCAStore(b)
-	steps.RegisterPCALoad(b)
-	steps.RegisterPCALoadStream(b)
-	steps.RegisterMinMaxScaling(b)
-	steps.RegisterStandardizationScaling(b)
-	steps.RegisterAggregateAvg(b)
-	steps.RegisterAggregateSlope(b)
-
-	// Clustering & Evaluation
-	dbscan.RegisterDbscan(b)
-	dbscan.RegisterDbscanParallel(b)
-	denstream.RegisterDenstream(b)
-	denstream.RegisterDenstreamLinear(b)
-	denstream.RegisterDenstreamBirch(b)
-	evaluation.RegisterAnomalyClusterTagger(b)
-	evaluation.RegisterCitTagsPreprocessor(b)
-	evaluation.RegisterAnomalySmoothing(b)
-	evaluation.RegisterEventEvaluation(b)
-	evaluation.RegisterBinaryEvaluation(b)
-
-	// Filter samples
-	steps.RegisterFilterExpression(b)
-	steps.RegisterPickPercent(b)
-	steps.RegisterPickHead(b)
-	steps.RegisterSkipHead(b)
-	steps.RegisterConvexHull(b)
-	steps.RegisterDuplicateTimestampFilter(b)
-
-	// Reorder samples
-	steps.RegisterConvexHullSort(b)
-	steps.RegisterSampleShuffler(b)
-	steps.RegisterSampleSorter(b)
-
-	// Metadata
-	steps.RegisterSetCurrentTime(b)
-	steps.RegisterTaggingProcessor(b)
-	http_tags.RegisterHttpTagger(b)
-	steps.RegisterTargetTagSplitter(b)
-	steps.RegisterPauseTagger(b)
-
-	// Add/Remove/Rename/Reorder generic metrics
-	steps.RegisterParseTags(b)
-	steps.RegisterStripMetrics(b)
-	steps.RegisterMetricMapper(b)
-	steps.RegisterMetricRenamer(b)
-	steps.RegisterIncludeMetricsFilter(b)
-	steps.RegisterExcludeMetricsFilter(b)
-	steps.RegisterVarianceMetricsFilter(b)
-
-	// Special
-	steps.RegisterSphere(b)
-	steps.RegisterAppendTimeDifference(b)
-	recovery.RegisterRecoveryEngine(b)
-	recovery.RegisterEventSimilarityEvaluation(b)
+	// Load the default pipeline steps
+	// TODO add a plugin discovery mechanism
+	return defaultPlugin.Plugin.Init(registry)
 }

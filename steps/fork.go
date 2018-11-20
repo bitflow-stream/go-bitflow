@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
+	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
 )
 
 // This function is placed in this package to avoid circular dependency between the fork and the query package.

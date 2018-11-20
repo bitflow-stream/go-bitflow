@@ -6,8 +6,8 @@ import (
 
 	"github.com/bitflow-stream/go-bitflow"
 	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
+	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
 )
 
 func RegisterOutputFiles(b reg.ProcessorRegistry) {

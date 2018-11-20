@@ -5,8 +5,8 @@ import (
 
 	"github.com/bitflow-stream/go-bitflow"
 	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
 	"github.com/bitflow-stream/go-bitflow-pipeline/plugin"
+	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 

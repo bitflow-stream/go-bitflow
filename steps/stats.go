@@ -1,14 +1,13 @@
 package steps
 
 import (
-	"math"
 	"sort"
 	"strconv"
 
-	"github.com/antongulenko/go-onlinestats"
 	"github.com/bitflow-stream/go-bitflow"
 	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow-pipeline/steps/math"
 	"github.com/go-ini/ini"
 	log "github.com/sirupsen/logrus"
 )
@@ -17,13 +16,13 @@ type StoreStats struct {
 	bitflow.NoopProcessor
 	TargetFile string
 
-	stats map[string]*FeatureStats
+	stats map[string]*math.FeatureStats
 }
 
 func NewStoreStats(targetFile string) *StoreStats {
 	return &StoreStats{
 		TargetFile: targetFile,
-		stats:      make(map[string]*FeatureStats),
+		stats:      make(map[string]*math.FeatureStats),
 	}
 }
 
@@ -34,41 +33,12 @@ func RegisterStoreStats(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("stats", create, "Output statistics about processed samples to a given ini-file", reg.RequiredParams("file"))
 }
 
-type FeatureStats struct {
-	onlinestats.Running
-	Min float64
-	Max float64
-}
-
-func NewFeatureStats() *FeatureStats {
-	return &FeatureStats{
-		Min: math.MaxFloat64,
-		Max: -math.MaxFloat64,
-	}
-}
-
-func (stats *FeatureStats) Push(values ...float64) {
-	for _, value := range values {
-		stats.Running.Push(value)
-		stats.Min = math.Min(stats.Min, value)
-		stats.Max = math.Max(stats.Max, value)
-	}
-}
-
-func (stats *FeatureStats) ScaleMinMax(val float64, outputMin, outputMax float64) float64 {
-	return ScaleMinMax(val, stats.Min, stats.Max, outputMin, outputMax)
-}
-
-func (stats *FeatureStats) ScaleStddev(val float64) float64 {
-	return ScaleStddev(val, stats.Mean(), stats.Stddev(), stats.Min, stats.Max)
-}
-
 func (stats *StoreStats) Sample(inSample *bitflow.Sample, header *bitflow.Header) error {
 	for index, field := range header.Fields {
 		val := inSample.Values[index]
 		feature, ok := stats.stats[field]
 		if !ok {
-			feature = NewFeatureStats()
+			feature = math.NewFeatureStats()
 			stats.stats[field] = feature
 		}
 		feature.Push(float64(val))

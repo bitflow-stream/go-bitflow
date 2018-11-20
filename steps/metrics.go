@@ -11,7 +11,7 @@ import (
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/bitflow-stream/go-bitflow"
 	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 

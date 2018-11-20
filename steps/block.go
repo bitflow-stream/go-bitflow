@@ -6,7 +6,7 @@ import (
 	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow"
 	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/bitflow-script/reg"
+	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
 )
 
 type BlockingProcessor struct {
