@@ -45,7 +45,7 @@ func (p *MockSampleProcessor) ParseParams(paramsIn map[string]string) error {
 	var err error
 	if intervalStr, ok := params["print"]; err == nil && ok {
 		p.PrintModulo, err = strconv.Atoi(intervalStr)
-		delete(params, "interval")
+		delete(params, "print")
 	}
 	if errorStr, ok := params["error"]; err == nil && ok {
 		p.ErrorAfter, err = strconv.Atoi(errorStr)

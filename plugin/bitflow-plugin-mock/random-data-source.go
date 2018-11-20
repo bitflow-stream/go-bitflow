@@ -48,7 +48,7 @@ func (p *RandomSampleGenerator) generate(stopper golib.StopChan) error {
 		return golib.StopLoopTask
 	}
 	if p.samplesGenerated >= p.ErrorAfter {
-		return fmt.Errorf("Automatic error after %v samples", p.samplesGenerated)
+		return fmt.Errorf("Mock data source: Automatic error after %v samples", p.samplesGenerated)
 	}
 
 	header := bitflow.Header{
