@@ -85,10 +85,10 @@ type UnmarshalledHeader struct {
 	HasTags bool
 }
 
-func readUntil(reader *bufio.Reader, delim byte) (data []byte, err error) {
-	data, err = reader.ReadBytes(delim)
+func readUntil(reader *bufio.Reader, delimiter byte) (data []byte, err error) {
+	data, err = reader.ReadBytes(delimiter)
 	if err == io.EOF {
-		if len(data) > 0 && data[len(data)-1] != delim {
+		if len(data) > 0 && data[len(data)-1] != delimiter {
 			err = io.ErrUnexpectedEOF
 		}
 	} else if len(data) == 0 && err != nil {

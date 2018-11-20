@@ -471,15 +471,15 @@ func (suite *PipelineTestSuite) Test_custom_endpoints() {
 	suite.NoError(err)
 	suite.Equal(res, testSink)
 
-	injectedError = errors.New("TESTERROR")
+	injectedError = errors.New("TEST-ERROR")
 
 	expectedTarget = "xxx"
 	res, err = factory.CreateInput("testendpoint://xxx")
-	suite.EqualError(err, "Error creating 'testendpoint' input: TESTERROR")
+	suite.EqualError(err, "Error creating 'testendpoint' input: TEST-ERROR")
 	suite.Equal(res, nil)
 
 	expectedTarget = "yyy"
 	res, err = factory.CreateOutput("testendpoint://yyy")
-	suite.EqualError(err, "Error creating 'testendpoint' output: TESTERROR")
+	suite.EqualError(err, "Error creating 'testendpoint' output: TEST-ERROR")
 	suite.Equal(res, nil)
 }

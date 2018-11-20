@@ -20,8 +20,9 @@ var parallel_handler = ParallelSampleHandler{
 
 var debug_tests = false
 
+//noinspection GoBoolExpressions
 func init() {
-	//debug_tests = true
+	// debug_tests = true
 	if debug_tests {
 		golib.LogVerbose = true
 	} else {

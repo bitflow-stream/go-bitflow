@@ -51,7 +51,7 @@ func (s *AbstractSampleSource) CloseSink() {
 
 // CloseSinkParallel closes the subsequent SampleProcessor in a concurrent goroutine, which is registered
 // in the WaitGroup. This can be useful compared to CloseSink() in certain cases
-// to avoid deadlocks due to long-running Close() invokations. As a general rule of thumb,
+// to avoid deadlocks due to long-running Close() invocations. As a general rule of thumb,
 // Implementations of SampleSource should use CloseSinkParallel(), while SampleProcessors should simply use CloseSink().
 func (s *AbstractSampleSource) CloseSinkParallel(wg *sync.WaitGroup) {
 	if s.out != nil {

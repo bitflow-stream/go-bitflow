@@ -15,7 +15,7 @@ import (
 // the SampleProcessor implementation must take care to adjust the outgoing
 // Samples accordingly. All required goroutines must be started in Start()
 // and stopped when Close() is called. When Start() is called, it can be assumed that SetSink()
-// has already been called to configure a non-nil seubsequent SampleProcessor.
+// has already been called to configure a non-nil subsequent SampleProcessor.
 // As a special case, some SampleProcessor implementations output samples to external sinks
 // like files or network connections. In this case, the incoming samples should usually be
 // forwarded to the subsequent SampleProcessor without changes.
@@ -42,8 +42,8 @@ type AbstractSampleOutput struct {
 	DontForwardSamples bool
 
 	// DropOutputErrors can be set to true to make this AbstractSampleOutput ignore
-	// errors that occured from outputting samples to byte streams like files or network Connections.
-	// In that case, such errors will be logged and the samples will be forwarded to seubsequent
+	// errors that occurred from outputting samples to byte streams like files or network Connections.
+	// In that case, such errors will be logged and the samples will be forwarded to subsequent
 	// processing steps.
 	DropOutputErrors bool
 }
