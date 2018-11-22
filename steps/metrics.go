@@ -9,9 +9,8 @@ import (
 	"strings"
 
 	"github.com/antongulenko/go-onlinestats"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -117,7 +116,7 @@ func NewMetricFilter() *MetricFilter {
 
 func RegisterIncludeMetricsFilter(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("include",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			filter, err := NewMetricFilter().IncludeRegex(params["m"])
 			if err == nil {
 				p.Add(filter)
@@ -129,7 +128,7 @@ func RegisterIncludeMetricsFilter(b reg.ProcessorRegistry) {
 
 func RegisterExcludeMetricsFilter(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("exclude",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			filter, err := NewMetricFilter().ExcludeRegex(params["m"])
 			if err == nil {
 				p.Add(filter)
@@ -229,7 +228,7 @@ func NewMetricMapper(metrics []string) *MetricMapper {
 
 func RegisterMetricMapper(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("remap",
-		func(p *pipeline.SamplePipeline, params map[string]string) {
+		func(p *bitflow.SamplePipeline, params map[string]string) {
 			metrics := strings.Split(params["header"], ",")
 			p.Add(NewMetricMapper(metrics))
 		},
@@ -294,7 +293,7 @@ func (mapper *AbstractBatchMetricMapper) String() string {
 
 func NewMetricVarianceFilter(minimumWeightedStddev float64) *AbstractBatchMetricMapper {
 	return &AbstractBatchMetricMapper{
-		Description: pipeline.String(fmt.Sprintf("Metric Variance Filter (%.2f%%)", minimumWeightedStddev*100)),
+		Description: bitflow.String(fmt.Sprintf("Metric Variance Filter (%.2f%%)", minimumWeightedStddev*100)),
 		ConstructIndices: func(header *bitflow.Header, samples []*bitflow.Sample) ([]int, []string) {
 			numFields := len(header.Fields)
 			variances := make([]onlinestats.Running, numFields)
@@ -322,7 +321,7 @@ func NewMetricVarianceFilter(minimumWeightedStddev float64) *AbstractBatchMetric
 
 func RegisterVarianceMetricsFilter(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("filter_variance",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			variance, err := strconv.ParseFloat(params["min"], 64)
 			if err != nil {
 				err = reg.ParameterError("min", err)
@@ -356,7 +355,7 @@ func NewMetricRenamer(regexes []*regexp.Regexp, replacements []string) *MetricRe
 
 func RegisterMetricRenamer(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("rename",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			if len(params) == 0 {
 				return errors.New("Need at least one regex=replacement parameter")
 			}

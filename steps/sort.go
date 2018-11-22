@@ -4,9 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -57,7 +56,7 @@ func (sorter *SampleSorter) String() string {
 
 func RegisterSampleSorter(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("sort",
-		func(p *pipeline.SamplePipeline, params map[string]string) {
+		func(p *bitflow.SamplePipeline, params map[string]string) {
 			var tags []string
 			if tags_param, ok := params["tags"]; ok {
 				tags = strings.Split(tags_param, ",")

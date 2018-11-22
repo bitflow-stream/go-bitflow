@@ -4,9 +4,8 @@ import (
 	"fmt"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 type BlockingProcessor struct {
@@ -98,7 +97,7 @@ func (m *BlockManager) NewReleaser(key string) *ReleasingProcessor {
 }
 
 func (m *BlockManager) RegisterBlockingProcessor(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("block", func(p *pipeline.SamplePipeline, params map[string]string) error {
+	b.RegisterAnalysisParamsErr("block", func(p *bitflow.SamplePipeline, params map[string]string) error {
 		if err := AddDecoupleStep(p, params); err != nil {
 			return err
 		}
@@ -108,7 +107,7 @@ func (m *BlockManager) RegisterBlockingProcessor(b reg.ProcessorRegistry) {
 }
 
 func (m *BlockManager) RegisterReleasingProcessor(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParams("releaseOnClose", func(p *pipeline.SamplePipeline, params map[string]string) {
+	b.RegisterAnalysisParams("releaseOnClose", func(p *bitflow.SamplePipeline, params map[string]string) {
 		p.Add(m.NewReleaser(params["key"]))
 	}, "When this step is closed, release all instances of block() with the same key value", reg.OptionalParams("key"))
 }

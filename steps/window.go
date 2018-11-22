@@ -1,6 +1,6 @@
 package steps
 
-import "github.com/bitflow-stream/go-bitflow"
+import "github.com/bitflow-stream/go-bitflow/bitflow"
 
 type MetricWindow struct {
 	data  []bitflow.Value

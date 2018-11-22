@@ -6,9 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 func RegisterGraphiteOutput(b reg.ProcessorRegistry) {
@@ -68,7 +67,7 @@ type SimpleTextMarshallerFactory struct {
 	WriteValue  func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error
 }
 
-func (f *SimpleTextMarshallerFactory) createTcpOutput(p *pipeline.SamplePipeline, params map[string]string) error {
+func (f *SimpleTextMarshallerFactory) createTcpOutput(p *bitflow.SamplePipeline, params map[string]string) error {
 	target, hasTarget := params["target"]
 	if !hasTarget {
 		return reg.ParameterError("target", fmt.Errorf("Missing required parameter"))
@@ -126,7 +125,7 @@ func (o *SimpleTextMarshaller) WriteHeader(header *bitflow.Header, hasTags bool,
 func (o *SimpleTextMarshaller) WriteSample(sample *bitflow.Sample, header *bitflow.Header, hasTags bool, writer io.Writer) error {
 	prefix := o.MetricPrefix
 	if prefix != "" {
-		prefix = pipeline.ResolveTagTemplate(prefix, "_", sample)
+		prefix = bitflow.ResolveTagTemplate(prefix, "_", sample)
 	}
 
 	for i, value := range sample.Values {

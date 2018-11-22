@@ -9,9 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 func RegisterLoggingSteps(b reg.ProcessorRegistry) {
@@ -24,10 +23,10 @@ func RegisterLoggingSteps(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
 }
 
-func print_header(p *pipeline.SamplePipeline) {
+func print_header(p *bitflow.SamplePipeline) {
 	var checker bitflow.HeaderChecker
 	numSamples := 0
-	p.Add(&pipeline.SimpleProcessor{
+	p.Add(&bitflow.SimpleProcessor{
 		Description: "header printer",
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 			if checker.HeaderChanged(header) {
@@ -117,21 +116,21 @@ func (printer *UniqueTagPrinter) String() string {
 	return res + " unique values of tag '" + printer.Tag + "'"
 }
 
-func print_tags(p *pipeline.SamplePipeline, params map[string]string) {
+func print_tags(p *bitflow.SamplePipeline, params map[string]string) {
 	p.Add(NewUniqueTagPrinter(params["tag"]))
 }
 
-func count_tags(p *pipeline.SamplePipeline, params map[string]string) {
+func count_tags(p *bitflow.SamplePipeline, params map[string]string) {
 	p.Add(NewUniqueTagCounter(params["tag"]))
 }
 
-func print_time_range(p *pipeline.SamplePipeline) {
+func print_time_range(p *bitflow.SamplePipeline) {
 	var (
 		from  time.Time
 		to    time.Time
 		count int
 	)
-	p.Add(&pipeline.SimpleProcessor{
+	p.Add(&bitflow.SimpleProcessor{
 		Description: "Print time range",
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 			count++
@@ -155,7 +154,7 @@ func print_time_range(p *pipeline.SamplePipeline) {
 	})
 }
 
-func print_timeline(p *pipeline.SamplePipeline, params map[string]string) error {
+func print_timeline(p *bitflow.SamplePipeline, params map[string]string) error {
 	numBuckets := uint64(10)
 	if bucketsStr, hasBuckets := params["buckets"]; hasBuckets {
 		var err error
@@ -169,7 +168,7 @@ func print_timeline(p *pipeline.SamplePipeline, params map[string]string) error 
 	}
 
 	var times []time.Time
-	p.Add(&pipeline.SimpleProcessor{
+	p.Add(&bitflow.SimpleProcessor{
 		Description: fmt.Sprintf("Print timeline (len %v)", numBuckets),
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 			times = append(times, sample.Time)
@@ -229,20 +228,20 @@ func print_timeline(p *pipeline.SamplePipeline, params map[string]string) error 
 	return nil
 }
 
-func count_invalid(p *pipeline.SamplePipeline) {
+func count_invalid(p *bitflow.SamplePipeline) {
 	var (
 		invalidSamples int
 		totalSamples   int
 		invalidValues  int
 		totalValues    int
 	)
-	p.Add(&pipeline.SimpleProcessor{
+	p.Add(&bitflow.SimpleProcessor{
 		Description: "Invalid values counter",
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 			sampleValid := true
 			for _, val := range sample.Values {
 				totalValues += 1
-				if !pipeline.IsValidNumber(float64(val)) {
+				if !IsValidNumber(float64(val)) {
 					invalidValues += 1
 					sampleValid = false
 				}
@@ -260,13 +259,13 @@ func count_invalid(p *pipeline.SamplePipeline) {
 	})
 }
 
-func print_common_metrics(p *pipeline.SamplePipeline) {
+func print_common_metrics(p *bitflow.SamplePipeline) {
 	var (
 		checker bitflow.HeaderChecker
 		common  map[string]bool
 		num     int
 	)
-	p.Add(&pipeline.SimpleProcessor{
+	p.Add(&bitflow.SimpleProcessor{
 		Description: "Common metrics printer",
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 			if checker.HeaderChanged(header) {

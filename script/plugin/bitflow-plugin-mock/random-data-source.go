@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
 
 type RandomSampleGenerator struct {

@@ -9,9 +9,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
+	"github.com/bitflow-stream/go-bitflow/steps"
 	log "github.com/sirupsen/logrus"
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat"
@@ -113,8 +113,10 @@ func (model *PCAModel) Load(filename string) (err error) {
 	if err != nil {
 		return err
 	}
-	defer file.Close() // Drop error
-	return gob.NewDecoder(file).Decode(model)
+	if err := gob.NewDecoder(file).Decode(model); err != nil {
+		return err
+	}
+	return file.Close()
 }
 
 func (model *PCAModel) Project(numComponents int) *PCAProjection {
@@ -163,18 +165,18 @@ func (model *PCAProjection) Vector(vec []float64) []float64 {
 }
 
 func (model *PCAProjection) Sample(sample *bitflow.Sample) (result *bitflow.Sample) {
-	values := model.Vector(pipeline.SampleToVector(sample))
+	values := model.Vector(steps.SampleToVector(sample))
 	result = new(bitflow.Sample)
-	pipeline.FillSample(result, values)
+	steps.FillSample(result, values)
 	result.CopyMetadataFrom(sample)
 	return
 }
 
-func StorePCAModel(filename string) pipeline.BatchProcessingStep {
+func StorePCAModel(filename string) bitflow.BatchProcessingStep {
 	var counter int
 	group := bitflow.NewFileGroup(filename)
 
-	return &pipeline.SimpleBatchProcessingStep{
+	return &bitflow.SimpleBatchProcessingStep{
 		Description: fmt.Sprintf("Compute & store PCA model to %v", filename),
 		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 			var model PCAModel
@@ -183,9 +185,11 @@ func StorePCAModel(filename string) pipeline.BatchProcessingStep {
 				var file *os.File
 				file, err = group.OpenNewFile(&counter)
 				if err == nil {
-					defer file.Close() // Drop error
 					log.Println("Storing PCA model to", file.Name())
 					err = model.WriteModel(file)
+					if err == nil {
+						err = file.Close()
+					}
 				}
 			}
 			return header, samples, err
@@ -193,13 +197,13 @@ func StorePCAModel(filename string) pipeline.BatchProcessingStep {
 	}
 }
 
-func LoadBatchPCAModel(filename string, containedVariance float64) (pipeline.BatchProcessingStep, error) {
+func LoadBatchPCAModel(filename string, containedVariance float64) (bitflow.BatchProcessingStep, error) {
 	var model PCAModel
 	if err := model.Load(filename); err != nil {
 		return nil, err
 	}
 
-	return &pipeline.SimpleBatchProcessingStep{
+	return &bitflow.SimpleBatchProcessingStep{
 		Description: fmt.Sprintf("Project PCA (model loaded from %v)", filename),
 		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 			projection, header, err := model.ProjectHeader(containedVariance, header)
@@ -210,7 +214,7 @@ func LoadBatchPCAModel(filename string, containedVariance float64) (pipeline.Bat
 			// Convert sample slice to matrix, do the projection, then fill the new values back into the same sample slice
 			// Should minimize allocations, since the value slices have the same length before and after projection
 			matrix := projection.Matrix(SamplesToMatrix(samples))
-			pipeline.FillSamplesFromMatrix(samples, matrix)
+			steps.FillSamplesFromMatrix(samples, matrix)
 			return header, samples, nil
 		},
 	}, nil
@@ -227,7 +231,7 @@ func LoadStreamingPCAModel(filename string, containedVariance float64) (bitflow.
 		return nil, err
 	}
 
-	return &pipeline.SimpleProcessor{
+	return &bitflow.SimpleProcessor{
 		Description: fmt.Sprintf("Streaming-project PCA (model loaded from %v)", filename),
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 			var err error
@@ -245,8 +249,8 @@ func LoadStreamingPCAModel(filename string, containedVariance float64) (bitflow.
 	}, nil
 }
 
-func ComputeAndProjectPCA(containedVariance float64) pipeline.BatchProcessingStep {
-	return &pipeline.SimpleBatchProcessingStep{
+func ComputeAndProjectPCA(containedVariance float64) bitflow.BatchProcessingStep {
+	return &bitflow.SimpleBatchProcessingStep{
 		Description: fmt.Sprintf("Compute & project PCA (%v variance)", containedVariance),
 		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 			var model PCAModel
@@ -261,14 +265,14 @@ func ComputeAndProjectPCA(containedVariance float64) pipeline.BatchProcessingSte
 			// Convert sample slice to matrix, do the projection, then fill the new values back into the same sample slice
 			// Should minimize allocations, since the value slices have the same length before and after projection
 			matrix := projection.Matrix(SamplesToMatrix(samples))
-			pipeline.FillSamplesFromMatrix(samples, matrix)
+			steps.FillSamplesFromMatrix(samples, matrix)
 			return header, samples, nil
 		},
 	}
 }
 
 func RegisterPCA(b reg.ProcessorRegistry) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
 			p.Batch(ComputeAndProjectPCA(variance))
@@ -281,7 +285,7 @@ func RegisterPCA(b reg.ProcessorRegistry) {
 
 func RegisterPCAStore(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("pca_store",
-		func(p *pipeline.SamplePipeline, params map[string]string) {
+		func(p *bitflow.SamplePipeline, params map[string]string) {
 			p.Batch(StorePCAModel(params["file"]))
 		},
 		"Create a PCA model of a batch of samples and store it to the given file",
@@ -289,10 +293,10 @@ func RegisterPCAStore(b reg.ProcessorRegistry) {
 }
 
 func RegisterPCALoad(b reg.ProcessorRegistry) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
-			var step pipeline.BatchProcessingStep
+			var step bitflow.BatchProcessingStep
 			step, err = LoadBatchPCAModel(params["file"], variance)
 			if err == nil {
 				p.Batch(step)
@@ -305,7 +309,7 @@ func RegisterPCALoad(b reg.ProcessorRegistry) {
 }
 
 func RegisterPCALoadStream(b reg.ProcessorRegistry) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
 		variance, err := parse_pca_variance(params)
 		if err == nil {
 			var step bitflow.SampleProcessor

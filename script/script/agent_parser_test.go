@@ -5,10 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
-	"github.com/bitflow-stream/go-bitflow-pipeline/steps"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
+	"github.com/bitflow-stream/go-bitflow/steps"
 	"github.com/bugsnag/bugsnag-go/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -102,31 +101,31 @@ func createTestParser() (BitflowScriptParser, *testOutputCatcher) {
 	out := &testOutputCatcher{}
 	registry := reg.NewProcessorRegistry()
 	registry.RegisterAnalysisParamsErr("normal_transform",
-		func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+		func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "normal_transform")
 			return nil
 		}, "a normal transform")
 
 	registry.RegisterAnalysisParamsErr("error_returning_transform",
-		func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+		func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "error_returning_transform")
 			return errors.Errorf("error_returning_transform")
 		}, "an error returning")
 
 	registry.RegisterAnalysisParamsErr("required_param_transform",
-		func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+		func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "required_param_transform")
 			return nil
 		}, "a transform requiring a parameter", reg.RequiredParams("requiredParam"))
 
 	registry.RegisterAnalysisParamsErr("batch_supporting_transform",
-		func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+		func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "batch_supporting_transform")
 			return nil
 		}, "a batch supporting transform", reg.SupportBatch())
 
 	registry.RegisterAnalysisParamsErr("batch_enforcing_transform",
-		func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+		func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "batch_enforcing_transform")
 			return nil
 		}, "a batch enforcing transform", reg.EnforceBatch())

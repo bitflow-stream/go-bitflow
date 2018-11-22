@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
 
 const MultiplexForkName = "multiplex"

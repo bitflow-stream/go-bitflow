@@ -10,9 +10,8 @@ import (
 	"sync"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	"github.com/lucasb-eyer/go-colorful"
 	log "github.com/sirupsen/logrus"
 	plotLib "gonum.org/v1/plot"
@@ -553,7 +552,7 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		}
 	}
 
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
 		plot := &PlotProcessor{
 			AxisX:      PlotAxisAuto,
 			AxisY:      PlotAxisAuto,

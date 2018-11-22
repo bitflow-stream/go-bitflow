@@ -133,7 +133,7 @@ func (m BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *Unmarshalle
 	case bytes.HasPrefix([]byte(binary_time_col), start):
 		return m.readHeader(reader)
 	case bytes.Equal(start, []byte(binary_sample_start)):
-		reader.Discard(len(start)) // No error
+		_, _ = reader.Discard(len(start)) // No error
 		data, err := m.readSampleData(previousHeader, reader)
 		return nil, data, err
 	default:

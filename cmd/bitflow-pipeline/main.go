@@ -10,13 +10,12 @@ import (
 	"strings"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/plugin"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/script"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/script_go"
-	defaultPlugin "github.com/bitflow-stream/go-bitflow-pipeline/steps/bitflow-plugin-default-steps"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/plugin"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
+	"github.com/bitflow-stream/go-bitflow/script/script"
+	"github.com/bitflow-stream/go-bitflow/script/script_go"
+	defaultPlugin "github.com/bitflow-stream/go-bitflow/steps/bitflow-plugin-default-steps"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -64,7 +63,7 @@ func do_main() int {
 	golib.Checkerr(load_plugins(registry, pluginPaths))
 
 	if *printCapabilities {
-		registry.PrintJsonCapabilities(os.Stdout)
+		golib.Checkerr(registry.PrintJsonCapabilities(os.Stdout))
 		return 0
 	}
 	if *printAnalyses {
@@ -121,7 +120,7 @@ func get_script(parsedArgs []string, scriptFile string) (string, error) {
 	return rawScript, nil
 }
 
-func make_pipeline_old(registry reg.ProcessorRegistry, scriptStr string) (*pipeline.SamplePipeline, error) {
+func make_pipeline_old(registry reg.ProcessorRegistry, scriptStr string) (*bitflow.SamplePipeline, error) {
 	queryBuilder := script_go.PipelineBuilder{registry}
 	parser := script_go.NewParser(bytes.NewReader([]byte(scriptStr)))
 	pipe, err := parser.Parse()
@@ -131,7 +130,7 @@ func make_pipeline_old(registry reg.ProcessorRegistry, scriptStr string) (*pipel
 	return queryBuilder.MakePipeline(pipe)
 }
 
-func make_pipeline_new(registry reg.ProcessorRegistry, scriptStr string) (*pipeline.SamplePipeline, error) {
+func make_pipeline_new(registry reg.ProcessorRegistry, scriptStr string) (*bitflow.SamplePipeline, error) {
 	s, err := script.NewAntlrBitflowParser(registry).ParseScript(scriptStr)
 	return s, err.NilOrError()
 }

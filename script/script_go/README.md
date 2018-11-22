@@ -83,7 +83,7 @@ The four main data stores are files, TCP listen sockets, active TCP connections,
 The kind of source is detected automatically from the string:
 - A *host:port* pair like `192.160.0.55:4444` is interpreted as an active TCP connection, meaning a connection to that endpoint will be established.
   Depending on whether this data store is used as a data source or data sink, the connection will be used to either send or receive data.
-- A separate *:port* like `:5555` is interpreted as a TCP listening socket. A socket will be opened, and waitfor incoming connections.
+- A separate *:port* like `:5555` is interpreted as a TCP listening socket. A socket will be opened, and wait for incoming connections.
   Sockets can also be used to both receive and serve data.
 - A single hyphen `-` is interpreted as standard input or output.
 - Any other string is interpreted as a file for writing or reading.

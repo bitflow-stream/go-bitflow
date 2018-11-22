@@ -77,9 +77,10 @@ func (m TextMarshaller) WriteSample(sample *Sample, header *Header, withTags boo
 	}
 
 	textWidth, columnWidths := m.calculateWidths(lines, writer)
-	m.writeHeader(headerStr, textWidth, writer)
-	m.writeLines(lines, columnWidths, writer)
-	return nil
+	if err := m.writeHeader(headerStr, textWidth, writer); err != nil {
+		return err
+	}
+	return m.writeLines(lines, columnWidths, writer)
 }
 
 func (m TextMarshaller) calculateWidths(lines []string, writer io.Writer) (textWidth int, columnWidths []int) {
@@ -151,7 +152,7 @@ func (m TextMarshaller) variableColumnWidths(strings []string, textWidth int, sp
 	return columns
 }
 
-func (m TextMarshaller) writeHeader(header string, textWidth int, writer io.Writer) {
+func (m TextMarshaller) writeHeader(header string, textWidth int, writer io.Writer) (err error) {
 	extraSpace := textWidth - len(header)
 	if extraSpace >= 4 {
 		lineChars := (extraSpace - 2) / 2
@@ -160,24 +161,32 @@ func (m TextMarshaller) writeHeader(header string, textWidth int, writer io.Writ
 			line[i] = TextMarshallerHeaderChar
 		}
 		lineStr := string(line)
-		fmt.Fprintln(writer, lineStr, header, lineStr)
+		_, err = fmt.Fprintln(writer, lineStr, header, lineStr)
 	} else {
-		fmt.Fprintln(writer, header)
+		_, err = fmt.Fprintln(writer, header)
 	}
+	return
 }
 
-func (m TextMarshaller) writeLines(lines []string, widths []int, writer io.Writer) {
+func (m TextMarshaller) writeLines(lines []string, widths []int, writer io.Writer) error {
 	columns := len(widths)
 	for i, line := range lines {
-		writer.Write([]byte(line))
+		if _, err := writer.Write([]byte(line)); err != nil {
+			return err
+		}
 		col := i % columns
 		if col >= columns-1 || i == len(lines)-1 {
-			writer.Write([]byte("\n"))
+			if _, err := writer.Write([]byte("\n")); err != nil {
+				return err
+			}
 		} else {
 			extraSpace := widths[col] - len(line)
 			for j := 0; j < extraSpace; j++ {
-				writer.Write([]byte(" "))
+				if _, err := writer.Write([]byte(" ")); err != nil {
+					return err
+				}
 			}
 		}
 	}
+	return nil
 }

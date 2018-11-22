@@ -5,13 +5,12 @@ import (
 	"sync"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 	log "github.com/sirupsen/logrus"
 )
 
 type Subpipeline struct {
-	Pipe *pipeline.SamplePipeline
+	Pipe *bitflow.SamplePipeline
 	Key  string
 }
 
@@ -21,7 +20,7 @@ type Distributor interface {
 }
 
 type subpipelineStart struct {
-	pipe      *pipeline.SamplePipeline
+	pipe      *bitflow.SamplePipeline
 	firstStep bitflow.SampleProcessor
 	key       string
 }
@@ -36,7 +35,7 @@ type SampleFork struct {
 	// Finished pipelines must be reported through LogFinishedPipeline()
 	NonfatalErrors bool
 
-	pipelines map[*pipeline.SamplePipeline]subpipelineStart
+	pipelines map[*bitflow.SamplePipeline]subpipelineStart
 	lock      sync.Mutex
 
 	ForkPath []string
@@ -45,7 +44,7 @@ type SampleFork struct {
 func (f *SampleFork) Start(wg *sync.WaitGroup) golib.StopChan {
 	result := f.NoopProcessor.Start(wg)
 	f.MultiPipeline.Init(f.GetSink(), f.CloseSink, wg)
-	f.pipelines = make(map[*pipeline.SamplePipeline]subpipelineStart)
+	f.pipelines = make(map[*bitflow.SamplePipeline]subpipelineStart)
 	return result
 }
 
@@ -97,13 +96,13 @@ func (f *SampleFork) initializePipeline(subpipe Subpipeline) bitflow.SampleProce
 		pipe.Source = nil
 	}
 	pipe.Add(&f.merger)
-	f.StartPipeline(&pipe.SamplePipeline, func(isPassive bool, err error) {
+	f.StartPipeline(pipe, func(isPassive bool, err error) {
 		f.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Subpipeline %v", f, path))
 	})
 	return pipe.Processors[0]
 }
 
-func (f *SampleFork) setForkPaths(pipeline *pipeline.SamplePipeline, key string) []string {
+func (f *SampleFork) setForkPaths(pipeline *bitflow.SamplePipeline, key string) []string {
 	path := make([]string, len(f.ForkPath)+1)
 	copy(path, f.ForkPath)
 	path[len(path)-1] = key
@@ -116,7 +115,7 @@ func (f *SampleFork) setForkPaths(pipeline *pipeline.SamplePipeline, key string)
 }
 
 func (f *SampleFork) ContainedStringers() []fmt.Stringer {
-	if container, ok := f.Distributor.(pipeline.StringerContainer); ok {
+	if container, ok := f.Distributor.(bitflow.StringerContainer); ok {
 		return container.ContainedStringers()
 	} else {
 		return []fmt.Stringer{f.Distributor}
@@ -125,7 +124,7 @@ func (f *SampleFork) ContainedStringers() []fmt.Stringer {
 
 func (f *SampleFork) String() string {
 	res := "Fork "
-	if _, complexDistributor := f.Distributor.(pipeline.StringerContainer); complexDistributor {
+	if _, complexDistributor := f.Distributor.(bitflow.StringerContainer); complexDistributor {
 		res += f.Distributor.String()
 	}
 	return res

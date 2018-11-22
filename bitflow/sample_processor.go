@@ -1,6 +1,7 @@
 package bitflow
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/antongulenko/golib"
@@ -176,4 +177,55 @@ func (p *NoopProcessor) Close() {
 // by types that are embedding NoopProcessor.
 func (p *NoopProcessor) String() string {
 	return "NoopProcessor"
+}
+
+// MergeableProcessor is an extension of SampleProcessor, that also allows
+// merging two processor instances of the same time into one. Merging is only allowed
+// when the result of the merge would has exactly the same functionality as using the
+// two separate instances. This can be used as an optional optimization.
+type MergeableProcessor interface {
+	SampleProcessor
+	MergeProcessor(other SampleProcessor) bool
+}
+
+type SimpleProcessor struct {
+	NoopProcessor
+	Description          string
+	Process              func(sample *Sample, header *Header) (*Sample, *Header, error)
+	OnClose              func()
+	OutputSampleSizeFunc func(sampleSize int) int
+}
+
+func (p *SimpleProcessor) Sample(sample *Sample, header *Header) error {
+	if process := p.Process; process == nil {
+		return fmt.Errorf("%s: Process function is not set", p)
+	} else {
+		sample, header, err := process(sample, header)
+		if err == nil && sample != nil && header != nil {
+			err = p.NoopProcessor.Sample(sample, header)
+		}
+		return err
+	}
+}
+
+func (p *SimpleProcessor) Close() {
+	if c := p.OnClose; c != nil {
+		c()
+	}
+	p.NoopProcessor.Close()
+}
+
+func (p *SimpleProcessor) OutputSampleSize(sampleSize int) int {
+	if f := p.OutputSampleSizeFunc; f != nil {
+		return f(sampleSize)
+	}
+	return sampleSize
+}
+
+func (p *SimpleProcessor) String() string {
+	if p.Description == "" {
+		return "SimpleProcessor"
+	} else {
+		return p.Description
+	}
 }

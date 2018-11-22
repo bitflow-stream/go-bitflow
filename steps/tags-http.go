@@ -8,9 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 )
@@ -48,7 +47,7 @@ func NewStandaloneHttpTagger(pathPrefix string, endpoint string) *HttpTagger {
 }
 
 func RegisterHttpTagger(b reg.ProcessorRegistry) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
 		tagger := NewStandaloneHttpTagger("/api", params["listen"])
 		if defaultTagStr, ok := params["default"]; ok {
 			parts := strings.Split(defaultTagStr, ",")

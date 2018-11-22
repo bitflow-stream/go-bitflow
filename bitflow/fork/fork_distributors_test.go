@@ -3,8 +3,7 @@ package fork
 import (
 	"testing"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -33,21 +32,21 @@ func (suite *distributorsTestSuite) TestTagTemplateDistributor() {
 	s.SetTag("tag2", "val2")
 	h := &bitflow.Header{Fields: []string{"a", "b", "c"}}
 
-	pipeA := new(pipeline.SamplePipeline)
-	pipeB := new(pipeline.SamplePipeline)
+	pipeA := new(bitflow.SamplePipeline)
+	pipeB := new(bitflow.SamplePipeline)
 
-	test := func(input, output string, expectedPipes ...*pipeline.SamplePipeline) {
+	test := func(input, output string, expectedPipes ...*bitflow.SamplePipeline) {
 		var dist TagDistributor
 		dist.Template = input
-		dist.Pipelines = map[string]func() ([]*pipeline.SamplePipeline, error){
-			"a*": func() ([]*pipeline.SamplePipeline, error) {
-				return []*pipeline.SamplePipeline{pipeA}, nil
+		dist.Pipelines = map[string]func() ([]*bitflow.SamplePipeline, error){
+			"a*": func() ([]*bitflow.SamplePipeline, error) {
+				return []*bitflow.SamplePipeline{pipeA}, nil
 			},
-			"b*": func() ([]*pipeline.SamplePipeline, error) {
-				return []*pipeline.SamplePipeline{pipeB}, nil
+			"b*": func() ([]*bitflow.SamplePipeline, error) {
+				return []*bitflow.SamplePipeline{pipeB}, nil
 			},
-			"c": func() ([]*pipeline.SamplePipeline, error) {
-				return []*pipeline.SamplePipeline{pipeA, pipeB}, nil
+			"c": func() ([]*bitflow.SamplePipeline, error) {
+				return []*bitflow.SamplePipeline{pipeA, pipeB}, nil
 			},
 		}
 		suite.NoError(dist.Init())

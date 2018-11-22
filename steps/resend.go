@@ -6,15 +6,14 @@ import (
 	"time"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
 func RegisterResendStep(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("resend",
-		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
 			p.Add(&ResendProcessor{
 				Interval: reg.DurationParam(params, "interval", 0, false, &err),
 			})
@@ -77,7 +76,7 @@ func SendPeriodically(sample *bitflow.Sample, header *bitflow.Header, receiver b
 
 func RegisterFillUpStep(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("fill-up",
-		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
 			interval := reg.DurationParam(params, "interval", 0, false, &err)
 			stepInterval := reg.DurationParam(params, "step-interval", interval, true, &err)
 			p.Add(&FillUpProcessor{

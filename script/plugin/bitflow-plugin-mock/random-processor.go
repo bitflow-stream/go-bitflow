@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
 
 type MockSampleProcessor struct {

@@ -4,16 +4,15 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow/fork"
 )
 
 const (
 	MultiplexForkName = "multiplex"
 )
 
-type AnalysisFunc func(pipeline *pipeline.SamplePipeline, params map[string]string) error
+type AnalysisFunc func(pipeline *bitflow.SamplePipeline, params map[string]string) error
 
 type ForkFunc func(subpiplines []Subpipeline, params map[string]string) (fork.Distributor, error)
 
@@ -39,7 +38,7 @@ type registeredParameters struct {
 }
 
 type Subpipeline interface {
-	Build() (*pipeline.SamplePipeline, error)
+	Build() (*bitflow.SamplePipeline, error)
 	Keys() []string
 }
 
@@ -93,21 +92,21 @@ func (r *ProcessorRegistryImpl) RegisterAnalysisParamsErr(name string, setupPipe
 	}
 }
 
-func (r *ProcessorRegistryImpl) RegisterAnalysisParams(name string, setupPipeline func(pipeline *pipeline.SamplePipeline, params map[string]string), description string, options ...Option) {
-	r.RegisterAnalysisParamsErr(name, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+func (r *ProcessorRegistryImpl) RegisterAnalysisParams(name string, setupPipeline func(pipeline *bitflow.SamplePipeline, params map[string]string), description string, options ...Option) {
+	r.RegisterAnalysisParamsErr(name, func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 		setupPipeline(pipeline, params)
 		return nil
 	}, description, options...)
 }
 
-func (r *ProcessorRegistryImpl) RegisterAnalysis(name string, setupPipeline func(pipeline *pipeline.SamplePipeline), description string, options ...Option) {
-	r.RegisterAnalysisParams(name, func(pipeline *pipeline.SamplePipeline, _ map[string]string) {
+func (r *ProcessorRegistryImpl) RegisterAnalysis(name string, setupPipeline func(pipeline *bitflow.SamplePipeline), description string, options ...Option) {
+	r.RegisterAnalysisParams(name, func(pipeline *bitflow.SamplePipeline, _ map[string]string) {
 		setupPipeline(pipeline)
 	}, description, options...)
 }
 
-func (r *ProcessorRegistryImpl) RegisterAnalysisErr(name string, setupPipeline func(pipeline *pipeline.SamplePipeline) error, description string, options ...Option) {
-	r.RegisterAnalysisParamsErr(name, func(pipeline *pipeline.SamplePipeline, _ map[string]string) error {
+func (r *ProcessorRegistryImpl) RegisterAnalysisErr(name string, setupPipeline func(pipeline *bitflow.SamplePipeline) error, description string, options ...Option) {
+	r.RegisterAnalysisParamsErr(name, func(pipeline *bitflow.SamplePipeline, _ map[string]string) error {
 		return setupPipeline(pipeline)
 	}, description, options...)
 }
@@ -214,7 +213,7 @@ func RegisterMultiplexFork(builder ProcessorRegistry) {
 
 func createMultiplexFork(subpipelines []Subpipeline, _ map[string]string) (fork.Distributor, error) {
 	var res fork.MultiplexDistributor
-	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpipelines))
+	res.Subpipelines = make([]*bitflow.SamplePipeline, len(subpipelines))
 	var err error
 	for i, pipe := range subpipelines {
 		res.Subpipelines[i], err = pipe.Build()

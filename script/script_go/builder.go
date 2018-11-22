@@ -3,10 +3,9 @@ package script_go
 import (
 	"fmt"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow/fork"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 type PipelineBuilder struct {
@@ -24,11 +23,11 @@ func (s *subpipeline) Keys() []string {
 	return s.keys
 }
 
-func (s *subpipeline) Build() (*pipeline.SamplePipeline, error) {
+func (s *subpipeline) Build() (*bitflow.SamplePipeline, error) {
 	return s.builder.makePipelineTail(s.pipe)
 }
 
-func (b PipelineBuilder) MakePipeline(pipe Pipeline) (*pipeline.SamplePipeline, error) {
+func (b PipelineBuilder) MakePipeline(pipe Pipeline) (*bitflow.SamplePipeline, error) {
 	pipe, err := pipe.Transform(b)
 	if err != nil {
 		return nil, err
@@ -36,7 +35,7 @@ func (b PipelineBuilder) MakePipeline(pipe Pipeline) (*pipeline.SamplePipeline, 
 	return b.makePipeline(pipe)
 }
 
-func (b PipelineBuilder) makePipeline(pipe Pipeline) (res *pipeline.SamplePipeline, err error) {
+func (b PipelineBuilder) makePipeline(pipe Pipeline) (res *bitflow.SamplePipeline, err error) {
 	var source bitflow.SampleSource
 
 	switch input := pipe[0].(type) {
@@ -59,8 +58,8 @@ func (b PipelineBuilder) makePipeline(pipe Pipeline) (res *pipeline.SamplePipeli
 	return
 }
 
-func (b PipelineBuilder) makePipelineTail(pipe Pipeline) (*pipeline.SamplePipeline, error) {
-	res := new(pipeline.SamplePipeline)
+func (b PipelineBuilder) makePipelineTail(pipe Pipeline) (*bitflow.SamplePipeline, error) {
+	res := new(bitflow.SamplePipeline)
 	var err error
 	for _, step := range pipe {
 		switch step := step.(type) {
@@ -83,7 +82,7 @@ func (b PipelineBuilder) makePipelineTail(pipe Pipeline) (*pipeline.SamplePipeli
 	return res, err
 }
 
-func (b PipelineBuilder) addOutputStep(pipe *pipeline.SamplePipeline, output Output) error {
+func (b PipelineBuilder) addOutputStep(pipe *bitflow.SamplePipeline, output Output) error {
 	endpoint, err := b.Endpoints.CreateOutput(Token(output).Content())
 	if err == nil {
 		pipe.Add(endpoint)
@@ -91,7 +90,7 @@ func (b PipelineBuilder) addOutputStep(pipe *pipeline.SamplePipeline, output Out
 	return err
 }
 
-func (b PipelineBuilder) addStep(pipe *pipeline.SamplePipeline, step Step) error {
+func (b PipelineBuilder) addStep(pipe *bitflow.SamplePipeline, step Step) error {
 	analysis, err := b.getAnalysis(step.Name)
 	if err != nil {
 		return err
@@ -134,7 +133,7 @@ func (b PipelineBuilder) createMultiInput(pipes MultiInput) (bitflow.SampleSourc
 	return subPipelines, nil
 }
 
-func (b PipelineBuilder) addFork(pipe *pipeline.SamplePipeline, f Fork) error {
+func (b PipelineBuilder) addFork(pipe *bitflow.SamplePipeline, f Fork) error {
 	forkStep, err := b.getFork(f.Name)
 	var distributor fork.Distributor
 	if err == nil {

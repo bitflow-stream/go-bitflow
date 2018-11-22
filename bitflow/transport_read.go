@@ -241,7 +241,7 @@ func (stream *SampleInputStream) readData(source string) {
 	}
 }
 
-func (stream *SampleInputStream) updateHeader(header *UnmarshalledHeader, source string) error {
+func (stream *SampleInputStream) updateHeader(header *UnmarshalledHeader, source string) {
 	logger := log.WithFields(log.Fields{"format": stream.um, "source": source})
 	if stream.header == nil {
 		logger.Println("Reading", len(header.Fields), "metrics")
@@ -254,7 +254,6 @@ func (stream *SampleInputStream) updateHeader(header *UnmarshalledHeader, source
 		stream.outHeader.Fields = make([]string, numFields)
 		copy(stream.outHeader.Fields, header.Fields)
 	}
-	return nil
 }
 
 func (stream *SampleInputStream) parseSamples(source string) {

@@ -9,9 +9,8 @@ import (
 	"sync"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -33,8 +32,8 @@ type SubprocessRunner struct {
 }
 
 func RegisterSubprocessRunner(b reg.ProcessorRegistry) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
-		cmd := pipeline.SplitShellCommand(params["cmd"])
+	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
+		cmd := SplitShellCommand(params["cmd"])
 		format, ok := params["format"]
 		if !ok {
 			format = "bin"

@@ -4,16 +4,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 func RegisterSleep(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("sleep", _create_sleep_processor, "Between every two samples, sleep the time difference between their timestamps", reg.OptionalParams("time", "onChangedTag"))
 }
 
-func _create_sleep_processor(p *pipeline.SamplePipeline, params map[string]string) error {
+func _create_sleep_processor(p *bitflow.SamplePipeline, params map[string]string) error {
 	var timeout time.Duration
 	timeoutStr, hasTimeout := params["time"]
 	changedTag, hasOnTagChange := params["onChangedTag"]
@@ -37,7 +36,7 @@ func _create_sleep_processor(p *pipeline.SamplePipeline, params map[string]strin
 
 	previousTag := ""
 	var lastTimestamp time.Time
-	processor := &pipeline.SimpleProcessor{
+	processor := &bitflow.SimpleProcessor{
 		Description: desc,
 	}
 	processor.Process = func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {

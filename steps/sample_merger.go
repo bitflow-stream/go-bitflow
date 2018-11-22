@@ -8,9 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -35,7 +34,7 @@ type SynchronizedStreamMerger struct {
 }
 
 func RegisterSubpipelineStreamMerger(b reg.ProcessorRegistry) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
 		intervalStr := params["interval"]
 		tag := params["tag"]
 		numStr := params["num"]

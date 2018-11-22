@@ -3,7 +3,7 @@ package steps
 import (
 	"fmt"
 
-	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
 
 type SampleFilter struct {

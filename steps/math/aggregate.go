@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -199,7 +198,7 @@ func FeatureWindowSlope(stats *FeatureWindowStats) bitflow.Value {
 
 func RegisterAggregateAvg(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("avg",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			agg, err := create_aggregator(params)
 			if err != nil {
 				return err
@@ -212,7 +211,7 @@ func RegisterAggregateAvg(b reg.ProcessorRegistry) {
 
 func RegisterAggregateSlope(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("slope",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			agg, err := create_aggregator(params)
 			if err != nil {
 				return err

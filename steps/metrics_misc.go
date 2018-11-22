@@ -6,16 +6,15 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
 func RegisterSetCurrentTime(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("set_time",
-		func(p *pipeline.SamplePipeline) {
-			p.Add(&pipeline.SimpleProcessor{
+		func(p *bitflow.SamplePipeline) {
+			p.Add(&bitflow.SimpleProcessor{
 				Description: "reset time to now",
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 					sample.Time = time.Now()
@@ -33,8 +32,8 @@ func RegisterAppendTimeDifference(b reg.ProcessorRegistry) {
 	var lastTime time.Time
 
 	b.RegisterAnalysis("append_latency",
-		func(p *pipeline.SamplePipeline) {
-			p.Add(&pipeline.SimpleProcessor{
+		func(p *bitflow.SamplePipeline) {
+			p.Add(&bitflow.SimpleProcessor{
 				Description: "Append time difference as metric " + fieldName,
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 					if checker.HeaderChanged(header) {
@@ -45,7 +44,7 @@ func RegisterAppendTimeDifference(b reg.ProcessorRegistry) {
 						diff = float64(sample.Time.Sub(lastTime))
 					}
 					lastTime = sample.Time
-					pipeline.AppendToSample(sample, []float64{diff})
+					AppendToSample(sample, []float64{diff})
 					return sample, outHeader, nil
 				},
 			})
@@ -55,8 +54,8 @@ func RegisterAppendTimeDifference(b reg.ProcessorRegistry) {
 
 func RegisterStripMetrics(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("strip",
-		func(p *pipeline.SamplePipeline) {
-			p.Add(&pipeline.SimpleProcessor{
+		func(p *bitflow.SamplePipeline) {
+			p.Add(&bitflow.SimpleProcessor{
 				Description: "remove metric values, keep timestamp and tags",
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 					return sample.Metadata().NewSample(nil), header.Clone(nil), nil
@@ -68,15 +67,15 @@ func RegisterStripMetrics(b reg.ProcessorRegistry) {
 
 func RegisterParseTags(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParams("parse_tags",
-		func(p *pipeline.SamplePipeline, params map[string]string) {
+		func(p *bitflow.SamplePipeline, params map[string]string) {
 			var checker bitflow.HeaderChecker
 			var outHeader *bitflow.Header
-			var sorted pipeline.SortedStringPairs
+			var sorted bitflow.SortedStringPairs
 			warnedMissingTags := make(map[string]bool)
 			sorted.FillFromMap(params)
 			sort.Sort(&sorted)
 
-			p.Add(&pipeline.SimpleProcessor{
+			p.Add(&bitflow.SimpleProcessor{
 				Description: "Convert tags to metrics: " + sorted.String(),
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 					if checker.HeaderChanged(header) {
@@ -99,7 +98,7 @@ func RegisterParseTags(b reg.ProcessorRegistry) {
 						}
 						values[i] = value
 					}
-					pipeline.AppendToSample(sample, values)
+					AppendToSample(sample, values)
 					return sample, outHeader, nil
 				},
 			})

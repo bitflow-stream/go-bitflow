@@ -3,6 +3,7 @@ package bitflow
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -402,4 +403,26 @@ func (h *HeaderChecker) InitializedHeaderChanged(newHeader *Header) bool {
 type SampleAndHeader struct {
 	*Sample
 	*Header
+}
+
+func ResolveTagTemplate(template string, missingValues string, sample *Sample) string {
+	return TagTemplate{Template: template, MissingValue: missingValues}.Resolve(sample)
+}
+
+type TagTemplate struct {
+	Template     string // Placeholders like ${xxx} will be replaced by tag values (left empty if tag missing)
+	MissingValue string // Replacement for missing values
+}
+
+var templateRegex = regexp.MustCompile("\\${[^{]*}") // Example: ${hello}
+
+func (t TagTemplate) Resolve(sample *Sample) string {
+	return templateRegex.ReplaceAllStringFunc(t.Template, func(placeholder string) string {
+		placeholder = placeholder[2 : len(placeholder)-1] // Strip the ${} prefix/suffix
+		if sample.HasTag(placeholder) {
+			return sample.Tag(placeholder)
+		} else {
+			return t.MissingValue
+		}
+	})
 }

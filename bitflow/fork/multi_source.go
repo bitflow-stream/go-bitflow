@@ -5,27 +5,24 @@ import (
 	"sync"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
 
 type MultiMetricSource struct {
 	MultiPipeline
 	bitflow.AbstractSampleProcessor
 
-	pipelines        []*pipeline.SamplePipeline
+	pipelines        []*bitflow.SamplePipeline
 	stoppedPipelines int
 }
 
-func (in *MultiMetricSource) Add(subPipeline *pipeline.SamplePipeline) {
+func (in *MultiMetricSource) Add(subPipeline *bitflow.SamplePipeline) {
 	in.pipelines = append(in.pipelines, subPipeline)
 }
 
 func (in *MultiMetricSource) AddSource(source bitflow.SampleSource, steps ...bitflow.SampleProcessor) {
-	pipe := &pipeline.SamplePipeline{
-		SamplePipeline: bitflow.SamplePipeline{
-			Source: source,
-		},
+	pipe := &bitflow.SamplePipeline{
+		Source: source,
 	}
 	for _, step := range steps {
 		pipe.Add(step)
@@ -47,8 +44,8 @@ func (in *MultiMetricSource) Start(wg *sync.WaitGroup) golib.StopChan {
 	return stopChan
 }
 
-func (in *MultiMetricSource) start(index int, pipe *pipeline.SamplePipeline) {
-	in.StartPipeline(&pipe.SamplePipeline, func(isPassive bool, err error) {
+func (in *MultiMetricSource) start(index int, pipe *bitflow.SamplePipeline) {
+	in.StartPipeline(pipe, func(isPassive bool, err error) {
 		in.LogFinishedPipeline(isPassive, err, fmt.Sprintf("[%v]: Multi-input pipeline %v", in, index))
 
 		in.stoppedPipelines++

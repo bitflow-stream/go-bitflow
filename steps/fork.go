@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow/fork"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 // This function is placed in this package to avoid circular dependency between the fork and the query package.
@@ -20,7 +20,7 @@ func RegisterForks(b reg.ProcessorRegistry) {
 func fork_round_robin(subpipelines []reg.Subpipeline, _ map[string]string) (fork.Distributor, error) {
 	res := new(fork.RoundRobinDistributor)
 	res.Weights = make([]int, len(subpipelines))
-	res.Subpipelines = make([]*pipeline.SamplePipeline, len(subpipelines))
+	res.Subpipelines = make([]*bitflow.SamplePipeline, len(subpipelines))
 	for i, subpipeAST := range subpipelines {
 		weightSum := 0
 		for _, keyStr := range subpipeAST.Keys() {
@@ -52,7 +52,7 @@ func fork_tag(subpipelines []reg.Subpipeline, params map[string]string) (fork.Di
 }
 
 func fork_tag_template(subpipelines []reg.Subpipeline, params map[string]string) (fork.Distributor, error) {
-	wildcardPipelines := make(map[string]func() ([]*pipeline.SamplePipeline, error))
+	wildcardPipelines := make(map[string]func() ([]*bitflow.SamplePipeline, error))
 	var keysArray []string
 	for _, pipe := range subpipelines {
 		for _, key := range pipe.Keys() {
@@ -67,7 +67,7 @@ func fork_tag_template(subpipelines []reg.Subpipeline, params map[string]string)
 
 	var err error
 	dist := &fork.TagDistributor{
-		TagTemplate: pipeline.TagTemplate{
+		TagTemplate: bitflow.TagTemplate{
 			Template: params["template"],
 		},
 		RegexDistributor: fork.RegexDistributor{
@@ -86,7 +86,7 @@ type wildcardSubpipeline struct {
 	p reg.Subpipeline
 }
 
-func (m wildcardSubpipeline) build() ([]*pipeline.SamplePipeline, error) {
+func (m wildcardSubpipeline) build() ([]*bitflow.SamplePipeline, error) {
 	pipe, err := m.p.Build()
-	return []*pipeline.SamplePipeline{pipe}, err
+	return []*bitflow.SamplePipeline{pipe}, err
 }

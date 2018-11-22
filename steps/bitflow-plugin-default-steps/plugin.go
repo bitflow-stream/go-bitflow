@@ -3,11 +3,11 @@ package bitflow_plugin_default_steps
 import (
 	"log"
 
-	"github.com/bitflow-stream/go-bitflow-pipeline/plugin"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
-	"github.com/bitflow-stream/go-bitflow-pipeline/steps"
-	"github.com/bitflow-stream/go-bitflow-pipeline/steps/math"
-	"github.com/bitflow-stream/go-bitflow-pipeline/steps/plot"
+	"github.com/bitflow-stream/go-bitflow/script/plugin"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
+	"github.com/bitflow-stream/go-bitflow/steps"
+	"github.com/bitflow-stream/go-bitflow/steps/math"
+	"github.com/bitflow-stream/go-bitflow/steps/plot"
 )
 
 // This plugin is automatically loaded by the bitflow-pipeline tool, there is no need to actually compile

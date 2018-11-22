@@ -3,14 +3,13 @@ package math
 import (
 	"math"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 func RegisterRMS(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("rms",
-		func(p *pipeline.SamplePipeline) {
+		func(p *bitflow.SamplePipeline) {
 			p.Batch(new(BatchRms))
 		},
 		"Compute the Root Mean Square value for every metric in a data batch. Output a single sample with all values.",

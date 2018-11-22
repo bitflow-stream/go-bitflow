@@ -9,11 +9,10 @@ import (
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
-	internal "github.com/bitflow-stream/go-bitflow-pipeline/script/script/internal"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow/fork"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
+	internal "github.com/bitflow-stream/go-bitflow/script/script/internal"
 	"github.com/bugsnag/bugsnag-go/errors"
 )
 
@@ -21,7 +20,7 @@ var emptyTokenMap = make(map[token]token)
 
 type BitflowScriptParser interface {
 	// ParseScript takes a Bitflow Script as input and returns the parsed SamplePipeline and occurred parsing errors as output
-	ParseScript(script string) (*pipeline.SamplePipeline, golib.MultiError)
+	ParseScript(script string) (*bitflow.SamplePipeline, golib.MultiError)
 }
 
 func NewAntlrBitflowParser(b reg.ProcessorRegistry) BitflowScriptParser {
@@ -34,10 +33,10 @@ func NewAntlrBitflowParser(b reg.ProcessorRegistry) BitflowScriptParser {
 
 type subpipeline struct {
 	keys []string
-	pipe *pipeline.SamplePipeline
+	pipe *bitflow.SamplePipeline
 }
 
-func (s *subpipeline) Build() (*pipeline.SamplePipeline, error) {
+func (s *subpipeline) Build() (*bitflow.SamplePipeline, error) {
 	return s.pipe, nil
 }
 
@@ -80,7 +79,7 @@ func (s *AntlrBitflowListener) resetListener() {
 }
 
 // ParseScript takes a Bitflow Script as input and returns the parsed SamplePipeline and occurred parsing errors as output
-func (s *AntlrBitflowListener) ParseScript(script string) (pipe *pipeline.SamplePipeline, errors golib.MultiError) {
+func (s *AntlrBitflowListener) ParseScript(script string) (pipe *bitflow.SamplePipeline, errors golib.MultiError) {
 	defer s.resetListener()
 	defer func() {
 		if r := recover(); r != nil {
@@ -184,12 +183,12 @@ func (s *AntlrBitflowListener) ExitMultiinput(ctx *internal.MultiinputContext) {
 
 // EnterPipeline is called when production pipeline is entered.
 func (s *AntlrBitflowListener) EnterPipeline(ctx *internal.PipelineContext) {
-	s.state.Push("pipeline", new(pipeline.SamplePipeline))
+	s.state.Push("pipeline", new(bitflow.SamplePipeline))
 }
 
 // EnterSub_pipeline is called when production sub_pipeline is entered.
 func (s *AntlrBitflowListener) EnterSubPipeline(ctx *internal.SubPipelineContext) {
-	s.state.Push("pipeline", new(pipeline.SamplePipeline))
+	s.state.Push("pipeline", new(bitflow.SamplePipeline))
 }
 
 // ExitSub_pipeline is called when production sub_pipeline is exited.
@@ -200,7 +199,7 @@ func (s *AntlrBitflowListener) ExitSubPipeline(ctx *internal.SubPipelineContext)
 	} else {
 		subpipeName = strconv.Itoa(s.state.Len("fork_subpipelines") + 1)
 	}
-	pipe := s.state.Pop("pipeline").(*pipeline.SamplePipeline)
+	pipe := s.state.Pop("pipeline").(*bitflow.SamplePipeline)
 	subpipe := &subpipeline{keys: []string{subpipeName}, pipe: pipe}
 	s.state.Push("fork_subpipelines", subpipe)
 }
@@ -314,8 +313,8 @@ func (s *AntlrBitflowListener) ExitPipelineName(ctx *internal.PipelineNameContex
 	})
 }
 
-func (s *AntlrBitflowListener) pipe() *pipeline.SamplePipeline {
-	return s.state.Peek("pipeline").(*pipeline.SamplePipeline)
+func (s *AntlrBitflowListener) pipe() *bitflow.SamplePipeline {
+	return s.state.Peek("pipeline").(*bitflow.SamplePipeline)
 }
 
 func stripQuotes(in string) string {

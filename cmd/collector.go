@@ -1,4 +1,4 @@
-package cmd_collector
+package cmd
 
 import (
 	"flag"
@@ -6,10 +6,9 @@ import (
 	"sync"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
-	"github.com/bitflow-stream/go-bitflow-pipeline/steps"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow/fork"
+	"github.com/bitflow-stream/go-bitflow/steps"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 )
@@ -17,6 +16,8 @@ import (
 const (
 	RestApiPathPrefix = "/api"
 )
+
+// TODO this helper type is awkwardly placed, find better package.
 
 type CmdDataCollector struct {
 	Endpoints     *bitflow.EndpointFactory
@@ -47,9 +48,9 @@ func (c *CmdDataCollector) ParseFlags() {
 	golib.ConfigureLogging()
 }
 
-func (c *CmdDataCollector) MakePipeline() *pipeline.SamplePipeline {
+func (c *CmdDataCollector) MakePipeline() *bitflow.SamplePipeline {
 	// Configure the data collector pipeline
-	p := new(pipeline.SamplePipeline)
+	p := new(bitflow.SamplePipeline)
 	if len(c.flagTags.Keys) > 0 {
 		p.Add(steps.NewTaggingProcessor(c.flagTags.Map()))
 	}
@@ -74,7 +75,7 @@ func (c *CmdDataCollector) MakePipeline() *pipeline.SamplePipeline {
 	return p
 }
 
-func (c *CmdDataCollector) add_outputs(p *pipeline.SamplePipeline) {
+func (c *CmdDataCollector) add_outputs(p *bitflow.SamplePipeline) {
 	outputs := c.create_outputs()
 	if len(outputs) == 1 {
 		c.set_sink(p, outputs[0])
@@ -82,7 +83,7 @@ func (c *CmdDataCollector) add_outputs(p *pipeline.SamplePipeline) {
 		// Create a multiplex-fork for all outputs
 		dist := new(fork.MultiplexDistributor)
 		for _, sink := range outputs {
-			pipe := new(pipeline.SamplePipeline)
+			pipe := new(bitflow.SamplePipeline)
 			c.set_sink(pipe, sink)
 			dist.Subpipelines = append(dist.Subpipelines, pipe)
 		}
@@ -110,12 +111,12 @@ func (c *CmdDataCollector) create_outputs() []bitflow.SampleProcessor {
 	return sinks
 }
 
-func (c *CmdDataCollector) set_sink(p *pipeline.SamplePipeline, sink bitflow.SampleProcessor) {
+func (c *CmdDataCollector) set_sink(p *bitflow.SamplePipeline, sink bitflow.SampleProcessor) {
 	// Add a filter to file outputs
 	if _, isFile := sink.(*bitflow.FileSink); isFile {
 		if c.restApiEndpoint != "" {
 			p.Add(&steps.SampleFilter{
-				Description: pipeline.String("Filter samples based on /file_output REST API."),
+				Description: bitflow.String("Filter samples based on /file_output REST API."),
 				IncludeFilter: func(sample *bitflow.Sample, header *bitflow.Header) (bool, error) {
 					return c.fileOutputApi.FileOutputEnabled, nil
 				},

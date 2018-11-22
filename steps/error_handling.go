@@ -3,15 +3,14 @@ package steps
 import (
 	"fmt"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
 func RegisterDropErrorsStep(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("drop_errors",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			var err error
 			logDebug := reg.BoolParam(params, "log-debug", false, true, &err)
 			logInfo := reg.BoolParam(params, "log-info", false, true, &err)

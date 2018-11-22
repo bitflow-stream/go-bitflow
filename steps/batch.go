@@ -1,16 +1,16 @@
 package steps
 
 import (
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 func RegisterGenericBatch(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("batch",
-		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
 			timeout := reg.DurationParam(params, "timeout", 0, true, &err)
 			if err == nil {
-				p.Add(&pipeline.BatchProcessor{
+				p.Add(&bitflow.BatchProcessor{
 					FlushTags:    []string{params["tag"]},
 					FlushTimeout: timeout,
 				})

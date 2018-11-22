@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 func RegisterDuplicateTimestampFilter(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("filter-duplicate-timestamps",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			var err error
 			interval := reg.DurationParam(params, "interval", 0, false, &err)
 			if err != nil {
@@ -19,7 +18,7 @@ func RegisterDuplicateTimestampFilter(b reg.ProcessorRegistry) {
 			}
 
 			var lastTimestamp time.Time
-			processor := &pipeline.SimpleProcessor{
+			processor := &bitflow.SimpleProcessor{
 				Description: fmt.Sprintf("Drop samples with timestamps closer than %v", interval),
 			}
 			processor.Process = func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {

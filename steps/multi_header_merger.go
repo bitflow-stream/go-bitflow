@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -27,7 +26,7 @@ func NewMultiHeaderMerger() *MultiHeaderMerger {
 
 func RegisterMergeHeaders(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("merge_headers",
-		func(p *pipeline.SamplePipeline) {
+		func(p *bitflow.SamplePipeline) {
 			p.Add(NewMultiHeaderMerger())
 		},
 		"Accept any number of changing headers and merge them into one output header when flushing the results")

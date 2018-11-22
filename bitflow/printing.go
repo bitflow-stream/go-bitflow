@@ -1,4 +1,4 @@
-package pipeline
+package bitflow
 
 import (
 	"bytes"

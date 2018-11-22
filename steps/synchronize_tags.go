@@ -8,15 +8,14 @@ import (
 	"time"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
 func RegisterTagSynchronizer(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("synchronize_tags",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			var err error
 			synchronizer := new(TagSynchronizer)
 			synchronizer.StreamIdentifierTag = params["identifier"]

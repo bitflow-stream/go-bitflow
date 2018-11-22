@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )

@@ -4,14 +4,13 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/fork"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow/fork"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 func RegisterOutputFiles(b reg.ProcessorRegistry) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
 		filename := params["file"]
 		if filename == "" {
 			return reg.ParameterError("file", errors.New("Missing required parameter"))
@@ -29,7 +28,7 @@ func RegisterOutputFiles(b reg.ProcessorRegistry) {
 		if err == nil {
 			distributor.Template = filename
 			if parallelize > 0 {
-				distributor.ExtendSubpipelines = func(fileName string, pipe *pipeline.SamplePipeline) {
+				distributor.ExtendSubpipelines = func(fileName string, pipe *bitflow.SamplePipeline) {
 					pipe.Add(&DecouplingProcessor{ChannelBuffer: parallelize})
 				}
 			}

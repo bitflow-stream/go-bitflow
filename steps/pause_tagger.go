@@ -5,13 +5,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 func RegisterPauseTagger(b reg.ProcessorRegistry) {
-	create := func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+	create := func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 		tag := params["tag"]
 		duration, err := time.ParseDuration(params["minPause"])
 		if err != nil {

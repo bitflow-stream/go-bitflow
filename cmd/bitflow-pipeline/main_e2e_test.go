@@ -69,8 +69,10 @@ func (suite *scriptIntegrationTestSuite) SetupSuite() {
 	suite.sampleOutputFileName = filepath.Join(os.TempDir(), "test-output-"+uid.String())
 	suite.NoError(err)
 
-	suite.sampleDataFile.WriteString(testData)
-	suite.sampleScriptFile.WriteString(suite.sampleDataFile.Name() + testScript + suite.sampleOutputFileName)
+	_, err = suite.sampleDataFile.WriteString(testData)
+	suite.NoError(err)
+	_, err = suite.sampleScriptFile.WriteString(suite.sampleDataFile.Name() + testScript + suite.sampleOutputFileName)
+	suite.NoError(err)
 
 	suite.NoError(suite.sampleScriptFile.Close())
 	suite.NoError(suite.sampleDataFile.Close())

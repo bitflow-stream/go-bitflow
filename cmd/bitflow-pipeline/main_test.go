@@ -70,10 +70,10 @@ func (suite *argsTestSuite) SetupSuite() {
 }
 
 func (suite *argsTestSuite) TearDownSuite() {
-	os.Remove(suite.executableFile)
-	os.Remove(suite.normalFile)
-	os.Remove(suite.wrongNameFile)
-	os.RemoveAll(suite.tempDir)
+	suite.NoError(os.Remove(suite.executableFile))
+	suite.NoError(os.Remove(suite.normalFile))
+	suite.NoError(os.Remove(suite.wrongNameFile))
+	suite.NoError(os.RemoveAll(suite.tempDir))
 }
 
 func (suite *argsTestSuite) TestFixArgs() {

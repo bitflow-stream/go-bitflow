@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Knetic/govaluate"
-	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
 
 type Expression struct {
@@ -103,10 +103,10 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 		}),
 		// Dates are parsed automatically by the govaluate library if a date/time formatted string is encountered. The Unix() value is used.
 		// If alternative date formats are required, this function can be added.
-		//"date": p.makeStringFunction("date", 1, func(sample *bitflow.Sample, args ...string) (interface{}, error) {
-		//	date, err := time.Parse(bitflow.TextMarshallerDateFormat, args[0])
-		//	return float64(date.Unix()), fmt.Errorf("Cannot parse date (format: %v): %v", bitflow.TextMarshallerDateFormat, err)
-		//}),
+		// "date": p.makeStringFunction("date", 1, func(sample *bitflow.Sample, args ...string) (interface{}, error) {
+		//  	date, err := time.Parse(bitflow.TextMarshallerDateFormat, args[0])
+		//  	return float64(date.Unix()), fmt.Errorf("Cannot parse date (format: %v): %v", bitflow.TextMarshallerDateFormat, err)
+		// }),
 		"now": p.makeStringFunction("now", 0, func(sample *bitflow.Sample, args ...string) (interface{}, error) {
 			return float64(time.Now().Unix()), nil
 		}),

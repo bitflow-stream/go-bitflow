@@ -8,14 +8,13 @@ import (
 	"sync"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
-	"github.com/bitflow-stream/go-bitflow-pipeline/steps"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
+	"github.com/bitflow-stream/go-bitflow/steps"
 )
 
 func RegisterHttpPlotter(b reg.ProcessorRegistry) {
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
 		windowSize := 100
 		if windowStr, ok := params["window"]; ok {
 			var err error

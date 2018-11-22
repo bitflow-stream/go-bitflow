@@ -11,9 +11,9 @@ import (
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/antongulenko/golearn/base"
 	"github.com/antongulenko/golearn/linear_models"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
+	"github.com/bitflow-stream/go-bitflow/steps"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -168,14 +168,14 @@ func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearReg
 }
 
 func RegisterLinearRegression(b reg.ProcessorRegistry) {
-	create := func(p *pipeline.SamplePipeline) {
+	create := func(p *bitflow.SamplePipeline) {
 		p.Batch(new(LinearRegressionBatchProcessor))
 	}
 	b.RegisterAnalysis("regression", create, "Perform a linear regression analysis on a batch of samples", reg.SupportBatch())
 }
 
 func RegisterLinearRegressionBruteForce(b reg.ProcessorRegistry) {
-	create := func(p *pipeline.SamplePipeline) {
+	create := func(p *bitflow.SamplePipeline) {
 		p.Batch(new(LinearRegressionBruteForce))
 	}
 	b.RegisterAnalysis("regression_brute", create, "In a batch of samples, perform a linear regression analysis for every possible combination of metrics", reg.SupportBatch())
@@ -244,14 +244,14 @@ func (reg *LinearRegression) MeanSquaredError(data base.FixedDataGrid) (float64,
 
 func (reg *LinearRegression) IsValid() bool {
 	non_zero := len(reg.Model.RegressionCoefficients) + 1
-	if !pipeline.IsValidNumber(reg.Model.Disturbance) {
+	if !steps.IsValidNumber(reg.Model.Disturbance) {
 		return false
 	}
 	if reg.Model.Disturbance == 0 {
 		non_zero--
 	}
 	for _, coefficients := range reg.Model.RegressionCoefficients {
-		if !pipeline.IsValidNumber(coefficients) {
+		if !steps.IsValidNumber(coefficients) {
 			return false
 		}
 		if coefficients == 0 {
@@ -279,7 +279,9 @@ func (header SubHeader) BuildInstances(classAttribute int) (*base.DenseInstances
 		attr := base.NewFloatAttribute(name)
 		data.AddAttribute(attr)
 		if i == classAttribute {
-			data.AddClassAttribute(attr)
+			if err := data.AddClassAttribute(attr); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return data, nil
@@ -288,7 +290,9 @@ func (header SubHeader) BuildInstances(classAttribute int) (*base.DenseInstances
 func (header SubHeader) FillInstances(samples []*bitflow.Sample, instances *base.DenseInstances) {
 	start, capacity := instances.Size()
 	if capacity-start < len(samples) {
-		instances.Extend(len(samples) - (capacity - start))
+		if err := instances.Extend(len(samples) - (capacity - start)); err != nil {
+			panic(err)
+		}
 	}
 	attributes := base.ResolveAllAttributes(instances)
 	if len(attributes) != len(header.Vars) {

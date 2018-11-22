@@ -7,8 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 	"github.com/ryanuber/go-glob"
 )
 
@@ -18,7 +17,7 @@ import (
 //
 
 type PipelineArray struct {
-	Subpipelines []*pipeline.SamplePipeline
+	Subpipelines []*bitflow.SamplePipeline
 	out          []Subpipeline
 }
 
@@ -68,7 +67,7 @@ func (rr *RoundRobinDistributor) ContainedStringers() []fmt.Stringer {
 	total := rr.TotalWeight()
 	for i, pipe := range rr.Subpipelines {
 		weight := rr.getWeight(i)
-		res[i] = &pipeline.TitledSamplePipeline{
+		res[i] = &bitflow.TitledSamplePipeline{
 			SamplePipeline: pipe,
 			Title:          fmt.Sprintf("weight %v (%.2v%%)", weight, float64(weight)/float64(total)),
 		}
@@ -98,7 +97,7 @@ func (d *MultiplexDistributor) String() string {
 func (d *MultiplexDistributor) ContainedStringers() []fmt.Stringer {
 	res := make([]fmt.Stringer, len(d.Subpipelines))
 	for i, pipe := range d.Subpipelines {
-		res[i] = &pipeline.TitledSamplePipeline{
+		res[i] = &bitflow.TitledSamplePipeline{
 			SamplePipeline: pipe,
 			Title:          fmt.Sprintf("Pipeline %v", i),
 		}
@@ -106,19 +105,19 @@ func (d *MultiplexDistributor) ContainedStringers() []fmt.Stringer {
 	return res
 }
 
-type PipelineBuildFunc func(key string) ([]*pipeline.SamplePipeline, error)
+type PipelineBuildFunc func(key string) ([]*bitflow.SamplePipeline, error)
 
 type PipelineCache struct {
-	pipelines map[string][]*pipeline.SamplePipeline
-	keys      map[*pipeline.SamplePipeline][]string
+	pipelines map[string][]*bitflow.SamplePipeline
+	keys      map[*bitflow.SamplePipeline][]string
 }
 
 func (d *PipelineCache) getPipelines(key string, build PipelineBuildFunc) ([]Subpipeline, error) {
 	if d.pipelines == nil {
-		d.pipelines = make(map[string][]*pipeline.SamplePipeline)
+		d.pipelines = make(map[string][]*bitflow.SamplePipeline)
 	}
 	if d.keys == nil {
-		d.keys = make(map[*pipeline.SamplePipeline][]string)
+		d.keys = make(map[*bitflow.SamplePipeline][]string)
 	}
 	pipes, ok := d.pipelines[key]
 	if !ok {
@@ -164,7 +163,7 @@ func (d *PipelineCache) ContainedStringers() []fmt.Stringer {
 		} else {
 			keyStr = "['" + strings.Join(keys, "', '") + "']"
 		}
-		res = append(res, &pipeline.TitledSamplePipeline{
+		res = append(res, &bitflow.TitledSamplePipeline{
 			Title:          "Pipeline " + keyStr,
 			SamplePipeline: pipe,
 		})
@@ -173,7 +172,7 @@ func (d *PipelineCache) ContainedStringers() []fmt.Stringer {
 }
 
 type RegexDistributor struct {
-	Pipelines map[string]func() ([]*pipeline.SamplePipeline, error)
+	Pipelines map[string]func() ([]*bitflow.SamplePipeline, error)
 
 	ExactMatch bool // Key patterns must match exactly, no glob (*) processing
 	RegexMatch bool // Overrides ExactMatch -> treat key patterns as regexes
@@ -186,7 +185,7 @@ type RegexDistributor struct {
 func (d *RegexDistributor) Init() error {
 	// Initialize the pipeline cache used for ContainedStringers(). Also report early errors.
 	for key := range d.Pipelines {
-		_, err := d.wildcardPipelines.getPipelines(key, func(key string) ([]*pipeline.SamplePipeline, error) {
+		_, err := d.wildcardPipelines.getPipelines(key, func(key string) ([]*bitflow.SamplePipeline, error) {
 			// Strictly build the pipelines for the available keys
 			return d.doBuild(key, false, false)
 		})
@@ -211,12 +210,12 @@ func (d *RegexDistributor) getPipelines(key string) ([]Subpipeline, error) {
 	return d.cache.getPipelines(key, d.build)
 }
 
-func (d *RegexDistributor) build(key string) ([]*pipeline.SamplePipeline, error) {
+func (d *RegexDistributor) build(key string) ([]*bitflow.SamplePipeline, error) {
 	return d.doBuild(key, d.RegexMatch, !d.ExactMatch)
 }
 
-func (d *RegexDistributor) doBuild(key string, allowRegex bool, allowGlob bool) ([]*pipeline.SamplePipeline, error) {
-	var res []*pipeline.SamplePipeline
+func (d *RegexDistributor) doBuild(key string, allowRegex bool, allowGlob bool) ([]*bitflow.SamplePipeline, error) {
+	var res []*bitflow.SamplePipeline
 	for wildcardKey, builderFunc := range d.Pipelines {
 		if d.matches(key, wildcardKey, allowRegex, allowGlob) {
 			newPipelines, err := builderFunc()
@@ -271,7 +270,7 @@ func (d *GenericDistributor) String() string {
 
 type TagDistributor struct {
 	RegexDistributor
-	pipeline.TagTemplate
+	bitflow.TagTemplate
 }
 
 func (d *TagDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) ([]Subpipeline, error) {
@@ -291,10 +290,10 @@ func (d *TagDistributor) String() string {
 var _ Distributor = new(MultiFileDistributor)
 
 type MultiFileDistributor struct {
-	pipeline.TagTemplate
+	bitflow.TagTemplate
 	PipelineCache
 	Config             bitflow.FileSink // Configuration parameters in this field will be used for file outputs
-	ExtendSubpipelines func(fileName string, pipe *pipeline.SamplePipeline)
+	ExtendSubpipelines func(fileName string, pipe *bitflow.SamplePipeline)
 }
 
 func (b *MultiFileDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) ([]Subpipeline, error) {
@@ -305,7 +304,7 @@ func (b *MultiFileDistributor) String() string {
 	return "Output to files: " + b.Template
 }
 
-func (b *MultiFileDistributor) build(fileName string) ([]*pipeline.SamplePipeline, error) {
+func (b *MultiFileDistributor) build(fileName string) ([]*bitflow.SamplePipeline, error) {
 	fileOut := b.Config
 	fileOut.Filename = fileName
 	format := bitflow.EndpointDescription{Target: fileName, Type: bitflow.FileEndpoint}.DefaultOutputFormat()
@@ -314,9 +313,9 @@ func (b *MultiFileDistributor) build(fileName string) ([]*pipeline.SamplePipelin
 	if err != nil {
 		return nil, err
 	}
-	pipe := (new(pipeline.SamplePipeline)).Add(&fileOut)
+	pipe := (new(bitflow.SamplePipeline)).Add(&fileOut)
 	if extend := b.ExtendSubpipelines; extend != nil {
 		extend(fileName, pipe)
 	}
-	return []*pipeline.SamplePipeline{pipe}, nil
+	return []*bitflow.SamplePipeline{pipe}, nil
 }

@@ -7,7 +7,7 @@ import (
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/antongulenko/golib"
-	internal "github.com/bitflow-stream/go-bitflow-pipeline/script/script/internal"
+	internal "github.com/bitflow-stream/go-bitflow/script/script/internal"
 )
 
 type Index int

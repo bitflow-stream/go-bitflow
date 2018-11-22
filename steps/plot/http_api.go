@@ -17,7 +17,9 @@ func (p *HttpPlotter) serve() error {
 	if err != nil {
 		return err
 	}
-	index.Parse(indexStr)
+	if _, err := index.Parse(indexStr); err != nil {
+		return err
+	}
 	engine.SetHTMLTemplate(index)
 
 	engine.GET("/", p.serveMain)

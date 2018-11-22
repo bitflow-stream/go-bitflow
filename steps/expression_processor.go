@@ -3,9 +3,8 @@ package steps
 import (
 	"bytes"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 type ExpressionProcessor struct {
@@ -18,7 +17,7 @@ type ExpressionProcessor struct {
 
 func RegisterExpression(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("do",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			return add_expression(p, params, false)
 		},
 		"Execute the given expression on every sample", reg.RequiredParams("expr"))
@@ -26,13 +25,13 @@ func RegisterExpression(b reg.ProcessorRegistry) {
 
 func RegisterFilterExpression(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("filter",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			return add_expression(p, params, true)
 		},
 		"Filter the samples based on a boolean expression", reg.RequiredParams("expr"))
 }
 
-func add_expression(p *pipeline.SamplePipeline, params map[string]string, filter bool) error {
+func add_expression(p *bitflow.SamplePipeline, params map[string]string, filter bool) error {
 	proc := &ExpressionProcessor{Filter: filter}
 	err := proc.AddExpression(params["expr"])
 	if err == nil {

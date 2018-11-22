@@ -4,21 +4,20 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 func RegisterPickPercent(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("pick",
-		func(p *pipeline.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			pick_percentage, err := strconv.ParseFloat(params["percent"], 64)
 			if err != nil {
 				return reg.ParameterError("percent", err)
 			}
 			counter := float64(0)
 			p.Add(&SampleFilter{
-				Description: pipeline.String(fmt.Sprintf("Pick %.2f%%", pick_percentage*100)),
+				Description: bitflow.String(fmt.Sprintf("Pick %.2f%%", pick_percentage*100)),
 				IncludeFilter: func(_ *bitflow.Sample, _ *bitflow.Header) (bool, error) {
 					counter += pick_percentage
 					if counter > 1.0 {
@@ -35,12 +34,12 @@ func RegisterPickPercent(b reg.ProcessorRegistry) {
 
 func RegisterPickHead(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("head",
-		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
 			doClose := reg.BoolParam(params, "close", false, true, &err)
 			num := reg.IntParam(params, "num", 0, false, &err)
 			if err == nil {
 				processed := 0
-				proc := &pipeline.SimpleProcessor{
+				proc := &bitflow.SimpleProcessor{
 					Description: "Pick first " + strconv.Itoa(num) + " samples",
 				}
 				proc.Process = func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -63,11 +62,11 @@ func RegisterPickHead(b reg.ProcessorRegistry) {
 
 func RegisterSkipHead(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("skip",
-		func(p *pipeline.SamplePipeline, params map[string]string) (err error) {
+		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
 			num := reg.IntParam(params, "num", 0, false, &err)
 			if err == nil {
 				dropped := 0
-				p.Add(&pipeline.SimpleProcessor{
+				p.Add(&bitflow.SimpleProcessor{
 					Description: "Drop first " + strconv.Itoa(num) + " samples",
 					Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 						if dropped >= num {

@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/bitflow-stream/go-bitflow"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 	log "github.com/sirupsen/logrus"
 )
 

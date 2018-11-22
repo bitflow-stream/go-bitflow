@@ -5,9 +5,8 @@ import (
 	"sync"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 type PipelineRateSynchronizer struct {
@@ -21,7 +20,7 @@ type PipelineRateSynchronizer struct {
 func RegisterPipelineRateSynchronizer(b reg.ProcessorRegistry) {
 	synchronization_keys := make(map[string]*PipelineRateSynchronizer)
 
-	create := func(p *pipeline.SamplePipeline, params map[string]string) error {
+	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
 		var err error
 		key := params["key"]
 		chanSize := reg.IntParam(params, "buf", 5, true, &err)

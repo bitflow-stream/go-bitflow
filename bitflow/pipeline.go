@@ -15,6 +15,8 @@ import (
 type SamplePipeline struct {
 	Source     SampleSource
 	Processors []SampleProcessor
+
+	lastProcessor SampleProcessor
 }
 
 // Construct connects the SampleSource and all SampleProcessors.
@@ -71,10 +73,52 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 // chaining multiple Add invocations like so:
 //   pipeline.Add(processor1).Add(processor2)
 func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
+	if p.lastProcessor != nil {
+		if merger, ok := p.lastProcessor.(MergeableProcessor); ok {
+			if merger.MergeProcessor(processor) {
+				// Merge successful: drop the incoming step
+				return p
+			}
+		}
+	}
+	p.lastProcessor = processor
 	if processor != nil {
 		p.Processors = append(p.Processors, processor)
 	}
 	return p
+}
+
+func (p *SamplePipeline) Batch(steps ...BatchProcessingStep) *SamplePipeline {
+	batch := new(BatchProcessor)
+	for _, step := range steps {
+		batch.Add(step)
+	}
+	return p.Add(batch)
+}
+
+func (p *SamplePipeline) String() string {
+	return "Pipeline"
+}
+
+func (p *SamplePipeline) ContainedStringers() []fmt.Stringer {
+	res := make([]fmt.Stringer, 0, len(p.Processors)+2)
+	if p.Source != nil {
+		res = append(res, p.Source)
+	}
+	for _, proc := range p.Processors {
+		res = append(res, proc)
+	}
+	return res
+}
+
+func (p *SamplePipeline) FormatLines() []string {
+	printer := IndentPrinter{
+		OuterIndent:  "│ ",
+		InnerIndent:  "├─",
+		CornerIndent: "└─",
+		FillerIndent: "  ",
+	}
+	return printer.PrintLines(p)
 }
 
 // StartAndWait constructs the pipeline and starts it. It blocks until the pipeline
@@ -122,7 +166,7 @@ func (t *ProcessorTaskWrapper) Stop() {
 	// Ignore Stop() method
 }
 
-// SourceTask can be used to convert an instance of SampleSource to a golib.Task.
+// SourceTaskWrapper can be used to convert an instance of SampleSource to a golib.Task.
 // Calls to the Stop() method are mapped to the Close() method of the underlying SampleSource.
 type SourceTaskWrapper struct {
 	SampleSource

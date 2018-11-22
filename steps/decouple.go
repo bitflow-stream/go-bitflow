@@ -6,9 +6,8 @@ import (
 	"sync"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 // Decouple the incoming samples from the MetricSink through a
@@ -20,7 +19,7 @@ type DecouplingProcessor struct {
 	ChannelBuffer int // Must be set before calling Start()
 }
 
-func AddDecoupleStep(p *pipeline.SamplePipeline, params map[string]string) error {
+func AddDecoupleStep(p *bitflow.SamplePipeline, params map[string]string) error {
 	buf, err := strconv.Atoi(params["buf"])
 	if err != nil {
 		err = reg.ParameterError("buf", err)

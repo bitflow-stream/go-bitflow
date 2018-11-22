@@ -3,10 +3,9 @@ package main
 import (
 	"time"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/plugin"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/plugin"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -55,7 +54,7 @@ func (p *pluginImpl) Init(registry reg.ProcessorRegistry) error {
 	}
 
 	plugin.LogPluginProcessor(p, DataProcessorName)
-	registry.RegisterAnalysisParamsErr(DataProcessorName, func(pipeline *pipeline.SamplePipeline, params map[string]string) error {
+	registry.RegisterAnalysisParamsErr(DataProcessorName, func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 		var res MockSampleProcessor
 		err := res.ParseParams(params)
 		if err == nil {

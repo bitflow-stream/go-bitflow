@@ -1,4 +1,4 @@
-package pipeline
+package bitflow
 
 import (
 	"fmt"
@@ -6,14 +6,13 @@ import (
 	"time"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow"
 	log "github.com/sirupsen/logrus"
 )
 
 type BatchProcessor struct {
-	bitflow.NoopProcessor
-	checker  bitflow.HeaderChecker
-	samples  []*bitflow.Sample
+	NoopProcessor
+	checker  HeaderChecker
+	samples  []*Sample
 	shutdown bool
 
 	Steps []BatchProcessingStep
@@ -26,13 +25,13 @@ type BatchProcessor struct {
 
 	FlushTags     []string // If set, flush every time any of these tags change
 	lastFlushTags []string
-	flushHeader   *bitflow.Header
+	flushHeader   *Header
 	flushTrigger  *golib.TimeoutCond // Used to trigger flush and to notify about finished flush. Relies on Sample()/Close() being synchronized externally.
 	flushError    error
 }
 
 type BatchProcessingStep interface {
-	ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error)
+	ProcessBatch(header *Header, samples []*Sample) (*Header, []*Sample, error)
 	String() string
 }
 
@@ -70,7 +69,7 @@ func (p *BatchProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	return p.NoopProcessor.Start(wg)
 }
 
-func (p *BatchProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) (err error) {
+func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 	oldHeader := p.checker.LastHeader
 	flush := p.checker.InitializedHeaderChanged(header)
 	if len(p.FlushTags) > 0 {
@@ -114,7 +113,7 @@ func (p *BatchProcessor) Close() {
 	}
 }
 
-func (p *BatchProcessor) triggerFlush(header *bitflow.Header, shutdown bool) error {
+func (p *BatchProcessor) triggerFlush(header *Header, shutdown bool) error {
 	p.flushTrigger.L.Lock()
 	defer p.flushTrigger.L.Unlock()
 	p.flushHeader = header
@@ -167,7 +166,7 @@ func (p *BatchProcessor) flushTimedOut() bool {
 	return time.Now().Sub(p.lastSample) >= p.FlushTimeout
 }
 
-func (p *BatchProcessor) executeFlush(header *bitflow.Header) error {
+func (p *BatchProcessor) executeFlush(header *Header) error {
 	samples := p.samples
 	if len(samples) == 0 || header == nil {
 		return nil
@@ -191,7 +190,7 @@ func (p *BatchProcessor) executeFlush(header *bitflow.Header) error {
 	}
 }
 
-func (p *BatchProcessor) executeSteps(samples []*bitflow.Sample, header *bitflow.Header) ([]*bitflow.Sample, *bitflow.Header, error) {
+func (p *BatchProcessor) executeSteps(samples []*Sample, header *Header) ([]*Sample, *Header, error) {
 	if len(p.Steps) > 0 {
 		log.Debugln("Executing", len(p.Steps), "batch processing step(s)")
 		for i, step := range p.Steps {
@@ -229,7 +228,7 @@ func (p *BatchProcessor) String() string {
 	return fmt.Sprintf("BatchProcessor (%v step%s%s)", len(p.Steps), extra, flushed)
 }
 
-func (p *BatchProcessor) MergeProcessor(other bitflow.SampleProcessor) bool {
+func (p *BatchProcessor) MergeProcessor(other SampleProcessor) bool {
 	if otherBatch, ok := other.(*BatchProcessor); ok && p.compatibleParameters(otherBatch) {
 		p.Steps = append(p.Steps, otherBatch.Steps...)
 		return true
@@ -253,11 +252,11 @@ func (p *BatchProcessor) compatibleParameters(other *BatchProcessor) bool {
 
 type SimpleBatchProcessingStep struct {
 	Description          string
-	Process              func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error)
+	Process              func(header *Header, samples []*Sample) (*Header, []*Sample, error)
 	OutputSampleSizeFunc func(sampleSize int) int
 }
 
-func (s *SimpleBatchProcessingStep) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
+func (s *SimpleBatchProcessingStep) ProcessBatch(header *Header, samples []*Sample) (*Header, []*Sample, error) {
 	if process := s.Process; process == nil {
 		return nil, nil, fmt.Errorf("%v: Process function is not set", s)
 	} else {

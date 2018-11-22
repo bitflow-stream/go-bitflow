@@ -3,14 +3,13 @@ package steps
 import (
 	"math/rand"
 
-	"github.com/bitflow-stream/go-bitflow"
-	"github.com/bitflow-stream/go-bitflow-pipeline"
-	"github.com/bitflow-stream/go-bitflow-pipeline/script/reg"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
-func NewSampleShuffler() *pipeline.SimpleBatchProcessingStep {
-	return &pipeline.SimpleBatchProcessingStep{
+func NewSampleShuffler() *bitflow.SimpleBatchProcessingStep {
+	return &bitflow.SimpleBatchProcessingStep{
 		Description: "sample shuffler",
 		Process: func(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
 			log.Println("Shuffling", len(samples), "samples")
@@ -25,7 +24,7 @@ func NewSampleShuffler() *pipeline.SimpleBatchProcessingStep {
 
 func RegisterSampleShuffler(b reg.ProcessorRegistry) {
 	b.RegisterAnalysis("shuffle",
-		func(p *pipeline.SamplePipeline) {
+		func(p *bitflow.SamplePipeline) {
 			p.Batch(NewSampleShuffler())
 		},
 		"Shuffle a batch of samples to a random ordering",
