@@ -188,6 +188,44 @@ type MergeableProcessor interface {
 	MergeProcessor(other SampleProcessor) bool
 }
 
+// ResizingSampleProcessor is a helper interface that can be implemented by SampleProcessors
+// in order to make RequiredValues() more reliable. The result of
+// the OutputSampleSize() method should give a worst-case estimation of the number of values
+// that will be present in Samples after this SampleProcessor is done processing a sample.
+// This allows the optimization of pre-allocating a value array large enough to hold the final
+// amount of metrics.
+// The optimization works best when all samples are processed in a one-to-one fashion,
+// i.e. no samples are split into multiple samples.
+type ResizingSampleProcessor interface {
+	SampleProcessor
+	OutputSampleSize(sampleSize int) int
+}
+
+// RequiredValues the number of Values that should be large enough to hold
+// the end-result after processing a Sample by all intermediate SampleProcessors.
+// The result is based on ResizingSampleProcessor.OutputSampleSize(). SampleProcessor instances
+// that do not implement the ResizingSampleProcessor interface are assumed to not increase the
+// number metrics.
+func RequiredValues(numFields int, sink SampleSink) int {
+	for {
+		if sink == nil {
+			break
+		}
+		if sink, ok := sink.(ResizingSampleProcessor); ok {
+			newSize := sink.OutputSampleSize(numFields)
+			if newSize > numFields {
+				numFields = newSize
+			}
+		}
+		if source, ok := sink.(SampleSource); ok {
+			sink = source.GetSink()
+		} else {
+			break
+		}
+	}
+	return numFields
+}
+
 type SimpleProcessor struct {
 	NoopProcessor
 	Description          string
