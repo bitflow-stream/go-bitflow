@@ -10,7 +10,7 @@
 
 # Install the pipeline to make sure the plugin is built against an up-to-date binary
 echo "Building go-bitflow-pipeline..."
-go install github.com/bitflow-stream/go-bitflow-pipeline/...
+go install github.com/bitflow-stream/go-bitflow/...
 
 # Now build the plugin (use the name of the folder as binary target)
 home=`dirname $(readlink -e $0)`
