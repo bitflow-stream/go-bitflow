@@ -1,7 +1,6 @@
 // Code generated from Bitflow.g4 by ANTLR 4.7.1. DO NOT EDIT.
 
 package parser // Bitflow
-
 import "github.com/antlr/antlr4/runtime/Go/antlr"
 
 // BitflowListener is a complete listener for a parse tree produced by BitflowParser.
