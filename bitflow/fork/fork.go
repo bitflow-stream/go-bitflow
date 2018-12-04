@@ -31,6 +31,7 @@ type SampleFork struct {
 
 	Distributor Distributor
 
+	// TODO implement fatal/non-fatal sub-pipeline errors
 	// If true, errors of subpipelines will be logged but don't stop the entire MultiPipeline
 	// Finished pipelines must be reported through LogFinishedPipeline()
 	NonfatalErrors bool

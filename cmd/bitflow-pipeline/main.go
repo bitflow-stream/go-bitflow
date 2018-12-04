@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -49,6 +50,7 @@ func fix_arguments(argsPtr *[]string) {
 func do_main() int {
 	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
 	printPipeline := flag.Bool("print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
+	printPipelineSchedulingHints := flag.Bool("print-scheduling-hints", false, "Print the subpipelines with scheduling hints as json and exit.")
 	printCapabilities := flag.Bool("capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
 	useNewScript := flag.Bool("new", false, "Use the new script parser for processing the input script.")
 	scriptFile := ""
@@ -73,6 +75,10 @@ func do_main() int {
 
 	rawScript, err := get_script(flag.Args(), scriptFile)
 	golib.Checkerr(err)
+
+	if *printPipelineSchedulingHints {
+		return convertAndPrintSchedulingHints(rawScript)
+	}
 	make_pipeline := make_pipeline_old
 	if *useNewScript {
 		log.Println("Running using new ANTLR script implementation")
@@ -91,6 +97,29 @@ func do_main() int {
 		return 0
 	}
 	return pipe.StartAndWait()
+}
+
+func convertAndPrintSchedulingHints(rawScript string) int {
+	scripts, errs := new(script.BitflowScriptScheduleParser).ParseScript(rawScript)
+	if errs.NilOrError() != nil {
+		log.Println(errs.Error())
+		return 1
+	}
+	j, err := JSONMarshal(scripts)
+	if err != nil {
+		log.Println(err)
+		return 1
+	}
+	fmt.Println(string(j))
+	return 0
+}
+
+func JSONMarshal(t interface{}) ([]byte, error) {
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(t)
+	return buffer.Bytes(), err
 }
 
 func get_script(parsedArgs []string, scriptFile string) (string, error) {
@@ -131,7 +160,7 @@ func make_pipeline_old(registry reg.ProcessorRegistry, scriptStr string) (*bitfl
 }
 
 func make_pipeline_new(registry reg.ProcessorRegistry, scriptStr string) (*bitflow.SamplePipeline, error) {
-	s, err := script.NewAntlrBitflowParser(registry).ParseScript(scriptStr)
+	s, err := (&script.BitflowScriptParser{Registry: registry}).ParseScript(scriptStr)
 	return s, err.NilOrError()
 }
 

@@ -2,227 +2,168 @@ package script
 
 import (
 	"fmt"
-	"reflect"
-	"strings"
+	"strconv"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/antongulenko/golib"
 	internal "github.com/bitflow-stream/go-bitflow/script/script/internal"
 )
 
-type Index int
-
-type ScriptSchedule struct {
-	Index        Index
-	Script       string
-	Hints        map[string]interface{}
-	Predecessors []Index
-	Successors   []Index
+type HintedSubscript struct {
+	Index  int
+	Script string
+	Hints  map[string]string
 }
 
-type BitflowScriptScheduleParser interface {
-	// ParseScript takes a Bitflow Script as input and returns the parsed SamplePipeline and occurred parsing errors as output
-	ParseScript(script string) ([]ScriptSchedule, golib.MultiError)
+type BitflowScriptScheduleParser struct {
+	RecoverPanics bool
 }
 
-func NewBitflowScriptScheduleParser() BitflowScriptScheduleParser {
-	r := new(AntlrBitflowScriptScheduleListener)
-	r.resetListener()
-	return r
+func (p *BitflowScriptScheduleParser) ParseScript(script string) ([]HintedSubscript, golib.MultiError) {
+	listener := &AntlrBitflowScriptScheduleListener{
+		script:       script,
+		rawScript:    script,
+		currentIndex: 1,
+	}
+	runParser(script, listener, p.RecoverPanics)
+	listener.assertCleanState()
+	return listener.sortedSubscripts(), listener.MultiError
 }
-
-// next line to ensure AntlrBitflowScriptScheduleListener satisfies BitflowListener interface
-var _ internal.BitflowListener = &AntlrBitflowScriptScheduleListener{}
 
 // AntlrBitflowScriptScheduleListener is a complete listener for a parse tree produced by BitflowParser.
 type AntlrBitflowScriptScheduleListener struct {
+	internal.BaseBitflowListener
+	antlrErrorListener
+
 	currentIndex       int
 	script             string
-	schedulableScripts []ScriptSchedule
-	errors             []error
+	rawScript          string
+	schedulableScripts []HintedSubscript
+
+	schedulingParams map[string]string
+	propagationStart int
+	propagatedHints  map[string]string
 }
 
-func (s *AntlrBitflowScriptScheduleListener) pushError(err error) {
-	s.errors = append(s.errors, err)
-}
-
-func (s *AntlrBitflowScriptScheduleListener) resetListener() {
-	s.schedulableScripts = make([]ScriptSchedule, 0)
-	s.errors = make([]error, 0)
-	s.currentIndex = 0
-}
-
-// ParseScript takes a Bitflow Script as input and returns the parsed SamplePipeline and occurred parsing errors as output
-func (s *AntlrBitflowScriptScheduleListener) ParseScript(script string) (scripts []ScriptSchedule, errors golib.MultiError) {
-	defer s.resetListener()
-	defer func() {
-		if r := recover(); r != nil {
-			// TODO what if r is not error
-			errors = golib.MultiError{r.(error)}
-		}
-	}()
-	rawScript := strings.Replace(script, "\n", "", -1)
-	input := antlr.NewInputStream(rawScript)
-	lexer := internal.NewBitflowLexer(input)
-	stream := antlr.NewCommonTokenStream(lexer, 0)
-	p := internal.NewBitflowParser(stream)
-	// Todo replace Error listener
-	p.AddErrorListener(antlr.NewDiagnosticErrorListener(true))
-	p.BuildParseTrees = true
-	tree := p.Script()
-	antlr.ParseTreeWalkerDefault.Walk(s, tree)
-	return s.schedulableScripts, s.errors
-}
-
-// EnterScheduling_hints is called when production scheduling_hints is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterSchedulingHints(ctx *internal.SchedulingHintsContext) {
-	switch c := ctx.GetParent().(type) {
-	case *internal.TransformContext:
-		// TODO
-		//replaceWithReference(script)
-	case *internal.ForkContext:
-		// TODO
-	default:
-		fmt.Println(reflect.TypeOf(c))
+func (s *AntlrBitflowScriptScheduleListener) assertCleanState() {
+	if s.schedulingParams != nil || s.propagationStart > 0 || s.propagatedHints != nil {
+		s.pushError(fmt.Errorf("Unclean listener state after parsing: propagationStart %v, propagatedHints %v, scheduling params %v",
+			s.propagationStart, s.propagatedHints, s.schedulingParams))
 	}
 }
 
-func replaceWithReference(script, reference string, ctx *antlr.BaseParserRuleContext) string {
-	runes := []rune(script)
-	runes = append(append(runes[:ctx.GetStart().GetStart()], []rune(reference)...), runes[:ctx.GetStop().GetStop()]...)
-	return string(runes)
+func (s *AntlrBitflowScriptScheduleListener) sortedSubscripts() []HintedSubscript {
+	res := make([]HintedSubscript, len(s.schedulableScripts))
+	for _, s := range s.schedulableScripts {
+		res[s.Index] = s
+	}
+	return res
 }
 
-// ExitScheduling_hints is called when production scheduling_hints is exited.
+// extractHintedSubscript takes a BaseParserRuleContext and replaces it's occurrence in the script with an index.
+// The script is updated during parsing, but the antlr.BaseParserRuleContext's properties are static, including start and
+// end position. Therefore extractHintedSubscript is keeping track of the offset between
+func (s *AntlrBitflowScriptScheduleListener) addHintedSubscript(from, until int, hints map[string]string) {
+	index := s.currentIndex
+	s.currentIndex++
+	runes := []rune(s.rawScript)
+	subscript := runes[from : until+1]
+	s.schedulableScripts = append(s.schedulableScripts, HintedSubscript{
+		Hints:  hints,
+		Index:  index,
+		Script: string(subscript),
+	})
+	s.replaceSubscriptWithReference(from, until, index)
+}
+
+// extractHintedSubscript takes a BaseParserRuleContext and replaces it's occurrence in the script with an index.
+// The script is updated during parsing, but the antlr.BaseParserRuleContext's properties are static, including start and
+// end position. Therefore extractHintedSubscript is keeping track of the offset between
+func (s *AntlrBitflowScriptScheduleListener) replaceSubscriptWithReference(from, until int, index int) {
+	runes := []rune(s.script)
+
+	reference := "{{" + strconv.Itoa(int(index)) + "}}"
+	currentOffset := len([]rune(s.rawScript)) - len(runes)
+
+	start := from - currentOffset
+	stop := until - currentOffset + 1
+
+	// HAVE: head of script -> current token -> tail of script
+	// WANT: head of script -> {{reference}} -> tail of script
+	head := append([]rune{}, runes[:start]...)      // head of script ->
+	headRef := append(head, []rune(reference)...)   // head of script -> {{reference}}
+	headRefTail := append(headRef, runes[stop:]...) // head of script -> {{reference}} -> tail of script
+	updatedScript := headRefTail
+
+	s.script = string(updatedScript)
+}
+
+func extractParentsStartStop(ctx *internal.SchedulingHintsContext) (start int, stop int) {
+	var baseCtx *antlr.BaseParserRuleContext
+	switch c := ctx.GetParent().(type) {
+	case *internal.TransformContext:
+		baseCtx = c.BaseParserRuleContext
+	case *internal.ForkContext:
+		baseCtx = c.BaseParserRuleContext
+	case *internal.WindowContext:
+		baseCtx = c.BaseParserRuleContext
+	}
+	start = baseCtx.GetStart().GetStart()
+	stop = baseCtx.GetStop().GetStop()
+	return start, stop
+}
+
+func (s *AntlrBitflowScriptScheduleListener) EnterSchedulingHints(ctx *internal.SchedulingHintsContext) {
+	s.schedulingParams = make(map[string]string)
+}
+
 func (s *AntlrBitflowScriptScheduleListener) ExitSchedulingHints(ctx *internal.SchedulingHintsContext) {
-	// ignored
+	parentStart, parentStop := extractParentsStartStop(ctx)
+
+	if s.propagatedHints != nil {
+		// terminate ongoing scheduling-hint-propagation
+		propHints := s.propagatedHints
+		propStart := s.propagationStart
+		s.propagatedHints = nil
+		s.propagationStart = 0
+		propStop := parentStart - 1 - len("->")
+		s.addHintedSubscript(propStart, propStop, propHints)
+	}
+
+	hints := s.schedulingParams
+	s.schedulingParams = nil
+	if val, ok := hints["propagate-down"]; ok && val == "true" {
+		// save state and propagate down these scheduling hints
+		s.propagationStart = parentStart
+		s.propagatedHints = hints
+		return
+	}
+
+	// apply hints now
+	s.addHintedSubscript(parentStart, parentStop, hints)
 }
 
-// EnterTransform_parameters is called when production transform_parameters is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterTransformParameters(ctx *internal.TransformParametersContext) {
+func (s *AntlrBitflowScriptScheduleListener) ExitSchedulingParameter(ctx *internal.SchedulingParameterContext) {
+	param := ctx.Parameter().(*internal.ParameterContext)
+	key := unwrapString(param.Name().(*internal.NameContext))
+	val := unwrapString(param.Val().(*internal.ValContext))
+	s.schedulingParams[key] = val
 }
 
-// ExitTransform_parameters is called when production transform_parameters is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitTransformParameters(ctx *internal.TransformParametersContext) {
-}
-
-// EnterName is called when production name is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterName(ctx *internal.NameContext) {}
-
-// ExitName is called when production name is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitName(ctx *internal.NameContext) {
-}
-
-// EnterOutput is called when production output is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterOutput(ctx *internal.OutputContext) {}
-
-// ExitOutput is called when production output is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitOutput(ctx *internal.OutputContext) {
-}
-
-// EnterOutput_fork is called when production output_fork is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterOutputFork(ctx *internal.OutputForkContext) {}
-
-// ExitOutput_fork is called when production output_fork is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitOutputFork(ctx *internal.OutputForkContext) {}
-
-// VisitTerminal is called when a terminal node is visited.
-func (s *AntlrBitflowScriptScheduleListener) VisitTerminal(node antlr.TerminalNode) {
-}
-
-// VisitErrorNode is called when an error node is visited.
-func (s *AntlrBitflowScriptScheduleListener) VisitErrorNode(node antlr.ErrorNode) {
-}
-
-// EnterEveryRule is called when any rule is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterEveryRule(ctx antlr.ParserRuleContext) {
-
-}
-
-// ExitEveryRule is called when any rule is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitEveryRule(ctx antlr.ParserRuleContext) {
-}
-
-// EnterScript is called when production script is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterScript(ctx *internal.ScriptContext) {
-}
-
-// ExitScript is called when production script is exited.
 func (s *AntlrBitflowScriptScheduleListener) ExitScript(ctx *internal.ScriptContext) {
-}
+	if s.propagatedHints != nil {
+		// terminate ongoing scheduling-hint-propagation
+		propHints := s.propagatedHints
+		propStart := s.propagationStart
+		s.propagatedHints = nil
+		s.propagationStart = 0
+		propStop := len([]rune(s.rawScript)) - 1
+		s.addHintedSubscript(propStart, propStop, propHints)
+	}
 
-// EnterFork is called when production fork is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterFork(ctx *internal.ForkContext) {
-}
-
-// ExitFork is called when production fork is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitFork(ctx *internal.ForkContext) {
-}
-
-// EnterInput is called when production input is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterInput(ctx *internal.InputContext) {}
-
-// ExitInput is called when production input is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitInput(ctx *internal.InputContext) {
-}
-
-// EnterMultiinput is called when production multiinput is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterMultiinput(ctx *internal.MultiinputContext) {
-}
-
-// ExitMultiinput is called when production multiinput is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitMultiinput(ctx *internal.MultiinputContext) {
-}
-
-// EnterPipeline is called when production pipeline is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterPipeline(ctx *internal.PipelineContext) {
-}
-
-// ExitPipeline is called when production pipeline is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitPipeline(ctx *internal.PipelineContext) {
-
-}
-
-// EnterSub_pipeline is called when production sub_pipeline is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterSubPipeline(ctx *internal.SubPipelineContext) {
-}
-
-// ExitSub_pipeline is called when production sub_pipeline is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitSubPipeline(ctx *internal.SubPipelineContext) {
-}
-
-// EnterSub_pipeline is called when production sub_pipeline is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterWindowSubPipeline(ctx *internal.WindowSubPipelineContext) {
-}
-
-// ExitSub_pipeline is called when production sub_pipeline is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitWindowSubPipeline(ctx *internal.WindowSubPipelineContext) {
-}
-
-// EnterTransform is called when production transform is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterTransform(ctx *internal.TransformContext) {
-}
-
-// ExitTransform is called when production transform is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitTransform(ctx *internal.TransformContext) {
-}
-
-// EnterParameter is called when production parameter is entered.
-func (s *AntlrBitflowScriptScheduleListener) EnterParameter(ctx *internal.ParameterContext) {
-}
-
-// ExitParameter is called when production parameter is exited.
-func (s *AntlrBitflowScriptScheduleListener) ExitPipelineName(ctx *internal.PipelineNameContext) {
-
-}
-func (s *AntlrBitflowScriptScheduleListener) EnterPipelineName(ctx *internal.PipelineNameContext) {
-
-}
-func (s *AntlrBitflowScriptScheduleListener) ExitParameter(ctx *internal.ParameterContext) {
-}
-
-func (s *AntlrBitflowScriptScheduleListener) EnterWindow(ctx *internal.WindowContext) {
-
-}
-func (s *AntlrBitflowScriptScheduleListener) ExitWindow(ctx *internal.WindowContext) {
+	// add the root script with Index 0
+	s.schedulableScripts = append(s.schedulableScripts, HintedSubscript{
+		Script: s.script,
+		Index:  0,
+	})
 }
