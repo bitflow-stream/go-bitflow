@@ -426,3 +426,58 @@ func (t TagTemplate) Resolve(sample *Sample) string {
 		}
 	})
 }
+
+type SampleRing struct {
+	samples []*SampleAndHeader
+	head    int
+}
+
+func NewSampleRing(capacity int) *SampleRing {
+	return &SampleRing{
+		samples: make([]*SampleAndHeader, capacity),
+	}
+}
+
+func (r *SampleRing) Push(sample *Sample, header *Header) *SampleRing {
+	return r.PushSampleAndHeader(&SampleAndHeader{sample, header})
+}
+
+func (r *SampleRing) PushSampleAndHeader(sample *SampleAndHeader) *SampleRing {
+	if sample != nil && len(r.samples) > 0 {
+		r.samples[r.head] = sample
+		if r.head >= len(r.samples)-1 {
+			r.head = 0
+		} else {
+			r.head++
+		}
+	}
+	return r
+}
+
+func (r *SampleRing) Len() int {
+	if r.IsFull() {
+		return len(r.samples)
+	}
+	return r.head
+}
+
+func (r *SampleRing) IsFull() bool {
+	if len(r.samples) == 0 {
+		return true
+	}
+	return r.samples[r.head] != nil
+}
+
+func (r *SampleRing) Get() []*SampleAndHeader {
+	if len(r.samples) == 0 {
+		return nil
+	}
+	res := make([]*SampleAndHeader, r.Len())
+	if r.IsFull() {
+		copy(res, r.samples[r.head:])
+		copy(res[len(r.samples)-r.head:], r.samples[:r.head])
+	} else {
+		copy(res, r.samples[:r.head])
+	}
+	return res
+}

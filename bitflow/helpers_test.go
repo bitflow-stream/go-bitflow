@@ -32,24 +32,28 @@ func init() {
 	golib.ConfigureLogging()
 }
 
-type testSuiteWithSamples struct {
+type testSuiteBase struct {
 	t *testing.T
 	*require.Assertions
+}
+
+func (suite *testSuiteBase) T() *testing.T {
+	return suite.t
+}
+
+func (suite *testSuiteBase) SetT(t *testing.T) {
+	suite.t = t
+	suite.Assertions = require.New(t)
+}
+
+type testSuiteWithSamples struct {
+	testSuiteBase
 
 	rand      *rand.Rand
 	timestamp time.Time
 
 	headers []*UnmarshalledHeader
 	samples [][]*Sample
-}
-
-func (suite *testSuiteWithSamples) T() *testing.T {
-	return suite.t
-}
-
-func (suite *testSuiteWithSamples) SetT(t *testing.T) {
-	suite.t = t
-	suite.Assertions = require.New(t)
 }
 
 func (suite *testSuiteWithSamples) SetupTest() {

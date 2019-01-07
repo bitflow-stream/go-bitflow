@@ -2,6 +2,7 @@ package steps
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/bitflow-stream/go-bitflow/bitflow"
@@ -81,4 +82,34 @@ func RegisterSkipHead(b reg.ProcessorRegistry) {
 			return
 		},
 		"Drop a number of samples in the beginning", reg.OptionalParams("num"))
+}
+
+func RegisterPickTail(b reg.ProcessorRegistry) {
+	b.RegisterAnalysisParamsErr("tail",
+		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
+			num := reg.IntParam(params, "num", 0, false, &err)
+			if err == nil {
+				ring := bitflow.NewSampleRing(num)
+				proc := &bitflow.SimpleProcessor{
+					Description: "Read until end of stream, and forward only the last " + strconv.Itoa(num) + " samples",
+					Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+						ring.Push(sample, header)
+						return nil, nil, nil
+					},
+				}
+				proc.OnClose = func() {
+					flush := ring.Get()
+					log.Printf("%v: Reached end of stream, now flushing %v samples", proc, len(flush))
+					for _, sample := range flush {
+						if err := proc.NoopProcessor.Sample(sample.Sample, sample.Header); err != nil {
+							proc.Error(err)
+							break
+						}
+					}
+				}
+				p.Add(proc)
+			}
+			return
+		},
+		"Forward only a number of the first processed samples. The whole pipeline is closed afterwards, unless close=false is given.", reg.RequiredParams("num"))
 }
