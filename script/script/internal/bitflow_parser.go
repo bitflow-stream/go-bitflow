@@ -39,34 +39,34 @@ var parserATN = []uint16{
 	11, 19, 3, 20, 3, 20, 3, 20, 3, 20, 7, 20, 198, 10, 20, 12, 20, 14, 20,
 	201, 11, 20, 5, 20, 203, 10, 20, 3, 20, 3, 20, 3, 21, 3, 21, 3, 21, 2,
 	2, 22, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34,
-	36, 38, 40, 2, 4, 3, 2, 14, 17, 4, 2, 14, 15, 17, 17, 2, 215, 2, 42, 3,
-	2, 2, 2, 4, 56, 3, 2, 2, 2, 6, 63, 3, 2, 2, 2, 8, 67, 3, 2, 2, 2, 10, 69,
-	3, 2, 2, 2, 12, 71, 3, 2, 2, 2, 14, 75, 3, 2, 2, 2, 16, 90, 3, 2, 2, 2,
-	18, 99, 3, 2, 2, 2, 20, 118, 3, 2, 2, 2, 22, 120, 3, 2, 2, 2, 24, 125,
-	3, 2, 2, 2, 26, 145, 3, 2, 2, 2, 28, 152, 3, 2, 2, 2, 30, 160, 3, 2, 2,
-	2, 32, 174, 3, 2, 2, 2, 34, 176, 3, 2, 2, 2, 36, 185, 3, 2, 2, 2, 38, 193,
-	3, 2, 2, 2, 40, 206, 3, 2, 2, 2, 42, 47, 5, 16, 9, 2, 43, 44, 7, 12, 2,
-	2, 44, 46, 5, 16, 9, 2, 45, 43, 3, 2, 2, 2, 46, 49, 3, 2, 2, 2, 47, 45,
-	3, 2, 2, 2, 47, 48, 3, 2, 2, 2, 48, 51, 3, 2, 2, 2, 49, 47, 3, 2, 2, 2,
-	50, 52, 7, 12, 2, 2, 51, 50, 3, 2, 2, 2, 51, 52, 3, 2, 2, 2, 52, 53, 3,
-	2, 2, 2, 53, 54, 7, 2, 2, 3, 54, 3, 3, 2, 2, 2, 55, 57, 5, 8, 5, 2, 56,
-	55, 3, 2, 2, 2, 57, 58, 3, 2, 2, 2, 58, 56, 3, 2, 2, 2, 58, 59, 3, 2, 2,
-	2, 59, 61, 3, 2, 2, 2, 60, 62, 5, 38, 20, 2, 61, 60, 3, 2, 2, 2, 61, 62,
-	3, 2, 2, 2, 62, 5, 3, 2, 2, 2, 63, 65, 5, 8, 5, 2, 64, 66, 5, 38, 20, 2,
-	65, 64, 3, 2, 2, 2, 65, 66, 3, 2, 2, 2, 66, 7, 3, 2, 2, 2, 67, 68, 9, 2,
-	2, 2, 68, 9, 3, 2, 2, 2, 69, 70, 9, 3, 2, 2, 70, 11, 3, 2, 2, 2, 71, 72,
-	5, 8, 5, 2, 72, 73, 7, 3, 2, 2, 73, 74, 5, 10, 6, 2, 74, 13, 3, 2, 2, 2,
-	75, 84, 7, 4, 2, 2, 76, 81, 5, 12, 7, 2, 77, 78, 7, 5, 2, 2, 78, 80, 5,
-	12, 7, 2, 79, 77, 3, 2, 2, 2, 80, 83, 3, 2, 2, 2, 81, 79, 3, 2, 2, 2, 81,
-	82, 3, 2, 2, 2, 82, 85, 3, 2, 2, 2, 83, 81, 3, 2, 2, 2, 84, 76, 3, 2, 2,
-	2, 84, 85, 3, 2, 2, 2, 85, 86, 3, 2, 2, 2, 86, 87, 7, 6, 2, 2, 87, 15,
-	3, 2, 2, 2, 88, 91, 5, 4, 3, 2, 89, 91, 5, 18, 10, 2, 90, 88, 3, 2, 2,
-	2, 90, 89, 3, 2, 2, 2, 91, 96, 3, 2, 2, 2, 92, 93, 7, 13, 2, 2, 93, 95,
-	5, 20, 11, 2, 94, 92, 3, 2, 2, 2, 95, 98, 3, 2, 2, 2, 96, 94, 3, 2, 2,
-	2, 96, 97, 3, 2, 2, 2, 97, 17, 3, 2, 2, 2, 98, 96, 3, 2, 2, 2, 99, 100,
-	7, 7, 2, 2, 100, 105, 5, 16, 9, 2, 101, 102, 7, 12, 2, 2, 102, 104, 5,
-	16, 9, 2, 103, 101, 3, 2, 2, 2, 104, 107, 3, 2, 2, 2, 105, 103, 3, 2, 2,
-	2, 105, 106, 3, 2, 2, 2, 106, 109, 3, 2, 2, 2, 107, 105, 3, 2, 2, 2, 108,
+	36, 38, 40, 2, 4, 3, 2, 14, 17, 3, 2, 14, 16, 2, 215, 2, 42, 3, 2, 2, 2,
+	4, 56, 3, 2, 2, 2, 6, 63, 3, 2, 2, 2, 8, 67, 3, 2, 2, 2, 10, 69, 3, 2,
+	2, 2, 12, 71, 3, 2, 2, 2, 14, 75, 3, 2, 2, 2, 16, 90, 3, 2, 2, 2, 18, 99,
+	3, 2, 2, 2, 20, 118, 3, 2, 2, 2, 22, 120, 3, 2, 2, 2, 24, 125, 3, 2, 2,
+	2, 26, 145, 3, 2, 2, 2, 28, 152, 3, 2, 2, 2, 30, 160, 3, 2, 2, 2, 32, 174,
+	3, 2, 2, 2, 34, 176, 3, 2, 2, 2, 36, 185, 3, 2, 2, 2, 38, 193, 3, 2, 2,
+	2, 40, 206, 3, 2, 2, 2, 42, 47, 5, 16, 9, 2, 43, 44, 7, 12, 2, 2, 44, 46,
+	5, 16, 9, 2, 45, 43, 3, 2, 2, 2, 46, 49, 3, 2, 2, 2, 47, 45, 3, 2, 2, 2,
+	47, 48, 3, 2, 2, 2, 48, 51, 3, 2, 2, 2, 49, 47, 3, 2, 2, 2, 50, 52, 7,
+	12, 2, 2, 51, 50, 3, 2, 2, 2, 51, 52, 3, 2, 2, 2, 52, 53, 3, 2, 2, 2, 53,
+	54, 7, 2, 2, 3, 54, 3, 3, 2, 2, 2, 55, 57, 5, 8, 5, 2, 56, 55, 3, 2, 2,
+	2, 57, 58, 3, 2, 2, 2, 58, 56, 3, 2, 2, 2, 58, 59, 3, 2, 2, 2, 59, 61,
+	3, 2, 2, 2, 60, 62, 5, 38, 20, 2, 61, 60, 3, 2, 2, 2, 61, 62, 3, 2, 2,
+	2, 62, 5, 3, 2, 2, 2, 63, 65, 5, 8, 5, 2, 64, 66, 5, 38, 20, 2, 65, 64,
+	3, 2, 2, 2, 65, 66, 3, 2, 2, 2, 66, 7, 3, 2, 2, 2, 67, 68, 9, 2, 2, 2,
+	68, 9, 3, 2, 2, 2, 69, 70, 9, 3, 2, 2, 70, 11, 3, 2, 2, 2, 71, 72, 5, 8,
+	5, 2, 72, 73, 7, 3, 2, 2, 73, 74, 5, 10, 6, 2, 74, 13, 3, 2, 2, 2, 75,
+	84, 7, 4, 2, 2, 76, 81, 5, 12, 7, 2, 77, 78, 7, 5, 2, 2, 78, 80, 5, 12,
+	7, 2, 79, 77, 3, 2, 2, 2, 80, 83, 3, 2, 2, 2, 81, 79, 3, 2, 2, 2, 81, 82,
+	3, 2, 2, 2, 82, 85, 3, 2, 2, 2, 83, 81, 3, 2, 2, 2, 84, 76, 3, 2, 2, 2,
+	84, 85, 3, 2, 2, 2, 85, 86, 3, 2, 2, 2, 86, 87, 7, 6, 2, 2, 87, 15, 3,
+	2, 2, 2, 88, 91, 5, 4, 3, 2, 89, 91, 5, 18, 10, 2, 90, 88, 3, 2, 2, 2,
+	90, 89, 3, 2, 2, 2, 91, 96, 3, 2, 2, 2, 92, 93, 7, 13, 2, 2, 93, 95, 5,
+	20, 11, 2, 94, 92, 3, 2, 2, 2, 95, 98, 3, 2, 2, 2, 96, 94, 3, 2, 2, 2,
+	96, 97, 3, 2, 2, 2, 97, 17, 3, 2, 2, 2, 98, 96, 3, 2, 2, 2, 99, 100, 7,
+	7, 2, 2, 100, 105, 5, 16, 9, 2, 101, 102, 7, 12, 2, 2, 102, 104, 5, 16,
+	9, 2, 103, 101, 3, 2, 2, 2, 104, 107, 3, 2, 2, 2, 105, 103, 3, 2, 2, 2,
+	105, 106, 3, 2, 2, 2, 106, 109, 3, 2, 2, 2, 107, 105, 3, 2, 2, 2, 108,
 	110, 7, 12, 2, 2, 109, 108, 3, 2, 2, 2, 109, 110, 3, 2, 2, 2, 110, 111,
 	3, 2, 2, 2, 111, 112, 7, 8, 2, 2, 112, 19, 3, 2, 2, 2, 113, 119, 5, 22,
 	12, 2, 114, 119, 5, 24, 13, 2, 115, 119, 5, 30, 16, 2, 116, 119, 5, 34,
@@ -115,7 +115,7 @@ var literalNames = []string{
 }
 var symbolicNames = []string{
 	"", "", "", "", "", "", "", "", "", "", "EOP", "NEXT", "STRING", "NUMBER",
-	"IDENTIFIER", "BOOL", "COMMENT", "NEWLINE", "WHITESPACE", "TAB",
+	"BOOL", "IDENTIFIER", "COMMENT", "NEWLINE", "WHITESPACE", "TAB",
 }
 
 var ruleNames = []string{
@@ -166,8 +166,8 @@ const (
 	BitflowParserNEXT       = 11
 	BitflowParserSTRING     = 12
 	BitflowParserNUMBER     = 13
-	BitflowParserIDENTIFIER = 14
-	BitflowParserBOOL       = 15
+	BitflowParserBOOL       = 14
+	BitflowParserIDENTIFIER = 15
 	BitflowParserCOMMENT    = 16
 	BitflowParserNEWLINE    = 17
 	BitflowParserWHITESPACE = 18
@@ -495,7 +495,7 @@ func (p *BitflowParser) Input() (localctx IInputContext) {
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	for ok := true; ok; ok = (((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserIDENTIFIER)|(1<<BitflowParserBOOL))) != 0) {
+	for ok := true; ok; ok = (((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserBOOL)|(1<<BitflowParserIDENTIFIER))) != 0) {
 		{
 			p.SetState(53)
 			p.Name()
@@ -759,7 +759,7 @@ func (p *BitflowParser) Name() (localctx INameContext) {
 		p.SetState(65)
 		_la = p.GetTokenStream().LA(1)
 
-		if !(((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserIDENTIFIER)|(1<<BitflowParserBOOL))) != 0) {
+		if !(((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserBOOL)|(1<<BitflowParserIDENTIFIER))) != 0) {
 			p.GetErrorHandler().RecoverInline(p)
 		} else {
 			p.GetErrorHandler().ReportMatch(p)
@@ -1133,7 +1133,7 @@ func (p *BitflowParser) TransformParameters() (localctx ITransformParametersCont
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	if ((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserIDENTIFIER)|(1<<BitflowParserBOOL))) != 0 {
+	if ((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserBOOL)|(1<<BitflowParserIDENTIFIER))) != 0 {
 		{
 			p.SetState(74)
 			p.Parameter()
@@ -1311,7 +1311,7 @@ func (p *BitflowParser) Pipeline() (localctx IPipelineContext) {
 	p.GetErrorHandler().Sync(p)
 
 	switch p.GetTokenStream().LA(1) {
-	case BitflowParserSTRING, BitflowParserNUMBER, BitflowParserIDENTIFIER, BitflowParserBOOL:
+	case BitflowParserSTRING, BitflowParserNUMBER, BitflowParserBOOL, BitflowParserIDENTIFIER:
 		{
 			p.SetState(86)
 			p.Input()
@@ -2192,7 +2192,7 @@ func (p *BitflowParser) NamedSubPipeline() (localctx INamedSubPipelineContext) {
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	for ok := true; ok; ok = (((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserIDENTIFIER)|(1<<BitflowParserBOOL))) != 0) {
+	for ok := true; ok; ok = (((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserBOOL)|(1<<BitflowParserIDENTIFIER))) != 0) {
 		{
 			p.SetState(142)
 			p.Name()
@@ -3061,7 +3061,7 @@ func (p *BitflowParser) SchedulingHints() (localctx ISchedulingHintsContext) {
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	if ((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserIDENTIFIER)|(1<<BitflowParserBOOL))) != 0 {
+	if ((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserBOOL)|(1<<BitflowParserIDENTIFIER))) != 0 {
 		{
 			p.SetState(192)
 			p.SchedulingParameter()
