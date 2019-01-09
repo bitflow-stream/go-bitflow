@@ -1,8 +1,10 @@
-FROM golang:1.8.1 as build
+FROM golang:1.11 as build
 
-RUN mkdir -p /go/src/github.com/antongulenko/go-bitflow
-COPY . /go/src/github.com/antongulenko/go-bitflow
-RUN GOOS=linux GOARCH=amd64 go get -ldflags "-linkmode external -extldflags -static" github.com/antongulenko/go-bitflow/cmd/bitflow-pipeline
+ENV GO111MODULE=on
+
+WORKDIR /go/src/github.com/bitflow-stream/go-bitflow
+COPY . .
+RUN GOOS=linux GOARCH=amd64 go install -ldflags "-linkmode external -extldflags -static" ./cmd/bitflow-pipeline
 
 FROM alpine
 WORKDIR /root/
