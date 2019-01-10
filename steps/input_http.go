@@ -55,7 +55,7 @@ func (endpoint *RestEndpoint) start() {
 	})
 }
 
-func (endpoint *RestEndpoint) serve(verb string, path string, logFile string, serve func(*gin.Context)) {
+func (endpoint *RestEndpoint) serve(verb string, path string, logFile string, serve func(*gin.Context)) (err error) {
 	pathStr := fmt.Sprintf("[%s] %s", verb, path)
 	// TODO check if pathStr is already present in paths, raise error if so
 
@@ -63,8 +63,16 @@ func (endpoint *RestEndpoint) serve(verb string, path string, logFile string, se
 	if logFile != "" {
 		handlers = append(handlers, golib.LogGinRequests(logFile, true, true))
 	}
+
+	defer func() {
+		if p := recover(); p != nil {
+			// Recovered from panic in Handle()
+			err = fmt.Errorf("Failed to register REST path %v: %v", path, p)
+		}
+	}()
 	endpoint.engine.Handle(verb, path, handlers...)
 	endpoint.paths = append(endpoint.paths, pathStr)
+	return
 }
 
 func (endpoint *RestEndpoint) NewDataSource(outgoingSampleBuffer int) *RestDataSource {
@@ -91,8 +99,8 @@ func (source *RestDataSource) Endpoint() string {
 	return source.endpoint.endpoint
 }
 
-func (source *RestDataSource) Serve(verb string, path string, httpLogFile string, serve func(*gin.Context)) {
-	source.endpoint.serve(verb, path, httpLogFile, serve)
+func (source *RestDataSource) Serve(verb string, path string, httpLogFile string, serve func(*gin.Context)) error {
+	return source.endpoint.serve(verb, path, httpLogFile, serve)
 }
 
 func (source *RestDataSource) EmitSample(sample *bitflow.Sample, header *bitflow.Header) {
@@ -108,6 +116,9 @@ func (source *RestDataSource) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (source *RestDataSource) Close() {
+	if source.wg == nil {
+		return
+	}
 	source.closeOnce.Do(func() {
 		source.stop.Stop()
 		close(source.outgoing)
