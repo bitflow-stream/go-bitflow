@@ -9,7 +9,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func ParseEndpointUrl(urlStr string) (string, string, map[string]string, error) {
+func ParseEndpointUrl(urlStr string, includesSchema bool) (string, string, map[string]string, error) {
+	if !includesSchema {
+		urlStr = "http://" + urlStr // the url.Parse() routine requires a schema
+	}
 	parsedUrl, err := url.Parse(urlStr)
 	if err != nil {
 		return "", "", nil, fmt.Errorf("Failed to parse plugin URL: %v", err)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,11 @@ var (
 
 // Value is a type alias for float64 and defines the type for metric values.
 type Value float64
+
+// String formats the receiving float64 value.
+func (v Value) String() string {
+	return strconv.FormatFloat(float64(v), 'g', -1, 64)
+}
 
 // Header defines the structure of samples that belong to this header.
 // When unmarshalling headers and sample, usually one header precedes a number of
@@ -427,6 +433,8 @@ func (t TagTemplate) Resolve(sample *Sample) string {
 	})
 }
 
+// SampleRing is a one-way circular queue of Sample instances. There is no dequeue operation.
+// The stored samples can be copied into a correctly ordered slice.
 type SampleRing struct {
 	samples []*SampleAndHeader
 	head    int
@@ -480,4 +488,36 @@ func (r *SampleRing) Get() []*SampleAndHeader {
 		copy(res, r.samples[:r.head])
 	}
 	return res
+}
+
+// SampleHeaderIndex builds a `map[string]int` index of the fields of a Header instance.
+// The index is cached and only updated when the header changes. This allows efficient access to specific header fields.
+type SampleHeaderIndex struct {
+	header *Header
+	index  map[string]int
+}
+
+func (index *SampleHeaderIndex) Update(header *Header) {
+	if index.header.Equals(header) {
+		return
+	}
+	index.header = header
+	index.index = make(map[string]int)
+	for i, field := range header.Fields {
+		index.index[field] = i
+	}
+}
+
+func (index *SampleHeaderIndex) GetSingle(sample *Sample, field string) (Value, bool) {
+	i, ok := index.index[field]
+	if !ok {
+		return 0, false // No such field
+	} else {
+		return sample.Values[i], true
+	}
+}
+
+func (index *SampleHeaderIndex) Get(sample *Sample, header *Header, field string) (Value, bool) {
+	index.Update(header)
+	return index.GetSingle(sample, field)
 }
