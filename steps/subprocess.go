@@ -41,8 +41,7 @@ func RegisterSubprocessRunner(b reg.ProcessorRegistry) {
 		delete(params, "cmd")
 		delete(params, "format")
 
-		var endpointFactory bitflow.EndpointFactory
-		if err := endpointFactory.ParseParameters(params); err != nil {
+		if err := bitflow.DefaultEndpointFactory.ParseParameters(params); err != nil {
 			return fmt.Errorf("Error parsing parameters: %v", err)
 		}
 
@@ -50,7 +49,7 @@ func RegisterSubprocessRunner(b reg.ProcessorRegistry) {
 			Cmd:  cmd[0],
 			Args: cmd[1:],
 		}
-		if err := runner.Configure(format, &endpointFactory); err != nil {
+		if err := runner.Configure(format, &bitflow.DefaultEndpointFactory); err != nil {
 			return err
 		}
 		p.Add(runner)
