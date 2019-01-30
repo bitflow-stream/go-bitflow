@@ -75,7 +75,8 @@ func (source *TCPListenerSource) handleConnection(wg *sync.WaitGroup, conn *net.
 		_ = conn.Close() // Drop error
 		return
 	}
-	if !source.countConnectionAccepted(conn) {
+	if !source.countConnectionAccepted(conn.RemoteAddr().String()) {
+		_ = conn.Close() // Drop error
 		return
 	}
 	log.WithField("remote", conn.RemoteAddr()).Debugln("Accepted connection")
@@ -184,6 +185,7 @@ func (sink *TCPListenerSink) String() string {
 // then handled in their own goroutine.
 func (sink *TCPListenerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 	sink.connCounterDescription = sink
+	sink.Protocol = "TCP"
 	capacity := sink.BufferedSamples
 	if capacity == 0 {
 		capacity = 1
@@ -212,10 +214,11 @@ func (sink *TCPListenerSink) Close() {
 }
 
 func (sink *TCPListenerSink) handleConnection(wg *sync.WaitGroup, conn *net.TCPConn) {
-	if !sink.countConnectionAccepted(conn) {
+	if !sink.countConnectionAccepted(conn.RemoteAddr().String()) {
+		_ = conn.Close() // Drop error
 		return
 	}
-	writeConn := sink.OpenWriteConn(wg, conn)
+	writeConn := sink.OpenWriteConn(wg, conn.RemoteAddr().String(), conn)
 	wg.Add(1)
 	go sink.sendSamples(wg, writeConn)
 }
@@ -230,30 +233,15 @@ func (sink *TCPListenerSink) Sample(sample *Sample, header *Header) error {
 	return sink.AbstractSampleOutput.Sample(nil, sample, header)
 }
 
-func (sink *TCPListenerSink) closeConn(conn *TcpWriteConn) {
-	conn.Close()
-	if !sink.countConnectionClosed() {
-		sink.Close()
-	}
-}
-
 func (sink *TCPListenerSink) sendSamples(wg *sync.WaitGroup, conn *TcpWriteConn) {
-	defer sink.closeConn(conn)
+	defer func() {
+		conn.Close()
+		if !sink.countConnectionClosed() {
+			sink.Close()
+		}
+	}()
 	defer wg.Done()
-	first, num := sink.buf.getFirst()
-	if num > 1 {
-		conn.log.Debugln("Sending", num, "buffered samples")
-	}
-	for first != nil {
-		if !conn.IsRunning() {
-			return
-		}
-		conn.Sample(first.sample, first.header)
-		if !conn.IsRunning() {
-			return
-		}
-		first = sink.buf.next(first)
-	}
+	sink.buf.sendSamples(conn)
 }
 
 // ======================================= output sample buffer =======================================
@@ -326,4 +314,27 @@ func (b *outputSampleBuffer) closeBuffer() {
 	defer b.cond.L.Unlock()
 	b.closed = true
 	b.cond.Broadcast()
+}
+
+func (b *outputSampleBuffer) sendSamples(conn *TcpWriteConn) {
+	b.sendFilteredSamples(conn, nil)
+}
+
+func (b *outputSampleBuffer) sendFilteredSamples(conn *TcpWriteConn, filter func(sample *Sample, header *Header) bool) {
+	first, num := b.getFirst()
+	if num > 1 {
+		conn.log.Debugln("Sending", num, "buffered samples")
+	}
+	for first != nil {
+		if !conn.IsRunning() {
+			return
+		}
+		if filter == nil || filter(first.sample, first.header) {
+			conn.Sample(first.sample, first.header)
+		}
+		if !conn.IsRunning() {
+			return
+		}
+		first = b.next(first)
+	}
 }

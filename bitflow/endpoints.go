@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"runtime"
 	"strconv"
@@ -24,6 +25,7 @@ const (
 	TcpListenEndpoint = EndpointType("listen")
 	FileEndpoint      = EndpointType("file")
 	StdEndpoint       = EndpointType("std")
+	HttpEndpoint      = EndpointType("http")
 	EmptyEndpoint     = EndpointType("empty")
 
 	UndefinedFormat = MarshallingFormat("")
@@ -429,6 +431,23 @@ func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 		}
 		marshallingSink = &sink.AbstractMarshallingSampleOutput
 		resultSink = sink
+	case HttpEndpoint:
+		theUrl, err := url.Parse("http://" + endpoint.Target)
+		if err != nil {
+			return nil, err
+		}
+		sink := &HttpServerSink{
+			Endpoint:        theUrl.Host,
+			RootPathPrefix:  theUrl.Path,
+			SubPathTag:      strings.Join(theUrl.Query()["tag"], ""),
+			BufferedSamples: f.FlagOutputTcpListenBuffer,
+		}
+		sink.TcpConnLimit = f.FlagTcpConnectionLimit
+		if f.FlagTcpLogReceivedData {
+			sink.LogReceivedTraffic = log.ErrorLevel
+		}
+		marshallingSink = &sink.AbstractMarshallingSampleOutput
+		resultSink = sink
 	default:
 		if factory, ok := f.CustomDataSinks[endpoint.Type]; ok && endpoint.IsCustomType {
 			var factoryErr error
@@ -469,6 +488,7 @@ type EndpointDescription struct {
 	Type         EndpointType
 	IsCustomType bool
 	Target       string
+	Params       map[string]string
 }
 
 // OutputFormat returns the MarshallingFormat that should be used when sending
@@ -551,12 +571,8 @@ func (f *EndpointFactory) ParseUrlEndpointDescription(endpoint string) (res Endp
 				return
 			}
 			switch EndpointType(part) {
-			case TcpEndpoint:
-				res.Type = TcpEndpoint
-			case TcpListenEndpoint:
-				res.Type = TcpListenEndpoint
-			case FileEndpoint:
-				res.Type = FileEndpoint
+			case TcpEndpoint, TcpListenEndpoint, FileEndpoint, HttpEndpoint:
+				res.Type = EndpointType(part)
 			case StdEndpoint:
 				if target != stdTransportTarget {
 					err = fmt.Errorf("Transport '%v' can only be defined with target '%v'", part, stdTransportTarget)

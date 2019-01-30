@@ -64,8 +64,7 @@ func (suite *scriptIntegrationTestSuite) SetupSuite() {
 	suite.NoError(err)
 	suite.sampleScriptFile, err = ioutil.TempFile(os.TempDir(), "test-script-")
 	suite.NoError(err)
-	uid, err := uuid.NewV4()
-	suite.NoError(err)
+	uid := uuid.NewV4()
 	suite.sampleOutputFileName = filepath.Join(os.TempDir(), "test-output-"+uid.String())
 	suite.NoError(err)
 
