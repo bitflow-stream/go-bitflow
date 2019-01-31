@@ -28,12 +28,14 @@ type CmdDataCollector struct {
 	fileOutputApi   FileOutputFilterApi
 	outputs         golib.StringSlice
 	flagTags        golib.KeyValueStringSlice
+	extraSteps      []bitflow.SampleProcessor
 }
 
 func (c *CmdDataCollector) ParseFlags() {
 	flag.Var(&c.outputs, "o", "Data sink(s) for outputting data")
 	flag.Var(&c.flagTags, "tag", "All collected samples will have the given tags (key=value) attached.")
-	// flag.Var(&splitMetrics, "split", "Provide a regex. Metrics that are matched will be converted to separate samples. When the regex contains named groups, their names and values will be added as tags, and an individual sample will be created for each unique value combination.")
+	var splitMetrics golib.StringSlice
+	flag.Var(&splitMetrics, "split", "Provide a regex. Metrics that are matched will be converted to separate samples. When the regex contains named groups, their names and values will be added as tags, and an individual sample will be created for each unique value combination.")
 	flag.BoolVar(&c.fileOutputApi.FileOutputEnabled, "default-enable-file-output", false, "Enables file output immediately. By default it must be enable through the REST API first.")
 	flag.StringVar(&c.restApiEndpoint, "api", "", "Enable REST API for controlling the collector. "+
 		"The API can be used to control tags and enable/disable file output.")
@@ -47,6 +49,12 @@ func (c *CmdDataCollector) ParseFlags() {
 	bitflow.RegisterGolibFlags()
 	flag.Parse()
 	golib.ConfigureLogging()
+
+	if len(splitMetrics) > 0 {
+		splitter, err := steps.NewMetricSplitter(splitMetrics)
+		golib.Checkerr(err)
+		c.extraSteps = append(c.extraSteps, splitter)
+	}
 }
 
 func (c *CmdDataCollector) MakePipeline() *bitflow.SamplePipeline {
@@ -71,6 +79,9 @@ func (c *CmdDataCollector) MakePipeline() *bitflow.SamplePipeline {
 			tagger.Error(server.ListenAndServe())
 		}()
 		p.Add(tagger)
+	}
+	for _, step := range c.extraSteps {
+		p.Add(step)
 	}
 	c.add_outputs(p)
 	return p
