@@ -17,8 +17,6 @@ const (
 	RestApiPathPrefix = "/api"
 )
 
-// TODO this helper type is awkwardly placed, find better package.
-
 type CmdDataCollector struct {
 	Endpoints     *bitflow.EndpointFactory
 	DefaultOutput string
@@ -26,16 +24,14 @@ type CmdDataCollector struct {
 
 	restApiEndpoint string
 	fileOutputApi   FileOutputFilterApi
+	script          string
 	outputs         golib.StringSlice
-	flagTags        golib.KeyValueStringSlice
-	extraSteps      []bitflow.SampleProcessor
+	builder         CmdPipelineBuilder
 }
 
-func (c *CmdDataCollector) ParseFlags() {
-	flag.Var(&c.outputs, "o", "Data sink(s) for outputting data")
-	flag.Var(&c.flagTags, "tag", "All collected samples will have the given tags (key=value) attached.")
-	var splitMetrics golib.StringSlice
-	flag.Var(&splitMetrics, "split", "Provide a regex. Metrics that are matched will be converted to separate samples. When the regex contains named groups, their names and values will be added as tags, and an individual sample will be created for each unique value combination.")
+func (c *CmdDataCollector) RegisterFlags() {
+	flag.StringVar(&c.script, "s", "", "Provide a Bitflow Script snippet, that will be executed before outputting the produced samples. The script must not contain an input.")
+	flag.Var(&c.outputs, "o", "Data sink(s) for outputting data. Will be appended at the end of provided Bitflow script(s), if any.")
 	flag.BoolVar(&c.fileOutputApi.FileOutputEnabled, "default-enable-file-output", false, "Enables file output immediately. By default it must be enable through the REST API first.")
 	flag.StringVar(&c.restApiEndpoint, "api", "", "Enable REST API for controlling the collector. "+
 		"The API can be used to control tags and enable/disable file output.")
@@ -46,23 +42,20 @@ func (c *CmdDataCollector) ParseFlags() {
 	}
 	c.Endpoints.RegisterGeneralFlagsTo(flag.CommandLine)
 	c.Endpoints.RegisterOutputFlagsTo(flag.CommandLine)
-	bitflow.RegisterGolibFlags()
-	flag.Parse()
-	golib.ConfigureLogging()
-
-	if len(splitMetrics) > 0 {
-		splitter, err := steps.NewMetricSplitter(splitMetrics)
-		golib.Checkerr(err)
-		c.extraSteps = append(c.extraSteps, splitter)
-	}
+	c.builder.RegisterFlags()
 }
 
-func (c *CmdDataCollector) MakePipeline() *bitflow.SamplePipeline {
-	// Configure the data collector pipeline
-	p := new(bitflow.SamplePipeline)
-	if len(c.flagTags.Keys) > 0 {
-		p.Add(steps.NewTaggingProcessor(c.flagTags.Map()))
+func (c *CmdDataCollector) MakePipeline() (*bitflow.SamplePipeline, error) {
+	script := "empty://-" // Prepend an empty input to ensure the script compiles
+	if c.script != "" {
+		script += " -> " + c.script
 	}
+	p, err := c.builder.BuildPipeline(script)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO move this extra functionality to reusable pipeline steps. Probably define some default script snippet to load.
 	if c.restApiEndpoint != "" {
 		router := mux.NewRouter()
 		tagger := steps.NewHttpTagger(RestApiPathPrefix, router)
@@ -80,15 +73,14 @@ func (c *CmdDataCollector) MakePipeline() *bitflow.SamplePipeline {
 		}()
 		p.Add(tagger)
 	}
-	for _, step := range c.extraSteps {
-		p.Add(step)
-	}
-	c.add_outputs(p)
-	return p
+	return p, c.add_outputs(p)
 }
 
-func (c *CmdDataCollector) add_outputs(p *bitflow.SamplePipeline) {
-	outputs := c.create_outputs()
+func (c *CmdDataCollector) add_outputs(p *bitflow.SamplePipeline) error {
+	outputs, err := c.create_outputs()
+	if err != nil {
+		return err
+	}
 	if len(outputs) == 1 {
 		c.set_sink(p, outputs[0])
 	} else {
@@ -101,9 +93,10 @@ func (c *CmdDataCollector) add_outputs(p *bitflow.SamplePipeline) {
 		}
 		p.Add(&fork.SampleFork{Distributor: dist})
 	}
+	return nil
 }
 
-func (c *CmdDataCollector) create_outputs() []bitflow.SampleProcessor {
+func (c *CmdDataCollector) create_outputs() ([]bitflow.SampleProcessor, error) {
 	if len(c.outputs) == 0 && c.DefaultOutput != "" {
 		c.outputs = []string{c.DefaultOutput}
 	}
@@ -111,8 +104,10 @@ func (c *CmdDataCollector) create_outputs() []bitflow.SampleProcessor {
 	consoleOutputs := 0
 	for _, output := range c.outputs {
 		sink, err := c.Endpoints.CreateOutput(output)
+		if err != nil {
+			return nil, err
+		}
 		sinks = append(sinks, sink)
-		golib.Checkerr(err)
 		if bitflow.IsConsoleOutput(sink) {
 			consoleOutputs++
 		}
@@ -120,7 +115,7 @@ func (c *CmdDataCollector) create_outputs() []bitflow.SampleProcessor {
 			golib.Fatalln("Cannot define multiple outputs to stdout")
 		}
 	}
-	return sinks
+	return sinks, nil
 }
 
 func (c *CmdDataCollector) set_sink(p *bitflow.SamplePipeline, sink bitflow.SampleProcessor) {

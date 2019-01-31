@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,13 +9,7 @@ import (
 	"strings"
 
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow/bitflow"
-	"github.com/bitflow-stream/go-bitflow/script/plugin"
-	"github.com/bitflow-stream/go-bitflow/script/reg"
-	"github.com/bitflow-stream/go-bitflow/script/script"
-	"github.com/bitflow-stream/go-bitflow/script/script_go"
-	defaultPlugin "github.com/bitflow-stream/go-bitflow/steps/bitflow-plugin-default-steps"
-	log "github.com/sirupsen/logrus"
+	"github.com/bitflow-stream/go-bitflow/cmd"
 )
 
 const (
@@ -48,78 +40,17 @@ func fix_arguments(argsPtr *[]string) {
 }
 
 func do_main() int {
-	printAnalyses := flag.Bool("print-analyses", false, "Print a list of available analyses and exit.")
-	printPipeline := flag.Bool("print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
-	printPipelineSchedulingHints := flag.Bool("print-scheduling-hints", false, "Print the subpipelines with scheduling hints as json and exit.")
-	printCapabilities := flag.Bool("capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
-	useNewScript := flag.Bool("new", false, "Use the new script parser for processing the input script.")
+	var builder cmd.CmdPipelineBuilder
 	scriptFile := ""
-	var pluginPaths golib.StringSlice
-	flag.Var(&pluginPaths, "p", "Plugins to load for additional functionality")
 	flag.StringVar(&scriptFile, fileFlag, "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
-	registry := reg.NewProcessorRegistry()
-	bitflow.RegisterGolibFlags()
-	registry.Endpoints.RegisterFlags()
-	flag.Parse()
-	golib.ConfigureLogging()
-	golib.Checkerr(load_plugins(registry, pluginPaths))
-
-	if *printCapabilities {
-		golib.Checkerr(registry.PrintJsonCapabilities(os.Stdout))
-		return 0
-	}
-	if *printAnalyses {
-		fmt.Printf("Available analysis steps:\n%v\n", registry.PrintAllAnalyses())
-		return 0
-	}
-
+	builder.RegisterFlags()
+	cmd.ParseFlags()
 	rawScript, err := get_script(flag.Args(), scriptFile)
 	golib.Checkerr(err)
 
-	if *printPipelineSchedulingHints {
-		return convertAndPrintSchedulingHints(rawScript)
-	}
-	make_pipeline := make_pipeline_old
-	if *useNewScript {
-		log.Println("Running using new ANTLR script implementation")
-		make_pipeline = make_pipeline_new
-	}
-	pipe, err := make_pipeline(registry, rawScript)
-	if err != nil {
-		log.Errorln(err)
-		golib.Fatalln("Use -print-analyses to print all available analysis steps.")
-	}
-	defer golib.ProfileCpu()()
-	for _, str := range pipe.FormatLines() {
-		log.Println(str)
-	}
-	if *printPipeline {
-		return 0
-	}
-	return pipe.StartAndWait()
-}
-
-func convertAndPrintSchedulingHints(rawScript string) int {
-	scripts, errs := new(script.BitflowScriptScheduleParser).ParseScript(rawScript)
-	if errs.NilOrError() != nil {
-		log.Println(errs.Error())
-		return 1
-	}
-	j, err := JSONMarshal(scripts)
-	if err != nil {
-		log.Println(err)
-		return 1
-	}
-	fmt.Println(string(j))
-	return 0
-}
-
-func JSONMarshal(t interface{}) ([]byte, error) {
-	buffer := &bytes.Buffer{}
-	encoder := json.NewEncoder(buffer)
-	encoder.SetEscapeHTML(false)
-	err := encoder.Encode(t)
-	return buffer.Bytes(), err
+	pipe, err := builder.BuildPipeline(rawScript)
+	golib.Checkerr(err)
+	return cmd.RunPipeline(pipe)
 }
 
 func get_script(parsedArgs []string, scriptFile string) (string, error) {
@@ -147,34 +78,4 @@ func get_script(parsedArgs []string, scriptFile string) (string, error) {
 		return "", errors.New("Please provide a bitflow pipeline script via -f or directly as parameter.")
 	}
 	return rawScript, nil
-}
-
-func make_pipeline_old(registry reg.ProcessorRegistry, scriptStr string) (*bitflow.SamplePipeline, error) {
-	queryBuilder := script_go.PipelineBuilder{registry}
-	parser := script_go.NewParser(bytes.NewReader([]byte(scriptStr)))
-	pipe, err := parser.Parse()
-	if err != nil {
-		return nil, err
-	}
-	return queryBuilder.MakePipeline(pipe)
-}
-
-func make_pipeline_new(registry reg.ProcessorRegistry, scriptStr string) (*bitflow.SamplePipeline, error) {
-	s, err := (&script.BitflowScriptParser{Registry: registry}).ParseScript(scriptStr)
-	return s, err.NilOrError()
-}
-
-func load_plugins(registry reg.ProcessorRegistry, pluginPaths []string) error {
-	loadedNames := make(map[string]bool)
-	for _, path := range pluginPaths {
-		if name, err := plugin.LoadPlugin(registry, path); err != nil {
-			return fmt.Errorf("Failed to load plugin %v: %v", path, err)
-		} else {
-			loadedNames[name] = true
-		}
-	}
-
-	// Load the default pipeline steps
-	// TODO add a plugin discovery mechanism
-	return defaultPlugin.Plugin.Init(registry)
 }
