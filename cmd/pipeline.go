@@ -18,7 +18,8 @@ import (
 )
 
 type CmdPipelineBuilder struct {
-	registry reg.ProcessorRegistry
+	reg.ProcessorRegistry
+	SkipInputFlags bool
 
 	printAnalyses                bool
 	printPipeline                bool
@@ -36,17 +37,21 @@ func (c *CmdPipelineBuilder) RegisterFlags() {
 	flag.BoolVar(&c.useNewScript, "new", false, "Use the new script parser for processing the input script.")
 	flag.Var(&c.pluginPaths, "p", "Plugins to loadfor additional functionality")
 
-	c.registry = reg.NewProcessorRegistry()
-	c.registry.Endpoints.RegisterFlags()
+	c.ProcessorRegistry = reg.NewProcessorRegistry()
+	c.Endpoints.RegisterGeneralFlagsTo(flag.CommandLine)
+	c.Endpoints.RegisterOutputFlagsTo(flag.CommandLine)
+	if !c.SkipInputFlags {
+		c.Endpoints.RegisterInputFlagsTo(flag.CommandLine)
+	}
 }
 
 func (c *CmdPipelineBuilder) BuildPipeline(script string) (*bitflow.SamplePipeline, error) {
-	err := load_plugins(c.registry, c.pluginPaths)
+	err := load_plugins(c.ProcessorRegistry, c.pluginPaths)
 	if c.printCapabilities {
-		return nil, c.registry.PrintJsonCapabilities(os.Stdout)
+		return nil, c.PrintJsonCapabilities(os.Stdout)
 	}
 	if c.printAnalyses {
-		fmt.Printf("Available analysis steps:\n%v\n", c.registry.PrintAllAnalyses())
+		fmt.Printf("Available analysis steps:\n%v\n", c.PrintAllAnalyses())
 		return nil, nil
 	}
 
@@ -58,7 +63,7 @@ func (c *CmdPipelineBuilder) BuildPipeline(script string) (*bitflow.SamplePipeli
 		log.Println("Running using new ANTLR script implementation")
 		make_pipeline = make_pipeline_new
 	}
-	pipe, err := make_pipeline(c.registry, script)
+	pipe, err := make_pipeline(c.ProcessorRegistry, script)
 	if err != nil {
 		return nil, err
 	}

@@ -18,7 +18,7 @@ const (
 )
 
 type CmdDataCollector struct {
-	Endpoints     *bitflow.EndpointFactory
+	CmdPipelineBuilder
 	DefaultOutput string
 	RestApis      []RestApiPath // HttpTagger and FileOutputFilterApi included by default
 
@@ -26,31 +26,25 @@ type CmdDataCollector struct {
 	fileOutputApi   FileOutputFilterApi
 	script          string
 	outputs         golib.StringSlice
-	builder         CmdPipelineBuilder
 }
 
 func (c *CmdDataCollector) RegisterFlags() {
+	c.SkipInputFlags = true
+	c.CmdPipelineBuilder.RegisterFlags()
+
 	flag.StringVar(&c.script, "s", "", "Provide a Bitflow Script snippet, that will be executed before outputting the produced samples. The script must not contain an input.")
 	flag.Var(&c.outputs, "o", "Data sink(s) for outputting data. Will be appended at the end of provided Bitflow script(s), if any.")
 	flag.BoolVar(&c.fileOutputApi.FileOutputEnabled, "default-enable-file-output", false, "Enables file output immediately. By default it must be enable through the REST API first.")
 	flag.StringVar(&c.restApiEndpoint, "api", "", "Enable REST API for controlling the collector. "+
 		"The API can be used to control tags and enable/disable file output.")
-
-	// Parse command line flags
-	if c.Endpoints == nil {
-		c.Endpoints = bitflow.NewEndpointFactory()
-	}
-	c.Endpoints.RegisterGeneralFlagsTo(flag.CommandLine)
-	c.Endpoints.RegisterOutputFlagsTo(flag.CommandLine)
-	c.builder.RegisterFlags()
 }
 
-func (c *CmdDataCollector) MakePipeline() (*bitflow.SamplePipeline, error) {
+func (c *CmdDataCollector) BuildPipeline() (*bitflow.SamplePipeline, error) {
 	script := "empty://-" // Prepend an empty input to ensure the script compiles
 	if c.script != "" {
 		script += " -> " + c.script
 	}
-	p, err := c.builder.BuildPipeline(script)
+	p, err := c.CmdPipelineBuilder.BuildPipeline(script)
 	if err != nil {
 		return nil, err
 	}
