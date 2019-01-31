@@ -45,8 +45,8 @@ func (c *CmdDataCollector) BuildPipeline() (*bitflow.SamplePipeline, error) {
 		script += " -> " + c.script
 	}
 	p, err := c.CmdPipelineBuilder.BuildPipeline(script)
-	if err != nil {
-		return nil, err
+	if err != nil || p == nil {
+		return p, err
 	}
 
 	// TODO move this extra functionality to reusable pipeline steps. Probably define some default script snippet to load.

@@ -12,11 +12,3 @@ func ParseFlags() {
 	flag.Parse()
 	golib.ConfigureLogging()
 }
-
-func RunPipeline(p *bitflow.SamplePipeline) int {
-	if p == nil {
-		return 0
-	}
-	defer golib.ProfileCpu()()
-	return p.StartAndWait()
-}

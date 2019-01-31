@@ -50,7 +50,11 @@ func do_main() int {
 
 	pipe, err := builder.BuildPipeline(rawScript)
 	golib.Checkerr(err)
-	return cmd.RunPipeline(pipe)
+	if pipe == nil {
+		return 0
+	}
+	defer golib.ProfileCpu()()
+	return pipe.StartAndWait()
 }
 
 func get_script(parsedArgs []string, scriptFile string) (string, error) {
