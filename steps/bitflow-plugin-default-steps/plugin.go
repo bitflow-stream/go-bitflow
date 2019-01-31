@@ -103,6 +103,7 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 	steps.RegisterIncludeMetricsFilter(b)
 	steps.RegisterExcludeMetricsFilter(b)
 	steps.RegisterVarianceMetricsFilter(b)
+	steps.RegisterMetricSplitter(b)
 
 	// Special
 	math.RegisterSphere(b)

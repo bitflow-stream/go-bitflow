@@ -217,6 +217,14 @@ func escapeTagString(str string) string {
 	return TagStringEscaper.Replace(str)
 }
 
+func EncodeTags(tags map[string]string) string {
+	var s Sample
+	for key, value := range tags {
+		s.SetTag(key, value)
+	}
+	return s.TagString()
+}
+
 // ParseTagString parses a string in the format produced by TagString().
 // The resulting tags and tag values directly replace the tags inside the
 // receiving Sample. Old tags are discarded.
