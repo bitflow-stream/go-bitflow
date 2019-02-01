@@ -108,6 +108,7 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 	// Special
 	math.RegisterSphere(b)
 	steps.RegisterAppendTimeDifference(b)
+	steps.RegisterTagChangeHttpNotifier(b)
 
 	return nil
 }
