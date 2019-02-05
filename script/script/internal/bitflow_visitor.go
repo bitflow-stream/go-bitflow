@@ -10,11 +10,11 @@ type BitflowVisitor interface {
 	// Visit a parse tree produced by BitflowParser#script.
 	VisitScript(ctx *ScriptContext) interface{}
 
-	// Visit a parse tree produced by BitflowParser#input.
-	VisitInput(ctx *InputContext) interface{}
+	// Visit a parse tree produced by BitflowParser#dataInput.
+	VisitDataInput(ctx *DataInputContext) interface{}
 
-	// Visit a parse tree produced by BitflowParser#output.
-	VisitOutput(ctx *OutputContext) interface{}
+	// Visit a parse tree produced by BitflowParser#dataOutput.
+	VisitDataOutput(ctx *DataOutputContext) interface{}
 
 	// Visit a parse tree produced by BitflowParser#name.
 	VisitName(ctx *NameContext) interface{}

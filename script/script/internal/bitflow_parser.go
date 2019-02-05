@@ -15,7 +15,7 @@ var _ = reflect.Copy
 var _ = strconv.Itoa
 
 var parserATN = []uint16{
-	3, 24715, 42794, 33075, 47597, 16764, 15335, 30598, 22884, 3, 21, 199,
+	3, 24715, 42794, 33075, 47597, 16764, 15335, 30598, 22884, 3, 21, 205,
 	4, 2, 9, 2, 4, 3, 9, 3, 4, 4, 9, 4, 4, 5, 9, 5, 4, 6, 9, 6, 4, 7, 9, 7,
 	4, 8, 9, 8, 4, 9, 9, 9, 4, 10, 9, 10, 4, 11, 9, 11, 4, 12, 9, 12, 4, 13,
 	9, 13, 4, 14, 9, 14, 4, 15, 9, 15, 4, 16, 9, 16, 4, 17, 9, 17, 4, 18, 9,
@@ -23,98 +23,103 @@ var parserATN = []uint16{
 	3, 47, 10, 3, 13, 3, 14, 3, 48, 3, 3, 5, 3, 52, 10, 3, 3, 4, 3, 4, 5, 4,
 	56, 10, 4, 3, 5, 3, 5, 3, 6, 3, 6, 3, 7, 3, 7, 3, 7, 3, 7, 3, 8, 3, 8,
 	3, 8, 3, 8, 7, 8, 70, 10, 8, 12, 8, 14, 8, 73, 11, 8, 5, 8, 75, 10, 8,
-	3, 8, 3, 8, 3, 9, 3, 9, 3, 9, 3, 9, 3, 9, 5, 9, 84, 10, 9, 3, 9, 3, 9,
-	7, 9, 88, 10, 9, 12, 9, 14, 9, 91, 11, 9, 3, 10, 3, 10, 3, 10, 7, 10, 96,
-	10, 10, 12, 10, 14, 10, 99, 11, 10, 3, 10, 5, 10, 102, 10, 10, 3, 11, 3,
-	11, 3, 11, 3, 11, 3, 11, 5, 11, 109, 10, 11, 3, 12, 3, 12, 3, 12, 5, 12,
-	114, 10, 12, 3, 13, 3, 13, 3, 13, 5, 13, 119, 10, 13, 3, 13, 3, 13, 3,
-	13, 3, 13, 7, 13, 125, 10, 13, 12, 13, 14, 13, 128, 11, 13, 3, 13, 5, 13,
-	131, 10, 13, 3, 13, 3, 13, 3, 14, 6, 14, 136, 10, 14, 13, 14, 14, 14, 137,
-	3, 14, 3, 14, 3, 14, 3, 15, 3, 15, 3, 15, 7, 15, 146, 10, 15, 12, 15, 14,
-	15, 149, 11, 15, 3, 16, 3, 16, 3, 16, 3, 16, 7, 16, 155, 10, 16, 12, 16,
-	14, 16, 158, 11, 16, 3, 16, 5, 16, 161, 10, 16, 3, 16, 3, 16, 3, 17, 3,
-	17, 3, 18, 3, 18, 3, 18, 5, 18, 170, 10, 18, 3, 18, 3, 18, 3, 18, 3, 18,
-	3, 19, 3, 19, 3, 19, 7, 19, 179, 10, 19, 12, 19, 14, 19, 182, 11, 19, 3,
-	20, 3, 20, 3, 20, 3, 20, 7, 20, 188, 10, 20, 12, 20, 14, 20, 191, 11, 20,
-	5, 20, 193, 10, 20, 3, 20, 3, 20, 3, 21, 3, 21, 3, 21, 2, 2, 22, 2, 4,
-	6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 2,
-	4, 3, 2, 14, 17, 3, 2, 14, 16, 2, 203, 2, 42, 3, 2, 2, 2, 4, 46, 3, 2,
-	2, 2, 6, 53, 3, 2, 2, 2, 8, 57, 3, 2, 2, 2, 10, 59, 3, 2, 2, 2, 12, 61,
-	3, 2, 2, 2, 14, 65, 3, 2, 2, 2, 16, 83, 3, 2, 2, 2, 18, 92, 3, 2, 2, 2,
-	20, 108, 3, 2, 2, 2, 22, 110, 3, 2, 2, 2, 24, 115, 3, 2, 2, 2, 26, 135,
-	3, 2, 2, 2, 28, 142, 3, 2, 2, 2, 30, 150, 3, 2, 2, 2, 32, 164, 3, 2, 2,
-	2, 34, 166, 3, 2, 2, 2, 36, 175, 3, 2, 2, 2, 38, 183, 3, 2, 2, 2, 40, 196,
-	3, 2, 2, 2, 42, 43, 5, 18, 10, 2, 43, 44, 7, 2, 2, 3, 44, 3, 3, 2, 2, 2,
-	45, 47, 5, 8, 5, 2, 46, 45, 3, 2, 2, 2, 47, 48, 3, 2, 2, 2, 48, 46, 3,
-	2, 2, 2, 48, 49, 3, 2, 2, 2, 49, 51, 3, 2, 2, 2, 50, 52, 5, 38, 20, 2,
-	51, 50, 3, 2, 2, 2, 51, 52, 3, 2, 2, 2, 52, 5, 3, 2, 2, 2, 53, 55, 5, 8,
-	5, 2, 54, 56, 5, 38, 20, 2, 55, 54, 3, 2, 2, 2, 55, 56, 3, 2, 2, 2, 56,
-	7, 3, 2, 2, 2, 57, 58, 9, 2, 2, 2, 58, 9, 3, 2, 2, 2, 59, 60, 9, 3, 2,
-	2, 60, 11, 3, 2, 2, 2, 61, 62, 5, 8, 5, 2, 62, 63, 7, 3, 2, 2, 63, 64,
-	5, 10, 6, 2, 64, 13, 3, 2, 2, 2, 65, 74, 7, 4, 2, 2, 66, 71, 5, 12, 7,
-	2, 67, 68, 7, 5, 2, 2, 68, 70, 5, 12, 7, 2, 69, 67, 3, 2, 2, 2, 70, 73,
-	3, 2, 2, 2, 71, 69, 3, 2, 2, 2, 71, 72, 3, 2, 2, 2, 72, 75, 3, 2, 2, 2,
-	73, 71, 3, 2, 2, 2, 74, 66, 3, 2, 2, 2, 74, 75, 3, 2, 2, 2, 75, 76, 3,
-	2, 2, 2, 76, 77, 7, 6, 2, 2, 77, 15, 3, 2, 2, 2, 78, 84, 5, 4, 3, 2, 79,
-	80, 7, 7, 2, 2, 80, 81, 5, 18, 10, 2, 81, 82, 7, 8, 2, 2, 82, 84, 3, 2,
-	2, 2, 83, 78, 3, 2, 2, 2, 83, 79, 3, 2, 2, 2, 84, 89, 3, 2, 2, 2, 85, 86,
-	7, 13, 2, 2, 86, 88, 5, 20, 11, 2, 87, 85, 3, 2, 2, 2, 88, 91, 3, 2, 2,
-	2, 89, 87, 3, 2, 2, 2, 89, 90, 3, 2, 2, 2, 90, 17, 3, 2, 2, 2, 91, 89,
-	3, 2, 2, 2, 92, 97, 5, 16, 9, 2, 93, 94, 7, 12, 2, 2, 94, 96, 5, 16, 9,
-	2, 95, 93, 3, 2, 2, 2, 96, 99, 3, 2, 2, 2, 97, 95, 3, 2, 2, 2, 97, 98,
-	3, 2, 2, 2, 98, 101, 3, 2, 2, 2, 99, 97, 3, 2, 2, 2, 100, 102, 7, 12, 2,
-	2, 101, 100, 3, 2, 2, 2, 101, 102, 3, 2, 2, 2, 102, 19, 3, 2, 2, 2, 103,
-	109, 5, 22, 12, 2, 104, 109, 5, 24, 13, 2, 105, 109, 5, 30, 16, 2, 106,
-	109, 5, 34, 18, 2, 107, 109, 5, 6, 4, 2, 108, 103, 3, 2, 2, 2, 108, 104,
-	3, 2, 2, 2, 108, 105, 3, 2, 2, 2, 108, 106, 3, 2, 2, 2, 108, 107, 3, 2,
-	2, 2, 109, 21, 3, 2, 2, 2, 110, 111, 5, 8, 5, 2, 111, 113, 5, 14, 8, 2,
-	112, 114, 5, 38, 20, 2, 113, 112, 3, 2, 2, 2, 113, 114, 3, 2, 2, 2, 114,
-	23, 3, 2, 2, 2, 115, 116, 5, 8, 5, 2, 116, 118, 5, 14, 8, 2, 117, 119,
-	5, 38, 20, 2, 118, 117, 3, 2, 2, 2, 118, 119, 3, 2, 2, 2, 119, 120, 3,
-	2, 2, 2, 120, 121, 7, 7, 2, 2, 121, 126, 5, 26, 14, 2, 122, 123, 7, 12,
-	2, 2, 123, 125, 5, 26, 14, 2, 124, 122, 3, 2, 2, 2, 125, 128, 3, 2, 2,
-	2, 126, 124, 3, 2, 2, 2, 126, 127, 3, 2, 2, 2, 127, 130, 3, 2, 2, 2, 128,
-	126, 3, 2, 2, 2, 129, 131, 7, 12, 2, 2, 130, 129, 3, 2, 2, 2, 130, 131,
-	3, 2, 2, 2, 131, 132, 3, 2, 2, 2, 132, 133, 7, 8, 2, 2, 133, 25, 3, 2,
-	2, 2, 134, 136, 5, 8, 5, 2, 135, 134, 3, 2, 2, 2, 136, 137, 3, 2, 2, 2,
-	137, 135, 3, 2, 2, 2, 137, 138, 3, 2, 2, 2, 138, 139, 3, 2, 2, 2, 139,
-	140, 7, 13, 2, 2, 140, 141, 5, 28, 15, 2, 141, 27, 3, 2, 2, 2, 142, 147,
-	5, 20, 11, 2, 143, 144, 7, 13, 2, 2, 144, 146, 5, 20, 11, 2, 145, 143,
-	3, 2, 2, 2, 146, 149, 3, 2, 2, 2, 147, 145, 3, 2, 2, 2, 147, 148, 3, 2,
-	2, 2, 148, 29, 3, 2, 2, 2, 149, 147, 3, 2, 2, 2, 150, 151, 7, 7, 2, 2,
-	151, 156, 5, 32, 17, 2, 152, 153, 7, 12, 2, 2, 153, 155, 5, 32, 17, 2,
-	154, 152, 3, 2, 2, 2, 155, 158, 3, 2, 2, 2, 156, 154, 3, 2, 2, 2, 156,
-	157, 3, 2, 2, 2, 157, 160, 3, 2, 2, 2, 158, 156, 3, 2, 2, 2, 159, 161,
-	7, 12, 2, 2, 160, 159, 3, 2, 2, 2, 160, 161, 3, 2, 2, 2, 161, 162, 3, 2,
-	2, 2, 162, 163, 7, 8, 2, 2, 163, 31, 3, 2, 2, 2, 164, 165, 5, 28, 15, 2,
-	165, 33, 3, 2, 2, 2, 166, 167, 7, 9, 2, 2, 167, 169, 5, 14, 8, 2, 168,
-	170, 5, 38, 20, 2, 169, 168, 3, 2, 2, 2, 169, 170, 3, 2, 2, 2, 170, 171,
-	3, 2, 2, 2, 171, 172, 7, 7, 2, 2, 172, 173, 5, 36, 19, 2, 173, 174, 7,
-	8, 2, 2, 174, 35, 3, 2, 2, 2, 175, 180, 5, 22, 12, 2, 176, 177, 7, 13,
-	2, 2, 177, 179, 5, 22, 12, 2, 178, 176, 3, 2, 2, 2, 179, 182, 3, 2, 2,
-	2, 180, 178, 3, 2, 2, 2, 180, 181, 3, 2, 2, 2, 181, 37, 3, 2, 2, 2, 182,
-	180, 3, 2, 2, 2, 183, 192, 7, 10, 2, 2, 184, 189, 5, 40, 21, 2, 185, 186,
-	7, 5, 2, 2, 186, 188, 5, 40, 21, 2, 187, 185, 3, 2, 2, 2, 188, 191, 3,
-	2, 2, 2, 189, 187, 3, 2, 2, 2, 189, 190, 3, 2, 2, 2, 190, 193, 3, 2, 2,
-	2, 191, 189, 3, 2, 2, 2, 192, 184, 3, 2, 2, 2, 192, 193, 3, 2, 2, 2, 193,
-	194, 3, 2, 2, 2, 194, 195, 7, 11, 2, 2, 195, 39, 3, 2, 2, 2, 196, 197,
-	5, 12, 7, 2, 197, 41, 3, 2, 2, 2, 24, 48, 51, 55, 71, 74, 83, 89, 97, 101,
-	108, 113, 118, 126, 130, 137, 147, 156, 160, 169, 180, 189, 192,
+	3, 8, 5, 8, 78, 10, 8, 3, 8, 3, 8, 3, 9, 3, 9, 3, 9, 3, 9, 3, 9, 5, 9,
+	87, 10, 9, 3, 9, 3, 9, 7, 9, 91, 10, 9, 12, 9, 14, 9, 94, 11, 9, 3, 10,
+	3, 10, 3, 10, 7, 10, 99, 10, 10, 12, 10, 14, 10, 102, 11, 10, 3, 10, 5,
+	10, 105, 10, 10, 3, 11, 3, 11, 3, 11, 3, 11, 3, 11, 5, 11, 112, 10, 11,
+	3, 12, 3, 12, 3, 12, 5, 12, 117, 10, 12, 3, 13, 3, 13, 3, 13, 5, 13, 122,
+	10, 13, 3, 13, 3, 13, 3, 13, 3, 13, 7, 13, 128, 10, 13, 12, 13, 14, 13,
+	131, 11, 13, 3, 13, 5, 13, 134, 10, 13, 3, 13, 3, 13, 3, 14, 6, 14, 139,
+	10, 14, 13, 14, 14, 14, 140, 3, 14, 3, 14, 3, 14, 3, 15, 3, 15, 3, 15,
+	7, 15, 149, 10, 15, 12, 15, 14, 15, 152, 11, 15, 3, 16, 3, 16, 3, 16, 3,
+	16, 7, 16, 158, 10, 16, 12, 16, 14, 16, 161, 11, 16, 3, 16, 5, 16, 164,
+	10, 16, 3, 16, 3, 16, 3, 17, 3, 17, 3, 18, 3, 18, 3, 18, 5, 18, 173, 10,
+	18, 3, 18, 3, 18, 3, 18, 3, 18, 3, 19, 3, 19, 3, 19, 7, 19, 182, 10, 19,
+	12, 19, 14, 19, 185, 11, 19, 3, 20, 3, 20, 3, 20, 3, 20, 7, 20, 191, 10,
+	20, 12, 20, 14, 20, 194, 11, 20, 5, 20, 196, 10, 20, 3, 20, 5, 20, 199,
+	10, 20, 3, 20, 3, 20, 3, 21, 3, 21, 3, 21, 2, 2, 22, 2, 4, 6, 8, 10, 12,
+	14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 2, 4, 3, 2, 14,
+	17, 3, 2, 14, 16, 2, 211, 2, 42, 3, 2, 2, 2, 4, 46, 3, 2, 2, 2, 6, 53,
+	3, 2, 2, 2, 8, 57, 3, 2, 2, 2, 10, 59, 3, 2, 2, 2, 12, 61, 3, 2, 2, 2,
+	14, 65, 3, 2, 2, 2, 16, 86, 3, 2, 2, 2, 18, 95, 3, 2, 2, 2, 20, 111, 3,
+	2, 2, 2, 22, 113, 3, 2, 2, 2, 24, 118, 3, 2, 2, 2, 26, 138, 3, 2, 2, 2,
+	28, 145, 3, 2, 2, 2, 30, 153, 3, 2, 2, 2, 32, 167, 3, 2, 2, 2, 34, 169,
+	3, 2, 2, 2, 36, 178, 3, 2, 2, 2, 38, 186, 3, 2, 2, 2, 40, 202, 3, 2, 2,
+	2, 42, 43, 5, 18, 10, 2, 43, 44, 7, 2, 2, 3, 44, 3, 3, 2, 2, 2, 45, 47,
+	5, 8, 5, 2, 46, 45, 3, 2, 2, 2, 47, 48, 3, 2, 2, 2, 48, 46, 3, 2, 2, 2,
+	48, 49, 3, 2, 2, 2, 49, 51, 3, 2, 2, 2, 50, 52, 5, 38, 20, 2, 51, 50, 3,
+	2, 2, 2, 51, 52, 3, 2, 2, 2, 52, 5, 3, 2, 2, 2, 53, 55, 5, 8, 5, 2, 54,
+	56, 5, 38, 20, 2, 55, 54, 3, 2, 2, 2, 55, 56, 3, 2, 2, 2, 56, 7, 3, 2,
+	2, 2, 57, 58, 9, 2, 2, 2, 58, 9, 3, 2, 2, 2, 59, 60, 9, 3, 2, 2, 60, 11,
+	3, 2, 2, 2, 61, 62, 5, 8, 5, 2, 62, 63, 7, 9, 2, 2, 63, 64, 5, 10, 6, 2,
+	64, 13, 3, 2, 2, 2, 65, 74, 7, 7, 2, 2, 66, 71, 5, 12, 7, 2, 67, 68, 7,
+	10, 2, 2, 68, 70, 5, 12, 7, 2, 69, 67, 3, 2, 2, 2, 70, 73, 3, 2, 2, 2,
+	71, 69, 3, 2, 2, 2, 71, 72, 3, 2, 2, 2, 72, 75, 3, 2, 2, 2, 73, 71, 3,
+	2, 2, 2, 74, 66, 3, 2, 2, 2, 74, 75, 3, 2, 2, 2, 75, 77, 3, 2, 2, 2, 76,
+	78, 7, 10, 2, 2, 77, 76, 3, 2, 2, 2, 77, 78, 3, 2, 2, 2, 78, 79, 3, 2,
+	2, 2, 79, 80, 7, 8, 2, 2, 80, 15, 3, 2, 2, 2, 81, 87, 5, 4, 3, 2, 82, 83,
+	7, 3, 2, 2, 83, 84, 5, 18, 10, 2, 84, 85, 7, 4, 2, 2, 85, 87, 3, 2, 2,
+	2, 86, 81, 3, 2, 2, 2, 86, 82, 3, 2, 2, 2, 87, 92, 3, 2, 2, 2, 88, 89,
+	7, 6, 2, 2, 89, 91, 5, 20, 11, 2, 90, 88, 3, 2, 2, 2, 91, 94, 3, 2, 2,
+	2, 92, 90, 3, 2, 2, 2, 92, 93, 3, 2, 2, 2, 93, 17, 3, 2, 2, 2, 94, 92,
+	3, 2, 2, 2, 95, 100, 5, 16, 9, 2, 96, 97, 7, 5, 2, 2, 97, 99, 5, 16, 9,
+	2, 98, 96, 3, 2, 2, 2, 99, 102, 3, 2, 2, 2, 100, 98, 3, 2, 2, 2, 100, 101,
+	3, 2, 2, 2, 101, 104, 3, 2, 2, 2, 102, 100, 3, 2, 2, 2, 103, 105, 7, 5,
+	2, 2, 104, 103, 3, 2, 2, 2, 104, 105, 3, 2, 2, 2, 105, 19, 3, 2, 2, 2,
+	106, 112, 5, 22, 12, 2, 107, 112, 5, 24, 13, 2, 108, 112, 5, 30, 16, 2,
+	109, 112, 5, 34, 18, 2, 110, 112, 5, 6, 4, 2, 111, 106, 3, 2, 2, 2, 111,
+	107, 3, 2, 2, 2, 111, 108, 3, 2, 2, 2, 111, 109, 3, 2, 2, 2, 111, 110,
+	3, 2, 2, 2, 112, 21, 3, 2, 2, 2, 113, 114, 5, 8, 5, 2, 114, 116, 5, 14,
+	8, 2, 115, 117, 5, 38, 20, 2, 116, 115, 3, 2, 2, 2, 116, 117, 3, 2, 2,
+	2, 117, 23, 3, 2, 2, 2, 118, 119, 5, 8, 5, 2, 119, 121, 5, 14, 8, 2, 120,
+	122, 5, 38, 20, 2, 121, 120, 3, 2, 2, 2, 121, 122, 3, 2, 2, 2, 122, 123,
+	3, 2, 2, 2, 123, 124, 7, 3, 2, 2, 124, 129, 5, 26, 14, 2, 125, 126, 7,
+	5, 2, 2, 126, 128, 5, 26, 14, 2, 127, 125, 3, 2, 2, 2, 128, 131, 3, 2,
+	2, 2, 129, 127, 3, 2, 2, 2, 129, 130, 3, 2, 2, 2, 130, 133, 3, 2, 2, 2,
+	131, 129, 3, 2, 2, 2, 132, 134, 7, 5, 2, 2, 133, 132, 3, 2, 2, 2, 133,
+	134, 3, 2, 2, 2, 134, 135, 3, 2, 2, 2, 135, 136, 7, 4, 2, 2, 136, 25, 3,
+	2, 2, 2, 137, 139, 5, 8, 5, 2, 138, 137, 3, 2, 2, 2, 139, 140, 3, 2, 2,
+	2, 140, 138, 3, 2, 2, 2, 140, 141, 3, 2, 2, 2, 141, 142, 3, 2, 2, 2, 142,
+	143, 7, 6, 2, 2, 143, 144, 5, 28, 15, 2, 144, 27, 3, 2, 2, 2, 145, 150,
+	5, 20, 11, 2, 146, 147, 7, 6, 2, 2, 147, 149, 5, 20, 11, 2, 148, 146, 3,
+	2, 2, 2, 149, 152, 3, 2, 2, 2, 150, 148, 3, 2, 2, 2, 150, 151, 3, 2, 2,
+	2, 151, 29, 3, 2, 2, 2, 152, 150, 3, 2, 2, 2, 153, 154, 7, 3, 2, 2, 154,
+	159, 5, 32, 17, 2, 155, 156, 7, 5, 2, 2, 156, 158, 5, 32, 17, 2, 157, 155,
+	3, 2, 2, 2, 158, 161, 3, 2, 2, 2, 159, 157, 3, 2, 2, 2, 159, 160, 3, 2,
+	2, 2, 160, 163, 3, 2, 2, 2, 161, 159, 3, 2, 2, 2, 162, 164, 7, 5, 2, 2,
+	163, 162, 3, 2, 2, 2, 163, 164, 3, 2, 2, 2, 164, 165, 3, 2, 2, 2, 165,
+	166, 7, 4, 2, 2, 166, 31, 3, 2, 2, 2, 167, 168, 5, 28, 15, 2, 168, 33,
+	3, 2, 2, 2, 169, 170, 7, 13, 2, 2, 170, 172, 5, 14, 8, 2, 171, 173, 5,
+	38, 20, 2, 172, 171, 3, 2, 2, 2, 172, 173, 3, 2, 2, 2, 173, 174, 3, 2,
+	2, 2, 174, 175, 7, 3, 2, 2, 175, 176, 5, 36, 19, 2, 176, 177, 7, 4, 2,
+	2, 177, 35, 3, 2, 2, 2, 178, 183, 5, 22, 12, 2, 179, 180, 7, 6, 2, 2, 180,
+	182, 5, 22, 12, 2, 181, 179, 3, 2, 2, 2, 182, 185, 3, 2, 2, 2, 183, 181,
+	3, 2, 2, 2, 183, 184, 3, 2, 2, 2, 184, 37, 3, 2, 2, 2, 185, 183, 3, 2,
+	2, 2, 186, 195, 7, 11, 2, 2, 187, 192, 5, 40, 21, 2, 188, 189, 7, 10, 2,
+	2, 189, 191, 5, 40, 21, 2, 190, 188, 3, 2, 2, 2, 191, 194, 3, 2, 2, 2,
+	192, 190, 3, 2, 2, 2, 192, 193, 3, 2, 2, 2, 193, 196, 3, 2, 2, 2, 194,
+	192, 3, 2, 2, 2, 195, 187, 3, 2, 2, 2, 195, 196, 3, 2, 2, 2, 196, 198,
+	3, 2, 2, 2, 197, 199, 7, 10, 2, 2, 198, 197, 3, 2, 2, 2, 198, 199, 3, 2,
+	2, 2, 199, 200, 3, 2, 2, 2, 200, 201, 7, 12, 2, 2, 201, 39, 3, 2, 2, 2,
+	202, 203, 5, 12, 7, 2, 203, 41, 3, 2, 2, 2, 26, 48, 51, 55, 71, 74, 77,
+	86, 92, 100, 104, 111, 116, 121, 129, 133, 140, 150, 159, 163, 172, 183,
+	192, 195, 198,
 }
 var deserializer = antlr.NewATNDeserializer(nil)
 var deserializedATN = deserializer.DeserializeFromUInt16(parserATN)
 
 var literalNames = []string{
-	"", "'='", "'('", "','", "')'", "'{'", "'}'", "'window'", "'['", "']'",
-	"';'", "'->'", "", "", "", "", "", "", "", "'\t'",
+	"", "'{'", "'}'", "';'", "'->'", "'('", "')'", "'='", "','", "'['", "']'",
+	"'window'", "", "", "", "", "", "", "", "'\t'",
 }
 var symbolicNames = []string{
-	"", "", "", "", "", "", "", "", "", "", "EOP", "NEXT", "STRING", "NUMBER",
-	"BOOL", "IDENTIFIER", "COMMENT", "NEWLINE", "WHITESPACE", "TAB",
+	"", "OPEN", "CLOSE", "EOP", "NEXT", "OPEN_PARAMS", "CLOSE_PARAMS", "EQ",
+	"SEP", "OPEN_HINTS", "CLOSE_HINTS", "WINDOW", "STRING", "NUMBER", "BOOL",
+	"IDENTIFIER", "COMMENT", "NEWLINE", "WHITESPACE", "TAB",
 }
 
 var ruleNames = []string{
-	"script", "input", "output", "name", "val", "parameter", "transformParameters",
+	"script", "dataInput", "dataOutput", "name", "val", "parameter", "transformParameters",
 	"pipeline", "multiInputPipeline", "pipelineElement", "transform", "fork",
 	"namedSubPipeline", "subPipeline", "multiplexFork", "multiplexSubPipeline",
 	"window", "windowPipeline", "schedulingHints", "schedulingParameter",
@@ -147,33 +152,33 @@ func NewBitflowParser(input antlr.TokenStream) *BitflowParser {
 
 // BitflowParser tokens.
 const (
-	BitflowParserEOF        = antlr.TokenEOF
-	BitflowParserT__0       = 1
-	BitflowParserT__1       = 2
-	BitflowParserT__2       = 3
-	BitflowParserT__3       = 4
-	BitflowParserT__4       = 5
-	BitflowParserT__5       = 6
-	BitflowParserT__6       = 7
-	BitflowParserT__7       = 8
-	BitflowParserT__8       = 9
-	BitflowParserEOP        = 10
-	BitflowParserNEXT       = 11
-	BitflowParserSTRING     = 12
-	BitflowParserNUMBER     = 13
-	BitflowParserBOOL       = 14
-	BitflowParserIDENTIFIER = 15
-	BitflowParserCOMMENT    = 16
-	BitflowParserNEWLINE    = 17
-	BitflowParserWHITESPACE = 18
-	BitflowParserTAB        = 19
+	BitflowParserEOF          = antlr.TokenEOF
+	BitflowParserOPEN         = 1
+	BitflowParserCLOSE        = 2
+	BitflowParserEOP          = 3
+	BitflowParserNEXT         = 4
+	BitflowParserOPEN_PARAMS  = 5
+	BitflowParserCLOSE_PARAMS = 6
+	BitflowParserEQ           = 7
+	BitflowParserSEP          = 8
+	BitflowParserOPEN_HINTS   = 9
+	BitflowParserCLOSE_HINTS  = 10
+	BitflowParserWINDOW       = 11
+	BitflowParserSTRING       = 12
+	BitflowParserNUMBER       = 13
+	BitflowParserBOOL         = 14
+	BitflowParserIDENTIFIER   = 15
+	BitflowParserCOMMENT      = 16
+	BitflowParserNEWLINE      = 17
+	BitflowParserWHITESPACE   = 18
+	BitflowParserTAB          = 19
 )
 
 // BitflowParser rules.
 const (
 	BitflowParserRULE_script               = 0
-	BitflowParserRULE_input                = 1
-	BitflowParserRULE_output               = 2
+	BitflowParserRULE_dataInput            = 1
+	BitflowParserRULE_dataOutput           = 2
 	BitflowParserRULE_name                 = 3
 	BitflowParserRULE_val                  = 4
 	BitflowParserRULE_parameter            = 5
@@ -308,45 +313,45 @@ func (p *BitflowParser) Script() (localctx IScriptContext) {
 	return localctx
 }
 
-// IInputContext is an interface to support dynamic dispatch.
-type IInputContext interface {
+// IDataInputContext is an interface to support dynamic dispatch.
+type IDataInputContext interface {
 	antlr.ParserRuleContext
 
 	// GetParser returns the parser.
 	GetParser() antlr.Parser
 
-	// IsInputContext differentiates from other interfaces.
-	IsInputContext()
+	// IsDataInputContext differentiates from other interfaces.
+	IsDataInputContext()
 }
 
-type InputContext struct {
+type DataInputContext struct {
 	*antlr.BaseParserRuleContext
 	parser antlr.Parser
 }
 
-func NewEmptyInputContext() *InputContext {
-	var p = new(InputContext)
+func NewEmptyDataInputContext() *DataInputContext {
+	var p = new(DataInputContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = BitflowParserRULE_input
+	p.RuleIndex = BitflowParserRULE_dataInput
 	return p
 }
 
-func (*InputContext) IsInputContext() {}
+func (*DataInputContext) IsDataInputContext() {}
 
-func NewInputContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *InputContext {
-	var p = new(InputContext)
+func NewDataInputContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *DataInputContext {
+	var p = new(DataInputContext)
 
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = BitflowParserRULE_input
+	p.RuleIndex = BitflowParserRULE_dataInput
 
 	return p
 }
 
-func (s *InputContext) GetParser() antlr.Parser { return s.parser }
+func (s *DataInputContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *InputContext) AllName() []INameContext {
+func (s *DataInputContext) AllName() []INameContext {
 	var ts = s.GetTypedRuleContexts(reflect.TypeOf((*INameContext)(nil)).Elem())
 	var tst = make([]INameContext, len(ts))
 
@@ -359,7 +364,7 @@ func (s *InputContext) AllName() []INameContext {
 	return tst
 }
 
-func (s *InputContext) Name(i int) INameContext {
+func (s *DataInputContext) Name(i int) INameContext {
 	var t = s.GetTypedRuleContext(reflect.TypeOf((*INameContext)(nil)).Elem(), i)
 
 	if t == nil {
@@ -369,7 +374,7 @@ func (s *InputContext) Name(i int) INameContext {
 	return t.(INameContext)
 }
 
-func (s *InputContext) SchedulingHints() ISchedulingHintsContext {
+func (s *DataInputContext) SchedulingHints() ISchedulingHintsContext {
 	var t = s.GetTypedRuleContext(reflect.TypeOf((*ISchedulingHintsContext)(nil)).Elem(), 0)
 
 	if t == nil {
@@ -379,39 +384,39 @@ func (s *InputContext) SchedulingHints() ISchedulingHintsContext {
 	return t.(ISchedulingHintsContext)
 }
 
-func (s *InputContext) GetRuleContext() antlr.RuleContext {
+func (s *DataInputContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
 
-func (s *InputContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+func (s *DataInputContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
-func (s *InputContext) EnterRule(listener antlr.ParseTreeListener) {
+func (s *DataInputContext) EnterRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(BitflowListener); ok {
-		listenerT.EnterInput(s)
+		listenerT.EnterDataInput(s)
 	}
 }
 
-func (s *InputContext) ExitRule(listener antlr.ParseTreeListener) {
+func (s *DataInputContext) ExitRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(BitflowListener); ok {
-		listenerT.ExitInput(s)
+		listenerT.ExitDataInput(s)
 	}
 }
 
-func (s *InputContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+func (s *DataInputContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case BitflowVisitor:
-		return t.VisitInput(s)
+		return t.VisitDataInput(s)
 
 	default:
 		return t.VisitChildren(s)
 	}
 }
 
-func (p *BitflowParser) Input() (localctx IInputContext) {
-	localctx = NewInputContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 2, BitflowParserRULE_input)
+func (p *BitflowParser) DataInput() (localctx IDataInputContext) {
+	localctx = NewDataInputContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 2, BitflowParserRULE_dataInput)
 	var _la int
 
 	defer func() {
@@ -449,7 +454,7 @@ func (p *BitflowParser) Input() (localctx IInputContext) {
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	if _la == BitflowParserT__7 {
+	if _la == BitflowParserOPEN_HINTS {
 		{
 			p.SetState(48)
 			p.SchedulingHints()
@@ -460,45 +465,45 @@ func (p *BitflowParser) Input() (localctx IInputContext) {
 	return localctx
 }
 
-// IOutputContext is an interface to support dynamic dispatch.
-type IOutputContext interface {
+// IDataOutputContext is an interface to support dynamic dispatch.
+type IDataOutputContext interface {
 	antlr.ParserRuleContext
 
 	// GetParser returns the parser.
 	GetParser() antlr.Parser
 
-	// IsOutputContext differentiates from other interfaces.
-	IsOutputContext()
+	// IsDataOutputContext differentiates from other interfaces.
+	IsDataOutputContext()
 }
 
-type OutputContext struct {
+type DataOutputContext struct {
 	*antlr.BaseParserRuleContext
 	parser antlr.Parser
 }
 
-func NewEmptyOutputContext() *OutputContext {
-	var p = new(OutputContext)
+func NewEmptyDataOutputContext() *DataOutputContext {
+	var p = new(DataOutputContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = BitflowParserRULE_output
+	p.RuleIndex = BitflowParserRULE_dataOutput
 	return p
 }
 
-func (*OutputContext) IsOutputContext() {}
+func (*DataOutputContext) IsDataOutputContext() {}
 
-func NewOutputContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *OutputContext {
-	var p = new(OutputContext)
+func NewDataOutputContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *DataOutputContext {
+	var p = new(DataOutputContext)
 
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = BitflowParserRULE_output
+	p.RuleIndex = BitflowParserRULE_dataOutput
 
 	return p
 }
 
-func (s *OutputContext) GetParser() antlr.Parser { return s.parser }
+func (s *DataOutputContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *OutputContext) Name() INameContext {
+func (s *DataOutputContext) Name() INameContext {
 	var t = s.GetTypedRuleContext(reflect.TypeOf((*INameContext)(nil)).Elem(), 0)
 
 	if t == nil {
@@ -508,7 +513,7 @@ func (s *OutputContext) Name() INameContext {
 	return t.(INameContext)
 }
 
-func (s *OutputContext) SchedulingHints() ISchedulingHintsContext {
+func (s *DataOutputContext) SchedulingHints() ISchedulingHintsContext {
 	var t = s.GetTypedRuleContext(reflect.TypeOf((*ISchedulingHintsContext)(nil)).Elem(), 0)
 
 	if t == nil {
@@ -518,39 +523,39 @@ func (s *OutputContext) SchedulingHints() ISchedulingHintsContext {
 	return t.(ISchedulingHintsContext)
 }
 
-func (s *OutputContext) GetRuleContext() antlr.RuleContext {
+func (s *DataOutputContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
 
-func (s *OutputContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+func (s *DataOutputContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
-func (s *OutputContext) EnterRule(listener antlr.ParseTreeListener) {
+func (s *DataOutputContext) EnterRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(BitflowListener); ok {
-		listenerT.EnterOutput(s)
+		listenerT.EnterDataOutput(s)
 	}
 }
 
-func (s *OutputContext) ExitRule(listener antlr.ParseTreeListener) {
+func (s *DataOutputContext) ExitRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(BitflowListener); ok {
-		listenerT.ExitOutput(s)
+		listenerT.ExitDataOutput(s)
 	}
 }
 
-func (s *OutputContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+func (s *DataOutputContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case BitflowVisitor:
-		return t.VisitOutput(s)
+		return t.VisitDataOutput(s)
 
 	default:
 		return t.VisitChildren(s)
 	}
 }
 
-func (p *BitflowParser) Output() (localctx IOutputContext) {
-	localctx = NewOutputContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 4, BitflowParserRULE_output)
+func (p *BitflowParser) DataOutput() (localctx IDataOutputContext) {
+	localctx = NewDataOutputContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 4, BitflowParserRULE_dataOutput)
 	var _la int
 
 	defer func() {
@@ -578,7 +583,7 @@ func (p *BitflowParser) Output() (localctx IOutputContext) {
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	if _la == BitflowParserT__7 {
+	if _la == BitflowParserOPEN_HINTS {
 		{
 			p.SetState(52)
 			p.SchedulingHints()
@@ -875,6 +880,10 @@ func (s *ParameterContext) Name() INameContext {
 	return t.(INameContext)
 }
 
+func (s *ParameterContext) EQ() antlr.TerminalNode {
+	return s.GetToken(BitflowParserEQ, 0)
+}
+
 func (s *ParameterContext) Val() IValContext {
 	var t = s.GetTypedRuleContext(reflect.TypeOf((*IValContext)(nil)).Elem(), 0)
 
@@ -942,7 +951,7 @@ func (p *BitflowParser) Parameter() (localctx IParameterContext) {
 	}
 	{
 		p.SetState(60)
-		p.Match(BitflowParserT__0)
+		p.Match(BitflowParserEQ)
 	}
 	{
 		p.SetState(61)
@@ -990,6 +999,14 @@ func NewTransformParametersContext(parser antlr.Parser, parent antlr.ParserRuleC
 
 func (s *TransformParametersContext) GetParser() antlr.Parser { return s.parser }
 
+func (s *TransformParametersContext) OPEN_PARAMS() antlr.TerminalNode {
+	return s.GetToken(BitflowParserOPEN_PARAMS, 0)
+}
+
+func (s *TransformParametersContext) CLOSE_PARAMS() antlr.TerminalNode {
+	return s.GetToken(BitflowParserCLOSE_PARAMS, 0)
+}
+
 func (s *TransformParametersContext) AllParameter() []IParameterContext {
 	var ts = s.GetTypedRuleContexts(reflect.TypeOf((*IParameterContext)(nil)).Elem())
 	var tst = make([]IParameterContext, len(ts))
@@ -1011,6 +1028,14 @@ func (s *TransformParametersContext) Parameter(i int) IParameterContext {
 	}
 
 	return t.(IParameterContext)
+}
+
+func (s *TransformParametersContext) AllSEP() []antlr.TerminalNode {
+	return s.GetTokens(BitflowParserSEP)
+}
+
+func (s *TransformParametersContext) SEP(i int) antlr.TerminalNode {
+	return s.GetToken(BitflowParserSEP, i)
 }
 
 func (s *TransformParametersContext) GetRuleContext() antlr.RuleContext {
@@ -1064,10 +1089,12 @@ func (p *BitflowParser) TransformParameters() (localctx ITransformParametersCont
 		}
 	}()
 
+	var _alt int
+
 	p.EnterOuterAlt(localctx, 1)
 	{
 		p.SetState(63)
-		p.Match(BitflowParserT__1)
+		p.Match(BitflowParserOPEN_PARAMS)
 	}
 	p.SetState(72)
 	p.GetErrorHandler().Sync(p)
@@ -1080,27 +1107,40 @@ func (p *BitflowParser) TransformParameters() (localctx ITransformParametersCont
 		}
 		p.SetState(69)
 		p.GetErrorHandler().Sync(p)
-		_la = p.GetTokenStream().LA(1)
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 3, p.GetParserRuleContext())
 
-		for _la == BitflowParserT__2 {
-			{
-				p.SetState(65)
-				p.Match(BitflowParserT__2)
-			}
-			{
-				p.SetState(66)
-				p.Parameter()
-			}
+		for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
+			if _alt == 1 {
+				{
+					p.SetState(65)
+					p.Match(BitflowParserSEP)
+				}
+				{
+					p.SetState(66)
+					p.Parameter()
+				}
 
+			}
 			p.SetState(71)
 			p.GetErrorHandler().Sync(p)
-			_la = p.GetTokenStream().LA(1)
+			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 3, p.GetParserRuleContext())
+		}
+
+	}
+	p.SetState(75)
+	p.GetErrorHandler().Sync(p)
+	_la = p.GetTokenStream().LA(1)
+
+	if _la == BitflowParserSEP {
+		{
+			p.SetState(74)
+			p.Match(BitflowParserSEP)
 		}
 
 	}
 	{
-		p.SetState(74)
-		p.Match(BitflowParserT__3)
+		p.SetState(77)
+		p.Match(BitflowParserCLOSE_PARAMS)
 	}
 
 	return localctx
@@ -1144,14 +1184,18 @@ func NewPipelineContext(parser antlr.Parser, parent antlr.ParserRuleContext, inv
 
 func (s *PipelineContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *PipelineContext) Input() IInputContext {
-	var t = s.GetTypedRuleContext(reflect.TypeOf((*IInputContext)(nil)).Elem(), 0)
+func (s *PipelineContext) DataInput() IDataInputContext {
+	var t = s.GetTypedRuleContext(reflect.TypeOf((*IDataInputContext)(nil)).Elem(), 0)
 
 	if t == nil {
 		return nil
 	}
 
-	return t.(IInputContext)
+	return t.(IDataInputContext)
+}
+
+func (s *PipelineContext) OPEN() antlr.TerminalNode {
+	return s.GetToken(BitflowParserOPEN, 0)
 }
 
 func (s *PipelineContext) MultiInputPipeline() IMultiInputPipelineContext {
@@ -1162,6 +1206,10 @@ func (s *PipelineContext) MultiInputPipeline() IMultiInputPipelineContext {
 	}
 
 	return t.(IMultiInputPipelineContext)
+}
+
+func (s *PipelineContext) CLOSE() antlr.TerminalNode {
+	return s.GetToken(BitflowParserCLOSE, 0)
 }
 
 func (s *PipelineContext) AllNEXT() []antlr.TerminalNode {
@@ -1247,48 +1295,48 @@ func (p *BitflowParser) Pipeline() (localctx IPipelineContext) {
 	}()
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(81)
+	p.SetState(84)
 	p.GetErrorHandler().Sync(p)
 
 	switch p.GetTokenStream().LA(1) {
 	case BitflowParserSTRING, BitflowParserNUMBER, BitflowParserBOOL, BitflowParserIDENTIFIER:
 		{
-			p.SetState(76)
-			p.Input()
+			p.SetState(79)
+			p.DataInput()
 		}
 
-	case BitflowParserT__4:
+	case BitflowParserOPEN:
 		{
-			p.SetState(77)
-			p.Match(BitflowParserT__4)
+			p.SetState(80)
+			p.Match(BitflowParserOPEN)
 		}
 		{
-			p.SetState(78)
+			p.SetState(81)
 			p.MultiInputPipeline()
 		}
 		{
-			p.SetState(79)
-			p.Match(BitflowParserT__5)
+			p.SetState(82)
+			p.Match(BitflowParserCLOSE)
 		}
 
 	default:
 		panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 	}
-	p.SetState(87)
+	p.SetState(90)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	for _la == BitflowParserNEXT {
 		{
-			p.SetState(83)
+			p.SetState(86)
 			p.Match(BitflowParserNEXT)
 		}
 		{
-			p.SetState(84)
+			p.SetState(87)
 			p.PipelineElement()
 		}
 
-		p.SetState(89)
+		p.SetState(92)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 	}
@@ -1420,36 +1468,36 @@ func (p *BitflowParser) MultiInputPipeline() (localctx IMultiInputPipelineContex
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(90)
+		p.SetState(93)
 		p.Pipeline()
 	}
-	p.SetState(95)
+	p.SetState(98)
 	p.GetErrorHandler().Sync(p)
-	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 7, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 8, p.GetParserRuleContext())
 
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
 			{
-				p.SetState(91)
+				p.SetState(94)
 				p.Match(BitflowParserEOP)
 			}
 			{
-				p.SetState(92)
+				p.SetState(95)
 				p.Pipeline()
 			}
 
 		}
-		p.SetState(97)
+		p.SetState(100)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 7, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 8, p.GetParserRuleContext())
 	}
-	p.SetState(99)
+	p.SetState(102)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	if _la == BitflowParserEOP {
 		{
-			p.SetState(98)
+			p.SetState(101)
 			p.Match(BitflowParserEOP)
 		}
 
@@ -1536,14 +1584,14 @@ func (s *PipelineElementContext) Window() IWindowContext {
 	return t.(IWindowContext)
 }
 
-func (s *PipelineElementContext) Output() IOutputContext {
-	var t = s.GetTypedRuleContext(reflect.TypeOf((*IOutputContext)(nil)).Elem(), 0)
+func (s *PipelineElementContext) DataOutput() IDataOutputContext {
+	var t = s.GetTypedRuleContext(reflect.TypeOf((*IDataOutputContext)(nil)).Elem(), 0)
 
 	if t == nil {
 		return nil
 	}
 
-	return t.(IOutputContext)
+	return t.(IDataOutputContext)
 }
 
 func (s *PipelineElementContext) GetRuleContext() antlr.RuleContext {
@@ -1596,42 +1644,42 @@ func (p *BitflowParser) PipelineElement() (localctx IPipelineElementContext) {
 		}
 	}()
 
-	p.SetState(106)
+	p.SetState(109)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 9, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 10, p.GetParserRuleContext()) {
 	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(101)
+			p.SetState(104)
 			p.Transform()
 		}
 
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(102)
+			p.SetState(105)
 			p.Fork()
 		}
 
 	case 3:
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(103)
+			p.SetState(106)
 			p.MultiplexFork()
 		}
 
 	case 4:
 		p.EnterOuterAlt(localctx, 4)
 		{
-			p.SetState(104)
+			p.SetState(107)
 			p.Window()
 		}
 
 	case 5:
 		p.EnterOuterAlt(localctx, 5)
 		{
-			p.SetState(105)
-			p.Output()
+			p.SetState(108)
+			p.DataOutput()
 		}
 
 	}
@@ -1760,20 +1808,20 @@ func (p *BitflowParser) Transform() (localctx ITransformContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(108)
+		p.SetState(111)
 		p.Name()
 	}
 	{
-		p.SetState(109)
+		p.SetState(112)
 		p.TransformParameters()
 	}
-	p.SetState(111)
+	p.SetState(114)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	if _la == BitflowParserT__7 {
+	if _la == BitflowParserOPEN_HINTS {
 		{
-			p.SetState(110)
+			p.SetState(113)
 			p.SchedulingHints()
 		}
 
@@ -1840,6 +1888,10 @@ func (s *ForkContext) TransformParameters() ITransformParametersContext {
 	return t.(ITransformParametersContext)
 }
 
+func (s *ForkContext) OPEN() antlr.TerminalNode {
+	return s.GetToken(BitflowParserOPEN, 0)
+}
+
 func (s *ForkContext) AllNamedSubPipeline() []INamedSubPipelineContext {
 	var ts = s.GetTypedRuleContexts(reflect.TypeOf((*INamedSubPipelineContext)(nil)).Elem())
 	var tst = make([]INamedSubPipelineContext, len(ts))
@@ -1861,6 +1913,10 @@ func (s *ForkContext) NamedSubPipeline(i int) INamedSubPipelineContext {
 	}
 
 	return t.(INamedSubPipelineContext)
+}
+
+func (s *ForkContext) CLOSE() antlr.TerminalNode {
+	return s.GetToken(BitflowParserCLOSE, 0)
 }
 
 func (s *ForkContext) SchedulingHints() ISchedulingHintsContext {
@@ -1936,66 +1992,66 @@ func (p *BitflowParser) Fork() (localctx IForkContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(113)
+		p.SetState(116)
 		p.Name()
 	}
 	{
-		p.SetState(114)
+		p.SetState(117)
 		p.TransformParameters()
 	}
-	p.SetState(116)
+	p.SetState(119)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	if _la == BitflowParserT__7 {
+	if _la == BitflowParserOPEN_HINTS {
 		{
-			p.SetState(115)
+			p.SetState(118)
 			p.SchedulingHints()
 		}
 
 	}
 	{
-		p.SetState(118)
-		p.Match(BitflowParserT__4)
+		p.SetState(121)
+		p.Match(BitflowParserOPEN)
 	}
 	{
-		p.SetState(119)
+		p.SetState(122)
 		p.NamedSubPipeline()
 	}
-	p.SetState(124)
+	p.SetState(127)
 	p.GetErrorHandler().Sync(p)
-	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 12, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 13, p.GetParserRuleContext())
 
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
 			{
-				p.SetState(120)
+				p.SetState(123)
 				p.Match(BitflowParserEOP)
 			}
 			{
-				p.SetState(121)
+				p.SetState(124)
 				p.NamedSubPipeline()
 			}
 
 		}
-		p.SetState(126)
+		p.SetState(129)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 12, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 13, p.GetParserRuleContext())
 	}
-	p.SetState(128)
+	p.SetState(131)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	if _la == BitflowParserEOP {
 		{
-			p.SetState(127)
+			p.SetState(130)
 			p.Match(BitflowParserEOP)
 		}
 
 	}
 	{
-		p.SetState(130)
-		p.Match(BitflowParserT__5)
+		p.SetState(133)
+		p.Match(BitflowParserCLOSE)
 	}
 
 	return localctx
@@ -2128,26 +2184,26 @@ func (p *BitflowParser) NamedSubPipeline() (localctx INamedSubPipelineContext) {
 	}()
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(133)
+	p.SetState(136)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	for ok := true; ok; ok = (((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserBOOL)|(1<<BitflowParserIDENTIFIER))) != 0) {
 		{
-			p.SetState(132)
+			p.SetState(135)
 			p.Name()
 		}
 
-		p.SetState(135)
+		p.SetState(138)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 	}
 	{
-		p.SetState(137)
+		p.SetState(140)
 		p.Match(BitflowParserNEXT)
 	}
 	{
-		p.SetState(138)
+		p.SetState(141)
 		p.SubPipeline()
 	}
 
@@ -2276,24 +2332,24 @@ func (p *BitflowParser) SubPipeline() (localctx ISubPipelineContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(140)
+		p.SetState(143)
 		p.PipelineElement()
 	}
-	p.SetState(145)
+	p.SetState(148)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	for _la == BitflowParserNEXT {
 		{
-			p.SetState(141)
+			p.SetState(144)
 			p.Match(BitflowParserNEXT)
 		}
 		{
-			p.SetState(142)
+			p.SetState(145)
 			p.PipelineElement()
 		}
 
-		p.SetState(147)
+		p.SetState(150)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 	}
@@ -2339,6 +2395,10 @@ func NewMultiplexForkContext(parser antlr.Parser, parent antlr.ParserRuleContext
 
 func (s *MultiplexForkContext) GetParser() antlr.Parser { return s.parser }
 
+func (s *MultiplexForkContext) OPEN() antlr.TerminalNode {
+	return s.GetToken(BitflowParserOPEN, 0)
+}
+
 func (s *MultiplexForkContext) AllMultiplexSubPipeline() []IMultiplexSubPipelineContext {
 	var ts = s.GetTypedRuleContexts(reflect.TypeOf((*IMultiplexSubPipelineContext)(nil)).Elem())
 	var tst = make([]IMultiplexSubPipelineContext, len(ts))
@@ -2360,6 +2420,10 @@ func (s *MultiplexForkContext) MultiplexSubPipeline(i int) IMultiplexSubPipeline
 	}
 
 	return t.(IMultiplexSubPipelineContext)
+}
+
+func (s *MultiplexForkContext) CLOSE() antlr.TerminalNode {
+	return s.GetToken(BitflowParserCLOSE, 0)
 }
 
 func (s *MultiplexForkContext) AllEOP() []antlr.TerminalNode {
@@ -2425,47 +2489,47 @@ func (p *BitflowParser) MultiplexFork() (localctx IMultiplexForkContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(148)
-		p.Match(BitflowParserT__4)
+		p.SetState(151)
+		p.Match(BitflowParserOPEN)
 	}
 	{
-		p.SetState(149)
+		p.SetState(152)
 		p.MultiplexSubPipeline()
 	}
-	p.SetState(154)
+	p.SetState(157)
 	p.GetErrorHandler().Sync(p)
-	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 16, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 17, p.GetParserRuleContext())
 
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
 			{
-				p.SetState(150)
+				p.SetState(153)
 				p.Match(BitflowParserEOP)
 			}
 			{
-				p.SetState(151)
+				p.SetState(154)
 				p.MultiplexSubPipeline()
 			}
 
 		}
-		p.SetState(156)
+		p.SetState(159)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 16, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 17, p.GetParserRuleContext())
 	}
-	p.SetState(158)
+	p.SetState(161)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	if _la == BitflowParserEOP {
 		{
-			p.SetState(157)
+			p.SetState(160)
 			p.Match(BitflowParserEOP)
 		}
 
 	}
 	{
-		p.SetState(160)
-		p.Match(BitflowParserT__5)
+		p.SetState(163)
+		p.Match(BitflowParserCLOSE)
 	}
 
 	return localctx
@@ -2571,7 +2635,7 @@ func (p *BitflowParser) MultiplexSubPipeline() (localctx IMultiplexSubPipelineCo
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(162)
+		p.SetState(165)
 		p.SubPipeline()
 	}
 
@@ -2616,6 +2680,10 @@ func NewWindowContext(parser antlr.Parser, parent antlr.ParserRuleContext, invok
 
 func (s *WindowContext) GetParser() antlr.Parser { return s.parser }
 
+func (s *WindowContext) WINDOW() antlr.TerminalNode {
+	return s.GetToken(BitflowParserWINDOW, 0)
+}
+
 func (s *WindowContext) TransformParameters() ITransformParametersContext {
 	var t = s.GetTypedRuleContext(reflect.TypeOf((*ITransformParametersContext)(nil)).Elem(), 0)
 
@@ -2626,6 +2694,10 @@ func (s *WindowContext) TransformParameters() ITransformParametersContext {
 	return t.(ITransformParametersContext)
 }
 
+func (s *WindowContext) OPEN() antlr.TerminalNode {
+	return s.GetToken(BitflowParserOPEN, 0)
+}
+
 func (s *WindowContext) WindowPipeline() IWindowPipelineContext {
 	var t = s.GetTypedRuleContext(reflect.TypeOf((*IWindowPipelineContext)(nil)).Elem(), 0)
 
@@ -2634,6 +2706,10 @@ func (s *WindowContext) WindowPipeline() IWindowPipelineContext {
 	}
 
 	return t.(IWindowPipelineContext)
+}
+
+func (s *WindowContext) CLOSE() antlr.TerminalNode {
+	return s.GetToken(BitflowParserCLOSE, 0)
 }
 
 func (s *WindowContext) SchedulingHints() ISchedulingHintsContext {
@@ -2699,35 +2775,35 @@ func (p *BitflowParser) Window() (localctx IWindowContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(164)
-		p.Match(BitflowParserT__6)
+		p.SetState(167)
+		p.Match(BitflowParserWINDOW)
 	}
 	{
-		p.SetState(165)
+		p.SetState(168)
 		p.TransformParameters()
 	}
-	p.SetState(167)
+	p.SetState(170)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	if _la == BitflowParserT__7 {
+	if _la == BitflowParserOPEN_HINTS {
 		{
-			p.SetState(166)
+			p.SetState(169)
 			p.SchedulingHints()
 		}
 
 	}
 	{
-		p.SetState(169)
-		p.Match(BitflowParserT__4)
+		p.SetState(172)
+		p.Match(BitflowParserOPEN)
 	}
 	{
-		p.SetState(170)
+		p.SetState(173)
 		p.WindowPipeline()
 	}
 	{
-		p.SetState(171)
-		p.Match(BitflowParserT__5)
+		p.SetState(174)
+		p.Match(BitflowParserCLOSE)
 	}
 
 	return localctx
@@ -2855,24 +2931,24 @@ func (p *BitflowParser) WindowPipeline() (localctx IWindowPipelineContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(173)
+		p.SetState(176)
 		p.Transform()
 	}
-	p.SetState(178)
+	p.SetState(181)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	for _la == BitflowParserNEXT {
 		{
-			p.SetState(174)
+			p.SetState(177)
 			p.Match(BitflowParserNEXT)
 		}
 		{
-			p.SetState(175)
+			p.SetState(178)
 			p.Transform()
 		}
 
-		p.SetState(180)
+		p.SetState(183)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 	}
@@ -2918,6 +2994,14 @@ func NewSchedulingHintsContext(parser antlr.Parser, parent antlr.ParserRuleConte
 
 func (s *SchedulingHintsContext) GetParser() antlr.Parser { return s.parser }
 
+func (s *SchedulingHintsContext) OPEN_HINTS() antlr.TerminalNode {
+	return s.GetToken(BitflowParserOPEN_HINTS, 0)
+}
+
+func (s *SchedulingHintsContext) CLOSE_HINTS() antlr.TerminalNode {
+	return s.GetToken(BitflowParserCLOSE_HINTS, 0)
+}
+
 func (s *SchedulingHintsContext) AllSchedulingParameter() []ISchedulingParameterContext {
 	var ts = s.GetTypedRuleContexts(reflect.TypeOf((*ISchedulingParameterContext)(nil)).Elem())
 	var tst = make([]ISchedulingParameterContext, len(ts))
@@ -2939,6 +3023,14 @@ func (s *SchedulingHintsContext) SchedulingParameter(i int) ISchedulingParameter
 	}
 
 	return t.(ISchedulingParameterContext)
+}
+
+func (s *SchedulingHintsContext) AllSEP() []antlr.TerminalNode {
+	return s.GetTokens(BitflowParserSEP)
+}
+
+func (s *SchedulingHintsContext) SEP(i int) antlr.TerminalNode {
+	return s.GetToken(BitflowParserSEP, i)
 }
 
 func (s *SchedulingHintsContext) GetRuleContext() antlr.RuleContext {
@@ -2992,43 +3084,58 @@ func (p *BitflowParser) SchedulingHints() (localctx ISchedulingHintsContext) {
 		}
 	}()
 
+	var _alt int
+
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(181)
-		p.Match(BitflowParserT__7)
+		p.SetState(184)
+		p.Match(BitflowParserOPEN_HINTS)
 	}
-	p.SetState(190)
+	p.SetState(193)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	if ((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<BitflowParserSTRING)|(1<<BitflowParserNUMBER)|(1<<BitflowParserBOOL)|(1<<BitflowParserIDENTIFIER))) != 0 {
 		{
-			p.SetState(182)
+			p.SetState(185)
 			p.SchedulingParameter()
 		}
-		p.SetState(187)
+		p.SetState(190)
 		p.GetErrorHandler().Sync(p)
-		_la = p.GetTokenStream().LA(1)
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 21, p.GetParserRuleContext())
 
-		for _la == BitflowParserT__2 {
-			{
-				p.SetState(183)
-				p.Match(BitflowParserT__2)
-			}
-			{
-				p.SetState(184)
-				p.SchedulingParameter()
-			}
+		for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
+			if _alt == 1 {
+				{
+					p.SetState(186)
+					p.Match(BitflowParserSEP)
+				}
+				{
+					p.SetState(187)
+					p.SchedulingParameter()
+				}
 
-			p.SetState(189)
+			}
+			p.SetState(192)
 			p.GetErrorHandler().Sync(p)
-			_la = p.GetTokenStream().LA(1)
+			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 21, p.GetParserRuleContext())
+		}
+
+	}
+	p.SetState(196)
+	p.GetErrorHandler().Sync(p)
+	_la = p.GetTokenStream().LA(1)
+
+	if _la == BitflowParserSEP {
+		{
+			p.SetState(195)
+			p.Match(BitflowParserSEP)
 		}
 
 	}
 	{
-		p.SetState(192)
-		p.Match(BitflowParserT__8)
+		p.SetState(198)
+		p.Match(BitflowParserCLOSE_HINTS)
 	}
 
 	return localctx
@@ -3134,7 +3241,7 @@ func (p *BitflowParser) SchedulingParameter() (localctx ISchedulingParameterCont
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(194)
+		p.SetState(200)
 		p.Parameter()
 	}
 

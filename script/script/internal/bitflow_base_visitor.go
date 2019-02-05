@@ -11,11 +11,11 @@ func (v *BaseBitflowVisitor) VisitScript(ctx *ScriptContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseBitflowVisitor) VisitInput(ctx *InputContext) interface{} {
+func (v *BaseBitflowVisitor) VisitDataInput(ctx *DataInputContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseBitflowVisitor) VisitOutput(ctx *OutputContext) interface{} {
+func (v *BaseBitflowVisitor) VisitDataOutput(ctx *DataOutputContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

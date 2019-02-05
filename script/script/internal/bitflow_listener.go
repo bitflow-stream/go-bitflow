@@ -10,11 +10,11 @@ type BitflowListener interface {
 	// EnterScript is called when entering the script production.
 	EnterScript(c *ScriptContext)
 
-	// EnterInput is called when entering the input production.
-	EnterInput(c *InputContext)
+	// EnterDataInput is called when entering the dataInput production.
+	EnterDataInput(c *DataInputContext)
 
-	// EnterOutput is called when entering the output production.
-	EnterOutput(c *OutputContext)
+	// EnterDataOutput is called when entering the dataOutput production.
+	EnterDataOutput(c *DataOutputContext)
 
 	// EnterName is called when entering the name production.
 	EnterName(c *NameContext)
@@ -70,11 +70,11 @@ type BitflowListener interface {
 	// ExitScript is called when exiting the script production.
 	ExitScript(c *ScriptContext)
 
-	// ExitInput is called when exiting the input production.
-	ExitInput(c *InputContext)
+	// ExitDataInput is called when exiting the dataInput production.
+	ExitDataInput(c *DataInputContext)
 
-	// ExitOutput is called when exiting the output production.
-	ExitOutput(c *OutputContext)
+	// ExitDataOutput is called when exiting the dataOutput production.
+	ExitDataOutput(c *DataOutputContext)
 
 	// ExitName is called when exiting the name production.
 	ExitName(c *NameContext)

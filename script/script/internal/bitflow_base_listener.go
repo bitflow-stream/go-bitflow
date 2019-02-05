@@ -26,17 +26,17 @@ func (s *BaseBitflowListener) EnterScript(ctx *ScriptContext) {}
 // ExitScript is called when production script is exited.
 func (s *BaseBitflowListener) ExitScript(ctx *ScriptContext) {}
 
-// EnterInput is called when production input is entered.
-func (s *BaseBitflowListener) EnterInput(ctx *InputContext) {}
+// EnterDataInput is called when production dataInput is entered.
+func (s *BaseBitflowListener) EnterDataInput(ctx *DataInputContext) {}
 
-// ExitInput is called when production input is exited.
-func (s *BaseBitflowListener) ExitInput(ctx *InputContext) {}
+// ExitDataInput is called when production dataInput is exited.
+func (s *BaseBitflowListener) ExitDataInput(ctx *DataInputContext) {}
 
-// EnterOutput is called when production output is entered.
-func (s *BaseBitflowListener) EnterOutput(ctx *OutputContext) {}
+// EnterDataOutput is called when production dataOutput is entered.
+func (s *BaseBitflowListener) EnterDataOutput(ctx *DataOutputContext) {}
 
-// ExitOutput is called when production output is exited.
-func (s *BaseBitflowListener) ExitOutput(ctx *OutputContext) {}
+// ExitDataOutput is called when production dataOutput is exited.
+func (s *BaseBitflowListener) ExitDataOutput(ctx *DataOutputContext) {}
 
 // EnterName is called when production name is entered.
 func (s *BaseBitflowListener) EnterName(ctx *NameContext) {}

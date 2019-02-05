@@ -21,21 +21,19 @@ type CmdPipelineBuilder struct {
 	reg.ProcessorRegistry
 	SkipInputFlags bool
 
-	printAnalyses                bool
-	printPipeline                bool
-	printPipelineSchedulingHints bool
-	printCapabilities            bool
-	useNewScript                 bool
-	pluginPaths                  golib.StringSlice
+	printAnalyses     bool
+	printPipeline     bool
+	printCapabilities bool
+	useOldScript      bool
+	pluginPaths       golib.StringSlice
 }
 
 func (c *CmdPipelineBuilder) RegisterFlags() {
 	flag.BoolVar(&c.printAnalyses, "print-analyses", false, "Print a list of available analyses and exit.")
 	flag.BoolVar(&c.printPipeline, "print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
-	flag.BoolVar(&c.printPipelineSchedulingHints, "print-scheduling-hints", false, "Print the subpipelines with scheduling hints as json and exit.")
 	flag.BoolVar(&c.printCapabilities, "capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
-	flag.BoolVar(&c.useNewScript, "new", false, "Use the new script parser for processing the input script.")
-	flag.Var(&c.pluginPaths, "p", "Plugins to loadfor additional functionality")
+	flag.BoolVar(&c.useOldScript, "old", false, "Use the old script parser for processing the input script.")
+	flag.Var(&c.pluginPaths, "p", "Plugins to load for additional functionality")
 
 	c.ProcessorRegistry = reg.NewProcessorRegistry()
 	c.Endpoints.RegisterGeneralFlagsTo(flag.CommandLine)
@@ -55,13 +53,10 @@ func (c *CmdPipelineBuilder) BuildPipeline(script string) (*bitflow.SamplePipeli
 		return nil, nil
 	}
 
-	if c.printPipelineSchedulingHints {
-		return nil, convertAndPrintSchedulingHints(script)
-	}
-	make_pipeline := make_pipeline_old
-	if c.useNewScript {
-		log.Println("Running using new ANTLR script implementation")
-		make_pipeline = make_pipeline_new
+	make_pipeline := make_pipeline_new
+	if c.useOldScript {
+		log.Println("Running using Go-only script implementation")
+		make_pipeline = make_pipeline_old
 	}
 	pipe, err := make_pipeline(c.ProcessorRegistry, script)
 	if err != nil {
@@ -75,19 +70,6 @@ func (c *CmdPipelineBuilder) BuildPipeline(script string) (*bitflow.SamplePipeli
 		pipe = nil
 	}
 	return pipe, nil
-}
-
-func convertAndPrintSchedulingHints(rawScript string) error {
-	scripts, errs := new(script.BitflowScriptScheduleParser).ParseScript(rawScript)
-	if err := errs.NilOrError(); err != nil {
-		return err
-	}
-	j, err := JSONMarshal(scripts)
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(j))
-	return nil
 }
 
 func JSONMarshal(t interface{}) ([]byte, error) {
