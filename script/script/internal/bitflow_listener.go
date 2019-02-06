@@ -19,26 +19,29 @@ type BitflowListener interface {
 	// EnterName is called when entering the name production.
 	EnterName(c *NameContext)
 
-	// EnterVal is called when entering the val production.
-	EnterVal(c *ValContext)
-
 	// EnterParameter is called when entering the parameter production.
 	EnterParameter(c *ParameterContext)
 
-	// EnterTransformParameters is called when entering the transformParameters production.
-	EnterTransformParameters(c *TransformParametersContext)
+	// EnterParameterList is called when entering the parameterList production.
+	EnterParameterList(c *ParameterListContext)
+
+	// EnterParameters is called when entering the parameters production.
+	EnterParameters(c *ParametersContext)
+
+	// EnterPipelines is called when entering the pipelines production.
+	EnterPipelines(c *PipelinesContext)
 
 	// EnterPipeline is called when entering the pipeline production.
 	EnterPipeline(c *PipelineContext)
 
-	// EnterMultiInputPipeline is called when entering the multiInputPipeline production.
-	EnterMultiInputPipeline(c *MultiInputPipelineContext)
-
 	// EnterPipelineElement is called when entering the pipelineElement production.
 	EnterPipelineElement(c *PipelineElementContext)
 
-	// EnterTransform is called when entering the transform production.
-	EnterTransform(c *TransformContext)
+	// EnterPipelineTailElement is called when entering the pipelineTailElement production.
+	EnterPipelineTailElement(c *PipelineTailElementContext)
+
+	// EnterProcessingStep is called when entering the processingStep production.
+	EnterProcessingStep(c *ProcessingStepContext)
 
 	// EnterFork is called when entering the fork production.
 	EnterFork(c *ForkContext)
@@ -52,20 +55,11 @@ type BitflowListener interface {
 	// EnterMultiplexFork is called when entering the multiplexFork production.
 	EnterMultiplexFork(c *MultiplexForkContext)
 
-	// EnterMultiplexSubPipeline is called when entering the multiplexSubPipeline production.
-	EnterMultiplexSubPipeline(c *MultiplexSubPipelineContext)
-
 	// EnterWindow is called when entering the window production.
 	EnterWindow(c *WindowContext)
 
-	// EnterWindowPipeline is called when entering the windowPipeline production.
-	EnterWindowPipeline(c *WindowPipelineContext)
-
 	// EnterSchedulingHints is called when entering the schedulingHints production.
 	EnterSchedulingHints(c *SchedulingHintsContext)
-
-	// EnterSchedulingParameter is called when entering the schedulingParameter production.
-	EnterSchedulingParameter(c *SchedulingParameterContext)
 
 	// ExitScript is called when exiting the script production.
 	ExitScript(c *ScriptContext)
@@ -79,26 +73,29 @@ type BitflowListener interface {
 	// ExitName is called when exiting the name production.
 	ExitName(c *NameContext)
 
-	// ExitVal is called when exiting the val production.
-	ExitVal(c *ValContext)
-
 	// ExitParameter is called when exiting the parameter production.
 	ExitParameter(c *ParameterContext)
 
-	// ExitTransformParameters is called when exiting the transformParameters production.
-	ExitTransformParameters(c *TransformParametersContext)
+	// ExitParameterList is called when exiting the parameterList production.
+	ExitParameterList(c *ParameterListContext)
+
+	// ExitParameters is called when exiting the parameters production.
+	ExitParameters(c *ParametersContext)
+
+	// ExitPipelines is called when exiting the pipelines production.
+	ExitPipelines(c *PipelinesContext)
 
 	// ExitPipeline is called when exiting the pipeline production.
 	ExitPipeline(c *PipelineContext)
 
-	// ExitMultiInputPipeline is called when exiting the multiInputPipeline production.
-	ExitMultiInputPipeline(c *MultiInputPipelineContext)
-
 	// ExitPipelineElement is called when exiting the pipelineElement production.
 	ExitPipelineElement(c *PipelineElementContext)
 
-	// ExitTransform is called when exiting the transform production.
-	ExitTransform(c *TransformContext)
+	// ExitPipelineTailElement is called when exiting the pipelineTailElement production.
+	ExitPipelineTailElement(c *PipelineTailElementContext)
+
+	// ExitProcessingStep is called when exiting the processingStep production.
+	ExitProcessingStep(c *ProcessingStepContext)
 
 	// ExitFork is called when exiting the fork production.
 	ExitFork(c *ForkContext)
@@ -112,18 +109,9 @@ type BitflowListener interface {
 	// ExitMultiplexFork is called when exiting the multiplexFork production.
 	ExitMultiplexFork(c *MultiplexForkContext)
 
-	// ExitMultiplexSubPipeline is called when exiting the multiplexSubPipeline production.
-	ExitMultiplexSubPipeline(c *MultiplexSubPipelineContext)
-
 	// ExitWindow is called when exiting the window production.
 	ExitWindow(c *WindowContext)
 
-	// ExitWindowPipeline is called when exiting the windowPipeline production.
-	ExitWindowPipeline(c *WindowPipelineContext)
-
 	// ExitSchedulingHints is called when exiting the schedulingHints production.
 	ExitSchedulingHints(c *SchedulingHintsContext)
-
-	// ExitSchedulingParameter is called when exiting the schedulingParameter production.
-	ExitSchedulingParameter(c *SchedulingParameterContext)
 }

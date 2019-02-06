@@ -59,7 +59,7 @@ func (s *parsedSubpipeline) Build() (*bitflow.SamplePipeline, error) {
 	parser := &_bitflowScriptParser{
 		registry: s.registry,
 	}
-	parser.buildPipelineTail(pipe, s.pipe.AllPipelineElement())
+	parser.buildPipelineTail(pipe, s.pipe.AllPipelineTailElement())
 	return pipe, parser.NilOrError()
 }
 
@@ -131,11 +131,11 @@ func unwrapString(ctx stringContext) string {
 
 func (s *_bitflowScriptParser) buildScript(ctx *internal.ScriptContext) *bitflow.SamplePipeline {
 	pipe := new(bitflow.SamplePipeline)
-	s.buildMultiInputPipeline(pipe, ctx.MultiInputPipeline().(*internal.MultiInputPipelineContext))
+	s.buildInputPipelines(pipe, ctx.Pipelines().(*internal.PipelinesContext))
 	return pipe
 }
 
-func (s *_bitflowScriptParser) buildMultiInputPipeline(pipe *bitflow.SamplePipeline, ctx *internal.MultiInputPipelineContext) {
+func (s *_bitflowScriptParser) buildInputPipelines(pipe *bitflow.SamplePipeline, ctx *internal.PipelinesContext) {
 	pipes := ctx.AllPipeline()
 	if len(pipes) == 1 {
 		// Optimization: avoid unnecessary parallelization of one single pipeline
@@ -153,15 +153,17 @@ func (s *_bitflowScriptParser) buildMultiInputPipeline(pipe *bitflow.SamplePipel
 
 func (s *_bitflowScriptParser) buildInputPipeline(pipe *bitflow.SamplePipeline, ctx *internal.PipelineContext) {
 	switch {
-	case ctx.MultiInputPipeline() != nil:
-		s.buildMultiInputPipeline(pipe, ctx.MultiInputPipeline().(*internal.MultiInputPipelineContext))
+	case ctx.Pipelines() != nil:
+		s.buildInputPipelines(pipe, ctx.Pipelines().(*internal.PipelinesContext))
 	case ctx.DataInput() != nil:
 		s.buildInput(pipe, ctx.DataInput().(*internal.DataInputContext))
+	case ctx.PipelineElement() != nil:
+		s.buildPipelineElement(pipe, false, ctx.PipelineElement().(*internal.PipelineElementContext))
 	default:
 		// This case is actually not possible due to the grammar. Just cover the case for the sake of completeness.
 		pipe.Source = new(bitflow.EmptySampleSource)
 	}
-	s.buildPipelineTail(pipe, ctx.AllPipelineElement())
+	s.buildPipelineTail(pipe, ctx.AllPipelineTailElement())
 }
 
 func (s *_bitflowScriptParser) buildInput(pipe *bitflow.SamplePipeline, ctx *internal.DataInputContext) {
@@ -186,35 +188,30 @@ func (s *_bitflowScriptParser) buildOutput(pipe *bitflow.SamplePipeline, ctx *in
 	}
 }
 
-func (s *_bitflowScriptParser) buildPipelineElement(pipe *bitflow.SamplePipeline, ctx *internal.PipelineElementContext) {
+func (s *_bitflowScriptParser) buildPipelineElement(pipe *bitflow.SamplePipeline, windowMode bool, ctx *internal.PipelineElementContext) {
 	switch {
-	case ctx.Transform() != nil:
-		s.buildTransform(pipe, ctx.Transform().(*internal.TransformContext))
+	case ctx.ProcessingStep() != nil:
+		s.buildProcessingStep(pipe, windowMode, ctx.ProcessingStep().(*internal.ProcessingStepContext))
 	case ctx.Fork() != nil:
 		s.buildFork(pipe, ctx.Fork().(*internal.ForkContext))
-	case ctx.MultiplexFork() != nil:
-		s.buildMultiplexFork(pipe, ctx.MultiplexFork().(*internal.MultiplexForkContext))
 	case ctx.Window() != nil:
 		s.buildWindow(pipe, ctx.Window().(*internal.WindowContext))
-	case ctx.DataOutput() != nil:
-		s.buildOutput(pipe, ctx.DataOutput().(*internal.DataOutputContext))
 	}
 }
 
-func (s *_bitflowScriptParser) buildTransform(pipe *bitflow.SamplePipeline, ctx *internal.TransformContext) {
+func (s *_bitflowScriptParser) buildProcessingStep(pipe *bitflow.SamplePipeline, windowMode bool, ctx *internal.ProcessingStepContext) {
 	nameCtx := ctx.Name().(*internal.NameContext)
 	name := unwrapString(nameCtx)
-	params := s.buildTransformParameters(ctx.TransformParameters().(*internal.TransformParametersContext))
-	isBatched := false // TODO implement window mode
+	params := s.buildParameters(ctx.Parameters().(*internal.ParametersContext))
 
 	regAnalysis, ok := s.registry.GetAnalysis(name)
 	if !ok {
 		s.pushError(nameCtx, "%v: %v", name, "Unknown Processor.")
 		return
-	} else if isBatched && !regAnalysis.SupportsBatchProcessing {
+	} else if windowMode && !regAnalysis.SupportsBatchProcessing {
 		s.pushError(nameCtx, "%v: %v", name, "Processor used in window, but does not support batch processing.")
 		return
-	} else if !isBatched && !regAnalysis.SupportsStreamProcessing {
+	} else if !windowMode && !regAnalysis.SupportsStreamProcessing {
 		s.pushError(nameCtx, "%v: %v", name, "Processor used outside window, but does not support stream processing.")
 		return
 	}
@@ -228,13 +225,15 @@ func (s *_bitflowScriptParser) buildTransform(pipe *bitflow.SamplePipeline, ctx 
 	}
 }
 
-func (s *_bitflowScriptParser) buildTransformParameters(ctx *internal.TransformParametersContext) map[string]string {
+func (s *_bitflowScriptParser) buildParameters(ctx *internal.ParametersContext) map[string]string {
 	params := make(map[string]string)
-	for _, paramCtxI := range ctx.AllParameter() {
-		paramCtx := paramCtxI.(*internal.ParameterContext)
-		key := unwrapString(paramCtx.Name().(*internal.NameContext))
-		value := unwrapString(paramCtx.Val().(*internal.ValContext))
-		params[key] = value
+	if lst := ctx.ParameterList(); lst != nil {
+		for _, paramCtxI := range lst.(*internal.ParameterListContext).AllParameter() {
+			paramCtx := paramCtxI.(*internal.ParameterContext)
+			key := unwrapString(paramCtx.Name(0).(*internal.NameContext))
+			value := unwrapString(paramCtx.Name(1).(*internal.NameContext))
+			params[key] = value
+		}
 	}
 	return params
 }
@@ -242,7 +241,7 @@ func (s *_bitflowScriptParser) buildTransformParameters(ctx *internal.TransformP
 func (s *_bitflowScriptParser) buildFork(pipe *bitflow.SamplePipeline, ctx *internal.ForkContext) {
 	nameCtx := ctx.Name().(*internal.NameContext)
 	name := unwrapString(nameCtx)
-	params := s.buildTransformParameters(ctx.TransformParameters().(*internal.TransformParametersContext))
+	params := s.buildParameters(ctx.Parameters().(*internal.ParametersContext))
 
 	// Lookup fork step and verify parameters
 	forkStep, ok := s.registry.GetFork(name)
@@ -285,17 +284,25 @@ func (s *_bitflowScriptParser) buildNamedSubPipeline(ctx *internal.NamedSubPipel
 	}
 }
 
-func (s *_bitflowScriptParser) buildPipelineTail(pipe *bitflow.SamplePipeline, elements []internal.IPipelineElementContext) {
-	for _, elem := range elements {
-		s.buildPipelineElement(pipe, elem.(*internal.PipelineElementContext))
+func (s *_bitflowScriptParser) buildPipelineTail(pipe *bitflow.SamplePipeline, elements []internal.IPipelineTailElementContext) {
+	for _, elemI := range elements {
+		elem := elemI.(*internal.PipelineTailElementContext)
+		switch {
+		case elem.PipelineElement() != nil:
+			s.buildPipelineElement(pipe, false, elem.PipelineElement().(*internal.PipelineElementContext))
+		case elem.MultiplexFork() != nil:
+			s.buildMultiplexFork(pipe, elem.MultiplexFork().(*internal.MultiplexForkContext))
+		case elem.DataOutput() != nil:
+			s.buildOutput(pipe, elem.DataOutput().(*internal.DataOutputContext))
+		}
 	}
 }
 
 func (s *_bitflowScriptParser) buildMultiplexFork(pipe *bitflow.SamplePipeline, ctx *internal.MultiplexForkContext) {
 	var multi fork.MultiplexDistributor
-	for _, subpipeCtx := range ctx.AllMultiplexSubPipeline() {
+	for _, subpipeCtx := range ctx.AllSubPipeline() {
 		subpipe := new(bitflow.SamplePipeline)
-		s.buildPipelineTail(subpipe, subpipeCtx.(*internal.MultiplexSubPipelineContext).SubPipeline().(*internal.SubPipelineContext).AllPipelineElement())
+		s.buildPipelineTail(subpipe, subpipeCtx.(*internal.SubPipelineContext).AllPipelineTailElement())
 		if len(subpipe.Processors) > 0 {
 			multi.Subpipelines = append(multi.Subpipelines, subpipe)
 		}

@@ -19,26 +19,29 @@ type BitflowVisitor interface {
 	// Visit a parse tree produced by BitflowParser#name.
 	VisitName(ctx *NameContext) interface{}
 
-	// Visit a parse tree produced by BitflowParser#val.
-	VisitVal(ctx *ValContext) interface{}
-
 	// Visit a parse tree produced by BitflowParser#parameter.
 	VisitParameter(ctx *ParameterContext) interface{}
 
-	// Visit a parse tree produced by BitflowParser#transformParameters.
-	VisitTransformParameters(ctx *TransformParametersContext) interface{}
+	// Visit a parse tree produced by BitflowParser#parameterList.
+	VisitParameterList(ctx *ParameterListContext) interface{}
+
+	// Visit a parse tree produced by BitflowParser#parameters.
+	VisitParameters(ctx *ParametersContext) interface{}
+
+	// Visit a parse tree produced by BitflowParser#pipelines.
+	VisitPipelines(ctx *PipelinesContext) interface{}
 
 	// Visit a parse tree produced by BitflowParser#pipeline.
 	VisitPipeline(ctx *PipelineContext) interface{}
 
-	// Visit a parse tree produced by BitflowParser#multiInputPipeline.
-	VisitMultiInputPipeline(ctx *MultiInputPipelineContext) interface{}
-
 	// Visit a parse tree produced by BitflowParser#pipelineElement.
 	VisitPipelineElement(ctx *PipelineElementContext) interface{}
 
-	// Visit a parse tree produced by BitflowParser#transform.
-	VisitTransform(ctx *TransformContext) interface{}
+	// Visit a parse tree produced by BitflowParser#pipelineTailElement.
+	VisitPipelineTailElement(ctx *PipelineTailElementContext) interface{}
+
+	// Visit a parse tree produced by BitflowParser#processingStep.
+	VisitProcessingStep(ctx *ProcessingStepContext) interface{}
 
 	// Visit a parse tree produced by BitflowParser#fork.
 	VisitFork(ctx *ForkContext) interface{}
@@ -52,18 +55,9 @@ type BitflowVisitor interface {
 	// Visit a parse tree produced by BitflowParser#multiplexFork.
 	VisitMultiplexFork(ctx *MultiplexForkContext) interface{}
 
-	// Visit a parse tree produced by BitflowParser#multiplexSubPipeline.
-	VisitMultiplexSubPipeline(ctx *MultiplexSubPipelineContext) interface{}
-
 	// Visit a parse tree produced by BitflowParser#window.
 	VisitWindow(ctx *WindowContext) interface{}
 
-	// Visit a parse tree produced by BitflowParser#windowPipeline.
-	VisitWindowPipeline(ctx *WindowPipelineContext) interface{}
-
 	// Visit a parse tree produced by BitflowParser#schedulingHints.
 	VisitSchedulingHints(ctx *SchedulingHintsContext) interface{}
-
-	// Visit a parse tree produced by BitflowParser#schedulingParameter.
-	VisitSchedulingParameter(ctx *SchedulingParameterContext) interface{}
 }

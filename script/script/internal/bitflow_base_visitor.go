@@ -23,15 +23,19 @@ func (v *BaseBitflowVisitor) VisitName(ctx *NameContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseBitflowVisitor) VisitVal(ctx *ValContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseBitflowVisitor) VisitParameter(ctx *ParameterContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseBitflowVisitor) VisitTransformParameters(ctx *TransformParametersContext) interface{} {
+func (v *BaseBitflowVisitor) VisitParameterList(ctx *ParameterListContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseBitflowVisitor) VisitParameters(ctx *ParametersContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseBitflowVisitor) VisitPipelines(ctx *PipelinesContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -39,15 +43,15 @@ func (v *BaseBitflowVisitor) VisitPipeline(ctx *PipelineContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseBitflowVisitor) VisitMultiInputPipeline(ctx *MultiInputPipelineContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseBitflowVisitor) VisitPipelineElement(ctx *PipelineElementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseBitflowVisitor) VisitTransform(ctx *TransformContext) interface{} {
+func (v *BaseBitflowVisitor) VisitPipelineTailElement(ctx *PipelineTailElementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseBitflowVisitor) VisitProcessingStep(ctx *ProcessingStepContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -67,22 +71,10 @@ func (v *BaseBitflowVisitor) VisitMultiplexFork(ctx *MultiplexForkContext) inter
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseBitflowVisitor) VisitMultiplexSubPipeline(ctx *MultiplexSubPipelineContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseBitflowVisitor) VisitWindow(ctx *WindowContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseBitflowVisitor) VisitWindowPipeline(ctx *WindowPipelineContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseBitflowVisitor) VisitSchedulingHints(ctx *SchedulingHintsContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseBitflowVisitor) VisitSchedulingParameter(ctx *SchedulingParameterContext) interface{} {
 	return v.VisitChildren(ctx)
 }
