@@ -35,7 +35,6 @@ type Marshaller interface {
 // from the parsing part. One goroutine can continuously call ReadSampleData(), while multiple
 // other routines execute ParseSample() in parallel.
 type Unmarshaller interface {
-
 	// String returns a short description of the Unmarshaller.
 	String() string
 
@@ -91,7 +90,7 @@ func readUntil(reader *bufio.Reader, delimiter byte) (data []byte, err error) {
 		if len(data) > 0 && data[len(data)-1] != delimiter {
 			err = io.ErrUnexpectedEOF
 		}
-	} else if len(data) == 0 && err != nil {
+	} else if len(data) == 0 && err == nil {
 		err = errors.New("Bitflow: empty read")
 	}
 	return

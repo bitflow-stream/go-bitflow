@@ -130,7 +130,7 @@ func (conn *tcpListenerConnection) isConnectionClosed() bool {
 
 func (conn *tcpListenerConnection) readSamples(wg *sync.WaitGroup, connection *net.TCPConn) {
 	defer wg.Done()
-	conn.stream.ReadTcpSamples(connection, conn.isConnectionClosed)
+	conn.stream.ReadTcpSamples(connection, connection.RemoteAddr().String(), conn.isConnectionClosed)
 	if !conn.source.countConnectionClosed() {
 		conn.source.Close()
 	}
@@ -317,10 +317,10 @@ func (b *outputSampleBuffer) closeBuffer() {
 }
 
 func (b *outputSampleBuffer) sendSamples(conn *TcpWriteConn) {
-	b.sendFilteredSamples(conn, nil)
+	b.sendFilteredSamples(conn, nil, nil)
 }
 
-func (b *outputSampleBuffer) sendFilteredSamples(conn *TcpWriteConn, filter func(sample *Sample, header *Header) bool) {
+func (b *outputSampleBuffer) sendFilteredSamples(conn *TcpWriteConn, flushCallback func(), filter func(sample *Sample, header *Header) bool) {
 	first, num := b.getFirst()
 	if num > 1 {
 		conn.log.Debugln("Sending", num, "buffered samples")
@@ -331,6 +331,9 @@ func (b *outputSampleBuffer) sendFilteredSamples(conn *TcpWriteConn, filter func
 		}
 		if filter == nil || filter(first.sample, first.header) {
 			conn.Sample(first.sample, first.header)
+			if flushCallback != nil {
+				flushCallback()
+			}
 		}
 		if !conn.IsRunning() {
 			return

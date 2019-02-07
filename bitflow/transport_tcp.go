@@ -287,7 +287,7 @@ func (sink *TCPSink) getOutputConnection() (conn *TcpWriteConn, err error) {
 
 func (sink *TCPSink) assertConnection() error {
 	if sink.conn == nil {
-		conn, err := dialTcp(sink.Endpoint, sink.DialTimeout)
+		conn, _, err := dialTcp(sink.Endpoint, sink.DialTimeout)
 		if err != nil {
 			return err
 		}
@@ -322,13 +322,22 @@ type TCPSource struct {
 	// DialTimeout can be set to time out automatically when connecting to a remote TCP endpoint
 	DialTimeout time.Duration
 
+	// UseHTTP instructs this data source to use the HTTP protocol instead of TCP. In this case, the RemoteAddrs
+	// strings are treated as HTTP URLs, but without the http:// prefix. This prefix is appended before attempting to
+	// send an HTTP request.
+	UseHTTP bool
+
 	downloadTasks []*tcpDownloadTask
 	downloadSink  SampleSink
 }
 
 // String implements the SampleSource interface.
 func (source *TCPSource) String() string {
-	return "TCP download (" + source.SourceString() + ")"
+	proto := "TCP"
+	if source.UseHTTP {
+		proto = "HTTP"
+	}
+	return proto + " download (" + source.SourceString() + ")"
 }
 
 // SourceString returns a string representation of the TCP endpoints the TCPSource
@@ -378,7 +387,7 @@ func (source *TCPSource) Close() {
 	}
 }
 
-func (source *TCPSource) startStream(conn *net.TCPConn) *SampleInputStream {
+func (source *TCPSource) startStream(conn io.ReadCloser) *SampleInputStream {
 	return source.Reader.Open(conn, source.downloadSink)
 }
 
@@ -395,12 +404,12 @@ func (task *tcpDownloadTask) Start(wg *sync.WaitGroup) golib.StopChan {
 	task.loopTask = &golib.LoopTask{
 		Description: "tcp download loop",
 		Loop: func(stop golib.StopChan) error {
-			if conn, err := task.dial(); err != nil {
+			if conn, remote, err := task.dial(); err != nil {
 				if task.source.PrintErrors {
 					log.WithField("remote", task.remote).Errorln("Error downloading data:", err)
 				}
 			} else {
-				task.handleConnection(conn)
+				task.handleConnection(conn, remote)
 			}
 			stop.WaitTimeout(task.source.RetryInterval)
 			return nil
@@ -409,12 +418,12 @@ func (task *tcpDownloadTask) Start(wg *sync.WaitGroup) golib.StopChan {
 	return task.loopTask.Start(wg)
 }
 
-func (task *tcpDownloadTask) handleConnection(conn *net.TCPConn) {
+func (task *tcpDownloadTask) handleConnection(conn io.ReadCloser, remote string) {
 	task.loopTask.IfNotStopped(func() {
 		task.stream = task.source.startStream(conn)
 	})
 	if !task.loopTask.Stopped() {
-		task.stream.ReadTcpSamples(conn, task.isConnectionClosed)
+		task.stream.ReadTcpSamples(conn, remote, task.isConnectionClosed)
 		if !task.source.countConnectionClosed() {
 			task.source.Close()
 		}
@@ -435,18 +444,22 @@ func (task *tcpDownloadTask) isConnectionClosed() bool {
 	return task.loopTask.Stopped()
 }
 
-func (task *tcpDownloadTask) dial() (*net.TCPConn, error) {
-	return dialTcp(task.remote, task.source.DialTimeout)
+func (task *tcpDownloadTask) dial() (io.ReadCloser, string, error) {
+	if task.source.UseHTTP {
+		return dialHTTP(task.remote, task.source.DialTimeout)
+	} else {
+		return dialTcp(task.remote, task.source.DialTimeout)
+	}
 }
 
-func dialTcp(endpoint string, timeout time.Duration) (*net.TCPConn, error) {
+func dialTcp(endpoint string, timeout time.Duration) (*net.TCPConn, string, error) {
 	conn, err := net.DialTimeout("tcp", endpoint, timeout)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if netConn, ok := conn.(*net.TCPConn); !ok {
-		return nil, fmt.Errorf("net.DialTimeout() returned a %T (%v) instead of *net.TCPConn", conn, conn)
+		return nil, "", fmt.Errorf("net.DialTimeout() returned a %T (%v) instead of *net.TCPConn", conn, conn)
 	} else {
-		return netConn, nil
+		return netConn, netConn.RemoteAddr().String(), nil
 	}
 }

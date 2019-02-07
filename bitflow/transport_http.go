@@ -2,8 +2,13 @@ package bitflow
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/antongulenko/golib"
 	"github.com/gin-gonic/gin"
@@ -39,7 +44,11 @@ type HttpServerSink struct {
 
 // String implements the SampleSink interface.
 func (sink *HttpServerSink) String() string {
-	return "HTTP sink on " + sink.Endpoint
+	msg := "HTTP sink on " + sink.Endpoint
+	if sink.SubPathTag != "" {
+		msg += " (paths defined by tag '" + sink.SubPathTag + "')"
+	}
+	return msg
 }
 
 // Start implements the SampleSink interface. It creates the TCP socket and
@@ -99,33 +108,75 @@ func (sink *HttpServerSink) handleRequest(ctx *gin.Context) {
 		filterTagValue = ctx.Param("tagVal")
 	}
 
+	ctx.Header("Connection", "Keep-Alive")
+	ctx.Header("Transfer-Encoding", "chunked")
+	ctx.Writer.WriteHeader(http.StatusOK)
+	ctx.Writer.Flush()
+
 	writeConn := sink.OpenWriteConn(sink.wg, ctx.Request.RemoteAddr, httpResponseWriteCloser{ctx.Writer})
 	sink.wg.Add(1)
-	sink.sendSamples(sink.wg, writeConn, filterTagValue) // TODO not forked for now
+	sink.sendSamples(sink.wg, writeConn, ctx.Writer, filterTagValue)
 }
 
-func (sink *HttpServerSink) sendSamples(wg *sync.WaitGroup, conn *TcpWriteConn, filterTagValue string) {
+func (sink *HttpServerSink) sendSamples(wg *sync.WaitGroup, conn *TcpWriteConn, flusher http.Flusher, filterTagValue string) {
+	defer wg.Done()
 	defer func() {
 		conn.Close()
 		if !sink.countConnectionClosed() {
 			sink.Close()
 		}
 	}()
-	defer wg.Done()
-	sink.buf.sendFilteredSamples(conn, func(sample *Sample, header *Header) bool {
-		if sink.SubPathTag != "" && filterTagValue != "" {
-			tagVal := sample.Tag(sink.SubPathTag)
-			return filterTagValue == tagVal
-		}
-		return true
-	})
+	if filterTagValue != "" {
+		log.Printf("Serving samples over HTTP, containing tag %v=%v", sink.SubPathTag, filterTagValue)
+	}
+	sink.buf.sendFilteredSamples(conn, flusher.Flush,
+		func(sample *Sample, header *Header) bool {
+			if sink.SubPathTag != "" && filterTagValue != "" {
+				tagVal := sample.Tag(sink.SubPathTag)
+				return filterTagValue == tagVal
+			}
+			return true
+		})
 }
 
 type httpResponseWriteCloser struct {
-	http.ResponseWriter
+	io.Writer
 }
 
 func (httpResponseWriteCloser) Close() error {
 	// Do nothing. The HTTP response will be closed automatically.
 	return nil
+}
+
+func dialHTTP(endpoint string, timeout time.Duration) (io.ReadCloser, string, error) {
+	if !strings.HasPrefix(endpoint, "http://") {
+		endpoint = "http://" + endpoint
+	}
+	// There is no way to set a timeout for establishing the connection and exchanging HTTP headers,
+	// so set the same timeout for all involved steps (except for receiving the body, since it is streamed/chunked)
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: timeout,
+			}).DialContext,
+			TLSHandshakeTimeout:   timeout,
+			ResponseHeaderTimeout: timeout,
+		},
+	}
+
+	resp, err := client.Get(endpoint)
+	if err == nil && resp.StatusCode != http.StatusOK {
+		body, err := ioutil.ReadAll(resp.Body)
+		var bodyStr string
+		if err != nil {
+			bodyStr = fmt.Sprintf("Failed to get response body: %v", err)
+		} else {
+			bodyStr = "Body: " + string(body)
+		}
+		err = fmt.Errorf("Reponse return status code %v. %v", resp.StatusCode, bodyStr)
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	return resp.Body, endpoint, nil
 }

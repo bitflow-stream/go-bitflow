@@ -305,12 +305,13 @@ func (f *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 				source := NewConsoleSource()
 				source.Reader = reader
 				result = source
-			case TcpEndpoint:
+			case TcpEndpoint, HttpEndpoint:
 				source := &TCPSource{
 					RemoteAddrs:   []string{endpoint.Target},
 					PrintErrors:   !f.FlagTcpSourceDropErrors,
 					RetryInterval: tcp_download_retry_interval,
 					DialTimeout:   tcp_dial_timeout,
+					UseHTTP:       endpoint.Type == HttpEndpoint,
 				}
 				source.TcpConnLimit = f.FlagTcpConnectionLimit
 				source.Reader = reader
@@ -511,6 +512,8 @@ func (e EndpointDescription) DefaultOutputFormat() MarshallingFormat {
 		if strings.HasSuffix(e.Target, binaryFileSuffix) {
 			return BinaryFormat
 		}
+		return CsvFormat
+	case HttpEndpoint:
 		return CsvFormat
 	case StdEndpoint:
 		return TextFormat

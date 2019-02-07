@@ -3,7 +3,6 @@ package bitflow
 import (
 	"bufio"
 	"io"
-	"net"
 	"sync"
 
 	"github.com/antongulenko/golib"
@@ -138,13 +137,12 @@ func (stream *SampleInputStream) ReadNamedSamples(sourceName string) (err error)
 // if it returns true, ReadTcpSamples assumes that the connection was closed by the local host,
 // because of a call to Close() or some other external reason. If checkClosed() returns false,
 // it is assumed that a network error or timeout caused the connection to be closed.
-func (stream *SampleInputStream) ReadTcpSamples(conn *net.TCPConn, checkClosed func() bool) {
-	remote := conn.RemoteAddr()
+func (stream *SampleInputStream) ReadTcpSamples(conn io.ReadCloser, remote string, checkClosed func() bool) {
 	l := log.WithFields(log.Fields{"remote": remote, "format": stream.Format()})
 	l.Debugln("Receiving data")
 	var err error
 	var num_samples int
-	if num_samples, err = stream.ReadSamples(remote.String()); err == nil {
+	if num_samples, err = stream.ReadSamples(remote); err == nil {
 		l.Debugln("Connection closed by remote")
 	} else {
 		if checkClosed() {
