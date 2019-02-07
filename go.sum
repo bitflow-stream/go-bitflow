@@ -12,6 +12,10 @@ github.com/antongulenko/golearn v0.0.0-20180917161504-d3c9efc653e9 h1:n3G6Jc7K40
 github.com/antongulenko/golearn v0.0.0-20180917161504-d3c9efc653e9/go.mod h1:ISOuvVjm+Gs4yqKZoCO9RbAGrrJVf4FyyK1G2ugEEiQ=
 github.com/antongulenko/golib v0.0.2 h1:z6Whx7LXHbMEJv9bW/HN9521Mw3xVbecBWUEHBG3zXk=
 github.com/antongulenko/golib v0.0.2/go.mod h1:F2KHKU4vzCr4rM7hhG7twH1for9iBqaEl1t+YxUGw8g=
+github.com/antongulenko/golib v0.0.3 h1:5PKZ3SV8XszPSUGEsI0qaMhrUNyW1LcdR+3dWMyKwJo=
+github.com/antongulenko/golib v0.0.3/go.mod h1:F2KHKU4vzCr4rM7hhG7twH1for9iBqaEl1t+YxUGw8g=
+github.com/antongulenko/golib v0.0.4 h1:1xnv1QTLP9DyQdVcUhoLpqFEljWIMO0kxhBGkHd0vGo=
+github.com/antongulenko/golib v0.0.4/go.mod h1:F2KHKU4vzCr4rM7hhG7twH1for9iBqaEl1t+YxUGw8g=
 github.com/antongulenko/goterm v0.0.3 h1:ggti0j41NgsbrXYol4x+UMKOr7Pfg6ttFvfy5d1d2W8=
 github.com/antongulenko/goterm v0.0.3/go.mod h1:6oWLrlayrVujfKUWrbsBQT3aKilCnnzfhfJcR3LpAWo=
 github.com/bugsnag/bugsnag-go v1.4.0 h1:CLCt5wO6/P0GelBEMRrlF52XveQMnnXHoCoxGZ+8a5g=
