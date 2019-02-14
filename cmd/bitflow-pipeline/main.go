@@ -50,6 +50,7 @@ func do_main() int {
 
 	pipe, err := builder.BuildPipeline(rawScript)
 	golib.Checkerr(err)
+	pipe = builder.PrintPipeline(pipe)
 	if pipe == nil {
 		return 0
 	}

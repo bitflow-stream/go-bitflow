@@ -45,6 +45,9 @@ func (c *CmdPipelineBuilder) RegisterFlags() {
 
 func (c *CmdPipelineBuilder) BuildPipeline(script string) (*bitflow.SamplePipeline, error) {
 	err := load_plugins(c.ProcessorRegistry, c.pluginPaths)
+	if err != nil {
+		return nil, err
+	}
 	if c.printCapabilities {
 		return nil, c.PrintJsonCapabilities(os.Stdout)
 	}
@@ -58,18 +61,17 @@ func (c *CmdPipelineBuilder) BuildPipeline(script string) (*bitflow.SamplePipeli
 		log.Println("Running using Go-only script implementation")
 		make_pipeline = make_pipeline_old
 	}
-	pipe, err := make_pipeline(c.ProcessorRegistry, script)
-	if err != nil {
-		return nil, err
-	}
+	return make_pipeline(c.ProcessorRegistry, script)
+}
 
+func (c *CmdPipelineBuilder) PrintPipeline(pipe *bitflow.SamplePipeline) *bitflow.SamplePipeline {
 	for _, str := range pipe.FormatLines() {
 		log.Println(str)
 	}
 	if c.printPipeline {
 		pipe = nil
 	}
-	return pipe, nil
+	return pipe
 }
 
 func JSONMarshal(t interface{}) ([]byte, error) {

@@ -67,7 +67,11 @@ func (c *CmdDataCollector) BuildPipeline() (*bitflow.SamplePipeline, error) {
 		}()
 		p.Add(tagger)
 	}
-	return p, c.add_outputs(p)
+	if err := c.add_outputs(p); err != nil {
+		return nil, err
+	}
+	p = c.CmdPipelineBuilder.PrintPipeline(p)
+	return p, nil
 }
 
 func (c *CmdDataCollector) add_outputs(p *bitflow.SamplePipeline) error {
