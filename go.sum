@@ -16,6 +16,8 @@ github.com/antongulenko/golib v0.0.3 h1:5PKZ3SV8XszPSUGEsI0qaMhrUNyW1LcdR+3dWMyK
 github.com/antongulenko/golib v0.0.3/go.mod h1:F2KHKU4vzCr4rM7hhG7twH1for9iBqaEl1t+YxUGw8g=
 github.com/antongulenko/golib v0.0.4 h1:1xnv1QTLP9DyQdVcUhoLpqFEljWIMO0kxhBGkHd0vGo=
 github.com/antongulenko/golib v0.0.4/go.mod h1:F2KHKU4vzCr4rM7hhG7twH1for9iBqaEl1t+YxUGw8g=
+github.com/antongulenko/golib v0.0.5 h1:jkrFQjmifD5FW238rQTU3AH+dFdt8Caca9qfbnDyx+I=
+github.com/antongulenko/golib v0.0.5/go.mod h1:F2KHKU4vzCr4rM7hhG7twH1for9iBqaEl1t+YxUGw8g=
 github.com/antongulenko/goterm v0.0.3 h1:ggti0j41NgsbrXYol4x+UMKOr7Pfg6ttFvfy5d1d2W8=
 github.com/antongulenko/goterm v0.0.3/go.mod h1:6oWLrlayrVujfKUWrbsBQT3aKilCnnzfhfJcR3LpAWo=
 github.com/bugsnag/bugsnag-go v1.4.0 h1:CLCt5wO6/P0GelBEMRrlF52XveQMnnXHoCoxGZ+8a5g=
