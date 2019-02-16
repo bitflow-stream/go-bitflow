@@ -5,8 +5,9 @@ import (
 	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
 
-func ParseFlags() {
+func ParseFlags() []string {
 	bitflow.RegisterGolibFlags()
-	golib.ParseFlags()
+	args := golib.ParseFlags()
 	golib.ConfigureLogging()
+	return args
 }
