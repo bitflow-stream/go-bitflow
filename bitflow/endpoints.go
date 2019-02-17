@@ -162,10 +162,6 @@ func RegisterBuiltinMarshallers(factory *EndpointFactory) {
 	}
 }
 
-func RegisterGolibFlags() {
-	golib.RegisterFlags(golib.FlagsAll)
-}
-
 func (f *EndpointFactory) ParseParameters(params map[string]string) (err error) {
 	get := func(name string) string {
 		if err != nil {

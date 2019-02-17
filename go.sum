@@ -7,6 +7,8 @@ github.com/antongulenko/go-onlinestats v0.0.0-20160514060630-5ff69410145c/go.mod
 github.com/antongulenko/golearn v0.0.0-20180917161504-d3c9efc653e9/go.mod h1:ISOuvVjm+Gs4yqKZoCO9RbAGrrJVf4FyyK1G2ugEEiQ=
 github.com/antongulenko/golib v0.0.8 h1:A1SCS5Xv84ETzGWxzESjOk1Yxq26Rk2WpcMpImH5g5Q=
 github.com/antongulenko/golib v0.0.8/go.mod h1:uAGlOSer3qSjgim4PvzoTb97ZtG9BEwH+nr5yjlVZ0M=
+github.com/antongulenko/golib v0.0.9 h1:hOMuCnJ7TGGL0+7cLdxTHM1L8U20na8xe5ymVgCxHaM=
+github.com/antongulenko/golib v0.0.9/go.mod h1:uAGlOSer3qSjgim4PvzoTb97ZtG9BEwH+nr5yjlVZ0M=
 github.com/antongulenko/goterm v0.0.3 h1:ggti0j41NgsbrXYol4x+UMKOr7Pfg6ttFvfy5d1d2W8=
 github.com/antongulenko/goterm v0.0.3/go.mod h1:6oWLrlayrVujfKUWrbsBQT3aKilCnnzfhfJcR3LpAWo=
 github.com/bugsnag/bugsnag-go v1.4.0/go.mod h1:2oa8nejYd4cQ/b0hMIopN0lCRxU0bueqREvZLWFrtK8=

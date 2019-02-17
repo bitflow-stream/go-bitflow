@@ -1,13 +1,14 @@
 package cmd
 
 import (
+	"flag"
+
 	"github.com/antongulenko/golib"
-	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
 
-func ParseFlags() []string {
-	bitflow.RegisterGolibFlags()
-	args := golib.ParseFlags()
+func ParseFlags() (*flag.FlagSet, []string) {
+	golib.RegisterFlags(golib.FlagsAll)
+	previousFlags, args := golib.ParseFlags()
 	golib.ConfigureLogging()
-	return args
+	return previousFlags, args
 }
