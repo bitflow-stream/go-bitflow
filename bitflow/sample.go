@@ -3,6 +3,7 @@ package bitflow
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -419,25 +420,31 @@ type SampleAndHeader struct {
 	*Header
 }
 
+const TAG_TEMPLATE_ENV_PREFIX = "ENV_"
+
 func ResolveTagTemplate(template string, missingValues string, sample *Sample) string {
 	return TagTemplate{Template: template, MissingValue: missingValues}.Resolve(sample)
 }
 
 type TagTemplate struct {
-	Template     string // Placeholders like ${xxx} will be replaced by tag values (left empty if tag missing)
-	MissingValue string // Replacement for missing values
+	Template      string // Placeholders like ${xxx} will be replaced by tag values. Values matching ENV_* will be replaced by the environment variable.
+	MissingValue  string // Replacement for missing values
+	IgnoreEnvVars bool   // Set to true to not treat ENV_ replacement templates specially
 }
 
-var templateRegex = regexp.MustCompile("\\${[^{]*}") // Example: ${hello}
+var templateRegex = regexp.MustCompile("\\${[^{]*}") // Example: ${hello}, ${ENV_HOSTNAME}
 
 func (t TagTemplate) Resolve(sample *Sample) string {
 	return templateRegex.ReplaceAllStringFunc(t.Template, func(placeholder string) string {
 		placeholder = placeholder[2 : len(placeholder)-1] // Strip the ${} prefix/suffix
 		if sample.HasTag(placeholder) {
 			return sample.Tag(placeholder)
-		} else {
-			return t.MissingValue
+		} else if strings.HasPrefix(placeholder, TAG_TEMPLATE_ENV_PREFIX) {
+			if env, isSet := os.LookupEnv(placeholder[len(TAG_TEMPLATE_ENV_PREFIX):]); isSet {
+				return env
+			}
 		}
+		return t.MissingValue
 	})
 }
 
