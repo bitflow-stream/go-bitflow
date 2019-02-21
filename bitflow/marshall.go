@@ -24,6 +24,8 @@ type Marshaller interface {
 	String() string
 	WriteHeader(header *Header, withTags bool, output io.Writer) error
 	WriteSample(sample *Sample, header *Header, withTags bool, output io.Writer) error
+	// some marshallers might be supposed to send a single sample per request3
+	ShouldCloseAfterFirstSample() bool
 }
 
 // Unmarshaller is an interface for reading Samples and Headers from byte streams.

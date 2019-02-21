@@ -9,26 +9,26 @@ import (
 )
 
 const (
-	// TextMarshallerDateFormat is the date format used by TextMarshaller to
+	// PrometheusMarshallerDateFormat is the date format used by PrometheusMarshaller to
 	// print the timestamp of each sample.
-	TextMarshallerDateFormat = "2006-01-02 15:04:05.999"
+	PrometheusMarshallerDateFormat = "2006-01-02 15:04:05.999"
 
-	// TextMarshallerDefaultSpacing is the default spacing between the columns
-	// printed by TextMarshaller.
-	TextMarshallerDefaultSpacing = 3
+	// PrometheusMarshallerDefaultSpacing is the default spacing between the columns
+	// printed by PrometheusMarshaller.
+	PrometheusMarshallerDefaultSpacing = 3
 
-	// TextMarshallerHeaderChar is used as fill-character in the header line
-	// preceding each sample marshalled by TextMarshaller.
-	TextMarshallerHeaderChar = '='
+	// PrometheusMarshallerHeaderChar is used as fill-character in the header line
+	// preceding each sample marshalled by PrometheusMarshaller.
+	PrometheusMarshallerHeaderChar = '='
 )
 
-// TextMarshaller marshals Headers and Samples to a human readable test format.
+// PrometheusMarshaller marshals Headers and Samples to a human readable test format.
 // It is mainly intended for easily readable output on the console. Headers are
 // not printed separately. Every Sample is preceded by a header line containing
 // the timestamp and tags. Afterwards, all values are printed in a aligned table
 // in a key = value format. The width of the header line, the number of columns
 // in the table, and the spacing between the columns in the table can be configured.
-type TextMarshaller struct {
+type PrometheusMarshaller struct {
 
 	// TextWidths sets the width of the header line and value table.
 	// If Columns > 0, this value is ignored as the width is determined by the
@@ -52,26 +52,26 @@ type TextMarshaller struct {
 	AssumeStdout bool
 }
 
-// ShouldCloseAfterFirstSample defines that text streams can stream without closing
-func (TextMarshaller) ShouldCloseAfterFirstSample() bool {
-	return false
+// String implements the Marshaller interface.
+func (PrometheusMarshaller) String() string {
+	return "prometheus"
 }
 
-// String implements the Marshaller interface.
-func (TextMarshaller) String() string {
-	return "text"
+// ShouldCloseAfterFirstSample defines that prometheus streams should close after first sent sample
+func (PrometheusMarshaller) ShouldCloseAfterFirstSample() bool {
+	return true
 }
 
 // WriteHeader implements the Marshaller interface. It is empty, because
 // TextMarshaller prints a separate header for each Sample.
-func (TextMarshaller) WriteHeader(header *Header, withTags bool, output io.Writer) error {
+func (PrometheusMarshaller) WriteHeader(header *Header, withTags bool, output io.Writer) error {
 	return nil
 }
 
-// WriteSample implements the Marshaller interface. See the TextMarshaller godoc
+// WriteSample implements the Marshaller interface. See the PrometheusMarshaller godoc
 // for information about the format.
-func (m TextMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
-	headerStr := sample.Time.Format(TextMarshallerDateFormat)
+func (m PrometheusMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
+	headerStr := sample.Time.Format(PrometheusMarshallerDateFormat)
 	if withTags {
 		headerStr = fmt.Sprintf("%s (%s)", headerStr, sample.TagString())
 	}
@@ -88,10 +88,10 @@ func (m TextMarshaller) WriteSample(sample *Sample, header *Header, withTags boo
 	return m.writeLines(lines, columnWidths, writer)
 }
 
-func (m TextMarshaller) calculateWidths(lines []string, writer io.Writer) (textWidth int, columnWidths []int) {
+func (m PrometheusMarshaller) calculateWidths(lines []string, writer io.Writer) (textWidth int, columnWidths []int) {
 	spacing := m.Spacing
 	if spacing <= 0 {
-		spacing = TextMarshallerDefaultSpacing
+		spacing = PrometheusMarshallerDefaultSpacing
 	}
 	if m.Columns > 0 {
 		columnWidths = m.fixedColumnWidths(lines, m.Columns, spacing)
@@ -109,7 +109,7 @@ func (m TextMarshaller) calculateWidths(lines []string, writer io.Writer) (textW
 	return
 }
 
-func (m TextMarshaller) fixedColumnWidths(lines []string, columns int, spacing int) (widths []int) {
+func (m PrometheusMarshaller) fixedColumnWidths(lines []string, columns int, spacing int) (widths []int) {
 	widths = make([]int, columns)
 	for i, line := range lines {
 		col := i % columns
@@ -121,7 +121,7 @@ func (m TextMarshaller) fixedColumnWidths(lines []string, columns int, spacing i
 	return
 }
 
-func (m TextMarshaller) defaultTextWidth(writer io.Writer) int {
+func (m PrometheusMarshaller) defaultTextWidth(writer io.Writer) int {
 	if m.AssumeStdout || writer == os.Stdout {
 		size := golib.GetTerminalSize()
 		return int(size.Col)
@@ -130,7 +130,7 @@ func (m TextMarshaller) defaultTextWidth(writer io.Writer) int {
 	}
 }
 
-func (m TextMarshaller) variableColumnWidths(strings []string, textWidth int, spacing int) []int {
+func (m PrometheusMarshaller) variableColumnWidths(strings []string, textWidth int, spacing int) []int {
 	columns := make([]int, len(strings))
 	strLengths := make([]int, len(strings))
 	for i, line := range strings {
@@ -157,13 +157,13 @@ func (m TextMarshaller) variableColumnWidths(strings []string, textWidth int, sp
 	return columns
 }
 
-func (m TextMarshaller) writeHeader(header string, textWidth int, writer io.Writer) (err error) {
+func (m PrometheusMarshaller) writeHeader(header string, textWidth int, writer io.Writer) (err error) {
 	extraSpace := textWidth - len(header)
 	if extraSpace >= 4 {
 		lineChars := (extraSpace - 2) / 2
 		line := make([]byte, lineChars)
 		for i := 0; i < lineChars; i++ {
-			line[i] = TextMarshallerHeaderChar
+			line[i] = PrometheusMarshallerHeaderChar
 		}
 		lineStr := string(line)
 		_, err = fmt.Fprintln(writer, lineStr, header, lineStr)
@@ -173,7 +173,7 @@ func (m TextMarshaller) writeHeader(header string, textWidth int, writer io.Writ
 	return
 }
 
-func (m TextMarshaller) writeLines(lines []string, widths []int, writer io.Writer) error {
+func (m PrometheusMarshaller) writeLines(lines []string, widths []int, writer io.Writer) error {
 	columns := len(widths)
 	for i, line := range lines {
 		if _, err := writer.Write([]byte(line)); err != nil {

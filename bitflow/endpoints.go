@@ -28,10 +28,11 @@ const (
 	HttpEndpoint      = EndpointType("http")
 	EmptyEndpoint     = EndpointType("empty")
 
-	UndefinedFormat = MarshallingFormat("")
-	TextFormat      = MarshallingFormat("text")
-	CsvFormat       = MarshallingFormat("csv")
-	BinaryFormat    = MarshallingFormat("bin")
+	UndefinedFormat  = MarshallingFormat("")
+	TextFormat       = MarshallingFormat("text")
+	CsvFormat        = MarshallingFormat("csv")
+	BinaryFormat     = MarshallingFormat("bin")
+	PrometheusFormat = MarshallingFormat("prometheus")
 
 	tcp_download_retry_interval = 1000 * time.Millisecond
 	tcp_dial_timeout            = 2000 * time.Millisecond
@@ -159,6 +160,9 @@ func RegisterBuiltinMarshallers(factory *EndpointFactory) {
 	}
 	factory.Marshallers[BinaryFormat] = func() Marshaller {
 		return BinaryMarshaller{}
+	}
+	factory.Marshallers[PrometheusFormat] = func() Marshaller {
+		return PrometheusMarshaller{}
 	}
 }
 

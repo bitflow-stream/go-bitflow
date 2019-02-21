@@ -71,7 +71,7 @@ func (sink *HttpServerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 		sink.buf.closeBuffer()
 		sink.CloseSink()
 	}
-	log.WithField("format", sink.Marshaller).Println("Listening for output HTTP requests on", sink.Endpoint)
+	log.WithField("format", sink.Marshaller).Println("Listening for output HTTP  xxx requests on", sink.Endpoint)
 	sink.gin.GET(sink.RootPathPrefix+"/", sink.handleRequest)
 	if sink.SubPathTag != "" {
 		sink.gin.GET(sink.RootPathPrefix+"/:tagVal", sink.handleRequest)
@@ -115,7 +115,14 @@ func (sink *HttpServerSink) handleRequest(ctx *gin.Context) {
 
 	writeConn := sink.OpenWriteConn(sink.wg, ctx.Request.RemoteAddr, httpResponseWriteCloser{ctx.Writer})
 	sink.wg.Add(1)
-	sink.sendSamples(sink.wg, writeConn, ctx.Writer, filterTagValue)
+
+	if sink.Marshaller.ShouldCloseAfterFirstSample() {
+		sink.buf.sendOneSample(writeConn, ctx.Writer.Flush)
+		writeConn.Close()
+	} else {
+		sink.sendSamples(sink.wg, writeConn, ctx.Writer, filterTagValue)
+	}
+
 }
 
 func (sink *HttpServerSink) sendSamples(wg *sync.WaitGroup, conn *TcpWriteConn, flusher http.Flusher, filterTagValue string) {

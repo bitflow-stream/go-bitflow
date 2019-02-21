@@ -46,6 +46,11 @@ const (
 type BinaryMarshaller struct {
 }
 
+// ShouldCloseAfterFirstSample defines that binary streams can stream without closing
+func (BinaryMarshaller) ShouldCloseAfterFirstSample() bool {
+	return false
+}
+
 // String implements the Marshaller interface.
 func (BinaryMarshaller) String() string {
 	return "binary"

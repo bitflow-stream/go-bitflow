@@ -52,6 +52,11 @@ const (
 type CsvMarshaller struct {
 }
 
+// ShouldCloseAfterFirstSample defines that csv streams can stream without closing
+func (CsvMarshaller) ShouldCloseAfterFirstSample() bool {
+	return false
+}
+
 // String implements the Marshaller interface.
 func (CsvMarshaller) String() string {
 	return "CSV"
