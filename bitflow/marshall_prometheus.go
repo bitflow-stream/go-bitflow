@@ -3,53 +3,11 @@ package bitflow
 import (
 	"fmt"
 	"io"
-	"os"
-
-	"github.com/antongulenko/golib"
+	"strings"
 )
 
-const (
-	// PrometheusMarshallerDateFormat is the date format used by PrometheusMarshaller to
-	// print the timestamp of each sample.
-	PrometheusMarshallerDateFormat = "2006-01-02 15:04:05.999"
-
-	// PrometheusMarshallerDefaultSpacing is the default spacing between the columns
-	// printed by PrometheusMarshaller.
-	PrometheusMarshallerDefaultSpacing = 3
-
-	// PrometheusMarshallerHeaderChar is used as fill-character in the header line
-	// preceding each sample marshalled by PrometheusMarshaller.
-	PrometheusMarshallerHeaderChar = '='
-)
-
-// PrometheusMarshaller marshals Headers and Samples to a human readable test format.
-// It is mainly intended for easily readable output on the console. Headers are
-// not printed separately. Every Sample is preceded by a header line containing
-// the timestamp and tags. Afterwards, all values are printed in a aligned table
-// in a key = value format. The width of the header line, the number of columns
-// in the table, and the spacing between the columns in the table can be configured.
+// PrometheusMarshaller marshals Headers and Samples to the prometheus exposition format
 type PrometheusMarshaller struct {
-
-	// TextWidths sets the width of the header line and value table.
-	// If Columns > 0, this value is ignored as the width is determined by the
-	// number of columns. If this is 0, the width will be determined automatically:
-	// If the output is a TTY (or if AssumeStdout is true), the width of the terminal
-	// will be used. If it cannot be obtained, golib.GetTerminalSize() will return
-	// a default value.
-	TextWidth int
-
-	// Columns can be set to > 0 to override TextWidth and set a fixed number of
-	// columns in the table. Otherwise it will be computed automatically based
-	// on TextWidth.
-	Columns int
-
-	// Set additional spacing between the columns of the output table. If <= 0, the
-	// default value TextMarshallerDefaultSpacing will be used.
-	Spacing int
-
-	// If true, assume the output is a TTY and try to obtain the TextWidth from
-	// the operating system.
-	AssumeStdout bool
 }
 
 // String implements the Marshaller interface.
@@ -63,7 +21,7 @@ func (PrometheusMarshaller) ShouldCloseAfterFirstSample() bool {
 }
 
 // WriteHeader implements the Marshaller interface. It is empty, because
-// TextMarshaller prints a separate header for each Sample.
+// the prometheus exposition format doesn't need one
 func (PrometheusMarshaller) WriteHeader(header *Header, withTags bool, output io.Writer) error {
 	return nil
 }
@@ -71,127 +29,56 @@ func (PrometheusMarshaller) WriteHeader(header *Header, withTags bool, output io
 // WriteSample implements the Marshaller interface. See the PrometheusMarshaller godoc
 // for information about the format.
 func (m PrometheusMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
-	headerStr := sample.Time.Format(PrometheusMarshallerDateFormat)
-	if withTags {
-		headerStr = fmt.Sprintf("%s (%s)", headerStr, sample.TagString())
-	}
-	lines := make([]string, 0, len(sample.Values))
 	for i, value := range sample.Values {
-		line := fmt.Sprintf("%s = %.4f", header.Fields[i], value)
-		lines = append(lines, line)
-	}
+		line := fmt.Sprintf("%s %.4f %d\n",
+			m.renderMetricLine(header.Fields[i], "all"),
+			value,
+			sample.Time.Unix(),
+		)
 
-	textWidth, columnWidths := m.calculateWidths(lines, writer)
-	if err := m.writeHeader(headerStr, textWidth, writer); err != nil {
-		return err
-	}
-	return m.writeLines(lines, columnWidths, writer)
-}
-
-func (m PrometheusMarshaller) calculateWidths(lines []string, writer io.Writer) (textWidth int, columnWidths []int) {
-	spacing := m.Spacing
-	if spacing <= 0 {
-		spacing = PrometheusMarshallerDefaultSpacing
-	}
-	if m.Columns > 0 {
-		columnWidths = m.fixedColumnWidths(lines, m.Columns, spacing)
-		for _, width := range columnWidths {
-			textWidth += width
-		}
-	} else {
-		if m.TextWidth > 0 {
-			textWidth = m.TextWidth
-		} else {
-			textWidth = m.defaultTextWidth(writer)
-		}
-		columnWidths = m.variableColumnWidths(lines, textWidth, spacing)
-	}
-	return
-}
-
-func (m PrometheusMarshaller) fixedColumnWidths(lines []string, columns int, spacing int) (widths []int) {
-	widths = make([]int, columns)
-	for i, line := range lines {
-		col := i % columns
-		length := len(line) + spacing
-		if widths[col] < length {
-			widths[col] = length
-		}
-	}
-	return
-}
-
-func (m PrometheusMarshaller) defaultTextWidth(writer io.Writer) int {
-	if m.AssumeStdout || writer == os.Stdout {
-		size := golib.GetTerminalSize()
-		return int(size.Col)
-	} else {
-		return int(golib.DefaultTerminalWindowSize.Col)
-	}
-}
-
-func (m PrometheusMarshaller) variableColumnWidths(strings []string, textWidth int, spacing int) []int {
-	columns := make([]int, len(strings))
-	strLengths := make([]int, len(strings))
-	for i, line := range strings {
-		length := len(line) + spacing
-		columns[i] = length
-		strLengths[i] = length
-	}
-	for len(columns) > 1 {
-		columns = columns[:len(columns)-1]
-		for i, strLen := range strLengths {
-			col := i % len(columns)
-			if columns[col] < strLen {
-				columns[col] = strLen
-			}
-		}
-		lineLen := 0
-		for _, strLen := range columns {
-			lineLen += strLen
-		}
-		if lineLen <= textWidth {
-			break
-		}
-	}
-	return columns
-}
-
-func (m PrometheusMarshaller) writeHeader(header string, textWidth int, writer io.Writer) (err error) {
-	extraSpace := textWidth - len(header)
-	if extraSpace >= 4 {
-		lineChars := (extraSpace - 2) / 2
-		line := make([]byte, lineChars)
-		for i := 0; i < lineChars; i++ {
-			line[i] = PrometheusMarshallerHeaderChar
-		}
-		lineStr := string(line)
-		_, err = fmt.Fprintln(writer, lineStr, header, lineStr)
-	} else {
-		_, err = fmt.Fprintln(writer, header)
-	}
-	return
-}
-
-func (m PrometheusMarshaller) writeLines(lines []string, widths []int, writer io.Writer) error {
-	columns := len(widths)
-	for i, line := range lines {
-		if _, err := writer.Write([]byte(line)); err != nil {
+		_, err := writer.Write([]byte(line))
+		if err != nil {
 			return err
-		}
-		col := i % columns
-		if col >= columns-1 || i == len(lines)-1 {
-			if _, err := writer.Write([]byte("\n")); err != nil {
-				return err
-			}
-		} else {
-			extraSpace := widths[col] - len(line)
-			for j := 0; j < extraSpace; j++ {
-				if _, err := writer.Write([]byte(" ")); err != nil {
-					return err
-				}
-			}
 		}
 	}
 	return nil
+}
+
+// renderMetricLine retrieves a sample field and renders a proper prometheus metric out of it
+func (m PrometheusMarshaller) renderMetricLine(line string, group string) string {
+	defaultLine := fmt.Sprintf("%s{group=\"%s\"}", line, group)
+	parts := strings.Split(line, "/")
+
+	numParts := len(parts)
+	if numParts == 1 {
+		return defaultLine
+	}
+
+	switch parts[0] {
+	case "disk-io", "disk-usage":
+		return fmt.Sprintf("%s{group=\"%s\", metric=\"%s\"}", m.stripDashes(parts[0]), group, parts[2])
+
+	case "load":
+		return fmt.Sprintf("load{minutes=\"%s\"}", parts[1])
+	case "mem":
+		return fmt.Sprintf("mem_%s{group=\"%s\"}", parts[1], group)
+	case "net-io":
+		if numParts == 2 {
+			return fmt.Sprintf("%s_%s{group=\"%s\"}", m.stripDashes(parts[0]), parts[1], group)
+		} else {
+			nic := parts[2]
+			return fmt.Sprintf("%s_%s{group=\"%s\", nic=\"%s\"}", m.stripDashes(parts[0]), parts[3], group, nic)
+		}
+	case "net-proto":
+		return fmt.Sprintf("%s{group=\"%s\"}", m.stripDashes(strings.Join(parts, "_")), group)
+	case "proc":
+		newParts := parts[2:]
+		return m.renderMetricLine(strings.Join(newParts, "/"), parts[1])
+	}
+
+	return defaultLine
+}
+
+func (PrometheusMarshaller) stripDashes(s string) string {
+	return strings.Replace(s, "-", "_", -1)
 }
