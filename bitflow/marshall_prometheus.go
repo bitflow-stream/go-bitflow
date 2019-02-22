@@ -30,10 +30,10 @@ func (PrometheusMarshaller) WriteHeader(header *Header, withTags bool, output io
 // for information about the format.
 func (m PrometheusMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
 	for i, value := range sample.Values {
-		line := fmt.Sprintf("%s %.4f %d\n",
+		line := fmt.Sprintf("%s\t%f\n",
 			m.renderMetricLine(header.Fields[i], "all"),
 			value,
-			sample.Time.Unix(),
+			//sample.Time.Unix(),
 		)
 
 		_, err := writer.Write([]byte(line))
@@ -46,7 +46,12 @@ func (m PrometheusMarshaller) WriteSample(sample *Sample, header *Header, withTa
 
 // renderMetricLine retrieves a sample field and renders a proper prometheus metric out of it
 func (m PrometheusMarshaller) renderMetricLine(line string, group string) string {
-	defaultLine := fmt.Sprintf("%s{group=\"%s\"}", line, group)
+	defaultLine := fmt.Sprintf(
+		"%s{group=\"%s\"}",
+		m.stripDashes(strings.Replace(line, "/", "_", -1)),
+		group,
+	)
+
 	parts := strings.Split(line, "/")
 
 	numParts := len(parts)
@@ -57,7 +62,8 @@ func (m PrometheusMarshaller) renderMetricLine(line string, group string) string
 	switch parts[0] {
 	case "disk-io", "disk-usage":
 		return fmt.Sprintf("%s{group=\"%s\", metric=\"%s\"}", m.stripDashes(parts[0]), group, parts[2])
-
+	case "disk":
+		return fmt.Sprintf("disk_io{group=\"%s\", metric=\"%s\"}", group, parts[1])
 	case "load":
 		return fmt.Sprintf("load{minutes=\"%s\"}", parts[1])
 	case "mem":
