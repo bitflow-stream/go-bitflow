@@ -350,7 +350,7 @@ func (f *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 				return nil, errors.New("Cannot read from stdin multiple times")
 			case TcpListenEndpoint:
 				return nil, errors.New("Cannot listen for input on multiple TCP ports")
-			case TcpEndpoint:
+			case TcpEndpoint, HttpEndpoint:
 				source := result.(*TCPSource)
 				source.RemoteAddrs = append(source.RemoteAddrs, endpoint.Target)
 			case FileEndpoint:
