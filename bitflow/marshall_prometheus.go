@@ -61,9 +61,9 @@ func (m PrometheusMarshaller) renderMetricLine(line string, group string) string
 
 	switch parts[0] {
 	case "disk-io", "disk-usage":
-		return fmt.Sprintf("%s{group=\"%s\", metric=\"%s\"}", m.stripDashes(parts[0]), group, parts[2])
+		return fmt.Sprintf("%s_%s{group=\"%s\"}", m.stripDashes(parts[0]), parts[2], group)
 	case "disk":
-		return fmt.Sprintf("disk_io{group=\"%s\", metric=\"%s\"}", group, parts[1])
+		return fmt.Sprintf("disk_io_%s{group=\"%s\"}", parts[1], group)
 	case "load":
 		return fmt.Sprintf("load{minutes=\"%s\"}", parts[1])
 	case "mem":
