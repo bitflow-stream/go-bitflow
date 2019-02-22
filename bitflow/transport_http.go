@@ -71,7 +71,7 @@ func (sink *HttpServerSink) Start(wg *sync.WaitGroup) golib.StopChan {
 		sink.buf.closeBuffer()
 		sink.CloseSink()
 	}
-	log.WithField("format", sink.Marshaller).Println("Listening for output HTTP  xxx requests on", sink.Endpoint)
+	log.WithField("format", sink.Marshaller).Println("Listening for output HTTP requests on", sink.Endpoint)
 	sink.gin.GET(sink.RootPathPrefix+"/", sink.handleRequest)
 	if sink.SubPathTag != "" {
 		sink.gin.GET(sink.RootPathPrefix+"/:tagVal", sink.handleRequest)

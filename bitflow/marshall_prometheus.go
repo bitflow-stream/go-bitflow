@@ -33,7 +33,6 @@ func (m PrometheusMarshaller) WriteSample(sample *Sample, header *Header, withTa
 		line := fmt.Sprintf("%s\t%f\n",
 			m.renderMetricLine(header.Fields[i], "all"),
 			value,
-			//sample.Time.Unix(),
 		)
 
 		_, err := writer.Write([]byte(line))
