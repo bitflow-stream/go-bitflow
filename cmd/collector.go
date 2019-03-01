@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"flag"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"sync"
 
@@ -25,6 +27,7 @@ type CmdDataCollector struct {
 	restApiEndpoint string
 	fileOutputApi   FileOutputFilterApi
 	script          string
+	scriptFile      string
 	outputs         golib.StringSlice
 }
 
@@ -33,6 +36,7 @@ func (c *CmdDataCollector) RegisterFlags() {
 	c.CmdPipelineBuilder.RegisterFlags()
 
 	flag.StringVar(&c.script, "s", "", "Provide a Bitflow Script snippet, that will be executed before outputting the produced samples. The script must not contain an input.")
+	flag.StringVar(&c.scriptFile, "f", "", "Like -s, but provide a script file instead.")
 	flag.Var(&c.outputs, "o", "Data sink(s) for outputting data. Will be appended at the end of provided Bitflow script(s), if any.")
 	flag.BoolVar(&c.fileOutputApi.FileOutputEnabled, "default-enable-file-output", false, "Enables file output immediately. By default it must be enable through the REST API first.")
 	flag.StringVar(&c.restApiEndpoint, "api", "", "Enable REST API for controlling the collector. "+
@@ -40,9 +44,20 @@ func (c *CmdDataCollector) RegisterFlags() {
 }
 
 func (c *CmdDataCollector) BuildPipeline() (*bitflow.SamplePipeline, error) {
+	if c.script != "" && c.scriptFile != "" {
+		return nil, fmt.Errorf("Cannot specify both an immediate Bitflow script through -s and a Bitflow script file through -f")
+	}
 	script := "empty://-" // Prepend an empty input to ensure the script compiles
-	if c.script != "" {
-		script += " -> " + c.script
+	extraScript := c.script
+	if c.scriptFile != "" {
+		scriptBytes, err := ioutil.ReadFile(c.scriptFile)
+		if err != nil {
+			return nil, fmt.Errorf("Error reading Bitflow script file %v: %v", c.scriptFile, err)
+		}
+		extraScript = string(scriptBytes)
+	}
+	if extraScript != "" {
+		script += " -> " + extraScript
 	}
 	p, err := c.CmdPipelineBuilder.BuildPipeline(script)
 	if err != nil || p == nil {
