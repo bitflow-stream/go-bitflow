@@ -52,6 +52,11 @@ type TextMarshaller struct {
 	AssumeStdout bool
 }
 
+// ShouldCloseAfterFirstSample defines that text streams can stream without closing
+func (TextMarshaller) ShouldCloseAfterFirstSample() bool {
+	return false
+}
+
 // String implements the Marshaller interface.
 func (TextMarshaller) String() string {
 	return "text"

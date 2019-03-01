@@ -112,6 +112,11 @@ type SimpleTextMarshaller struct {
 	WriteValue   func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error
 }
 
+// ShouldCloseAfterFirstSample defines that text streams can stream without closing
+func (SimpleTextMarshaller) ShouldCloseAfterFirstSample() bool {
+	return false
+}
+
 func (o *SimpleTextMarshaller) String() string {
 	return fmt.Sprintf("%s(prefix: %v)", o.Description, o.MetricPrefix)
 }

@@ -341,3 +341,22 @@ func (b *outputSampleBuffer) sendFilteredSamples(conn *TcpWriteConn, flushCallba
 		first = b.next(first)
 	}
 }
+
+func (b *outputSampleBuffer) sendOneSample(conn *TcpWriteConn, flushCallback func()) {
+	first, num := b.getFirst()
+	if num > 1 {
+		conn.log.Debugln("Sending", num, "buffered samples")
+	}
+	if first != nil {
+		if !conn.IsRunning() {
+			return
+		}
+		conn.Sample(first.sample, first.header)
+		if flushCallback != nil {
+			flushCallback()
+		}
+		if !conn.IsRunning() {
+			return
+		}
+	}
+}

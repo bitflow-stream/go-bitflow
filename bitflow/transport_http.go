@@ -115,7 +115,14 @@ func (sink *HttpServerSink) handleRequest(ctx *gin.Context) {
 
 	writeConn := sink.OpenWriteConn(sink.wg, ctx.Request.RemoteAddr, httpResponseWriteCloser{ctx.Writer})
 	sink.wg.Add(1)
-	sink.sendSamples(sink.wg, writeConn, ctx.Writer, filterTagValue)
+
+	if sink.Marshaller.ShouldCloseAfterFirstSample() {
+		sink.buf.sendOneSample(writeConn, ctx.Writer.Flush)
+		writeConn.Close()
+	} else {
+		sink.sendSamples(sink.wg, writeConn, ctx.Writer, filterTagValue)
+	}
+
 }
 
 func (sink *HttpServerSink) sendSamples(wg *sync.WaitGroup, conn *TcpWriteConn, flusher http.Flusher, filterTagValue string) {
