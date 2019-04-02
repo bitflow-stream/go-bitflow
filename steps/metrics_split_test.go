@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/bitflow-stream/go-bitflow/bitflow"
-	testAssert "github.com/stretchr/testify/assert"
+	testAssert "github.com/stretchr/testify/require"
 )
 
 func TestFailedRegexMetricSplitter(t *testing.T) {

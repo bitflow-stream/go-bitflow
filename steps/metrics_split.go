@@ -22,7 +22,7 @@ type _splitSample struct {
 	outHeader *bitflow.Header
 }
 
-var MetricSplitterDescription = "Metrics that are matched by the regex will be converted to separate samples. When the regex contains named groups, their names and values will be added as tags, and an individual sample will be created for each unique value combination."
+var MetricSplitterDescription = "Metrics that are matched by the regex will be converted to separate samples. When the regex contains named groups, their names and values will be added as tags, and an individual samples will be created for each unique value combination."
 
 func RegisterMetricSplitter(b reg.ProcessorRegistry) {
 	b.RegisterAnalysisParamsErr("split", func(p *bitflow.SamplePipeline, params map[string]string) error {
@@ -70,6 +70,7 @@ func (m *MetricSplitter) Split(sample *bitflow.Sample, header *bitflow.Header) [
 
 func (m *MetricSplitter) prepare(header *bitflow.Header) {
 	splits := make(map[string]*_splitSample)
+	var orderedSplits []string
 	defaultSplit := &_splitSample{
 		tags:      make(map[string]string),
 		outHeader: new(bitflow.Header),
@@ -98,6 +99,7 @@ func (m *MetricSplitter) prepare(header *bitflow.Header) {
 						outHeader: new(bitflow.Header),
 					}
 					splits[encoded] = split
+					orderedSplits = append(orderedSplits, encoded)
 				}
 
 				matchedSplit = split
@@ -111,8 +113,8 @@ func (m *MetricSplitter) prepare(header *bitflow.Header) {
 
 	m.splits = m.splits[0:0]
 	m.splits = append(m.splits, defaultSplit)
-	for _, splitter := range splits {
-		m.splits = append(m.splits, splitter)
+	for _, encoded := range orderedSplits {
+		m.splits = append(m.splits, splits[encoded])
 	}
 }
 
