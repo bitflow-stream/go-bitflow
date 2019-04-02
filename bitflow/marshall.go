@@ -24,7 +24,7 @@ type Marshaller interface {
 	String() string
 	WriteHeader(header *Header, withTags bool, output io.Writer) error
 	WriteSample(sample *Sample, header *Header, withTags bool, output io.Writer) error
-	// some marshallers might be supposed to send a single sample per request3
+	// Some marshallers might be supposed to send a single sample per request
 	ShouldCloseAfterFirstSample() bool
 }
 
@@ -76,6 +76,7 @@ type BidiMarshaller interface {
 	ParseSample(header *UnmarshalledHeader, minValueCapacity int, data []byte) (*Sample, error)
 	WriteHeader(header *Header, withTags bool, output io.Writer) error
 	WriteSample(sample *Sample, header *Header, withTags bool, output io.Writer) error
+	ShouldCloseAfterFirstSample() bool
 	String() string
 }
 
