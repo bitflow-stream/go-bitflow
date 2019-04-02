@@ -83,14 +83,6 @@ func (suite *scriptIntegrationTestSuite) TearDownSuite() {
 	suite.NoError(os.Remove(suite.sampleOutputFileName))
 }
 
-func (suite *scriptIntegrationTestSuite) TestScriptExecutionWithOldImplementation() {
-	resultCode := executeMain([]string{"bitflow-pipeline", "-old", "-f", suite.sampleScriptFile.Name()})
-	suite.Equal(resultCode, 0)
-	content, err := ioutil.ReadFile(suite.sampleOutputFileName)
-	suite.NoError(err)
-	suite.Equal(expectedOutput, string(content))
-}
-
 func (suite *scriptIntegrationTestSuite) TestScriptExecutionWithNewImplementation() {
 	resultCode := executeMain([]string{"bitflow-pipeline", "-f", suite.sampleScriptFile.Name()})
 	suite.Equal(resultCode, 0)

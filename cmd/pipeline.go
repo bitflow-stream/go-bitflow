@@ -12,7 +12,6 @@ import (
 	"github.com/bitflow-stream/go-bitflow/script/plugin"
 	"github.com/bitflow-stream/go-bitflow/script/reg"
 	"github.com/bitflow-stream/go-bitflow/script/script"
-	"github.com/bitflow-stream/go-bitflow/script/script_go"
 	defaultPlugin "github.com/bitflow-stream/go-bitflow/steps/bitflow-plugin-default-steps"
 	log "github.com/sirupsen/logrus"
 )
@@ -24,7 +23,6 @@ type CmdPipelineBuilder struct {
 	printAnalyses     bool
 	printPipeline     bool
 	printCapabilities bool
-	useOldScript      bool
 	pluginPaths       golib.StringSlice
 }
 
@@ -32,7 +30,6 @@ func (c *CmdPipelineBuilder) RegisterFlags() {
 	flag.BoolVar(&c.printAnalyses, "print-analyses", false, "Print a list of available analyses and exit.")
 	flag.BoolVar(&c.printPipeline, "print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
 	flag.BoolVar(&c.printCapabilities, "capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
-	flag.BoolVar(&c.useOldScript, "old", false, "Use the old script parser for processing the input script.")
 	flag.Var(&c.pluginPaths, "p", "Plugins to load for additional functionality")
 
 	c.ProcessorRegistry = reg.NewProcessorRegistry()
@@ -43,7 +40,7 @@ func (c *CmdPipelineBuilder) RegisterFlags() {
 	}
 }
 
-func (c *CmdPipelineBuilder) BuildPipeline(script string) (*bitflow.SamplePipeline, error) {
+func (c *CmdPipelineBuilder) BuildPipeline(scriptStr string) (*bitflow.SamplePipeline, error) {
 	err := load_plugins(c.ProcessorRegistry, c.pluginPaths)
 	if err != nil {
 		return nil, err
@@ -56,12 +53,9 @@ func (c *CmdPipelineBuilder) BuildPipeline(script string) (*bitflow.SamplePipeli
 		return nil, nil
 	}
 
-	make_pipeline := make_pipeline_new
-	if c.useOldScript {
-		log.Println("Running using Go-only script implementation")
-		make_pipeline = make_pipeline_old
-	}
-	return make_pipeline(c.ProcessorRegistry, script)
+	parser := &script.BitflowScriptParser{Registry: c.ProcessorRegistry}
+	s, parseErr := parser.ParseScript(scriptStr)
+	return s, parseErr.NilOrError()
 }
 
 func (c *CmdPipelineBuilder) PrintPipeline(pipe *bitflow.SamplePipeline) *bitflow.SamplePipeline {
@@ -80,21 +74,6 @@ func JSONMarshal(t interface{}) ([]byte, error) {
 	encoder.SetEscapeHTML(false)
 	err := encoder.Encode(t)
 	return buffer.Bytes(), err
-}
-
-func make_pipeline_old(registry reg.ProcessorRegistry, scriptStr string) (*bitflow.SamplePipeline, error) {
-	queryBuilder := script_go.PipelineBuilder{registry}
-	parser := script_go.NewParser(bytes.NewReader([]byte(scriptStr)))
-	pipe, err := parser.Parse()
-	if err != nil {
-		return nil, err
-	}
-	return queryBuilder.MakePipeline(pipe)
-}
-
-func make_pipeline_new(registry reg.ProcessorRegistry, scriptStr string) (*bitflow.SamplePipeline, error) {
-	s, err := (&script.BitflowScriptParser{Registry: registry}).ParseScript(scriptStr)
-	return s, err.NilOrError()
 }
 
 func load_plugins(registry reg.ProcessorRegistry, pluginPaths []string) error {
