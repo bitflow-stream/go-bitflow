@@ -18,7 +18,7 @@ nav:
     - Implementations:
         - go-bitflow: index.md
         - bitflow4j (Github): "https://github.com/bitflow-stream/bitflow4j"
-        - python-bitflow: "https://bitflow.readthedocs.io/projects/go-bitflow/en/latest/"
+        - python-bitflow: "https://bitflow.readthedocs.io/projects/python-bitflow/en/latest/"
     - Related Projects:
         - bitflow-collector: "https://bitflow.readthedocs.io/projects/go-bitflow-collector/en/latest/"
         - bitflow-coordinator (Github): "https://github.com/bitflow-stream/bitflow-coordinator"
