@@ -21,7 +21,6 @@ nav:
         - python-bitflow: "https://bitflow.readthedocs.io/projects/go-bitflow/en/latest/"
     - Related Projects:
         - bitflow-collector: "https://bitflow.readthedocs.io/projects/go-bitflow-collector/en/latest/"
-        - bitflow-antlr-grammars (Github): "https://github.com/bitflow-stream/antlr-grammars"
         - bitflow-coordinator (Github): "https://github.com/bitflow-stream/bitflow-coordinator"
         - bitflow-process-agent (Github): "https://github.com/bitflow-stream/bitflow-process-agent"
 
