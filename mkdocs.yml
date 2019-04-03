@@ -13,7 +13,7 @@ markdown_extensions:
 nav:
     - Home:
         - The Bitflow Project: "https://bitflow.readthedocs.io/en/latest/"
-        - Data Sources, Sinks and Format: "https://bitflow.readthedocs.io/en/latest/data_format/"
+        - Data Sources, Sinks and Format: "https://bitflow.readthedocs.io/en/latest/data-format/"
         - Bitflow Script: "https://bitflow.readthedocs.io/projects/bitflow-antlr-grammars/en/latest/bitflow-script/"
     - Implementations:
         - go-bitflow: index.md
