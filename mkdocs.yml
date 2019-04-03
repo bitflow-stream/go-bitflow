@@ -1,0 +1,27 @@
+site_name: Go Bitflow
+repo_url: https://github.com/bitflow-stream/go-bitflow
+site_author: Anton Gulenko
+site_description: Go Bitflow Documentation
+theme: readthedocs
+plugins:
+    - search
+markdown_extensions:
+    - sane_lists
+    - smarty
+    - toc:
+        permalink: True
+nav:
+    - Home:
+        - The Bitflow Project: "https://bitflow.readthedocs.io/en/latest/"
+        - Bitflow Data Format: "https://bitflow.readthedocs.io/en/latest/data_format/"
+        - Bitflow Script: "https://bitflow.readthedocs.io/en/latest/script/"
+    - Implementations:
+        - go-bitflow: index.md
+        - bitflow4j (Github): "https://github.com/bitflow-stream/bitflow4j"
+        - python-bitflow: "https://bitflow.readthedocs.io/projects/go-bitflow/en/latest/"
+    - Related Projects:
+        - bitflow-collector: "https://bitflow.readthedocs.io/projects/go-bitflow-collector/en/latest/"
+        - bitflow-antlr-grammars (Github): "https://github.com/bitflow-stream/antlr-grammars"
+        - bitflow-coordinator (Github): "https://github.com/bitflow-stream/bitflow-coordinator"
+        - bitflow-process-agent (Github): "https://github.com/bitflow-stream/bitflow-process-agent"
+
