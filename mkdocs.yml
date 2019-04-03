@@ -14,7 +14,7 @@ nav:
     - Home:
         - The Bitflow Project: "https://bitflow.readthedocs.io/en/latest/"
         - Data Sources, Sinks and Format: "https://bitflow.readthedocs.io/en/latest/data_format/"
-        - Bitflow Script: "https://bitflow.readthedocs.io/en/latest/script/"
+        - Bitflow Script: "https://bitflow.readthedocs.io/projects/antlr-grammars/en/latest/bitflow-script/"
     - Implementations:
         - go-bitflow: index.md
         - bitflow4j (Github): "https://github.com/bitflow-stream/bitflow4j"
