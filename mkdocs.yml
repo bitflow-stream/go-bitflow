@@ -11,7 +11,7 @@ nav:
   - Naming Conventions: https://bitflow.readthedocs.io/en/latest/naming/
 - Implementations:
   - go-bitflow: index.md
-  - bitflow4j (Github): https://github.com/bitflow-stream/bitflow4j
+  - bitflow4j: https://bitflow.readthedocs.io/projects/bitflow4j/en/latest/
   - python-bitflow: https://bitflow.readthedocs.io/projects/python-bitflow/en/latest/
 - Related Projects:
   - bitflow-collector: https://bitflow.readthedocs.io/projects/go-bitflow-collector/en/latest/
