@@ -104,7 +104,7 @@ var deserializedATN = deserializer.DeserializeFromUInt16(parserATN)
 
 var literalNames = []string{
 	"", "'{'", "'}'", "';'", "'->'", "'('", "')'", "'='", "','", "'['", "']'",
-	"'window'", "", "", "", "", "", "'\t'",
+	"'batch'", "", "", "", "", "", "'\t'",
 }
 var symbolicNames = []string{
 	"", "OPEN", "CLOSE", "EOP", "NEXT", "OPEN_PARAMS", "CLOSE_PARAMS", "EQ",
