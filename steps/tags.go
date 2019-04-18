@@ -13,7 +13,8 @@ func RegisterTaggingProcessor(b reg.ProcessorRegistry) {
 			p.Add(NewTaggingProcessor(params))
 			return nil
 		},
-		"Set the given tags on every sample")
+		"Set the given tags on every sample",
+		reg.VariableParams())
 }
 
 func NewTaggingProcessor(tags map[string]string) bitflow.SampleProcessor {

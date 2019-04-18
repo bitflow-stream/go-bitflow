@@ -107,5 +107,6 @@ func RegisterParseTags(b reg.ProcessorRegistry) {
 			})
 			return nil
 		},
-		"Append metrics based on tag values. Keys are new metric names, values are tag names")
+		"Append metrics based on tag values. Keys are new metric names, values are tag names",
+		reg.VariableParams())
 }

@@ -373,7 +373,8 @@ func RegisterMetricRenamer(b reg.ProcessorRegistry) {
 			p.Add(NewMetricRenamer(regexes, replacements))
 			return nil
 		},
-		"Find the keys (regexes) in every metric name and replace the matched parts with the given values")
+		"Find the keys (regexes) in every metric name and replace the matched parts with the given values",
+		reg.VariableParams())
 }
 
 func (r *MetricRenamer) String() string {
