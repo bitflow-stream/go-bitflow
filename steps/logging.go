@@ -14,16 +14,16 @@ import (
 )
 
 func RegisterLoggingSteps(b reg.ProcessorRegistry) {
-	b.RegisterAnalysis("print_header", print_header, "Print every changing header to the log")
-	b.RegisterAnalysisParams("print_tags", print_tags, "When done processing, print every encountered value of the given tag", reg.RequiredParams("tag"))
-	b.RegisterAnalysisParams("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", reg.RequiredParams("tag"))
-	b.RegisterAnalysis("print_timerange", print_time_range, "When done processing, print the first and last encountered timestamp")
-	b.RegisterAnalysisParamsErr("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", reg.OptionalParams("buckets"))
-	b.RegisterAnalysis("count_invalid", count_invalid, "When done processing, print the number of invalid metric values and samples containing such values (NaN, -/+ infinity, ...)")
-	b.RegisterAnalysis("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
+	b.RegisterStep("print_header", print_header, "Print every changing header to the log")
+	b.RegisterStep("print_tags", print_tags, "When done processing, print every encountered value of the given tag", reg.RequiredParams("tag"))
+	b.RegisterStep("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", reg.RequiredParams("tag"))
+	b.RegisterStep("print_timerange", print_time_range, "When done processing, print the first and last encountered timestamp")
+	b.RegisterStep("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", reg.OptionalParams("buckets"))
+	b.RegisterStep("count_invalid", count_invalid, "When done processing, print the number of invalid metric values and samples containing such values (NaN, -/+ infinity, ...)")
+	b.RegisterStep("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
 }
 
-func print_header(p *bitflow.SamplePipeline) {
+func print_header(p *bitflow.SamplePipeline, _ map[string]string) error {
 	var checker bitflow.HeaderChecker
 	numSamples := 0
 	p.Add(&bitflow.SimpleProcessor{
@@ -43,6 +43,7 @@ func print_header(p *bitflow.SamplePipeline) {
 			log.Println("Samples after last header:", numSamples)
 		},
 	})
+	return nil
 }
 
 type UniqueTagPrinter struct {
@@ -116,15 +117,17 @@ func (printer *UniqueTagPrinter) String() string {
 	return res + " unique values of tag '" + printer.Tag + "'"
 }
 
-func print_tags(p *bitflow.SamplePipeline, params map[string]string) {
+func print_tags(p *bitflow.SamplePipeline, params map[string]string) error {
 	p.Add(NewUniqueTagPrinter(params["tag"]))
+	return nil
 }
 
-func count_tags(p *bitflow.SamplePipeline, params map[string]string) {
+func count_tags(p *bitflow.SamplePipeline, params map[string]string) error {
 	p.Add(NewUniqueTagCounter(params["tag"]))
+	return nil
 }
 
-func print_time_range(p *bitflow.SamplePipeline) {
+func print_time_range(p *bitflow.SamplePipeline, _ map[string]string) error {
 	var (
 		from  time.Time
 		to    time.Time
@@ -152,6 +155,7 @@ func print_time_range(p *bitflow.SamplePipeline) {
 				from.Format(format), to.Format(format), duration)
 		},
 	})
+	return nil
 }
 
 func print_timeline(p *bitflow.SamplePipeline, params map[string]string) error {
@@ -228,7 +232,7 @@ func print_timeline(p *bitflow.SamplePipeline, params map[string]string) error {
 	return nil
 }
 
-func count_invalid(p *bitflow.SamplePipeline) {
+func count_invalid(p *bitflow.SamplePipeline, _ map[string]string) error {
 	var (
 		invalidSamples int
 		totalSamples   int
@@ -257,9 +261,10 @@ func count_invalid(p *bitflow.SamplePipeline) {
 				invalidValues, totalValues, invalidSamples, totalSamples)
 		},
 	})
+	return nil
 }
 
-func print_common_metrics(p *bitflow.SamplePipeline) {
+func print_common_metrics(p *bitflow.SamplePipeline, _ map[string]string) error {
 	var (
 		checker bitflow.HeaderChecker
 		common  map[string]bool
@@ -298,4 +303,5 @@ func print_common_metrics(p *bitflow.SamplePipeline) {
 			log.Printf("%v common metrics in %v headers: %v", len(fields), num, fields)
 		},
 	})
+	return nil
 }

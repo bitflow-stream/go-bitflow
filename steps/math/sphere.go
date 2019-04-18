@@ -53,7 +53,7 @@ func RegisterSphere(b reg.ProcessorRegistry) {
 		p.Add(sphere)
 		return nil
 	}
-	b.RegisterAnalysisParamsErr("sphere", create, "Treat every sample as the center of a multi-dimensional sphere, and output a number of random points on the hull of the resulting sphere. The radius can either be fixed or given as one of the metrics", reg.RequiredParams("points"), reg.OptionalParams("seed", "radius", "radius_metric"))
+	b.RegisterStep("sphere", create, "Treat every sample as the center of a multi-dimensional sphere, and output a number of random points on the hull of the resulting sphere. The radius can either be fixed or given as one of the metrics", reg.RequiredParams("points"), reg.OptionalParams("seed", "radius", "radius_metric"))
 }
 
 type SpherePoints struct {

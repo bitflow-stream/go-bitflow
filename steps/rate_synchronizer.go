@@ -41,7 +41,7 @@ func RegisterPipelineRateSynchronizer(b reg.ProcessorRegistry) {
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("synchronize", create, "Synchronize the number of samples going through each synchronize() step with the same key parameter", reg.RequiredParams("key"), reg.OptionalParams("buf"))
+	b.RegisterStep("synchronize", create, "Synchronize the number of samples going through each synchronize() step with the same key parameter", reg.RequiredParams("key"), reg.OptionalParams("buf"))
 }
 
 func (s *PipelineRateSynchronizer) NewSynchronizationStep() bitflow.SampleProcessor {

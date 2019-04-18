@@ -17,6 +17,16 @@ type BatchProcessor struct {
 
 	Steps []BatchProcessingStep
 
+	// ForwardImmediately enables a mode where each received sample is immediately forwarded to the subsequent processing
+	// step for further processing. The sample is also stored for batch processing, and all flush semantics are still active,
+	// but the results of the batch processing will be dropped. Errors that occur during batch flushing are logged, but are
+	// not reported to the caller of the Sample() method.
+	ForwardImmediately bool
+
+	// DontFlushOnClose disables the automatic final flushing when this processing step is closed. This is useful only in
+	// certain special cases.
+	DontFlushOnClose bool
+
 	FlushTimeout                time.Duration // If > 0, flush when no new samples are received for the given duration. The wall-time is used for this (not sample timestamps)
 	SampleTimestampFlushTimeout time.Duration // If > 0, flush when a sample is received with a timestamp jump bigger than this
 	lastAutoFlushError          error
@@ -99,17 +109,27 @@ func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 		p.lastAutoFlushError = nil
 	}
 	p.samples = append(p.samples, sample)
-	return
+
+	if p.ForwardImmediately {
+		if err != nil {
+			log.Errorln("Dropping error, because forward-immediately mode is enabled:", err)
+		}
+		return p.NoopProcessor.Sample(sample, header)
+	} else {
+		return
+	}
 }
 
 func (p *BatchProcessor) Close() {
 	defer p.NoopProcessor.Close()
-	header := p.checker.LastHeader
-	if header == nil {
-		log.Warnln(p.String(), "received no samples")
-	}
-	if err := p.triggerFlush(header, true); err != nil {
-		p.Error(err)
+	if !p.DontFlushOnClose {
+		header := p.checker.LastHeader
+		if header == nil {
+			log.Warnln(p.String(), "received no samples")
+		}
+		if err := p.triggerFlush(header, true); err != nil {
+			p.Error(err)
+		}
 	}
 }
 
@@ -174,6 +194,9 @@ func (p *BatchProcessor) executeFlush(header *Header) error {
 	p.samples = nil // Allow garbage collection
 	if samples, header, err := p.executeSteps(samples, header); err != nil {
 		return err
+	} else if p.ForwardImmediately {
+		log.Println("Dropping", len(samples), "batched samples (forward immediately mode is enabled)")
+		return nil
 	} else {
 		if header == nil {
 			return fmt.Errorf("Cannot flush %v samples because nil-header was returned by last batch processing step", len(samples))

@@ -33,7 +33,7 @@ const (
 2006-01-02 15:04:05.99999998,,1
 2006-01-02 15:04:05.999999981,,2
 `
-	testScript = ` -> shuffle() -> rr(){1 -> head(num=2);2 -> head(num=5)}-> `
+	testScript = ` -> batch() { shuffle() } -> rr(){1 -> head(num=2);2 -> head(num=5)}-> `
 )
 
 func TestE2EWithSampleScripts(t *testing.T) {

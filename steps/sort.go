@@ -55,15 +55,14 @@ func (sorter *SampleSorter) String() string {
 }
 
 func RegisterSampleSorter(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParams("sort",
-		func(p *bitflow.SamplePipeline, params map[string]string) {
+	b.RegisterBatchStep("sort",
+		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
 			var tags []string
 			if tags_param, ok := params["tags"]; ok {
 				tags = strings.Split(tags_param, ",")
 			}
-			p.Batch(&SampleSorter{tags})
+			return &SampleSorter{tags}, nil
 		},
 		"Sort a batch of samples based on the values of the given comma-separated tags. The default criterion is the timestamp.",
-		reg.OptionalParams("tags"),
-		reg.SupportBatch())
+		reg.OptionalParams("tags"))
 }

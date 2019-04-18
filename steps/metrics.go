@@ -115,7 +115,7 @@ func NewMetricFilter() *MetricFilter {
 }
 
 func RegisterIncludeMetricsFilter(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("include",
+	b.RegisterStep("include",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			filter, err := NewMetricFilter().IncludeRegex(params["m"])
 			if err == nil {
@@ -127,7 +127,7 @@ func RegisterIncludeMetricsFilter(b reg.ProcessorRegistry) {
 }
 
 func RegisterExcludeMetricsFilter(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("exclude",
+	b.RegisterStep("exclude",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			filter, err := NewMetricFilter().ExcludeRegex(params["m"])
 			if err == nil {
@@ -227,10 +227,11 @@ func NewMetricMapper(metrics []string) *MetricMapper {
 }
 
 func RegisterMetricMapper(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParams("remap",
-		func(p *bitflow.SamplePipeline, params map[string]string) {
+	b.RegisterStep("remap",
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			metrics := strings.Split(params["header"], ",")
 			p.Add(NewMetricMapper(metrics))
+			return nil
 		},
 		"Change (reorder) the header to the given comma-separated list of metrics", reg.RequiredParams("header"))
 }
@@ -320,18 +321,17 @@ func NewMetricVarianceFilter(minimumWeightedStddev float64) *AbstractBatchMetric
 }
 
 func RegisterVarianceMetricsFilter(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("filter_variance",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
+	b.RegisterBatchStep("filter_variance",
+		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
 			variance, err := strconv.ParseFloat(params["min"], 64)
 			if err != nil {
-				err = reg.ParameterError("min", err)
+				return nil, reg.ParameterError("min", err)
 			} else {
-				p.Batch(NewMetricVarianceFilter(variance))
+				return NewMetricVarianceFilter(variance), nil
 			}
-			return err
 		},
-		"In a batch of samples, filter out the metrics with a variance lower than the given threshold (based on the weighted stddev of the population, stddev/mean)",
-		reg.RequiredParams("min"), reg.SupportBatch())
+		"Filter out the metrics with a variance lower than the given threshold (based on the weighted stddev of the population, stddev/mean)",
+		reg.RequiredParams("min"))
 }
 
 type MetricRenamer struct {
@@ -354,7 +354,7 @@ func NewMetricRenamer(regexes []*regexp.Regexp, replacements []string) *MetricRe
 }
 
 func RegisterMetricRenamer(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("rename",
+	b.RegisterStep("rename",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			if len(params) == 0 {
 				return errors.New("Need at least one regex=replacement parameter")
@@ -373,7 +373,8 @@ func RegisterMetricRenamer(b reg.ProcessorRegistry) {
 			p.Add(NewMetricRenamer(regexes, replacements))
 			return nil
 		},
-		"Find the keys (regexes) in every metric name and replace the matched parts with the given values")
+		"Find the keys (regexes) in every metric name and replace the matched parts with the given values",
+		reg.VariableParams())
 }
 
 func (r *MetricRenamer) String() string {

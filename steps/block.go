@@ -97,17 +97,22 @@ func (m *BlockManager) NewReleaser(key string) *ReleasingProcessor {
 }
 
 func (m *BlockManager) RegisterBlockingProcessor(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("block", func(p *bitflow.SamplePipeline, params map[string]string) error {
-		if err := AddDecoupleStep(p, params); err != nil {
-			return err
-		}
-		p.Add(m.NewBlocker(params["key"]))
-		return nil
-	}, "Block further processing of the samples until a release() with the same key is closed. Creates a new goroutine, input buffer size must be specified.", reg.RequiredParams("key", "buf"))
+	b.RegisterStep("block",
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
+			if err := AddDecoupleStep(p, params); err != nil {
+				return err
+			}
+			p.Add(m.NewBlocker(params["key"]))
+			return nil
+		},
+		"Block further processing of the samples until a release() with the same key is closed. Creates a new goroutine, input buffer size must be specified.", reg.RequiredParams("key", "buf"))
 }
 
 func (m *BlockManager) RegisterReleasingProcessor(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParams("releaseOnClose", func(p *bitflow.SamplePipeline, params map[string]string) {
-		p.Add(m.NewReleaser(params["key"]))
-	}, "When this step is closed, release all instances of block() with the same key value", reg.OptionalParams("key"))
+	b.RegisterStep("releaseOnClose",
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
+			p.Add(m.NewReleaser(params["key"]))
+			return nil
+		},
+		"When this step is closed, release all instances of block() with the same key value", reg.OptionalParams("key"))
 }

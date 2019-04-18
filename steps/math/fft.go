@@ -31,12 +31,11 @@ var (
 )
 
 func RegisterFFT(b reg.ProcessorRegistry) {
-	b.RegisterAnalysis("fft",
-		func(p *bitflow.SamplePipeline) {
-			p.Batch(new(BatchFft))
+	b.RegisterBatchStep("fft",
+		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+			return new(BatchFft), nil
 		},
-		"Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result",
-		reg.SupportBatch())
+		"Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result")
 }
 
 type BatchFft struct {

@@ -12,25 +12,23 @@ type MinMaxScaling struct {
 }
 
 func RegisterMinMaxScaling(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("scale_min_max",
-		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
-			p.Batch(&MinMaxScaling{
+	b.RegisterBatchStep("scale_min_max",
+		func(params map[string]string) (res bitflow.BatchProcessingStep, err error) {
+			res = &MinMaxScaling{
 				Min: reg.FloatParam(params, "min", 0, true, &err),
 				Max: reg.FloatParam(params, "max", 1, true, &err),
-			})
+			}
 			return
 		},
-		"Normalize a batch of samples using a min-max scale. The output value range is 0..1 by default, but can be customized.",
-		reg.SupportBatch())
+		"Normalize a batch of samples using a min-max scale. The output value range is 0..1 by default, but can be customized.")
 }
 
 func RegisterStandardizationScaling(b reg.ProcessorRegistry) {
-	b.RegisterAnalysis("standardize",
-		func(p *bitflow.SamplePipeline) {
-			p.Batch(new(StandardizationScaling))
+	b.RegisterBatchStep("standardize",
+		func(params map[string]string) (res bitflow.BatchProcessingStep, err error) {
+			return new(StandardizationScaling), nil
 		},
-		"Normalize a batch of samples based on the mean and std-deviation",
-		reg.SupportBatch())
+		"Normalize a batch of samples based on the mean and std-deviation")
 }
 
 func (s *MinMaxScaling) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {

@@ -20,7 +20,7 @@ func StrParam(params map[string]string, name string, defaultVal string, hasDefau
 	} else if hasDefault {
 		return defaultVal
 	} else {
-		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
+		*err = ParameterError(name, fmt.Errorf("Missing Required parmeter"))
 		return ""
 	}
 }
@@ -40,7 +40,7 @@ func DurationParam(params map[string]string, name string, defaultVal time.Durati
 	} else if hasDefault {
 		return defaultVal
 	} else {
-		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
+		*err = ParameterError(name, fmt.Errorf("Missing Required parmeter"))
 		return 0
 	}
 }
@@ -60,7 +60,7 @@ func IntParam(params map[string]string, name string, defaultVal int, hasDefault 
 	} else if hasDefault {
 		return defaultVal
 	} else {
-		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
+		*err = ParameterError(name, fmt.Errorf("Missing Required parmeter"))
 		return 0
 	}
 }
@@ -79,7 +79,7 @@ func FloatParam(params map[string]string, name string, defaultVal float64, hasDe
 	} else if hasDefault {
 		return defaultVal
 	} else {
-		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
+		*err = ParameterError(name, fmt.Errorf("Missing Required parmeter"))
 		return 0
 	}
 }
@@ -99,7 +99,7 @@ func BoolParam(params map[string]string, name string, defaultVal bool, hasDefaul
 	} else if hasDefault {
 		return defaultVal
 	} else {
-		*err = ParameterError(name, fmt.Errorf("Missing required parmeter"))
+		*err = ParameterError(name, fmt.Errorf("Missing Required parmeter"))
 		return false
 	}
 }

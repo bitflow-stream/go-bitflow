@@ -37,7 +37,6 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 	steps.RegisterExpression(b)
 	steps.RegisterSubprocessRunner(b)
 	steps.RegisterMergeHeaders(b)
-	steps.RegisterGenericBatch(b)
 	steps.RegisterDecouple(b)
 	steps.RegisterDropErrorsStep(b)
 	steps.RegisterResendStep(b)

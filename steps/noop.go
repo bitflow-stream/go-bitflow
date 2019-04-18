@@ -6,9 +6,10 @@ import (
 )
 
 func RegisterNoop(b reg.ProcessorRegistry) {
-	b.RegisterAnalysis("noop",
-		func(p *bitflow.SamplePipeline) {
+	b.RegisterStep("noop",
+		func(p *bitflow.SamplePipeline, _ map[string]string) error {
 			p.Add(new(NoopProcessor))
+			return nil
 		},
 		"Pass samples through without modification")
 }

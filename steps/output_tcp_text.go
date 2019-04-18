@@ -19,7 +19,7 @@ func RegisterGraphiteOutput(b reg.ProcessorRegistry) {
 			return err
 		},
 	}
-	b.RegisterAnalysisParamsErr("graphite", factory.createTcpOutput, "Send metrics and/or tags to the given Graphite endpoint. Required parameter: 'target'. Optional: 'prefix'")
+	b.RegisterStep("graphite", factory.createTcpOutput, "Send metrics and/or tags to the given Graphite endpoint. Required parameter: 'target'. Optional: 'prefix'")
 }
 
 func RegisterOpentsdbOutput(b reg.ProcessorRegistry) {
@@ -56,7 +56,7 @@ func RegisterOpentsdbOutput(b reg.ProcessorRegistry) {
 			return err
 		},
 	}
-	b.RegisterAnalysisParamsErr("opentsdb", factory.createTcpOutput, "Send metrics and/or tags to the given OpenTSDB endpoint. Required parameter: 'target'. Optional: 'prefix'")
+	b.RegisterStep("opentsdb", factory.createTcpOutput, "Send metrics and/or tags to the given OpenTSDB endpoint. Required parameter: 'target'. Optional: 'prefix'")
 }
 
 var _ bitflow.Marshaller = new(SimpleTextMarshaller)

@@ -10,6 +10,7 @@ import (
 	"github.com/bitflow-stream/go-bitflow/bitflow/fork"
 	"github.com/bitflow-stream/go-bitflow/script/reg"
 	internal "github.com/bitflow-stream/go-bitflow/script/script/internal"
+	"github.com/bitflow-stream/go-bitflow/steps"
 )
 
 type BitflowScriptParser struct {
@@ -158,7 +159,7 @@ func (s *_bitflowScriptParser) buildInputPipeline(pipe *bitflow.SamplePipeline, 
 	case ctx.DataInput() != nil:
 		s.buildInput(pipe, ctx.DataInput().(*internal.DataInputContext))
 	case ctx.PipelineElement() != nil:
-		s.buildPipelineElement(pipe, false, ctx.PipelineElement().(*internal.PipelineElementContext))
+		s.buildPipelineElement(pipe, ctx.PipelineElement().(*internal.PipelineElementContext))
 	default:
 		// This case is actually not possible due to the grammar. Just cover the case for the sake of completeness.
 		pipe.Source = new(bitflow.EmptySampleSource)
@@ -188,10 +189,10 @@ func (s *_bitflowScriptParser) buildOutput(pipe *bitflow.SamplePipeline, ctx *in
 	}
 }
 
-func (s *_bitflowScriptParser) buildPipelineElement(pipe *bitflow.SamplePipeline, windowMode bool, ctx *internal.PipelineElementContext) {
+func (s *_bitflowScriptParser) buildPipelineElement(pipe *bitflow.SamplePipeline, ctx *internal.PipelineElementContext) {
 	switch {
 	case ctx.ProcessingStep() != nil:
-		s.buildProcessingStep(pipe, windowMode, ctx.ProcessingStep().(*internal.ProcessingStepContext))
+		s.buildProcessingStep(pipe, ctx.ProcessingStep().(*internal.ProcessingStepContext))
 	case ctx.Fork() != nil:
 		s.buildFork(pipe, ctx.Fork().(*internal.ForkContext))
 	case ctx.Window() != nil:
@@ -199,20 +200,21 @@ func (s *_bitflowScriptParser) buildPipelineElement(pipe *bitflow.SamplePipeline
 	}
 }
 
-func (s *_bitflowScriptParser) buildProcessingStep(pipe *bitflow.SamplePipeline, windowMode bool, ctx *internal.ProcessingStepContext) {
+func (s *_bitflowScriptParser) buildProcessingStep(pipe *bitflow.SamplePipeline, ctx *internal.ProcessingStepContext) {
 	nameCtx := ctx.Name().(*internal.NameContext)
 	name := unwrapString(nameCtx)
 	params := s.buildParameters(ctx.Parameters().(*internal.ParametersContext))
 
-	regAnalysis, ok := s.registry.GetAnalysis(name)
+	regAnalysis, ok := s.registry.GetStep(name)
 	if !ok {
-		s.pushError(nameCtx, "%v: %v", name, "Unknown Processor.")
-		return
-	} else if windowMode && !regAnalysis.SupportsBatchProcessing {
-		s.pushError(nameCtx, "%v: %v", name, "Processor used in window, but does not support batch processing.")
-		return
-	} else if !windowMode && !regAnalysis.SupportsStreamProcessing {
-		s.pushError(nameCtx, "%v: %v", name, "Processor used outside window, but does not support stream processing.")
+		// Check, if a batch or fork step step with that name exists.
+		extraHelp := ""
+		if _, ok := s.registry.GetBatchStep(name); ok {
+			extraHelp = ", but a batch step with that name exists. Did you mean to use '" + name + "' inside the batch() {...} environment?"
+		} else if _, ok := s.registry.GetFork(name); ok {
+			extraHelp = ", but a fork step with that name exists. Did you mean to use '" + name + "' with attached sub-pipelines?"
+		}
+		s.pushError(nameCtx, "Processing step '%v' is unknown%s", name, extraHelp)
 		return
 	}
 
@@ -246,7 +248,14 @@ func (s *_bitflowScriptParser) buildFork(pipe *bitflow.SamplePipeline, ctx *inte
 	// Lookup fork step and verify parameters
 	forkStep, ok := s.registry.GetFork(name)
 	if !ok {
-		s.pushError(nameCtx, "Pipeline fork '%v' is unknown", name)
+		// Check, if a batch or non-batch step step with that name exists.
+		extraHelp := ""
+		if _, ok := s.registry.GetStep(name); ok {
+			extraHelp = ", but a non-fork step with that name exists. Did you mean to use '" + name + "' without attached sub-pipelines?"
+		} else if _, ok := s.registry.GetBatchStep(name); ok {
+			extraHelp = ", but a batch step with that name exists. Did you mean to use '" + name + "' inside the batch() {...} environment and without attached sub-pipelines?"
+		}
+		s.pushError(nameCtx, "Pipeline fork '%v' is unknown%s", name, extraHelp)
 		return
 	}
 	err := forkStep.Params.Verify(params)
@@ -289,7 +298,7 @@ func (s *_bitflowScriptParser) buildPipelineTail(pipe *bitflow.SamplePipeline, e
 		elem := elemI.(*internal.PipelineTailElementContext)
 		switch {
 		case elem.PipelineElement() != nil:
-			s.buildPipelineElement(pipe, false, elem.PipelineElement().(*internal.PipelineElementContext))
+			s.buildPipelineElement(pipe, elem.PipelineElement().(*internal.PipelineElementContext))
 		case elem.MultiplexFork() != nil:
 			s.buildMultiplexFork(pipe, elem.MultiplexFork().(*internal.MultiplexForkContext))
 		case elem.DataOutput() != nil:
@@ -315,9 +324,44 @@ func (s *_bitflowScriptParser) buildMultiplexFork(pipe *bitflow.SamplePipeline, 
 }
 
 func (s *_bitflowScriptParser) buildWindow(pipe *bitflow.SamplePipeline, ctx *internal.WindowContext) {
+	batchParams := steps.MakeBatchProcessorParameters()
+	params := s.buildParameters(ctx.Parameters().(*internal.ParametersContext))
 
-	// TODO implement batch mode
-	// Take window parameters into account
-
-	s.pushError(ctx, "Window mode not implemented")
+	if err := batchParams.Verify(params); err != nil {
+		s.pushError(ctx, "Invalid batch parameters: %v", err)
+		return
+	}
+	batch, err := steps.MakeBatchProcessor(params)
+	if err != nil {
+		s.pushError(ctx, "Failed to create batch step: %v", err)
+		return
+	}
+	for _, batchStepI := range ctx.AllProcessingStep() {
+		batchStep := batchStepI.(*internal.ProcessingStepContext)
+		stepName := unwrapString(batchStep.Name().(*internal.NameContext))
+		registeredStep, ok := s.registry.GetBatchStep(stepName)
+		if !ok {
+			// Check, if a streaming step or fork step with that name exists.
+			extraHelp := ""
+			if _, ok := s.registry.GetStep(stepName); ok {
+				extraHelp = ", but a non-batch step with that name exists. Did you mean to use '" + stepName + "' outside of the batch() {...} environment?"
+			} else if _, ok := s.registry.GetFork(stepName); ok {
+				extraHelp = ", but a fork step with that name exists. Did you mean to use '" + stepName + "' outside of the batch() {...} environment, as a fork?"
+			}
+			s.pushError(batchStep, "Batch step '%v' is unknown%s", stepName, extraHelp)
+			return
+		}
+		stepParams := s.buildParameters(batchStep.Parameters().(*internal.ParametersContext))
+		if err = registeredStep.Params.Verify(stepParams); err != nil {
+			s.pushError(batchStep, "%v: %v", stepName, err)
+			return
+		}
+		createdStep, err := registeredStep.Func(stepParams)
+		if err != nil {
+			s.pushError(batchStep, "%v: %v", stepName, err)
+			return
+		}
+		batch.Add(createdStep)
+	}
+	pipe.Add(batch)
 }

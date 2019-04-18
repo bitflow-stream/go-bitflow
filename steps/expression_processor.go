@@ -16,7 +16,7 @@ type ExpressionProcessor struct {
 }
 
 func RegisterExpression(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("do",
+	b.RegisterStep("do",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			return add_expression(p, params, false)
 		},
@@ -24,7 +24,7 @@ func RegisterExpression(b reg.ProcessorRegistry) {
 }
 
 func RegisterFilterExpression(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("filter",
+	b.RegisterStep("filter",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			return add_expression(p, params, true)
 		},

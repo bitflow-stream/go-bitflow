@@ -12,8 +12,8 @@ import (
 )
 
 func RegisterSetCurrentTime(b reg.ProcessorRegistry) {
-	b.RegisterAnalysis("set_time",
-		func(p *bitflow.SamplePipeline) {
+	b.RegisterStep("set_time",
+		func(p *bitflow.SamplePipeline, _ map[string]string) error {
 			p.Add(&bitflow.SimpleProcessor{
 				Description: "reset time to now",
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -21,6 +21,7 @@ func RegisterSetCurrentTime(b reg.ProcessorRegistry) {
 					return sample, header, nil
 				},
 			})
+			return nil
 		},
 		"Set the timestamp on every processed sample to the current time")
 }
@@ -31,8 +32,8 @@ func RegisterAppendTimeDifference(b reg.ProcessorRegistry) {
 	var outHeader *bitflow.Header
 	var lastTime time.Time
 
-	b.RegisterAnalysis("append_latency",
-		func(p *bitflow.SamplePipeline) {
+	b.RegisterStep("append_latency",
+		func(p *bitflow.SamplePipeline, _ map[string]string) error {
 			p.Add(&bitflow.SimpleProcessor{
 				Description: "Append time difference as metric " + fieldName,
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -48,26 +49,28 @@ func RegisterAppendTimeDifference(b reg.ProcessorRegistry) {
 					return sample, outHeader, nil
 				},
 			})
+			return nil
 		},
 		"Append the time difference to the previous sample as a metric")
 }
 
 func RegisterStripMetrics(b reg.ProcessorRegistry) {
-	b.RegisterAnalysis("strip",
-		func(p *bitflow.SamplePipeline) {
+	b.RegisterStep("strip",
+		func(p *bitflow.SamplePipeline, _ map[string]string) error {
 			p.Add(&bitflow.SimpleProcessor{
 				Description: "remove metric values, keep timestamp and tags",
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 					return sample.Metadata().NewSample(nil), header.Clone(nil), nil
 				},
 			})
+			return nil
 		},
 		"Remove all metrics, only keeping the timestamp and the tags of each sample")
 }
 
 func RegisterParseTags(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParams("parse_tags",
-		func(p *bitflow.SamplePipeline, params map[string]string) {
+	b.RegisterStep("parse_tags",
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			var checker bitflow.HeaderChecker
 			var outHeader *bitflow.Header
 			var sorted bitflow.SortedStringPairs
@@ -102,6 +105,8 @@ func RegisterParseTags(b reg.ProcessorRegistry) {
 					return sample, outHeader, nil
 				},
 			})
+			return nil
 		},
-		"Append metrics based on tag values. Keys are new metric names, values are tag names")
+		"Append metrics based on tag values. Keys are new metric names, values are tag names",
+		reg.VariableParams())
 }

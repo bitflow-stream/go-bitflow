@@ -197,7 +197,7 @@ func FeatureWindowSlope(stats *FeatureWindowStats) bitflow.Value {
 }
 
 func RegisterAggregateAvg(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("avg",
+	b.RegisterStep("avg",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			agg, err := create_aggregator(params)
 			if err != nil {
@@ -210,7 +210,7 @@ func RegisterAggregateAvg(b reg.ProcessorRegistry) {
 }
 
 func RegisterAggregateSlope(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("slope",
+	b.RegisterStep("slope",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			agg, err := create_aggregator(params)
 			if err != nil {

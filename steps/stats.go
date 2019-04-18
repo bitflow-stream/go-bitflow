@@ -26,10 +26,12 @@ func NewStoreStats(targetFile string) *StoreStats {
 }
 
 func RegisterStoreStats(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline, params map[string]string) {
-		p.Add(NewStoreStats(params["file"]))
-	}
-	b.RegisterAnalysisParams("stats", create, "Output statistics about processed samples to a given ini-file", reg.RequiredParams("file"))
+	b.RegisterStep("stats",
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
+			p.Add(NewStoreStats(params["file"]))
+			return nil
+		},
+		"Output statistics about processed samples to a given ini-file", reg.RequiredParams("file"))
 }
 
 func (stats *StoreStats) Sample(inSample *bitflow.Sample, header *bitflow.Header) error {

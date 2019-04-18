@@ -8,12 +8,11 @@ import (
 )
 
 func RegisterRMS(b reg.ProcessorRegistry) {
-	b.RegisterAnalysis("rms",
-		func(p *bitflow.SamplePipeline) {
-			p.Batch(new(BatchRms))
+	b.RegisterBatchStep("rms",
+		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+			return new(BatchRms), nil
 		},
-		"Compute the Root Mean Square value for every metric in a data batch. Output a single sample with all values.",
-		reg.SupportBatch())
+		"Compute the Root Mean Square value for every metric in a data batch. Output a single sample with all values.")
 }
 
 type BatchRms struct {

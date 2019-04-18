@@ -20,7 +20,7 @@ func RegisterPauseTagger(b reg.ProcessorRegistry) {
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("tag-pauses", create, "Set a given tag to an integer value, that increments whenever the timestamps of two samples are more apart than a given duration", reg.RequiredParams("tag", "minPause"))
+	b.RegisterStep("tag-pauses", create, "Set a given tag to an integer value, that increments whenever the timestamps of two samples are more apart than a given duration", reg.RequiredParams("tag", "minPause"))
 }
 
 type PauseTagger struct {

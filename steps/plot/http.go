@@ -36,7 +36,7 @@ func RegisterHttpPlotter(b reg.ProcessorRegistry) {
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("http", create, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", reg.RequiredParams("endpoint"), reg.OptionalParams("window", "local_static"))
+	b.RegisterStep("http", create, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", reg.RequiredParams("endpoint"), reg.OptionalParams("window", "local_static"))
 }
 
 func NewHttpPlotter(endpoint string, windowSize int, useLocalStatic bool) *HttpPlotter {

@@ -5,17 +5,26 @@ import (
 	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
-func RegisterGenericBatch(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("batch",
-		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
-			timeout := reg.DurationParam(params, "timeout", 0, true, &err)
-			if err == nil {
-				p.Add(&bitflow.BatchProcessor{
-					FlushTags:    []string{params["tag"]},
-					FlushTimeout: timeout,
-				})
-			}
-			return
-		},
-		"Collect samples and flush them on different events (wall time/sample time/tag change/number of samples). Affects the follow-up analysis step, if it is also a batch analysis", reg.RequiredParams("tag"), reg.OptionalParams("timeout"))
+// These functions are placed here (and not directly in the bitflow package, next to the BatchProcessor type),
+// to avoid an import cycle between the packages bitflow and reg.
+
+// TODO implement DontFlushOnHeaderChange. Requires refactoring of the BatchProcessingStep interface.
+
+func MakeBatchProcessorParameters() reg.RegisteredParameters {
+	return reg.RegisteredParameters{
+		Optional: []string{"tag", "timeout", "ignore-close", "forward-immediately"},
+		// "ignore-header-change"
+	}
+}
+
+func MakeBatchProcessor(params map[string]string) (res *bitflow.BatchProcessor, err error) {
+	res = new(bitflow.BatchProcessor)
+	if tag, ok := params["tag"]; ok {
+		res.FlushTags = []string{tag}
+	}
+	// res.DontFlushOnHeaderChange = reg.BoolParam(params, "ignore-header-change", false, true, &err)
+	res.DontFlushOnClose = reg.BoolParam(params, "ignore-close", false, true, &err)
+	res.ForwardImmediately = reg.BoolParam(params, "forward-immediately", false, true, &err)
+	res.FlushTimeout = reg.DurationParam(params, "timeout", 0, true, &err)
+	return
 }
