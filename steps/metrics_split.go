@@ -25,7 +25,7 @@ type _splitSample struct {
 var MetricSplitterDescription = "Metrics that are matched by the regex will be converted to separate samples. When the regex contains named groups, their names and values will be added as tags, and an individual samples will be created for each unique value combination."
 
 func RegisterMetricSplitter(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("split", func(p *bitflow.SamplePipeline, params map[string]string) error {
+	b.RegisterStep("split", func(p *bitflow.SamplePipeline, params map[string]string) error {
 		splitter, err := NewMetricSplitter([]string{params["regex"]})
 		if err == nil {
 			p.Add(splitter)

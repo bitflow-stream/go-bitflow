@@ -272,40 +272,38 @@ func ComputeAndProjectPCA(containedVariance float64) bitflow.BatchProcessingStep
 }
 
 func RegisterPCA(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
-		variance, err := parse_pca_variance(params)
-		if err == nil {
-			p.Batch(ComputeAndProjectPCA(variance))
-		}
-		return err
-	}
-	b.RegisterAnalysisParamsErr("pca", create, "Create a PCA model of a batch of samples and project all samples into a number of principal components with a total contained variance given by the parameter",
-		reg.RequiredParams("var"), reg.SupportBatch())
+	b.RegisterBatchStep("pca",
+		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+			variance, err := parse_pca_variance(params)
+			if err != nil {
+				return nil, err
+			}
+			return ComputeAndProjectPCA(variance), nil
+		},
+		"Create a PCA model of a batch of samples and project all samples into a number of principal components with a total contained variance given by the parameter",
+		reg.RequiredParams("var"))
 }
 
 func RegisterPCAStore(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParams("pca_store",
-		func(p *bitflow.SamplePipeline, params map[string]string) {
-			p.Batch(StorePCAModel(params["file"]))
+	b.RegisterBatchStep("pca_store",
+		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+			return StorePCAModel(params["file"]), nil
 		},
 		"Create a PCA model of a batch of samples and store it to the given file",
-		reg.RequiredParams("file"), reg.SupportBatch())
+		reg.RequiredParams("file"))
 }
 
 func RegisterPCALoad(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
-		variance, err := parse_pca_variance(params)
-		if err == nil {
-			var step bitflow.BatchProcessingStep
-			step, err = LoadBatchPCAModel(params["file"], variance)
-			if err == nil {
-				p.Batch(step)
+	b.RegisterBatchStep("pca_load",
+		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+			variance, err := parse_pca_variance(params)
+			if err != nil {
+				return nil, err
 			}
-		}
-		return err
-	}
-	b.RegisterAnalysisParamsErr("pca_load", create, "Load a PCA model from the given file and project all samples into a number of principal components with a total contained variance given by the parameter",
-		reg.RequiredParams("var", "file"), reg.SupportBatch())
+			return LoadBatchPCAModel(params["file"], variance)
+		},
+		"Load a PCA model from the given file and project all samples into a number of principal components with a total contained variance given by the parameter",
+		reg.RequiredParams("var", "file"))
 }
 
 func RegisterPCALoadStream(b reg.ProcessorRegistry) {
@@ -320,7 +318,7 @@ func RegisterPCALoadStream(b reg.ProcessorRegistry) {
 		}
 		return err
 	}
-	b.RegisterAnalysisParamsErr("pca_load_stream", create, "Like pca_load, but process every sample individually, instead of batching them up", reg.RequiredParams("var", "file"))
+	b.RegisterStep("pca_load_stream", create, "Like pca_load, but process every sample individually, instead of batching them up", reg.RequiredParams("var", "file"))
 }
 
 func parse_pca_variance(params map[string]string) (float64, error) {

@@ -10,7 +10,7 @@ import (
 )
 
 func RegisterPickPercent(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("pick",
+	b.RegisterStep("pick",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			pick_percentage, err := strconv.ParseFloat(params["percent"], 64)
 			if err != nil {
@@ -34,7 +34,7 @@ func RegisterPickPercent(b reg.ProcessorRegistry) {
 }
 
 func RegisterPickHead(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("head",
+	b.RegisterStep("head",
 		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
 			doClose := reg.BoolParam(params, "close", false, true, &err)
 			num := reg.IntParam(params, "num", 0, false, &err)
@@ -62,7 +62,7 @@ func RegisterPickHead(b reg.ProcessorRegistry) {
 }
 
 func RegisterSkipHead(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("skip",
+	b.RegisterStep("skip",
 		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
 			num := reg.IntParam(params, "num", 0, false, &err)
 			if err == nil {
@@ -85,7 +85,7 @@ func RegisterSkipHead(b reg.ProcessorRegistry) {
 }
 
 func RegisterPickTail(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("tail",
+	b.RegisterStep("tail",
 		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
 			num := reg.IntParam(params, "num", 0, false, &err)
 			if err == nil {

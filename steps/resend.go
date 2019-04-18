@@ -12,7 +12,7 @@ import (
 )
 
 func RegisterResendStep(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("resend",
+	b.RegisterStep("resend",
 		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
 			p.Add(&ResendProcessor{
 				Interval: reg.DurationParam(params, "interval", 0, false, &err),
@@ -75,7 +75,7 @@ func SendPeriodically(sample *bitflow.Sample, header *bitflow.Header, receiver b
 }
 
 func RegisterFillUpStep(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("fill-up",
+	b.RegisterStep("fill-up",
 		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
 			interval := reg.DurationParam(params, "interval", 0, false, &err)
 			stepInterval := reg.DurationParam(params, "step-interval", interval, true, &err)

@@ -1,7 +1,6 @@
 package script
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/bitflow-stream/go-bitflow/bitflow"
@@ -38,83 +37,94 @@ func TestParseScript_multipleOutputs(t *testing.T) {
 }
 
 func TestParseScript_withEnforcedBatchInStream_shouldReturnError(t *testing.T) {
-	testScript := "./in -> batch_enforcing_transform() -> ./out"
+	testScript := "./in -> batch_transform() -> ./out"
 	parser, _ := createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
 	assert.Len(t, errs, 1)
-	assert.True(t, strings.Contains(errs[0].Error(), "Processor used outside window, but does not support stream processing"))
+	assert.Contains(t, errs[0].Error(), "Processing step 'batch_transform' is unknown, but a batch step with that name exists")
 }
 
-// TODO add test
-func __TestParseScript_withStreamTransformInWindow_shouldReturnError(t *testing.T) {
-	testScript := "./in -> window { normal_transform() -> batch_supporting_transform()} -> ./out"
+func TestParseScript_withEnforcedBatchInStream_shouldReturnError_unknownStep(t *testing.T) {
+	testScript := "./in -> xxxYYY() -> ./out"
 	parser, _ := createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
 	assert.Len(t, errs, 1)
-	assert.True(t, strings.Contains(errs[0].Error(), "Processor used in window, but does not support batch processing."))
+	assert.Contains(t, errs[0].Error(), "Processing step 'xxxYYY' is unknown")
+	assert.NotContains(t, errs[0].Error(), ", but a ") // no additional help, because the step is not known at all
 }
 
-// TODO add test
-func __TestParseScript_withWindow_shouldWork(t *testing.T) {
-	testScript := "./in -> window { batch_enforcing_transform()-> batch_supporting_transform()} -> normal_transform() -> ./out"
+func TestParseScript_withStreamTransformInWindow_shouldReturnError(t *testing.T) {
+	testScript := "./in -> batch() { normal_transform() -> batch_transform()} -> ./out"
+	parser, _ := createTestParser()
+
+	_, errs := parser.ParseScript(testScript)
+
+	assert.Len(t, errs, 1)
+	assert.Contains(t, errs[0].Error(), "Batch step 'normal_transform' is unknown, but a non-batch step with that name exists")
+}
+
+func TestParseScript_withStreamTransformInWindow_shouldReturnError_unknownStep(t *testing.T) {
+	testScript := "./in -> batch() { xxxxYYYY() -> batch_transform()} -> ./out"
+	parser, _ := createTestParser()
+
+	_, errs := parser.ParseScript(testScript)
+
+	assert.Len(t, errs, 1)
+	assert.Contains(t, errs[0].Error(), "Batch step 'xxxxYYYY' is unknown")
+	assert.NotContains(t, errs[0].Error(), ", but a ") // no additional help, because the step is not known at all
+}
+
+func TestParseScript_withWindow_shouldWork(t *testing.T) {
+	testScript := "./in -> batch() { batch_transform()-> batch_transform()} -> normal_transform() -> ./out"
 	parser, out := createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
-
-	assert.Equal(t, nil, errs.NilOrError())
-	assert.Equal(t, "batch_enforcing_transform", out.calledSteps[0])
-	assert.Equal(t, "batch_supporting_transform", out.calledSteps[1])
+	assert.NoError(t, errs.NilOrError())
+	assert.Equal(t, "batch_transform", out.calledSteps[0])
+	assert.Equal(t, "batch_transform", out.calledSteps[1])
 	assert.Equal(t, "normal_transform", out.calledSteps[2])
 }
 
-// TODO add test
-func __TestParseScript_withWindowInWindow_shouldReturnError(t *testing.T) {
-	testScript := "./in -> window {batch_supporting_transform() -> window { batch_supporting_transform()}} -> normal_transform() -> ./out"
+func TestParseScript_withWindowInWindow_shouldReturnError(t *testing.T) {
+	testScript := "./in -> batch() {batch_transform() -> batch() { batch_transform()}} -> normal_transform() -> ./out"
 	parser, _ := createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Equal(t, 1, len(errs))
-	assert.True(t, strings.Contains(errs.Error(), "Window inside Window is not allowed."))
+	assert.Equal(t, 4, len(errs))
+	assert.Contains(t, errs.Error(), "mismatched input 'batch'")
 }
 
 func createTestParser() (BitflowScriptParser, *testOutputCatcher) {
 	out := &testOutputCatcher{}
 	registry := reg.NewProcessorRegistry()
 	registry.Endpoints = *bitflow.NewEndpointFactory()
-	registry.RegisterAnalysisParamsErr("normal_transform",
+	registry.RegisterStep("normal_transform",
 		func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "normal_transform")
 			return nil
 		}, "a normal transform")
 
-	registry.RegisterAnalysisParamsErr("error_returning_transform",
+	registry.RegisterStep("error_returning_transform",
 		func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "error_returning_transform")
 			return errors.Errorf("error_returning_transform")
 		}, "an error returning")
 
-	registry.RegisterAnalysisParamsErr("required_param_transform",
+	registry.RegisterStep("required_param_transform",
 		func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 			out.calledSteps = append(out.calledSteps, "required_param_transform")
 			return nil
 		}, "a transform requiring a parameter", reg.RequiredParams("requiredParam"))
-
-	registry.RegisterAnalysisParamsErr("batch_supporting_transform",
-		func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
-			out.calledSteps = append(out.calledSteps, "batch_supporting_transform")
-			return nil
-		}, "a batch supporting transform", reg.SupportBatch())
-
-	registry.RegisterAnalysisParamsErr("batch_enforcing_transform",
-		func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
-			out.calledSteps = append(out.calledSteps, "batch_enforcing_transform")
-			return nil
-		}, "a batch enforcing transform", reg.EnforceBatch())
+	registry.RegisterBatchStep("batch_transform",
+		func(params map[string]string) (res bitflow.BatchProcessingStep, err error) {
+			out.calledSteps = append(out.calledSteps, "batch_transform")
+			return nil, nil
+		}, "a batch enforcing transform")
 	steps.RegisterNoop(registry)
 	return BitflowScriptParser{Registry: registry}, out
 }

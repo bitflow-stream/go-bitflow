@@ -90,7 +90,7 @@ func RegisterSubpipelineStreamMerger(b reg.ProcessorRegistry) {
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("merge_streams", create, "Merge multiple streams, identified by a given tag. Output samples are generated in a given interval, all incoming metrics are averaged within that window, incoming metric names are prefixes with the respective tag value.", reg.RequiredParams("tag", "num", "interval"))
+	b.RegisterStep("merge_streams", create, "Merge multiple streams, identified by a given tag. Output samples are generated in a given interval, all incoming metrics are averaged within that window, incoming metric names are prefixes with the respective tag value.", reg.RequiredParams("tag", "num", "interval"))
 }
 
 func (p *SynchronizedStreamMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

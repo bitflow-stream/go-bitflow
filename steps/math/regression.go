@@ -168,17 +168,19 @@ func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearReg
 }
 
 func RegisterLinearRegression(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline) {
-		p.Batch(new(LinearRegressionBatchProcessor))
-	}
-	b.RegisterAnalysis("regression", create, "Perform a linear regression analysis on a batch of samples", reg.SupportBatch())
+	b.RegisterBatchStep("regression",
+		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+			return new(LinearRegressionBatchProcessor), nil
+		},
+		"Perform a linear regression analysis on a batch of samples")
 }
 
 func RegisterLinearRegressionBruteForce(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline) {
-		p.Batch(new(LinearRegressionBruteForce))
-	}
-	b.RegisterAnalysis("regression_brute", create, "In a batch of samples, perform a linear regression analysis for every possible combination of metrics", reg.SupportBatch())
+	b.RegisterBatchStep("regression_brute",
+		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+			return new(LinearRegressionBruteForce), nil
+		},
+		"In a batch of samples, perform a linear regression analysis for every possible combination of metrics")
 }
 
 func (reg *LinearRegression) FormulaString() string {

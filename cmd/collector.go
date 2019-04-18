@@ -44,22 +44,7 @@ func (c *CmdDataCollector) RegisterFlags() {
 }
 
 func (c *CmdDataCollector) BuildPipeline() (*bitflow.SamplePipeline, error) {
-	if c.script != "" && c.scriptFile != "" {
-		return nil, fmt.Errorf("Cannot specify both an immediate Bitflow script through -s and a Bitflow script file through -f")
-	}
-	script := "empty://-" // Prepend an empty input to ensure the script compiles
-	extraScript := c.script
-	if c.scriptFile != "" {
-		scriptBytes, err := ioutil.ReadFile(c.scriptFile)
-		if err != nil {
-			return nil, fmt.Errorf("Error reading Bitflow script file %v: %v", c.scriptFile, err)
-		}
-		extraScript = string(scriptBytes)
-	}
-	if extraScript != "" {
-		script += " -> " + extraScript
-	}
-	p, err := c.CmdPipelineBuilder.BuildPipeline(script)
+	p, err := c.CmdPipelineBuilder.BuildPipeline(c.get_script)
 	if err != nil || p == nil {
 		return p, err
 	}
@@ -87,6 +72,25 @@ func (c *CmdDataCollector) BuildPipeline() (*bitflow.SamplePipeline, error) {
 	}
 	p = c.CmdPipelineBuilder.PrintPipeline(p)
 	return p, nil
+}
+
+func (c *CmdDataCollector) get_script() (string, error) {
+	if c.script != "" && c.scriptFile != "" {
+		return "", fmt.Errorf("Cannot specify both an immediate Bitflow script through -s and a Bitflow script file through -f")
+	}
+	script := "empty://-" // Prepend an empty input to ensure the script compiles
+	extraScript := c.script
+	if c.scriptFile != "" {
+		scriptBytes, err := ioutil.ReadFile(c.scriptFile)
+		if err != nil {
+			return "", fmt.Errorf("Error reading Bitflow script file %v: %v", c.scriptFile, err)
+		}
+		extraScript = string(scriptBytes)
+	}
+	if extraScript != "" {
+		script += " -> " + extraScript
+	}
+	return script, nil
 }
 
 func (c *CmdDataCollector) add_outputs(p *bitflow.SamplePipeline) error {

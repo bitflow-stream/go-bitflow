@@ -8,10 +8,12 @@ import (
 )
 
 func RegisterTaggingProcessor(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline, params map[string]string) {
-		p.Add(NewTaggingProcessor(params))
-	}
-	b.RegisterAnalysisParams("tags", create, "Set the given tags on every sample")
+	b.RegisterStep("tags",
+		func(p *bitflow.SamplePipeline, params map[string]string) error {
+			p.Add(NewTaggingProcessor(params))
+			return nil
+		},
+		"Set the given tags on every sample")
 }
 
 func NewTaggingProcessor(tags map[string]string) bitflow.SampleProcessor {

@@ -45,11 +45,14 @@ func do_main() int {
 	flag.StringVar(&scriptFile, fileFlag, "", "File to read a Bitflow script from (alternative to providing the script on the command line)")
 	builder.RegisterFlags()
 	_, args := cmd.ParseFlags()
-	rawScript, err := get_script(args, scriptFile)
-	golib.Checkerr(err)
 
-	pipe, err := builder.BuildPipeline(rawScript)
+	pipe, err := builder.BuildPipeline(func() (string, error) {
+		return get_script(args, scriptFile)
+	})
 	golib.Checkerr(err)
+	if pipe == nil {
+		return 0
+	}
 	pipe = builder.PrintPipeline(pipe)
 	if pipe == nil {
 		return 0

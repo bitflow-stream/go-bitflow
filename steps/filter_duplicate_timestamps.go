@@ -9,7 +9,7 @@ import (
 )
 
 func RegisterDuplicateTimestampFilter(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("filter-duplicate-timestamps",
+	b.RegisterStep("filter-duplicate-timestamps",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			var err error
 			interval := reg.DurationParam(params, "interval", 0, false, &err)

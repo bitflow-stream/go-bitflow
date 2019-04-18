@@ -6,14 +6,15 @@ import (
 )
 
 func RegisterDrop(b reg.ProcessorRegistry) {
-	b.RegisterAnalysis("drop",
-		func(p *bitflow.SamplePipeline) {
+	b.RegisterStep("drop",
+		func(p *bitflow.SamplePipeline, _ map[string]string) error {
 			p.Add(&bitflow.SimpleProcessor{
 				Description: "Drop all samples",
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 					return nil, nil, nil
 				},
 			})
+			return nil
 		},
 		"Drop all samples")
 }

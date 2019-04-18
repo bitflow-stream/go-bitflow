@@ -609,5 +609,5 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("plot", create, "Plot a batch of samples to a given filename. The file ending denotes the file type", reg.RequiredParams("file"), reg.OptionalParams("color", "flags", "xMin", "xMax", "yMin", "yMax"))
+	b.RegisterStep("plot", create, "Plot a batch of samples to a given filename. The file ending denotes the file type", reg.RequiredParams("file"), reg.OptionalParams("color", "flags", "xMin", "xMax", "yMin", "yMax"))
 }

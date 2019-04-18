@@ -14,7 +14,7 @@ import (
 )
 
 func RegisterTagSynchronizer(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("synchronize_tags",
+	b.RegisterStep("synchronize_tags",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			var err error
 			synchronizer := new(TagSynchronizer)

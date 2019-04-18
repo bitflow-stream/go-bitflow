@@ -20,16 +20,16 @@ type CmdPipelineBuilder struct {
 	reg.ProcessorRegistry
 	SkipInputFlags bool
 
-	printAnalyses     bool
-	printPipeline     bool
-	printCapabilities bool
-	pluginPaths       golib.StringSlice
+	printPipeline         bool
+	printCapabilities     bool
+	printJsonCapabilities bool
+	pluginPaths           golib.StringSlice
 }
 
 func (c *CmdPipelineBuilder) RegisterFlags() {
-	flag.BoolVar(&c.printAnalyses, "print-analyses", false, "Print a list of available analyses and exit.")
 	flag.BoolVar(&c.printPipeline, "print-pipeline", false, "Print the parsed pipeline and exit. Can be used to verify the input script.")
-	flag.BoolVar(&c.printCapabilities, "capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
+	flag.BoolVar(&c.printCapabilities, "capabilities", false, "Print a list of available processing steps and exit.")
+	flag.BoolVar(&c.printJsonCapabilities, "json-capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
 	flag.Var(&c.pluginPaths, "p", "Plugins to load for additional functionality")
 
 	c.ProcessorRegistry = reg.NewProcessorRegistry()
@@ -40,19 +40,22 @@ func (c *CmdPipelineBuilder) RegisterFlags() {
 	}
 }
 
-func (c *CmdPipelineBuilder) BuildPipeline(scriptStr string) (*bitflow.SamplePipeline, error) {
+func (c *CmdPipelineBuilder) BuildPipeline(getScript func() (string, error)) (*bitflow.SamplePipeline, error) {
 	err := load_plugins(c.ProcessorRegistry, c.pluginPaths)
 	if err != nil {
 		return nil, err
 	}
-	if c.printCapabilities {
-		return nil, c.PrintJsonCapabilities(os.Stdout)
+	if c.printJsonCapabilities {
+		return nil, c.FormatJsonCapabilities(os.Stdout)
 	}
-	if c.printAnalyses {
-		fmt.Printf("Available analysis steps:\n%v\n", c.PrintAllAnalyses())
-		return nil, nil
+	if c.printCapabilities {
+		return nil, c.FormatCapabilities(os.Stdout)
 	}
 
+	scriptStr, err := getScript()
+	if err != nil {
+		return nil, err
+	}
 	parser := &script.BitflowScriptParser{Registry: c.ProcessorRegistry}
 	s, parseErr := parser.ParseScript(scriptStr)
 	return s, parseErr.NilOrError()

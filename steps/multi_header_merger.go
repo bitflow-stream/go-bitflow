@@ -25,9 +25,10 @@ func NewMultiHeaderMerger() *MultiHeaderMerger {
 }
 
 func RegisterMergeHeaders(b reg.ProcessorRegistry) {
-	b.RegisterAnalysis("merge_headers",
-		func(p *bitflow.SamplePipeline) {
+	b.RegisterStep("merge_headers",
+		func(p *bitflow.SamplePipeline, _ map[string]string) error {
 			p.Add(NewMultiHeaderMerger())
+			return nil
 		},
 		"Accept any number of changing headers and merge them into one output header when flushing the results")
 }

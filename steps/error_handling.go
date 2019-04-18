@@ -9,7 +9,7 @@ import (
 )
 
 func RegisterDropErrorsStep(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("drop_errors",
+	b.RegisterStep("drop_errors",
 		func(p *bitflow.SamplePipeline, params map[string]string) error {
 			var err error
 			logDebug := reg.BoolParam(params, "log-debug", false, true, &err)

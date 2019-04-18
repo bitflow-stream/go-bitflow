@@ -9,7 +9,7 @@ import (
 )
 
 func RegisterSleep(b reg.ProcessorRegistry) {
-	b.RegisterAnalysisParamsErr("sleep", _create_sleep_processor, "Between every two samples, sleep the time difference between their timestamps", reg.OptionalParams("time", "onChangedTag"))
+	b.RegisterStep("sleep", _create_sleep_processor, "Between every two samples, sleep the time difference between their timestamps", reg.OptionalParams("time", "onChangedTag"))
 }
 
 func _create_sleep_processor(p *bitflow.SamplePipeline, params map[string]string) error {

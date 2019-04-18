@@ -63,7 +63,7 @@ func RegisterHttpTagger(b reg.ProcessorRegistry) {
 		return nil
 	}
 
-	b.RegisterAnalysisParamsErr("listen_tags", create, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", reg.RequiredParams("listen"), reg.OptionalParams("default"))
+	b.RegisterStep("listen_tags", create, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", reg.RequiredParams("listen"), reg.OptionalParams("default"))
 }
 
 func (tagger *HttpTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

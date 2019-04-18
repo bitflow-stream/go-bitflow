@@ -54,7 +54,7 @@ func (p *pluginImpl) Init(registry reg.ProcessorRegistry) error {
 	}
 
 	plugin.LogPluginProcessor(p, DataProcessorName)
-	registry.RegisterAnalysisParamsErr(DataProcessorName, func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
+	registry.RegisterStep(DataProcessorName, func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
 		var res MockSampleProcessor
 		err := res.ParseParams(params)
 		if err == nil {
