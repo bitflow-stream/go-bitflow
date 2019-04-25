@@ -6,7 +6,7 @@ require (
 	github.com/antlr/antlr4 v0.0.0-20190325153624-837aa60e2c47
 	github.com/antongulenko/go-onlinestats v0.0.0-20160514060630-5ff69410145c
 	github.com/antongulenko/golearn v0.0.0-20180917161504-d3c9efc653e9
-	github.com/antongulenko/golib v0.0.10
+	github.com/antongulenko/golib v0.0.11
 	github.com/bugsnag/bugsnag-go v1.5.0
 	github.com/gin-gonic/gin v1.3.0
 	github.com/go-ini/ini v1.42.0

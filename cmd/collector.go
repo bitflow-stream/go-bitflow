@@ -129,7 +129,7 @@ func (c *CmdDataCollector) create_outputs() ([]bitflow.SampleProcessor, error) {
 			consoleOutputs++
 		}
 		if consoleOutputs > 1 {
-			golib.Fatalln("Cannot define multiple outputs to stdout")
+			return nil, fmt.Errorf("Cannot define multiple outputs to stdout")
 		}
 	}
 	return sinks, nil
