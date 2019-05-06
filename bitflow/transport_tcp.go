@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/antongulenko/golib"
@@ -173,16 +171,9 @@ func (conn *TcpWriteConn) IsRunning() bool {
 }
 
 func (conn *TcpWriteConn) printErr(err error) {
-	if opErr, ok := err.(*net.OpError); ok {
-		if opErr.Err == syscall.EPIPE {
-			conn.log.Debugln("Connection closed by remote")
-			return
-		} else {
-			if syscallErr, ok := opErr.Err.(*os.SyscallError); ok && syscallErr.Err == syscall.EPIPE {
-				conn.log.Debugln("Connection closed by remote")
-				return
-			}
-		}
+	if opErr, ok := err.(*net.OpError); ok && IsBrokenPipeError(opErr.Err) {
+		conn.log.Debugln("Connection closed by remote")
+		return
 	}
 	if err != nil {
 		conn.log.Errorln("Write failed, closing connection:", err)

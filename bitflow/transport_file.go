@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/antongulenko/golib"
@@ -392,13 +391,6 @@ func (source *FileSource) readFile(filename string) error {
 	return stream.ReadNamedSamples(name)
 }
 
-// IsFileClosedError returns true, if the given error likely originates from intentionally
-// closing a file, while it is still being read concurrently.
-func IsFileClosedError(err error) bool {
-	pathErr, ok := err.(*os.PathError)
-	return ok && pathErr.Err == syscall.EBADF
-}
-
 // SynchronizedReadCloser is a helper type to wrap *os.File and synchronize calls
 // to Read() and Close(). This prevents race condition warnings from the Go race detector
 // due to parallel access to the fd field of the internal os.file type. The performance
@@ -469,8 +461,8 @@ type FileSink struct {
 	stream                *SampleOutputStream
 	closed                golib.StopChan
 	currentFile           string
-	currentIno            uint64
 	lastVanishedFileCheck time.Time
+	fileVanishChecker     fileVanishChecker
 }
 
 // String implements the SampleSink interface.
@@ -524,11 +516,7 @@ func (sink *FileSink) openNextFile() (err error) {
 		if err == nil {
 			sink.currentFile = file.Name()
 			if sink.VanishedFileCheck > 0 {
-				stat, statErr := file.Stat()
-				if statErr != nil {
-					err = statErr
-				}
-				sink.currentIno = stat.Sys().(*syscall.Stat_t).Ino
+				err = sink.fileVanishChecker.setCurrentFile(file.Name())
 			}
 			if err == nil {
 				sink.stream = sink.Writer.OpenBuffered(file, sink.Marshaller, sink.IoBuffer)
@@ -570,17 +558,7 @@ func (sink *FileSink) checkOutputFile() (openNewFile bool) {
 	now := time.Now()
 	if now.Sub(sink.lastVanishedFileCheck) > sink.VanishedFileCheck {
 		sink.lastVanishedFileCheck = now
-		info, err := os.Stat(sink.currentFile)
-		if err != nil {
-			log.WithField("file", sink.currentFile).Warn("Error stating opened output file:", err)
-			openNewFile = true
-		} else {
-			newIno := info.Sys().(*syscall.Stat_t).Ino
-			if newIno != sink.currentIno {
-				log.WithField("file", sink.currentFile).Warnf("Output file inumber has changed, reopening file (%v -> %v)", sink.currentIno, newIno)
-				openNewFile = true
-			}
-		}
+		openNewFile = sink.fileVanishChecker.hasFileVanished(sink.currentFile)
 		if openNewFile {
 			sink.file_num = 0
 		}
