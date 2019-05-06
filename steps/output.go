@@ -37,7 +37,8 @@ func RegisterOutputFiles(b reg.ProcessorRegistry) {
 		return err
 	}
 
-	b.RegisterStep("output_files", create, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values")
+	b.RegisterStep("output_files", create, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values",
+		reg.VariableParams())
 }
 
 func _make_multi_file_pipeline_builder(params map[string]string) (*fork.MultiFileDistributor, error) {
