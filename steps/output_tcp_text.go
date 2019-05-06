@@ -56,7 +56,8 @@ func RegisterOpentsdbOutput(b reg.ProcessorRegistry) {
 			return err
 		},
 	}
-	b.RegisterStep("opentsdb", factory.createTcpOutput, "Send metrics and/or tags to the given OpenTSDB endpoint. Required parameter: 'target'. Optional: 'prefix'")
+	b.RegisterStep("opentsdb", factory.createTcpOutput, "Send metrics and/or tags to the given OpenTSDB endpoint.",
+		reg.VariableParams())
 }
 
 var _ bitflow.Marshaller = new(SimpleTextMarshaller)
