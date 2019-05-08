@@ -12,14 +12,15 @@ pipeline {
                     sh 'go install -v ./...'
                     sh 'rm -rf reports && mkdir -p reports'
                     sh 'go test -v ./... 2>&1 | go-junit-report > reports/test.xml'
-                    sh 'go vet ./... || true &> reports/vet.txt'
+                    sh 'go vet ./... &> reports/vet.txt || true'
                     sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
             }
             post {
                 always {
                     archiveArtifacts 'reports/*'
+                    junit 'reports/test.xml'
 
-                    // TODO: capture test results. Enable coverage and capture report.
+                    // TODO: Enable coverage and capture report.
                     // TODO: add static code analysis stage
                 }
             }
