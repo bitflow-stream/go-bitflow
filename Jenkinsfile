@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'golang:1.12-alpine'
+            image 'teambitflow/golang-build:1.12-alpine'
             args '-v /root/.goroot:/go'
         }
     }
