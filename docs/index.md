@@ -1,4 +1,4 @@
-[![Build Status](https://ci.bitflow.team/jenkins/buildStatus/icon?job=Bitflow%2Fgo-bitflow%2Fmaster&build=lastBuild)](https://ci.bitflow.team/jenkins/buildStatus/icon?job=Bitflow%2Fgo-bitflow%2Fmaster&build=lastBuild)
+[![Build Status](https://ci.bitflow.team/jenkins/buildStatus/icon?job=Bitflow%2Fgo-bitflow%2Fmaster&build=lastBuild)](http://wally144.cit.tu-berlin.de/jenkins/blue/organizations/jenkins/Bitflow%2Fgo-bitflow/activity)
 
 # go-bitflow
 **go-bitflow** is a Go (Golang) library for sending, receiving and transforming streams of data.
