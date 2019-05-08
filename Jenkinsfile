@@ -16,12 +16,14 @@ pipeline {
                     go test -v ./...
                 '''
             }
+            /*
             post {
                 always {
                     // TODO: capture test results. Enable coverage and capture report.
                     // TODO: add static code analysis stage
                 }
             }
+            */
         }
         stage('Build container') {
             when {
