@@ -19,7 +19,7 @@ pipeline {
             }
             post {
                 always {
-                    archiveArtifacts reports/*
+                    archiveArtifacts 'reports/*'
 
                     // TODO: capture test results. Enable coverage and capture report.
                     // TODO: add static code analysis stage
