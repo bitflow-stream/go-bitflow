@@ -8,14 +8,12 @@ pipeline {
     stages {
         stage('Build & test') { 
             steps {
-                sh '''
-                    go clean -i ./...
-                    go install ./...
-                    rm -rf reports && mkdir -p reports
-                    go test -v ./... 2>&1 | go-junit-report > reports/test.xml
-                    go vet ./... &> reports/vet.txt
-                    golint $(go list -f '{{.Dir}}' ./...) &> reports/lint.txt
-                '''
+                    sh 'go clean -i -v ./...'
+                    sh 'go install -v ./...'
+                    sh 'rm -rf reports && mkdir -p reports'
+                    sh 'go test -v ./... 2>&1 | go-junit-report > reports/test.xml'
+                    sh 'go vet ./... || true &> reports/vet.txt'
+                    sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
             }
             post {
                 always {
