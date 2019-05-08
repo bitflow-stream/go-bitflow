@@ -166,7 +166,7 @@ func (s *BatchFft) processBatch(header *bitflow.Header, samples []*bitflow.Sampl
 	}
 	outHeader := header
 	if outputFields != len(outHeader.Fields) {
-		outHeader = &bitflow.Header{make([]string, outputFields)}
+        outHeader = &bitflow.Header{Fields: make([]string, outputFields)}
 		copy(outHeader.Fields, header.Fields[:freqIndex])
 		if freqIndex < len(header.Fields) {
 			copy(outHeader.Fields[freqIndex+1:], header.Fields[freqIndex:])

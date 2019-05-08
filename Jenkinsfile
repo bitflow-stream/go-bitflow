@@ -12,7 +12,7 @@ pipeline {
                     sh 'go install -v ./...'
                     sh 'rm -rf reports && mkdir -p reports'
                     sh 'go test -v ./... 2>&1 | go-junit-report > reports/test.xml'
-                    sh 'go vet ./... &> reports/vet.txt || true'
+                    sh 'go vet ./... &> reports/vet.txt'
                     sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
             }
             post {

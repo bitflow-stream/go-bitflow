@@ -64,7 +64,7 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 			tasks.Add(&ProcessorTaskWrapper{proc})
 		}
 	}
-	tasks.Add(&SourceTaskWrapper{firstSource})
+    tasks.Add(&SourceTaskWrapper{firstSource})
 }
 
 // Add adds the SampleProcessor parameter to the list of SampleProcessors in the

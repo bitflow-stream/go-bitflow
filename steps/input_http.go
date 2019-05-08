@@ -104,7 +104,7 @@ func (source *RestDataSource) Serve(verb string, path string, httpLogFile string
 }
 
 func (source *RestDataSource) EmitSample(sample *bitflow.Sample, header *bitflow.Header) {
-	source.outgoing <- bitflow.SampleAndHeader{sample, header}
+    source.outgoing <- bitflow.SampleAndHeader{Sample: sample, Header: header}
 }
 
 func (source *RestDataSource) Start(wg *sync.WaitGroup) golib.StopChan {

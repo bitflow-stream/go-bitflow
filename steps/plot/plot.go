@@ -430,10 +430,10 @@ type boxThumbnail struct {
 
 func (b *boxThumbnail) Thumbnail(c *draw.Canvas) {
 	points := []vg.Point{
-		{c.Min.X, c.Min.Y},
-		{c.Min.X, c.Max.Y},
-		{c.Max.X, c.Max.Y},
-		{c.Max.X, c.Min.Y},
+        {X: c.Min.X, Y: c.Min.Y},
+        {X: c.Min.X, Y: c.Max.Y},
+        {X: c.Max.X, Y: c.Max.Y},
+        {X: c.Max.X, Y: c.Min.Y},
 	}
 	poly := c.ClipPolygonY(points)
 	c.FillPolygon(b.color, poly)
