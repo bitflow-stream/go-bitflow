@@ -1,3 +1,5 @@
+[![Build Status](https://ci.bitflow.team/jenkins/buildStatus/icon?job=Bitflow%2Fgo-bitflow%2Fmaster&build=lastBuild)](https://ci.bitflow.team/jenkins/buildStatus/icon?job=Bitflow%2Fgo-bitflow%2Fmaster&build=lastBuild)
+
 # go-bitflow
 **go-bitflow** is a Go (Golang) library for sending, receiving and transforming streams of data.
 The basic data entity is a `bitfolw.Sample`, which consists of a `time.Time` timestamp, a vector of `float64` values, and a `map[string]string` of tags.

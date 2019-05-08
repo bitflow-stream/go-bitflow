@@ -12,9 +12,12 @@ pipeline {
         stage('Build & test') { 
             steps {
                 sh '''
-                    go install ./...
+                    go clean -i -v ./...
+                    go install -v ./...
                     go test -v ./...
+
                 '''
+                // golint $(go list -f '{{.Dir}}' ./...)
             }
             /*
             post {

@@ -20,6 +20,12 @@ require (
 	github.com/smartystreets/goconvey v0.0.0-20190330032615-68dc04aab96a // indirect
 	github.com/stretchr/testify v1.3.0
 	github.com/xlab/handysort v0.0.0-20150421192137-fb3537ed64a1 // indirect
+	golang.org/x/crypto v0.0.0-20190506204251-e1dfcc566284 // indirect
+	golang.org/x/lint v0.0.0-20190409202823-959b441ac422 // indirect
+	golang.org/x/net v0.0.0-20190503192946-f4e77d36d62c // indirect
+	golang.org/x/sys v0.0.0-20190507160741-ecd444e8653b // indirect
+	golang.org/x/text v0.3.2 // indirect
+	golang.org/x/tools v0.0.0-20190508025753-952990169864 // indirect
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
 	gonum.org/v1/plot v0.0.0-20190409091833-06eadbae2185
 	gopkg.in/ini.v1 v1.42.0 // indirect
