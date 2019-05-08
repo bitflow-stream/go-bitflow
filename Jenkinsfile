@@ -1,49 +1,42 @@
 pipeline {
     agent {
         docker {
-            image 'teambitflow/golang-docker:1.11-stretch'
-            args '-v /root/.goroot:/go -v /root/.docker:/root/.docker'
+            image 'golang:1.12-alpine'
+            args '-v /root/.goroot:/go'
         }
-    }
-    environment {
-        docker_image = 'teambitflow/go-bitflow'
     }
     stages {
         stage('Build & test') { 
             steps {
                 sh '''
-                    go clean -i -v ./...
-                    go install -v ./...
-                    go test -v ./...
-
+                    go clean -i ./...
+                    go install ./...
+                    rm -rf reports && mkdir -p reports
+                    go test -v ./... 2>&1 | go-junit-report > reports/test.xml
+                    go vet ./... &> reports/vet.txt
+                    golint $(go list -f '{{.Dir}}' ./...) &> reports/lint.txt
                 '''
-                // golint $(go list -f '{{.Dir}}' ./...)
             }
-            /*
             post {
                 always {
+                    archiveArtifacts reports/*
+
                     // TODO: capture test results. Enable coverage and capture report.
                     // TODO: add static code analysis stage
                 }
             }
-            */
         }
-        stage('Build container') {
-            when {
-                branch 'master'
-            }
-            steps {
-                script {
-                    sh 'docker build -t $docker_image:build-$BUILD_NUMER -t $docker_image:latest .'
-                }
-            }
+        stage('Slack message') {
+            steps { sh 'true' }
             post {
                 success {
-                    sh '''
-                        docker push $docker_image:build-$BUILD_NUMBER
-                        docker push $docker_image:latest'
-                    '''
-               }
+                    withSonarQubeEnv('CIT SonarQube') {
+                        slackSend color: 'good', message: "Build ${env.JOB_NAME} ${env.BUILD_NUMBER} was successful (<${env.BUILD_URL}|Open Jenkins>) (<${env.SONAR_HOST_URL}|Open SonarQube>)"
+                    }
+                }
+                failure {
+                    slackSend color: 'danger', message: "Build ${env.JOB_NAME} ${env.BUILD_NUMBER} failed (<${env.BUILD_URL}|Open Jenkins>)"
+                }
             }
         }
     }
