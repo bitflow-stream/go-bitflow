@@ -130,7 +130,7 @@ func (m *MetricSplitter) split(sample *bitflow.Sample, header *bitflow.Header) [
 			values[i] = sample.Values[index]
 		}
 		outSample.Values = values
-		res[i] = bitflow.SampleAndHeader{outSample, split.outHeader}
+        res[i] = bitflow.SampleAndHeader{Sample: outSample, Header: split.outHeader}
 	}
 	return res
 }

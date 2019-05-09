@@ -81,12 +81,12 @@ func (r *SubprocessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
 	var tasks golib.TaskGroup
 	if r.input != nil {
 		// (Optionally) start the input first
-		tasks.Add(&bitflow.SourceTaskWrapper{r.input})
+        tasks.Add(&bitflow.SourceTaskWrapper{SampleSource: r.input})
 	}
 	tasks.Add(&golib.NoopTask{
 		Description: "",
 		Chan:        golib.WaitErrFunc(wg, r.runProcess),
-	}, &bitflow.ProcessorTaskWrapper{r.output})
+    }, &bitflow.ProcessorTaskWrapper{SampleProcessor: r.output})
 
 	channels := tasks.StartTasks(wg)
 	return golib.WaitErrFunc(wg, func() error {
