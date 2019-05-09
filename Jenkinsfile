@@ -19,9 +19,6 @@ pipeline {
                 always {
                     archiveArtifacts 'reports/*'
                     junit 'reports/test.xml'
-
-                    // TODO: Enable coverage and capture report.
-                    // TODO: add static code analysis stage
                 }
             }
         }
@@ -33,12 +30,12 @@ pipeline {
                     withSonarQubeEnv('CIT SonarQube') {
                         sh """
                             ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitfow \
-                            -Dsonar.sources=. -Dsonar=tests. \
+                            -Dsonar.sources=. -Dsonar.tests=. \
                             -Dsonar.inclusions="**/*.go" -Dsonar.test.inclusions="**/*_test.go" \
                             -Dsonar.go.golint.reportPath=reports/lint.txt \
                             -Dsonar.go.govet.reportPaths=reports/vet.txt \
-                            -Dsonar.test.reportPath=reports/test.xml \
-                            -Dsonar.go.coverage.reportPaths=reports/test-coverage.txt
+                            -Dsonar.go.coverage.reportPaths=reports/test-coverage.txt \
+                            -Dsonar.test.reportPath=reports/test.xml
                         """
                     }
                 }
