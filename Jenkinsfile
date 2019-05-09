@@ -25,6 +25,22 @@ pipeline {
                 }
             }
         }
+        stage('SonarQube') {
+            steps {
+                script {
+                    // sonar-scanner which don't rely on JVM
+                    def scannerHome = tool 'sonar-scanner-linux'
+                    withSonarQubeEnv('CIT SonarQube') {
+                        sh '''
+                            ${scannerHome}"/bin/sonar-scanner -Dsonar.projectKey=go-bitfow \
+                            -Dsonar.go.golint.reportPath=reports/lint.txt \
+                            -Dsonar.go.govet.reportPaths=reports/vet.txt \
+                            -Dsonar.test.reportPath=reports/test.xml
+                        '''
+                    }
+                }
+            }
+        }
         stage('Slack message') {
             steps { sh 'true' }
             post {
