@@ -33,7 +33,8 @@ pipeline {
                     withSonarQubeEnv('CIT SonarQube') {
                         sh """
                             ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitfow \
-                            -Dsonar.inclusions="**/*.go" -Dsonar.test.inclusions="**/*.go" \
+                            -Dsonar.sources=. -Dsonar=tests. \
+                            -Dsonar.inclusions="**/*.go" -Dsonar.test.inclusions="**/*_test.go" \
                             -Dsonar.go.golint.reportPath=reports/lint.txt \
                             -Dsonar.go.govet.reportPaths=reports/vet.txt \
                             -Dsonar.test.reportPath=reports/test.xml \
