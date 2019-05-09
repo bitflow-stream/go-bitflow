@@ -32,7 +32,7 @@ pipeline {
                     def scannerHome = tool 'sonar-scanner-linux'
                     withSonarQubeEnv('CIT SonarQube') {
                         sh '''
-                            ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitfow \
+                            "${scannerHome}"/bin/sonar-scanner -Dsonar.projectKey=go-bitfow \
                             -Dsonar.go.golint.reportPath=reports/lint.txt \
                             -Dsonar.go.govet.reportPaths=reports/vet.txt \
                             -Dsonar.test.reportPath=reports/test.xml
