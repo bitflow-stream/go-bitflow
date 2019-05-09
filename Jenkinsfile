@@ -11,7 +11,7 @@ pipeline {
                     sh 'go clean -i -v ./...'
                     sh 'go install -v ./...'
                     sh 'rm -rf reports && mkdir -p reports'
-                    sh 'go test -v ./... 2>&1 | go-junit-report > reports/test.xml'
+                    sh 'go test -v ./... -coverprofile=reports/test-coverage.txt 2>&1 | go-junit-report > reports/test.xml'
                     sh 'go vet ./... &> reports/vet.txt'
                     sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
             }
@@ -35,7 +35,8 @@ pipeline {
                             ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitfow \
                             -Dsonar.go.golint.reportPath=reports/lint.txt \
                             -Dsonar.go.govet.reportPaths=reports/vet.txt \
-                            -Dsonar.test.reportPath=reports/test.xml
+                            -Dsonar.test.reportPath=reports/test.xml \
+                            -Dsonar.go.coverage.reportPaths=reports/test-coverage.txt
                         """
                     }
                 }
