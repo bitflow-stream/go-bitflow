@@ -23,6 +23,9 @@ pipeline {
             }
         }
         stage('SonarQube') {
+            when {
+                branch: 'master'
+            }
             steps {
                 script {
                     // sonar-scanner which don't rely on JVM
