@@ -10,6 +10,16 @@ pipeline {
         registryCredential = 'dockerhub'
     }
     stages {
+        stage('Git') {
+            steps {
+                script {
+                    env.GIT_COMMITTER_EMAIL = sh(
+                        script: "git --no-pager show -s --format='%ae'",
+                        returnStdout: true
+                        ).trim()
+                }
+            }
+        }
         stage('Build & test') { 
             steps {
                     sh 'go clean -i -v ./...'
