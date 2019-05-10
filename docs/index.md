@@ -1,4 +1,7 @@
 [![Build Status](https://ci.bitflow.team/jenkins/buildStatus/icon?job=Bitflow%2Fgo-bitflow%2Fmaster&build=lastBuild)](http://wally144.cit.tu-berlin.de/jenkins/blue/organizations/jenkins/Bitflow%2Fgo-bitflow/activity)
+[![Code Coverage](https://ci.bitflow.team/sonarqube/api/project_badges/measure?project=go-bitflow&metric=coverage)](http://wally144.cit.tu-berlin.de/sonarqube/dashboard?id=go-bitflow)
+[![Maintainability](https://ci.bitflow.team/sonarqube/api/project_badges/measure?project=go-bitflow&metric=sqale_rating)](http://wally144.cit.tu-berlin.de/sonarqube/dashboard?id=go-bitflow)
+[![Reliability](https://ci.bitflow.team/sonarqube/api/project_badges/measure?project=go-bitflow&metric=reliability_rating)](http://wally144.cit.tu-berlin.de/sonarqube/dashboard?id=go-bitflow)
 
 # go-bitflow
 **go-bitflow** is a Go (Golang) library for sending, receiving and transforming streams of data.

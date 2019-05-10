@@ -23,21 +23,28 @@ pipeline {
             }
         }
         stage('SonarQube') {
+            when {
+                branch 'master'
+            }
             steps {
                 script {
                     // sonar-scanner which don't rely on JVM
                     def scannerHome = tool 'sonar-scanner-linux'
                     withSonarQubeEnv('CIT SonarQube') {
                         sh """
-                            ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitfow \
-                            -Dsonar.sources=. -Dsonar.tests=. \
-                            -Dsonar.inclusions="**/*.go" -Dsonar.test.inclusions="**/*_test.go" \
-                            -Dsonar.go.golint.reportPath=reports/lint.txt \
-                            -Dsonar.go.govet.reportPaths=reports/vet.txt \
-                            -Dsonar.go.coverage.reportPaths=reports/test-coverage.txt \
-                            -Dsonar.test.reportPath=reports/test.xml
+                            ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitflow \
+                                -Dsonar.sources=. -Dsonar.tests=. \
+                                -Dsonar.inclusions="**/*.go" -Dsonar.test.inclusions="**/*_test.go" \
+                                -Dsonar.exclusions="**/script/script/internal/**/*.go" \
+                                -Dsonar.go.golint.reportPath=reports/lint.txt \
+                                -Dsonar.go.govet.reportPaths=reports/vet.txt \
+                                -Dsonar.go.coverage.reportPaths=reports/test-coverage.txt \
+                                -Dsonar.test.reportPath=reports/test.xml
                         """
                     }
+                }
+                timeout(time: 30, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
