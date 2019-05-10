@@ -24,7 +24,7 @@ pipeline {
         }
         stage('SonarQube') {
             when {
-                branch: 'master'
+                branch 'master'
             }
             steps {
                 script {
