@@ -48,8 +48,8 @@ pipeline {
                         sh """
                             ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitflow \
                                 -Dsonar.sources=. -Dsonar.tests=. \
-                                -Dsonar.inclusions="**/*.go" -Dsonar.test.inclusions="**/*_test.go" \
-                                -Dsonar.exclusions="**/script/script/internal/**/*.go" \
+                                -Dsonar.inclusions="*.go" -Dsonar.test.inclusions="*_test.go" \
+                                -Dsonar.exclusions="script/script/internal/*.go" \
                                 -Dsonar.go.golint.reportPath=reports/lint.txt \
                                 -Dsonar.go.govet.reportPaths=reports/vet.txt \
                                 -Dsonar.go.coverage.reportPaths=reports/test-coverage.txt \
