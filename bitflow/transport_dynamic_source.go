@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"sort"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ var _ SampleSource = new(DynamicSource)
 const (
 	DynamicSourceDefaultFetchTimeout = 2 * time.Second
 	DynamicSourceEndpointType        = "dynamic"
+	DynamicSourceUpdateTimeParam     = "update-time"
 )
 
 type DynamicSource struct {
@@ -37,17 +39,35 @@ type DynamicSource struct {
 }
 
 func RegisterDynamicSource(factory *EndpointFactory) {
-	factory.CustomDataSources[DynamicSourceEndpointType] = func(url string) (SampleSource, error) {
+	factory.CustomDataSources[DynamicSourceEndpointType] = func(urlStr string) (SampleSource, error) {
+		u, err := url.Parse(urlStr)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to parse dynamic URL '%v': %v", urlStr, err)
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return nil, fmt.Errorf("Dynamic URL scheme must be http:// or https:// (instead of '%v')", u.Scheme)
+		}
+		query := u.Query()
+		timeout := DynamicSourceDefaultFetchTimeout
+		if val, ok := query[DynamicSourceUpdateTimeParam]; ok && len(val) >= 1 {
+			timeout, err = time.ParseDuration(val[0])
+			if err != nil {
+				return nil, fmt.Errorf("Failed to parse %v parameter '%v': %v", DynamicSourceUpdateTimeParam, val[0], err)
+			}
+			delete(query, DynamicSourceUpdateTimeParam)
+			u.RawQuery = query.Encode()
+		}
+
 		return &DynamicSource{
-			URL:          url,
+			URL:          u.String(),
 			Endpoints:    factory,
-			FetchTimeout: DynamicSourceDefaultFetchTimeout,
+			FetchTimeout: timeout,
 		}, nil
 	}
 }
 
 func (s *DynamicSource) String() string {
-	return fmt.Sprintf("Dynamic source (%v)", s.URL)
+	return fmt.Sprintf("Dynamic source (%v, updated every %v)", s.URL, s.FetchTimeout)
 }
 
 func (s *DynamicSource) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
