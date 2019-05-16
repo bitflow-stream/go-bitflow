@@ -67,8 +67,8 @@ pipeline {
         stage('Docker build') {
             steps {
                 script {
-                    normalImage = docker.build registry + ':$BRANCH_NAME-build-$BUILD_NUMBER'
-                    staticImage = docker.build registry + ':static-$BRANCH_NAME-build-$BUILD_NUMBER -f static.Dockerfile'
+                    normalImage = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER"
+                    staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f static.Dockerfile'
                 }
             }
         }
