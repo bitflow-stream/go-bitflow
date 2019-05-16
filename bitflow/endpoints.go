@@ -140,6 +140,7 @@ func RegisterDefaults(factory *EndpointFactory) {
 	RegisterBuiltinMarshallers(factory)
 	RegisterConsoleBoxOutput(factory)
 	RegisterEmptyInputOutput(factory)
+	RegisterDynamicSource(factory)
 }
 
 func RegisterEmptyInputOutput(factory *EndpointFactory) {
