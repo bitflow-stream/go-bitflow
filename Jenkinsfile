@@ -8,7 +8,8 @@ pipeline {
     environment {
         registry = 'teambitflow/go-bitflow'
         registryCredential = 'dockerhub'
-        dockerImage = '' // Empty variable must be declared here to allow passing an object between the stages.
+        normalImage = '' // Empty variable must be declared here to allow passing an object between the stages.
+        staticImage = ''
     }
     stages {
         stage('Git') {
@@ -66,7 +67,8 @@ pipeline {
         stage('Docker build') {
             steps {
                 script {
-                    dockerImage = docker.build registry + ':$BRANCH_NAME-build-$BUILD_NUMBER'
+                    normalImage = docker.build registry + ':$BRANCH_NAME-build-$BUILD_NUMBER'
+                    staticImage = docker.build registry + ':static-$BRANCH_NAME-build-$BUILD_NUMBER -f static.Dockerfile'
                 }
             }
         }
@@ -77,8 +79,10 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry('', registryCredential) {
-                        dockerImage.push("build-$BUILD_NUMBER")
-                        dockerImage.push("latest")
+                        normalImage.push("build-$BUILD_NUMBER")
+                        normalImage.push("latest")
+                        staticImage.push("static-build-$BUILD_NUMBER")
+                        staticImage.push("static")
                     }
                 }
             }
