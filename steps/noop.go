@@ -7,7 +7,7 @@ import (
 
 func RegisterNoop(b reg.ProcessorRegistry) {
 	b.RegisterStep("noop",
-		func(p *bitflow.SamplePipeline, _ map[string]string) error {
+		func(p *bitflow.SamplePipeline, _ map[string]interface{}) error {
 			p.Add(new(NoopProcessor))
 			return nil
 		},

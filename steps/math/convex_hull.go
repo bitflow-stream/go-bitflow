@@ -160,7 +160,7 @@ func BatchConvexHull(sortOnly bool) bitflow.BatchProcessingStep {
 
 func RegisterConvexHull(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("convex_hull",
-		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+		func(params map[string]interface{}) (bitflow.BatchProcessingStep, error) {
 			return BatchConvexHull(false), nil
 		},
 		"Filter out the convex hull for a two-dimensional batch of samples")
@@ -168,7 +168,7 @@ func RegisterConvexHull(b reg.ProcessorRegistry) {
 
 func RegisterConvexHullSort(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("convex_hull_sort",
-		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+		func(params map[string]interface{}) (bitflow.BatchProcessingStep, error) {
 			return BatchConvexHull(true), nil
 		},
 		"Sort a two-dimensional batch of samples in order around their center")

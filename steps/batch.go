@@ -1,6 +1,8 @@
 package steps
 
 import (
+	"time"
+
 	"github.com/bitflow-stream/go-bitflow/bitflow"
 	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
@@ -10,21 +12,20 @@ import (
 
 // TODO implement DontFlushOnHeaderChange. Requires refactoring of the BatchProcessingStep interface.
 
-func MakeBatchProcessorParameters() reg.RegisteredParameters {
-	return reg.RegisteredParameters{
-		Optional: []string{"tag", "timeout", "ignore-close", "forward-immediately"},
-		// "ignore-header-change"
-	}
-}
+// TODO "ignore-header-change"
+var BatchProcessorParameters = reg.RegisteredParameters{}.
+	Optional("tags", reg.List(reg.String()), []string{}).
+	Optional("timeout", reg.Duration(), time.Duration(0)).
+	Optional("ignore-close", reg.Bool(), false).
+	Optional("forward-immediately", reg.Bool(), false)
 
-func MakeBatchProcessor(params map[string]string) (res *bitflow.BatchProcessor, err error) {
-	res = new(bitflow.BatchProcessor)
-	if tag, ok := params["tag"]; ok {
-		res.FlushTags = []string{tag}
-	}
-	// res.DontFlushOnHeaderChange = reg.BoolParam(params, "ignore-header-change", false, true, &err)
-	res.DontFlushOnClose = reg.BoolParam(params, "ignore-close", false, true, &err)
-	res.ForwardImmediately = reg.BoolParam(params, "forward-immediately", false, true, &err)
-	res.FlushTimeout = reg.DurationParam(params, "timeout", 0, true, &err)
-	return
+func MakeBatchProcessor(params map[string]interface{}) (res *bitflow.BatchProcessor, err error) {
+	return &bitflow.BatchProcessor{
+		FlushTags:          params["tags"].([]string),
+		FlushTimeout:       params["timeout"].(time.Duration),
+		DontFlushOnClose:   params["ignore-close"].(bool),
+		ForwardImmediately: params["forward-immediately"].(bool),
+	}, nil
+
+	// DontFlushOnHeaderChange: reg.BoolParam(params, "ignore-header-change", false, true, &err),
 }

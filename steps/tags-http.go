@@ -2,10 +2,8 @@ package steps
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/bitflow-stream/go-bitflow/bitflow"
@@ -47,23 +45,18 @@ func NewStandaloneHttpTagger(pathPrefix string, endpoint string) *HttpTagger {
 }
 
 func RegisterHttpTagger(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
-		tagger := NewStandaloneHttpTagger("/api", params["listen"])
-		if defaultTagStr, ok := params["default"]; ok {
-			parts := strings.Split(defaultTagStr, ",")
-			for _, part := range parts {
-				tagParts := strings.Split(part, "=")
-				if len(tagParts) != 2 {
-					return reg.ParameterError("default", errors.New("Format must be 'key1=value1,key2=value2,...'. Received: "+defaultTagStr))
-				}
-				tagger.currentHttpTags[tagParts[0]] = tagParts[1]
-			}
+	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+		tagger := NewStandaloneHttpTagger("/api", params["listen"].(string))
+		for key, val := range params["default"].(map[string]string) {
+			tagger.currentHttpTags[key] = val
 		}
 		p.Add(tagger)
 		return nil
 	}
-
-	b.RegisterStep("listen_tags", create, "Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags", reg.RequiredParams("listen"), reg.OptionalParams("default"))
+	b.RegisterStep("listen_tags", create,
+		"Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags").
+		Required("listen", reg.String()).
+		Optional("default", reg.Map(reg.String()), nil)
 }
 
 func (tagger *HttpTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

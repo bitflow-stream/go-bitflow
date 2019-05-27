@@ -15,19 +15,18 @@ import (
 
 func RegisterTagSynchronizer(b reg.ProcessorRegistry) {
 	b.RegisterStep("synchronize_tags",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
-			var err error
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 			synchronizer := new(TagSynchronizer)
-			synchronizer.StreamIdentifierTag = params["identifier"]
-			synchronizer.ReferenceStream = params["reference"]
-			synchronizer.NumTargetStreams = reg.IntParam(params, "num", 0, false, &err)
-			if err == nil {
-				p.Add(synchronizer)
-			}
-			return err
+			synchronizer.StreamIdentifierTag = params["identifier"].(string)
+			synchronizer.ReferenceStream = params["reference"].(string)
+			synchronizer.NumTargetStreams = params["num"].(int)
+			p.Add(synchronizer)
+			return nil
 		},
-		"Split samples into streams identified by a given tag,",
-		reg.RequiredParams("identifier", "reference", "num"))
+		"Split samples into streams identified by a given tag,").
+		Required("identifier", reg.String()).
+		Required("reference", reg.String()).
+		Required("num", reg.Int())
 }
 
 // This processor copies tags from a "reference" sample stream to a number of "target" sample streams.

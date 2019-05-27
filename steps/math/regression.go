@@ -169,7 +169,7 @@ func NewLinearRegression(header *bitflow.Header, fieldNames []string) (LinearReg
 
 func RegisterLinearRegression(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("regression",
-		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+		func(params map[string]interface{}) (bitflow.BatchProcessingStep, error) {
 			return new(LinearRegressionBatchProcessor), nil
 		},
 		"Perform a linear regression analysis on a batch of samples")
@@ -177,7 +177,7 @@ func RegisterLinearRegression(b reg.ProcessorRegistry) {
 
 func RegisterLinearRegressionBruteForce(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("regression_brute",
-		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+		func(params map[string]interface{}) (bitflow.BatchProcessingStep, error) {
 			return new(LinearRegressionBruteForce), nil
 		},
 		"In a batch of samples, perform a linear regression analysis for every possible combination of metrics")

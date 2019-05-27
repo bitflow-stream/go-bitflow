@@ -15,15 +15,18 @@ import (
 
 func RegisterLoggingSteps(b reg.ProcessorRegistry) {
 	b.RegisterStep("print_header", print_header, "Print every changing header to the log")
-	b.RegisterStep("print_tags", print_tags, "When done processing, print every encountered value of the given tag", reg.RequiredParams("tag"))
-	b.RegisterStep("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered", reg.RequiredParams("tag"))
+	b.RegisterStep("print_tags", print_tags, "When done processing, print every encountered value of the given tag").
+		Required("tag", reg.String())
+	b.RegisterStep("count_tags", count_tags, "When done processing, print the number of times every value of the given tag was encountered").
+		Required("tag", reg.String())
 	b.RegisterStep("print_timerange", print_time_range, "When done processing, print the first and last encountered timestamp")
-	b.RegisterStep("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples", reg.OptionalParams("buckets"))
+	b.RegisterStep("histogram", print_timeline, "When done processing, print a timeline showing a rudimentary histogram of the number of samples").
+		Optional("buckets", reg.Int(), 10)
 	b.RegisterStep("count_invalid", count_invalid, "When done processing, print the number of invalid metric values and samples containing such values (NaN, -/+ infinity, ...)")
 	b.RegisterStep("print_common_metrics", print_common_metrics, "When done processing, print the metrics that occurred in all processed headers")
 }
 
-func print_header(p *bitflow.SamplePipeline, _ map[string]string) error {
+func print_header(p *bitflow.SamplePipeline, _ map[string]interface{}) error {
 	var checker bitflow.HeaderChecker
 	numSamples := 0
 	p.Add(&bitflow.SimpleProcessor{
@@ -117,17 +120,17 @@ func (printer *UniqueTagPrinter) String() string {
 	return res + " unique values of tag '" + printer.Tag + "'"
 }
 
-func print_tags(p *bitflow.SamplePipeline, params map[string]string) error {
-	p.Add(NewUniqueTagPrinter(params["tag"]))
+func print_tags(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+	p.Add(NewUniqueTagPrinter(params["tag"].(string)))
 	return nil
 }
 
-func count_tags(p *bitflow.SamplePipeline, params map[string]string) error {
-	p.Add(NewUniqueTagCounter(params["tag"]))
+func count_tags(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+	p.Add(NewUniqueTagCounter(params["tag"].(string)))
 	return nil
 }
 
-func print_time_range(p *bitflow.SamplePipeline, _ map[string]string) error {
+func print_time_range(p *bitflow.SamplePipeline, _ map[string]interface{}) error {
 	var (
 		from  time.Time
 		to    time.Time
@@ -158,15 +161,8 @@ func print_time_range(p *bitflow.SamplePipeline, _ map[string]string) error {
 	return nil
 }
 
-func print_timeline(p *bitflow.SamplePipeline, params map[string]string) error {
-	numBuckets := uint64(10)
-	if bucketsStr, hasBuckets := params["buckets"]; hasBuckets {
-		var err error
-		numBuckets, err = strconv.ParseUint(bucketsStr, 10, 64)
-		if err != nil {
-			return reg.ParameterError("buckets", err)
-		}
-	}
+func print_timeline(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+	numBuckets := params["buckets"].(int)
 	if numBuckets <= 0 {
 		numBuckets = 1
 	}
@@ -196,7 +192,7 @@ func print_timeline(p *bitflow.SamplePipeline, params map[string]string) error {
 			buckets := make([]int, numBuckets)
 			bucketEnds := make([]time.Time, numBuckets)
 
-			for i := uint64(0); i < numBuckets-1; i++ {
+			for i := 0; i < numBuckets-1; i++ {
 				bucketEnds[i] = from.Add(time.Duration(i+1) * bucketDuration)
 			}
 			bucketEnds[numBuckets-1] = to // No rounding error
@@ -232,7 +228,7 @@ func print_timeline(p *bitflow.SamplePipeline, params map[string]string) error {
 	return nil
 }
 
-func count_invalid(p *bitflow.SamplePipeline, _ map[string]string) error {
+func count_invalid(p *bitflow.SamplePipeline, _ map[string]interface{}) error {
 	var (
 		invalidSamples int
 		totalSamples   int
@@ -264,7 +260,7 @@ func count_invalid(p *bitflow.SamplePipeline, _ map[string]string) error {
 	return nil
 }
 
-func print_common_metrics(p *bitflow.SamplePipeline, _ map[string]string) error {
+func print_common_metrics(p *bitflow.SamplePipeline, _ map[string]interface{}) error {
 	var (
 		checker bitflow.HeaderChecker
 		common  map[string]bool

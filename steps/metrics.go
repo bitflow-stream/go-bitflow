@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/antongulenko/go-onlinestats"
@@ -116,26 +115,28 @@ func NewMetricFilter() *MetricFilter {
 
 func RegisterIncludeMetricsFilter(b reg.ProcessorRegistry) {
 	b.RegisterStep("include",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
-			filter, err := NewMetricFilter().IncludeRegex(params["m"])
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+			filter, err := NewMetricFilter().IncludeRegex(params["m"].(string))
 			if err == nil {
 				p.Add(filter)
 			}
 			return err
 		},
-		"Match every metric with the given regex and only include the matched metrics", reg.RequiredParams("m"))
+		"Match every metric with the given regex and only include the matched metrics").
+		Required("m", reg.String())
 }
 
 func RegisterExcludeMetricsFilter(b reg.ProcessorRegistry) {
 	b.RegisterStep("exclude",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
-			filter, err := NewMetricFilter().ExcludeRegex(params["m"])
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+			filter, err := NewMetricFilter().ExcludeRegex(params["m"].(string))
 			if err == nil {
 				p.Add(filter)
 			}
 			return err
 		},
-		"Match every metric with the given regex and exclude the matched metrics", reg.RequiredParams("m"))
+		"Match every metric with the given regex and exclude the matched metrics").
+		Required("m", reg.String())
 }
 
 func (filter *MetricFilter) Exclude(regex *regexp.Regexp) *MetricFilter {
@@ -228,12 +229,13 @@ func NewMetricMapper(metrics []string) *MetricMapper {
 
 func RegisterMetricMapper(b reg.ProcessorRegistry) {
 	b.RegisterStep("remap",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
-			metrics := strings.Split(params["header"], ",")
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+			metrics := strings.Split(params["header"].(string), ",")
 			p.Add(NewMetricMapper(metrics))
 			return nil
 		},
-		"Change (reorder) the header to the given comma-separated list of metrics", reg.RequiredParams("header"))
+		"Change (reorder) the header to the given comma-separated list of metrics").
+		Required("header", reg.String())
 }
 
 func (mapper *MetricMapper) constructIndices(header *bitflow.Header) ([]int, []string) {
@@ -322,16 +324,11 @@ func NewMetricVarianceFilter(minimumWeightedStddev float64) *AbstractBatchMetric
 
 func RegisterVarianceMetricsFilter(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("filter_variance",
-		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
-			variance, err := strconv.ParseFloat(params["min"], 64)
-			if err != nil {
-				return nil, reg.ParameterError("min", err)
-			} else {
-				return NewMetricVarianceFilter(variance), nil
-			}
+		func(params map[string]interface{}) (bitflow.BatchProcessingStep, error) {
+			return NewMetricVarianceFilter(params["min"].(float64)), nil
 		},
-		"Filter out the metrics with a variance lower than the given threshold (based on the weighted stddev of the population, stddev/mean)",
-		reg.RequiredParams("min"))
+		"Filter out the metrics with a variance lower than the given threshold (based on the weighted stddev of the population, stddev/mean)").
+		Required("min", reg.Float())
 }
 
 type MetricRenamer struct {
@@ -355,14 +352,10 @@ func NewMetricRenamer(regexes []*regexp.Regexp, replacements []string) *MetricRe
 
 func RegisterMetricRenamer(b reg.ProcessorRegistry) {
 	b.RegisterStep("rename",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
-			if len(params) == 0 {
-				return errors.New("Need at least one regex=replacement parameter")
-			}
-
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 			var regexes []*regexp.Regexp
 			var replacements []string
-			for regex, replacement := range params {
+			for regex, replacement := range params["metrics"].(map[string]string) {
 				r, err := regexp.Compile(regex)
 				if err != nil {
 					return reg.ParameterError(regex, err)
@@ -373,8 +366,8 @@ func RegisterMetricRenamer(b reg.ProcessorRegistry) {
 			p.Add(NewMetricRenamer(regexes, replacements))
 			return nil
 		},
-		"Find the keys (regexes) in every metric name and replace the matched parts with the given values",
-		reg.VariableParams())
+		"Find the keys (regexes) in every metric name and replace the matched parts with the given values").
+		Required("metrics", reg.Map(reg.String()))
 }
 
 func (r *MetricRenamer) String() string {

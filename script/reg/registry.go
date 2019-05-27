@@ -2,7 +2,6 @@ package reg
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/bitflow-stream/go-bitflow/bitflow"
 	"github.com/bitflow-stream/go-bitflow/bitflow/fork"
@@ -12,15 +11,19 @@ const (
 	MultiplexForkName = "multiplex"
 )
 
-type AnalysisFunc func(pipeline *bitflow.SamplePipeline, params map[string]string) error
+type AnalysisFunc func(pipeline *bitflow.SamplePipeline, params map[string]interface{}) error
 
-type BatchStepFunc func(params map[string]string) (bitflow.BatchProcessingStep, error)
+type BatchStepFunc func(params map[string]interface{}) (bitflow.BatchProcessingStep, error)
 
-type ForkFunc func(subpiplines []Subpipeline, params map[string]string) (fork.Distributor, error)
+type ForkFunc func(subpiplines []Subpipeline, params map[string]interface{}) (fork.Distributor, error)
 
-type RegisteredParameters struct {
-	Required []string
-	Optional []string
+type RegisteredParameters map[string]RegisteredParameter
+
+type RegisteredParameter struct {
+	Name     string
+	Parser   ParameterParser
+	Default  interface{}
+	Required bool
 }
 
 type RegisteredStep struct {
@@ -57,187 +60,167 @@ type ProcessorRegistry struct {
 type ProcessorRegistryImpl struct {
 	Endpoints bitflow.EndpointFactory
 
-	stepRegistry  map[string]RegisteredPipelineStep
-	batchRegistry map[string]RegisteredBatchStep
-	forkRegistry  map[string]RegisteredFork
+	stepRegistry  map[string]*RegisteredPipelineStep
+	batchRegistry map[string]*RegisteredBatchStep
+	forkRegistry  map[string]*RegisteredFork
 }
 
 func NewProcessorRegistry() ProcessorRegistry {
 	reg := ProcessorRegistry{
 		ProcessorRegistryImpl: &ProcessorRegistryImpl{
 			Endpoints:     *bitflow.NewEndpointFactory(),
-			stepRegistry:  make(map[string]RegisteredPipelineStep),
-			batchRegistry: make(map[string]RegisteredBatchStep),
-			forkRegistry:  make(map[string]RegisteredFork),
+			stepRegistry:  make(map[string]*RegisteredPipelineStep),
+			batchRegistry: make(map[string]*RegisteredBatchStep),
+			forkRegistry:  make(map[string]*RegisteredFork),
 		},
 	}
 	RegisterMultiplexFork(reg)
 	return reg
 }
 
-func (r *ProcessorRegistryImpl) GetStep(name string) (analysisProcessor RegisteredPipelineStep, ok bool) {
-	analysisProcessor, ok = r.stepRegistry[name]
-	return
+func (r *ProcessorRegistryImpl) GetStep(name string) *RegisteredPipelineStep {
+	return r.stepRegistry[name]
 }
 
-func (r *ProcessorRegistryImpl) GetFork(name string) (fork RegisteredFork, ok bool) {
-	fork, ok = r.forkRegistry[name]
-	return
+func (r *ProcessorRegistryImpl) GetFork(name string) *RegisteredFork {
+	return r.forkRegistry[name]
 }
 
-func (r *ProcessorRegistryImpl) GetBatchStep(name string) (batchStep RegisteredBatchStep, ok bool) {
-	batchStep, ok = r.batchRegistry[name]
-	return
+func (r *ProcessorRegistryImpl) GetBatchStep(name string) *RegisteredBatchStep {
+	return r.batchRegistry[name]
 }
 
-type ParameterOption func(*RegisteredParameters)
+func (r *RegisteredStep) Param(name string, parser ParameterParser, defaultValue interface{}, isRequired bool) *RegisteredStep {
+	r.Params.Param(name, parser, defaultValue, isRequired)
+	return r
+}
 
-func RequiredParams(params ...string) ParameterOption {
-	return func(opts *RegisteredParameters) {
-		opts.Required = append(opts.Required, params...)
+func (r *RegisteredStep) Optional(name string, parser ParameterParser, defaultValue interface{}) *RegisteredStep {
+	r.Params.Optional(name, parser, defaultValue)
+	return r
+}
+
+func (r *RegisteredStep) Required(name string, parser ParameterParser) *RegisteredStep {
+	r.Params.Required(name, parser)
+	return r
+}
+
+func (params RegisteredParameters) Param(name string, parser ParameterParser, defaultValue interface{}, isRequired bool) RegisteredParameters {
+	if _, ok := params[name]; ok {
+		panic(fmt.Sprintf("Parameter %v already registered", name))
 	}
+	params[name] = RegisteredParameter{
+		Name:     name,
+		Parser:   parser,
+		Default:  defaultValue,
+		Required: isRequired,
+	}
+	return params
 }
 
-func OptionalParams(params ...string) ParameterOption {
-	return func(opts *RegisteredParameters) {
-		opts.Optional = append(opts.Optional, params...)
-	}
+func (params RegisteredParameters) Optional(name string, parser ParameterParser, defaultValue interface{}) RegisteredParameters {
+	return params.Param(name, parser, defaultValue, false)
 }
 
-func VariableParams() ParameterOption {
-	return func(opts *RegisteredParameters) {
-		// Two empty (but non-nil) slices are a marker, that this step accepts any parameters without validation
-		opts.Optional = []string{}
-		opts.Required = []string{}
-	}
+func (params RegisteredParameters) Required(name string, parser ParameterParser) RegisteredParameters {
+	return params.Param(name, parser, nil, true)
 }
 
-func applyParameterOptions(options []ParameterOption) RegisteredParameters {
-	opts := RegisteredParameters{}
-	for _, o := range options {
-		o(&opts)
-	}
-	return opts
-}
-
-func (r *ProcessorRegistryImpl) RegisterStep(name string, setupPipeline AnalysisFunc, description string, options ...ParameterOption) {
-	if _, ok := r.stepRegistry[name]; ok {
-		panic("Analysis already registered: " + name)
-	}
-	params := applyParameterOptions(options)
-	r.stepRegistry[name] = RegisteredPipelineStep{
-		RegisteredStep: RegisteredStep{
-			Name:        name,
-			Description: description,
-			Params:      params,
-		},
-		Func: setupPipeline,
-	}
-}
-
-func (r *ProcessorRegistryImpl) RegisterFork(name string, createFork ForkFunc, description string, options ...ParameterOption) {
-	if _, ok := r.forkRegistry[name]; ok {
-		panic("Fork already registered: " + name)
-	}
-	opts := applyParameterOptions(options)
-	params := RegisteredParameters{opts.Required, opts.Optional}
-	r.forkRegistry[name] = RegisteredFork{RegisteredStep{name, description, params}, createFork}
-}
-
-func (r *ProcessorRegistryImpl) RegisterBatchStep(name string, createBatchStep BatchStepFunc, description string, options ...ParameterOption) {
-	if _, ok := r.batchRegistry[name]; ok {
-		panic("Batch step already registered: " + name)
-	}
-	opts := applyParameterOptions(options)
-	params := RegisteredParameters{opts.Required, opts.Optional}
-	r.batchRegistry[name] = RegisteredBatchStep{RegisteredStep{name, description, params}, createBatchStep}
-}
-
-func (params RegisteredParameters) AcceptsVariableParameters() bool {
-	return params.Required != nil && params.Optional != nil && len(params.Required) == 0 && len(params.Optional) == 0
-}
-
-func (params RegisteredParameters) Verify(input map[string]string) error {
-	if params.AcceptsVariableParameters() {
-		return nil
-	}
-	checked := map[string]bool{}
-	for _, opt := range params.Optional {
-		checked[opt] = true
-	}
-	for _, req := range params.Required {
-		if _, ok := input[req]; !ok {
-			return fmt.Errorf("Missing Required parameter '%v'", req)
+func (params RegisteredParameters) ParsePrimitives(stringParams map[string]string) (map[string]interface{}, error) {
+	result := make(map[string]interface{}, len(stringParams))
+	for key, val := range stringParams {
+		param, ok := params[key]
+		if !ok {
+			return nil, fmt.Errorf("Unexpected parameter %v = %v", key, val)
 		}
-		checked[req] = true
+		var err error
+		result[key], err = param.Parser.ParsePrimitive(val)
+		if err != nil {
+			return nil, err
+		}
 	}
-	for key := range input {
-		if _, ok := checked[key]; !ok {
-			return fmt.Errorf("Unexpected parameter '%v'", key)
+	return result, nil
+}
+
+// Check if required parameters are defined and fill defaults for optional parameters
+func (params RegisteredParameters) ValidateAndSetDefaults(parsedValues map[string]interface{}) error {
+	for key, param := range params {
+		if _, paramDefined := parsedValues[key]; !paramDefined {
+			if param.Required {
+				return fmt.Errorf("Missing required parameter '%v' (type %v)", key, param.Parser)
+			} else {
+				parsedValues[key] = param.Default
+			}
+		}
+		if val := parsedValues[key]; !param.Parser.CorrectType(val) {
+			return fmt.Errorf("Value for parameter '%v' (type %v) is of unexpected type %T: %v", key, param.Parser, val, val)
 		}
 	}
 	return nil
 }
 
-type AvailableProcessor struct {
-	Name           string
-	IsFork         bool
-	Description    string
-	RequiredParams []string
-	OptionalParams []string
-}
-
-type AvailableProcessorSlice []AvailableProcessor
-
-func (slice AvailableProcessorSlice) Len() int {
-	return len(slice)
-}
-
-func (slice AvailableProcessorSlice) Less(i, j int) bool {
-	// Sort the forks after the regular processing steps
-	return (!slice[i].IsFork && slice[j].IsFork) || slice[i].Name < slice[j].Name
-}
-
-func (slice AvailableProcessorSlice) Swap(i, j int) {
-	slice[i], slice[j] = slice[j], slice[i]
-}
-
-func (r ProcessorRegistryImpl) GetAvailableProcessors() AvailableProcessorSlice {
-	all := make(AvailableProcessorSlice, 0, len(r.stepRegistry))
-	for _, step := range r.stepRegistry {
-		if step.Func == nil {
-			continue
-		}
-		all = append(all, AvailableProcessor{
-			Name:           step.Name,
-			IsFork:         false,
-			Description:    step.Description,
-			RequiredParams: step.Params.Required,
-			OptionalParams: step.Params.Optional,
-		})
+func (r *RegisteredParameter) String() string {
+	defaultStr := ""
+	if r.Default != nil {
+		defaultStr = fmt.Sprintf(", default: %v", r.Default)
 	}
-	for _, registeredFork := range r.forkRegistry {
-		if registeredFork.Func == nil {
-			continue
-		}
-		all = append(all, AvailableProcessor{
-			Name:           registeredFork.Name,
-			IsFork:         true,
-			Description:    registeredFork.Description,
-			RequiredParams: registeredFork.Params.Required,
-			OptionalParams: registeredFork.Params.Optional,
-		})
-	}
-	sort.Sort(all)
-	return all
+	return fmt.Sprintf("%v (%v%v)", r.Name, r.Parser, defaultStr)
 }
 
-// default Fork
+func (r *ProcessorRegistryImpl) RegisterStep(name string, setupPipeline AnalysisFunc, description string) *RegisteredStep {
+	if _, ok := r.stepRegistry[name]; ok {
+		panic("Analysis already registered: " + name)
+	}
+	newStep := &RegisteredPipelineStep{
+		RegisteredStep: RegisteredStep{
+			Name:        name,
+			Description: description,
+			Params:      make(RegisteredParameters),
+		},
+		Func: setupPipeline,
+	}
+	r.stepRegistry[name] = newStep
+	return &newStep.RegisteredStep
+}
+
+func (r *ProcessorRegistryImpl) RegisterFork(name string, createFork ForkFunc, description string) *RegisteredStep {
+	if _, ok := r.forkRegistry[name]; ok {
+		panic("Fork already registered: " + name)
+	}
+	newFork := &RegisteredFork{
+		RegisteredStep: RegisteredStep{
+			Name:        name,
+			Description: description,
+			Params:      make(RegisteredParameters),
+		},
+		Func: createFork,
+	}
+	r.forkRegistry[name] = newFork
+	return &newFork.RegisteredStep
+}
+
+func (r *ProcessorRegistryImpl) RegisterBatchStep(name string, createBatchStep BatchStepFunc, description string) *RegisteredStep {
+	if _, ok := r.batchRegistry[name]; ok {
+		panic("Batch step already registered: " + name)
+	}
+	newBatchStep := &RegisteredBatchStep{
+		RegisteredStep: RegisteredStep{
+			Name:        name,
+			Description: description,
+			Params:      make(RegisteredParameters),
+		},
+		Func: createBatchStep,
+	}
+	r.batchRegistry[name] = newBatchStep
+	return &newBatchStep.RegisteredStep
+}
+
 func RegisterMultiplexFork(builder ProcessorRegistry) {
-	builder.RegisterFork(MultiplexForkName, createMultiplexFork, "Basic fork forwarding samples to all subpipelines. Subpipeline keys are ignored.")
+	builder.RegisterFork(MultiplexForkName, createMultiplexFork,
+		"Basic fork forwarding samples to all subpipelines. Subpipeline keys are ignored.")
 }
 
-func createMultiplexFork(subpipelines []Subpipeline, _ map[string]string) (fork.Distributor, error) {
+func createMultiplexFork(subpipelines []Subpipeline, _ map[string]interface{}) (fork.Distributor, error) {
 	var res fork.MultiplexDistributor
 	res.Subpipelines = make([]*bitflow.SamplePipeline, len(subpipelines))
 	var err error

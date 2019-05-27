@@ -10,23 +10,25 @@ import (
 
 func RegisterDropErrorsStep(b reg.ProcessorRegistry) {
 	b.RegisterStep("drop_errors",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
-			var err error
-			logDebug := reg.BoolParam(params, "log-debug", false, true, &err)
-			logInfo := reg.BoolParam(params, "log-info", false, true, &err)
-			logWarn := reg.BoolParam(params, "log-warn", false, true, &err)
-			logError := reg.BoolParam(params, "log", !(logDebug || logInfo || logWarn), true, &err) // Enable by default if no other log level was selected
-			if err == nil {
-				p.Add(&DropErrorsProcessor{
-					LogError:   logError,
-					LogWarning: logWarn,
-					LogInfo:    logInfo,
-					LogDebug:   logDebug,
-				})
-			}
-			return err
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+			logDebug := params["log-debug"].(bool)
+			logInfo := params["log-info"].(bool)
+			logWarn := params["log-warn"].(bool)
+			logError := params["log"].(bool) || !(logDebug || logInfo || logWarn) // Enable by default if no other log level was selected
+
+			p.Add(&DropErrorsProcessor{
+				LogError:   logError,
+				LogWarning: logWarn,
+				LogInfo:    logInfo,
+				LogDebug:   logDebug,
+			})
+			return nil
 		},
-		"All errors of subsequent processing steps are only logged and not forwarded to the steps before. By default, the errors are logged (can be disabled).", reg.OptionalParams("log", "log-debug", "log-info", "log-warn"))
+		"All errors of subsequent processing steps are only logged and not forwarded to the steps before. By default, the errors are logged (can be disabled).").
+		Optional("log", reg.Bool(), false).
+		Optional("log-debug", reg.Bool(), false).
+		Optional("log-info", reg.Bool(), false).
+		Optional("log-warn", reg.Bool(), false)
 }
 
 type DropErrorsProcessor struct {

@@ -17,23 +17,25 @@ type ExpressionProcessor struct {
 
 func RegisterExpression(b reg.ProcessorRegistry) {
 	b.RegisterStep("do",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 			return add_expression(p, params, false)
 		},
-		"Execute the given expression on every sample", reg.RequiredParams("expr"))
+		"Execute the given expression on every sample").
+		Required("expr", reg.String())
 }
 
 func RegisterFilterExpression(b reg.ProcessorRegistry) {
 	b.RegisterStep("filter",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 			return add_expression(p, params, true)
 		},
-		"Filter the samples based on a boolean expression", reg.RequiredParams("expr"))
+		"Filter the samples based on a boolean expression").
+		Required("expr", reg.String())
 }
 
-func add_expression(p *bitflow.SamplePipeline, params map[string]string, filter bool) error {
+func add_expression(p *bitflow.SamplePipeline, params map[string]interface{}, filter bool) error {
 	proc := &ExpressionProcessor{Filter: filter}
-	err := proc.AddExpression(params["expr"])
+	err := proc.AddExpression(params["expr"].(string))
 	if err == nil {
 		p.Add(proc)
 	}
