@@ -10,9 +10,9 @@ import (
 
 func RegisterDuplicateTimestampFilter(b reg.ProcessorRegistry) {
 	b.RegisterStep("filter-duplicate-timestamps",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 			var err error
-			interval := reg.DurationParam(params, "interval", 0, false, &err)
+			interval := params["interval"].(time.Duration)
 			if err != nil {
 				return err
 			}
@@ -30,5 +30,6 @@ func RegisterDuplicateTimestampFilter(b reg.ProcessorRegistry) {
 			}
 			p.Add(processor)
 			return nil
-		}, "Filter samples that follow each other too closely", reg.RequiredParams("interval"))
+		}, "Filter samples that follow each other too closely").
+		Required("interval", reg.Duration())
 }

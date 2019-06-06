@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 )
 
 type RandomSampleGenerator struct {
@@ -27,6 +27,19 @@ type RandomSampleGenerator struct {
 }
 
 var _ bitflow.SampleSource = new(RandomSampleGenerator)
+
+var SampleGeneratorParameters = reg.RegisteredParameters{}.
+	Required("interval", reg.Duration()).
+	Required("error", reg.Int()).
+	Required("close", reg.Int()).
+	Required("offset", reg.Duration())
+
+func (p *RandomSampleGenerator) SetValues(params map[string]interface{}) {
+	p.Interval = params["interval"].(time.Duration)
+	p.ErrorAfter = params["error"].(int)
+	p.CloseAfter = params["close"].(int)
+	p.TimeOffset = params["offset"].(time.Duration)
+}
 
 func (p *RandomSampleGenerator) String() string {
 	return fmt.Sprintf("Random Samples (every %v, error after %v, close after %v, time offset %v)", p.Interval, p.ErrorAfter, p.CloseAfter, p.TimeOffset)
@@ -76,34 +89,4 @@ func (p *RandomSampleGenerator) generate(stopper golib.StopChan) error {
 	}
 	stopper.WaitTimeout(p.Interval)
 	return nil
-}
-
-func (p *RandomSampleGenerator) ParseParams(paramsIn map[string]string) error {
-	// Make copy to avoid modifying value passed in from outside
-	params := make(map[string]string, len(paramsIn))
-	for key, value := range paramsIn {
-		params[key] = value
-	}
-
-	var err error
-	if intervalStr, ok := params["interval"]; err == nil && ok {
-		p.Interval, err = time.ParseDuration(intervalStr)
-		delete(params, "interval")
-	}
-	if errorStr, ok := params["error"]; err == nil && ok {
-		p.ErrorAfter, err = strconv.Atoi(errorStr)
-		delete(params, "error")
-	}
-	if closeStr, ok := params["close"]; err == nil && ok {
-		p.CloseAfter, err = strconv.Atoi(closeStr)
-		delete(params, "close")
-	}
-	if offsetStr, ok := params["offset"]; err == nil && ok {
-		p.TimeOffset, err = time.ParseDuration(offsetStr)
-		delete(params, "offset")
-	}
-	if err == nil && len(params) > 0 {
-		err = fmt.Errorf("Unexpected parameters: %v", params)
-	}
-	return err
 }

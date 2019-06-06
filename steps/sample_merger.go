@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"fmt"
 	"math"
-	"strconv"
 	"sync"
 	"time"
 
@@ -34,19 +33,11 @@ type SynchronizedStreamMerger struct {
 }
 
 func RegisterSubpipelineStreamMerger(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
-		intervalStr := params["interval"]
-		tag := params["tag"]
-		numStr := params["num"]
-		debug := params["debug"] == "true"
-		num, err := strconv.Atoi(numStr)
-		if err != nil {
-			return reg.ParameterError("num", err)
-		}
-		interval, err := time.ParseDuration(intervalStr)
-		if err != nil {
-			return reg.ParameterError("interval", err)
-		}
+	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+		tag := params["tag"].(string)
+		debug := params["debug"].(bool)
+		num := params["num"].(int)
+		interval := params["interval"].(time.Duration)
 
 		merger := &SynchronizedStreamMerger{
 			MergeTag:           tag,
@@ -90,7 +81,12 @@ func RegisterSubpipelineStreamMerger(b reg.ProcessorRegistry) {
 		return nil
 	}
 
-	b.RegisterStep("merge_streams", create, "Merge multiple streams, identified by a given tag. Output samples are generated in a given interval, all incoming metrics are averaged within that window, incoming metric names are prefixes with the respective tag value.", reg.RequiredParams("tag", "num", "interval"))
+	b.RegisterStep("merge_streams", create,
+		"Merge multiple streams, identified by a given tag. Output samples are generated in a given interval, all incoming metrics are averaged within that window, incoming metric names are prefixes with the respective tag value.").
+		Required("tag", reg.String()).
+		Required("num", reg.Int()).
+		Required("interval", reg.Duration()).
+		Optional("debug", reg.Bool(), false)
 }
 
 func (p *SynchronizedStreamMerger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

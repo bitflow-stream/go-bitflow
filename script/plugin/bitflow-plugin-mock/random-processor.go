@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"strconv"
 
 	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
@@ -33,26 +32,4 @@ func (p *MockSampleProcessor) Sample(sample *bitflow.Sample, header *bitflow.Hea
 	}
 	p.samplesGenerated++
 	return p.NoopProcessor.Sample(sample, header)
-}
-
-func (p *MockSampleProcessor) ParseParams(paramsIn map[string]string) error {
-	// Make copy to avoid modifying value passed in from outside
-	params := make(map[string]string, len(paramsIn))
-	for key, value := range paramsIn {
-		params[key] = value
-	}
-
-	var err error
-	if intervalStr, ok := params["print"]; err == nil && ok {
-		p.PrintModulo, err = strconv.Atoi(intervalStr)
-		delete(params, "print")
-	}
-	if errorStr, ok := params["error"]; err == nil && ok {
-		p.ErrorAfter, err = strconv.Atoi(errorStr)
-		delete(params, "error")
-	}
-	if err == nil && len(params) > 0 {
-		err = fmt.Errorf("Unexpected parameters: %v", params)
-	}
-	return err
 }

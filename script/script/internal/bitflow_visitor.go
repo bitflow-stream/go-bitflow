@@ -22,6 +22,21 @@ type BitflowVisitor interface {
 	// Visit a parse tree produced by BitflowParser#parameter.
 	VisitParameter(ctx *ParameterContext) interface{}
 
+	// Visit a parse tree produced by BitflowParser#parameterValue.
+	VisitParameterValue(ctx *ParameterValueContext) interface{}
+
+	// Visit a parse tree produced by BitflowParser#primitiveValue.
+	VisitPrimitiveValue(ctx *PrimitiveValueContext) interface{}
+
+	// Visit a parse tree produced by BitflowParser#listValue.
+	VisitListValue(ctx *ListValueContext) interface{}
+
+	// Visit a parse tree produced by BitflowParser#mapValue.
+	VisitMapValue(ctx *MapValueContext) interface{}
+
+	// Visit a parse tree produced by BitflowParser#mapValueElement.
+	VisitMapValueElement(ctx *MapValueElementContext) interface{}
+
 	// Visit a parse tree produced by BitflowParser#parameterList.
 	VisitParameterList(ctx *ParameterListContext) interface{}
 

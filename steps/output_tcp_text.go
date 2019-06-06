@@ -19,7 +19,10 @@ func RegisterGraphiteOutput(b reg.ProcessorRegistry) {
 			return err
 		},
 	}
-	b.RegisterStep("graphite", factory.createTcpOutput, "Send metrics and/or tags to the given Graphite endpoint. Required parameter: 'target'. Optional: 'prefix'")
+	b.RegisterStep("graphite", factory.createTcpOutput, "Send metrics and/or tags to the given Graphite endpoint.").
+		Required("target", reg.String()).
+		Optional("prefix", reg.String(), "").
+		Optional("endpoint-config", reg.Map(reg.String()), map[string]string{})
 }
 
 func RegisterOpentsdbOutput(b reg.ProcessorRegistry) {
@@ -56,8 +59,10 @@ func RegisterOpentsdbOutput(b reg.ProcessorRegistry) {
 			return err
 		},
 	}
-	b.RegisterStep("opentsdb", factory.createTcpOutput, "Send metrics and/or tags to the given OpenTSDB endpoint.",
-		reg.VariableParams())
+	b.RegisterStep("opentsdb", factory.createTcpOutput, "Send metrics and/or tags to the given OpenTSDB endpoint.").
+		Required("target", reg.String()).
+		Optional("prefix", reg.String(), "").
+		Optional("endpoint-config", reg.Map(reg.String()), map[string]string{})
 }
 
 var _ bitflow.Marshaller = new(SimpleTextMarshaller)
@@ -68,20 +73,12 @@ type SimpleTextMarshallerFactory struct {
 	WriteValue  func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error
 }
 
-func (f *SimpleTextMarshallerFactory) createTcpOutput(p *bitflow.SamplePipeline, params map[string]string) error {
-	target, hasTarget := params["target"]
-	if !hasTarget {
-		return reg.ParameterError("target", fmt.Errorf("Missing required parameter"))
-	}
-	prefix := params["prefix"]
-	delete(params, "target")
-	delete(params, "prefix")
-
-	sink, err := _make_tcp_output(params)
+func (f *SimpleTextMarshallerFactory) createTcpOutput(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+	sink, err := _make_tcp_output(params["endpoint-config"].(map[string]string))
 	if err == nil {
-		sink.Endpoint = target
+		sink.Endpoint = params["target"].(string)
 		sink.SetMarshaller(&SimpleTextMarshaller{
-			MetricPrefix: prefix,
+			MetricPrefix: params["prefix"].(string),
 			Description:  f.Description,
 			NameFixer:    f.NameFixer,
 			WriteValue:   f.WriteValue,

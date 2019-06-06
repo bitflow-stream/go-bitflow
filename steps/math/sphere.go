@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"strconv"
 	"sync"
 
 	"github.com/antongulenko/golib"
@@ -15,45 +14,29 @@ import (
 )
 
 func RegisterSphere(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
-		var err error
-		points, err := strconv.Atoi(params["points"])
-		if err != nil {
-			return reg.ParameterError("points", err)
-		}
-		seed := int64(1)
-		if seedStr, ok := params["seed"]; ok {
-			seed, err = strconv.ParseInt(seedStr, 10, 64)
-			if err != nil {
-				return reg.ParameterError("seed", err)
-			}
-		}
-		radiusStr, hasRadius := params["radius"]
-		radiusMetricStr, hasRadiusMetric := params["radius_metric"]
+	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+		radius := params["radius"].(float64)
+		hasRadius := radius > 0
+		radiusMetric := params["radius_metric"].(int)
+		hasRadiusMetric := radiusMetric > 0
 		if hasRadius == hasRadiusMetric {
 			return errors.New("Need either 'radius' or 'radius_metric' parameter")
 		}
 
-		sphere := &SpherePoints{
-			RandomSeed: seed,
-			NumPoints:  points,
-		}
-		if hasRadius {
-			sphere.RadiusMetric = -1
-			sphere.Radius, err = strconv.ParseFloat(radiusStr, 64)
-			if err != nil {
-				return reg.ParameterError("radius", err)
-			}
-		} else {
-			sphere.RadiusMetric, err = strconv.Atoi(radiusMetricStr)
-			if err != nil {
-				return reg.ParameterError("radius_metric", err)
-			}
-		}
-		p.Add(sphere)
+		p.Add(&SpherePoints{
+			RandomSeed:   int64(params["seed"].(int)),
+			NumPoints:    params["points"].(int),
+			RadiusMetric: radiusMetric,
+			Radius:       radius,
+		})
 		return nil
 	}
-	b.RegisterStep("sphere", create, "Treat every sample as the center of a multi-dimensional sphere, and output a number of random points on the hull of the resulting sphere. The radius can either be fixed or given as one of the metrics", reg.RequiredParams("points"), reg.OptionalParams("seed", "radius", "radius_metric"))
+	b.RegisterStep("sphere", create,
+		"Treat every sample as the center of a multi-dimensional sphere, and output a number of random points on the hull of the resulting sphere. The radius can either be fixed or given as one of the metrics").
+		Required("points", reg.Int()).
+		Optional("seed", reg.Int(), 1).
+		Optional("radius", reg.Float(), 0).
+		Optional("radius_metric", reg.Int(), -1)
 }
 
 type SpherePoints struct {

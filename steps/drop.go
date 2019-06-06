@@ -7,7 +7,7 @@ import (
 
 func RegisterDrop(b reg.ProcessorRegistry) {
 	b.RegisterStep("drop",
-		func(p *bitflow.SamplePipeline, _ map[string]string) error {
+		func(p *bitflow.SamplePipeline, _ map[string]interface{}) error {
 			p.Add(&bitflow.SimpleProcessor{
 				Description: "Drop all samples",
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {

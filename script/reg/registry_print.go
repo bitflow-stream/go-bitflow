@@ -3,9 +3,9 @@ package reg
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"sort"
-	"strings"
 )
 
 type ProcessingSteps []JsonProcessingStep
@@ -24,42 +24,60 @@ func (slice ProcessingSteps) Swap(i, j int) {
 }
 
 type JsonProcessingStep struct {
-	Name           string
-	IsFork         bool
-	IsBatch        bool
-	Description    string
-	RequiredParams []string
-	OptionalParams []string
-	VariableParams bool
+	Name        string
+	IsFork      bool
+	IsBatch     bool
+	Description string
+	Params      []JsonParameter
+}
+
+type JsonParameter struct {
+	Name     string
+	Type     string
+	Default  interface{}
+	Required bool
 }
 
 func makeJsonProcessingStep(reg RegisteredStep, batch, fork bool) JsonProcessingStep {
 	return JsonProcessingStep{
-		Name:           reg.Name,
-		Description:    reg.Description,
-		IsFork:         fork,
-		IsBatch:        batch,
-		RequiredParams: reg.Params.Required,
-		OptionalParams: reg.Params.Optional,
-		VariableParams: reg.Params.AcceptsVariableParameters(),
+		Name:        reg.Name,
+		Description: reg.Description,
+		IsFork:      fork,
+		IsBatch:     batch,
+		Params:      makeJsonParameters(reg.Params),
 	}
+}
+
+func makeJsonParameters(params RegisteredParameters) []JsonParameter {
+	result := make([]JsonParameter, 0, len(params))
+	for _, param := range params {
+		result = append(result, JsonParameter{
+			Name:     param.Name,
+			Type:     param.Parser.String(),
+			Default:  param.Default,
+			Required: param.Required,
+		})
+	}
+	return result
 }
 
 func (s *JsonProcessingStep) formatTo(buf *bytes.Buffer) {
 	buf.WriteString("\n - ")
 	buf.WriteString(s.Name)
-	buf.WriteString(":\n      Description: ")
-	buf.WriteString(s.Description)
-	if len(s.RequiredParams) > 0 {
-		buf.WriteString("\n      Required parameters: ")
-		buf.WriteString(strings.Join(s.RequiredParams, ", "))
+	if s.Description != "" {
+		buf.WriteString(":\n      Description: ")
+		buf.WriteString(s.Description)
 	}
-	if len(s.OptionalParams) > 0 {
-		buf.WriteString("\n      Optional parameters: ")
-		buf.WriteString(strings.Join(s.OptionalParams, ", "))
-	}
-	if s.VariableParams {
-		buf.WriteString("\n      Accepts variable parameters")
+	if len(s.Params) > 0 {
+		buf.WriteString("\n      Parameters:")
+		for _, param := range s.Params {
+			buf.WriteString("\n          ")
+			requiredOrOptional := "required"
+			if !param.Required {
+				requiredOrOptional = fmt.Sprintf("optional, default: %v", param.Default)
+			}
+			fmt.Fprintf(buf, "\n          %v (%v): %v", param.Name, requiredOrOptional, param.Type)
+		}
 	}
 }
 

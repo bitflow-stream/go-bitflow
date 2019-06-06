@@ -50,6 +50,36 @@ func (s *BaseBitflowListener) EnterParameter(ctx *ParameterContext) {}
 // ExitParameter is called when production parameter is exited.
 func (s *BaseBitflowListener) ExitParameter(ctx *ParameterContext) {}
 
+// EnterParameterValue is called when production parameterValue is entered.
+func (s *BaseBitflowListener) EnterParameterValue(ctx *ParameterValueContext) {}
+
+// ExitParameterValue is called when production parameterValue is exited.
+func (s *BaseBitflowListener) ExitParameterValue(ctx *ParameterValueContext) {}
+
+// EnterPrimitiveValue is called when production primitiveValue is entered.
+func (s *BaseBitflowListener) EnterPrimitiveValue(ctx *PrimitiveValueContext) {}
+
+// ExitPrimitiveValue is called when production primitiveValue is exited.
+func (s *BaseBitflowListener) ExitPrimitiveValue(ctx *PrimitiveValueContext) {}
+
+// EnterListValue is called when production listValue is entered.
+func (s *BaseBitflowListener) EnterListValue(ctx *ListValueContext) {}
+
+// ExitListValue is called when production listValue is exited.
+func (s *BaseBitflowListener) ExitListValue(ctx *ListValueContext) {}
+
+// EnterMapValue is called when production mapValue is entered.
+func (s *BaseBitflowListener) EnterMapValue(ctx *MapValueContext) {}
+
+// ExitMapValue is called when production mapValue is exited.
+func (s *BaseBitflowListener) ExitMapValue(ctx *MapValueContext) {}
+
+// EnterMapValueElement is called when production mapValueElement is entered.
+func (s *BaseBitflowListener) EnterMapValueElement(ctx *MapValueElementContext) {}
+
+// ExitMapValueElement is called when production mapValueElement is exited.
+func (s *BaseBitflowListener) ExitMapValueElement(ctx *MapValueElementContext) {}
+
 // EnterParameterList is called when production parameterList is entered.
 func (s *BaseBitflowListener) EnterParameterList(ctx *ParameterListContext) {}
 

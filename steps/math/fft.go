@@ -32,7 +32,7 @@ var (
 
 func RegisterFFT(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("fft",
-		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+		func(params map[string]interface{}) (bitflow.BatchProcessingStep, error) {
 			return new(BatchFft), nil
 		},
 		"Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result")
@@ -166,7 +166,7 @@ func (s *BatchFft) processBatch(header *bitflow.Header, samples []*bitflow.Sampl
 	}
 	outHeader := header
 	if outputFields != len(outHeader.Fields) {
-        outHeader = &bitflow.Header{Fields: make([]string, outputFields)}
+		outHeader = &bitflow.Header{Fields: make([]string, outputFields)}
 		copy(outHeader.Fields, header.Fields[:freqIndex])
 		if freqIndex < len(header.Fields) {
 			copy(outHeader.Fields[freqIndex+1:], header.Fields[freqIndex:])

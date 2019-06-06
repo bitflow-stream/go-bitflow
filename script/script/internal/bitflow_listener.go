@@ -22,6 +22,21 @@ type BitflowListener interface {
 	// EnterParameter is called when entering the parameter production.
 	EnterParameter(c *ParameterContext)
 
+	// EnterParameterValue is called when entering the parameterValue production.
+	EnterParameterValue(c *ParameterValueContext)
+
+	// EnterPrimitiveValue is called when entering the primitiveValue production.
+	EnterPrimitiveValue(c *PrimitiveValueContext)
+
+	// EnterListValue is called when entering the listValue production.
+	EnterListValue(c *ListValueContext)
+
+	// EnterMapValue is called when entering the mapValue production.
+	EnterMapValue(c *MapValueContext)
+
+	// EnterMapValueElement is called when entering the mapValueElement production.
+	EnterMapValueElement(c *MapValueElementContext)
+
 	// EnterParameterList is called when entering the parameterList production.
 	EnterParameterList(c *ParameterListContext)
 
@@ -75,6 +90,21 @@ type BitflowListener interface {
 
 	// ExitParameter is called when exiting the parameter production.
 	ExitParameter(c *ParameterContext)
+
+	// ExitParameterValue is called when exiting the parameterValue production.
+	ExitParameterValue(c *ParameterValueContext)
+
+	// ExitPrimitiveValue is called when exiting the primitiveValue production.
+	ExitPrimitiveValue(c *PrimitiveValueContext)
+
+	// ExitListValue is called when exiting the listValue production.
+	ExitListValue(c *ListValueContext)
+
+	// ExitMapValue is called when exiting the mapValue production.
+	ExitMapValue(c *MapValueContext)
+
+	// ExitMapValueElement is called when exiting the mapValueElement production.
+	ExitMapValueElement(c *MapValueElementContext)
 
 	// ExitParameterList is called when exiting the parameterList production.
 	ExitParameterList(c *ParameterListContext)

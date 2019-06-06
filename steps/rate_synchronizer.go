@@ -20,14 +20,9 @@ type PipelineRateSynchronizer struct {
 func RegisterPipelineRateSynchronizer(b reg.ProcessorRegistry) {
 	synchronization_keys := make(map[string]*PipelineRateSynchronizer)
 
-	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
-		var err error
-		key := params["key"]
-		chanSize := reg.IntParam(params, "buf", 5, true, &err)
-		if err != nil {
-			return err
-		}
-
+	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+		chanSize := params["buf"].(int)
+		key := params["key"].(string)
 		synchronizer, ok := synchronization_keys[key]
 		if !ok {
 			synchronizer = &PipelineRateSynchronizer{
@@ -41,7 +36,10 @@ func RegisterPipelineRateSynchronizer(b reg.ProcessorRegistry) {
 		return nil
 	}
 
-	b.RegisterStep("synchronize", create, "Synchronize the number of samples going through each synchronize() step with the same key parameter", reg.RequiredParams("key"), reg.OptionalParams("buf"))
+	b.RegisterStep("synchronize", create,
+		"Synchronize the number of samples going through each synchronize() step with the same key parameter").
+		Required("key", reg.String()).
+		Optional("buf", reg.Int(), 5)
 }
 
 func (s *PipelineRateSynchronizer) NewSynchronizationStep() bitflow.SampleProcessor {

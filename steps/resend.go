@@ -13,13 +13,14 @@ import (
 
 func RegisterResendStep(b reg.ProcessorRegistry) {
 	b.RegisterStep("resend",
-		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 			p.Add(&ResendProcessor{
-				Interval: reg.DurationParam(params, "interval", 0, false, &err),
+				Interval: params["interval"].(time.Duration),
 			})
-			return
+			return nil
 		},
-		"If no new sample is received within the given period of time, resend a copy of it.", reg.RequiredParams("interval"))
+		"If no new sample is received within the given period of time, resend a copy of it.").
+		Required("interval", reg.Duration())
 }
 
 type ResendProcessor struct {
@@ -76,17 +77,21 @@ func SendPeriodically(sample *bitflow.Sample, header *bitflow.Header, receiver b
 
 func RegisterFillUpStep(b reg.ProcessorRegistry) {
 	b.RegisterStep("fill-up",
-		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
-			interval := reg.DurationParam(params, "interval", 0, false, &err)
-			stepInterval := reg.DurationParam(params, "step-interval", interval, true, &err)
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) (err error) {
+			interval := params["interval"].(time.Duration)
+			stepInterval := params["step-interval"].(time.Duration)
+			if stepInterval == 0 {
+				stepInterval = interval
+			}
 			p.Add(&FillUpProcessor{
 				MinMissingInterval: interval,
 				StepInterval:       stepInterval,
 			})
 			return
 		},
-		"If the timestamp different between two consecutive samples is larger than the given interval, send copies of the first sample to fill the gap",
-		reg.RequiredParams("interval"), reg.OptionalParams("step-interval"))
+		"If the timestamp different between two consecutive samples is larger than the given interval, send copies of the first sample to fill the gap").
+		Required("interval", reg.Duration()).
+		Optional("step-interval", reg.Duration(), 0)
 }
 
 type FillUpProcessor struct {

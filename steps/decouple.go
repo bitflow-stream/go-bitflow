@@ -2,7 +2,6 @@ package steps
 
 import (
 	"fmt"
-	"strconv"
 	"sync"
 
 	"github.com/antongulenko/golib"
@@ -19,18 +18,15 @@ type DecouplingProcessor struct {
 	ChannelBuffer int // Must be set before calling Start()
 }
 
-func AddDecoupleStep(p *bitflow.SamplePipeline, params map[string]string) error {
-	buf, err := strconv.Atoi(params["buf"])
-	if err != nil {
-		err = reg.ParameterError("buf", err)
-	} else {
-		p.Add(&DecouplingProcessor{ChannelBuffer: buf})
-	}
-	return err
+func AddDecoupleStep(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+	p.Add(&DecouplingProcessor{ChannelBuffer: params["buf"].(int)})
+	return nil
 }
 
 func RegisterDecouple(b reg.ProcessorRegistry) {
-	b.RegisterStep("decouple", AddDecoupleStep, "Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples", reg.RequiredParams("buf"))
+	b.RegisterStep("decouple", AddDecoupleStep,
+		"Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples").
+		Required("buf", reg.Int())
 }
 
 func (p *DecouplingProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
