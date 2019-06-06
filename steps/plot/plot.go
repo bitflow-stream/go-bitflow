@@ -22,20 +22,20 @@ import (
 )
 
 const (
-	PlotAxisTime = -1
-	PlotAxisNum  = -2
-	PlotAxisAuto = -3
-	minAxis      = PlotAxisAuto
+	AxisTime = -1
+	AxisNum  = -2
+	AxisAuto = -3
+	minAxis  = AxisAuto
 
-	PlotWidth  = 20 * vg.Centimeter
-	PlotHeight = PlotWidth
+	DefaultWidth  = 20 * vg.Centimeter
+	DefaultHeight = DefaultWidth
 
 	numColors      = 100
 	plotTimeFormat = "02.01.2006 15:04:05"
 	plotTimeLabel  = "time"
 	plotNumLabel   = "num"
 
-	ScatterPlot = PlotType(iota)
+	ScatterPlot = Type(iota)
 	LinePlot
 	LinePointPlot
 	ClusterPlot
@@ -43,13 +43,13 @@ const (
 	InvalidPlotType
 )
 
-type PlotType uint
+type Type uint
 
-type PlotProcessor struct {
+type Processor struct {
 	bitflow.NoopProcessor
 	checker bitflow.HeaderChecker
 
-	Type            PlotType
+	Type            Type
 	NoLegend        bool
 	AxisX           int
 	AxisY           int
@@ -70,9 +70,9 @@ type PlotProcessor struct {
 	xName, yName string
 }
 
-func (p *PlotProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
+func (p *Processor) Start(wg *sync.WaitGroup) golib.StopChan {
 	if p.Type >= InvalidPlotType {
-		return golib.NewStoppedChan(fmt.Errorf("Invalid PlotType: %v", p.Type))
+		return golib.NewStoppedChan(fmt.Errorf("Invalid Type: %v", p.Type))
 	}
 	if p.OutputFile == "" {
 		return golib.NewStoppedChan(errors.New("Plotter.OutputFile must be configured"))
@@ -95,7 +95,7 @@ func (p *PlotProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 	return p.NoopProcessor.Start(wg)
 }
 
-func (p *PlotProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (p *Processor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if p.checker.HeaderChanged(header) {
 		if err := p.headerChanged(header); err != nil {
 			return err
@@ -105,18 +105,18 @@ func (p *PlotProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) e
 	return p.NoopProcessor.Sample(sample, header)
 }
 
-func (p *PlotProcessor) headerChanged(header *bitflow.Header) error {
+func (p *Processor) headerChanged(header *bitflow.Header) error {
 	p.x = p.AxisX
 	p.y = p.AxisY
 	p.radius = p.RadiusDimension
-	if p.x == PlotAxisAuto {
+	if p.x == AxisAuto {
 		if len(header.Fields) > 1 {
 			p.x = 0
 		} else {
-			p.x = PlotAxisTime
+			p.x = AxisTime
 		}
 	}
-	if p.y == PlotAxisAuto {
+	if p.y == AxisAuto {
 		if len(header.Fields) > 1 {
 			p.y = 1
 		} else {
@@ -136,14 +136,14 @@ func (p *PlotProcessor) headerChanged(header *bitflow.Header) error {
 	}
 
 	var xName, yName string
-	if p.x == PlotAxisNum {
+	if p.x == AxisNum {
 		xName = plotNumLabel
 	} else if p.x >= 0 {
 		xName = header.Fields[p.x]
 	} else {
 		xName = plotTimeLabel
 	}
-	if p.y == PlotAxisNum {
+	if p.y == AxisNum {
 		xName = plotNumLabel
 	} else if p.y >= 0 {
 		yName = header.Fields[p.y]
@@ -160,11 +160,11 @@ func (p *PlotProcessor) headerChanged(header *bitflow.Header) error {
 	return nil
 }
 
-func (p *PlotProcessor) needsRadius() bool {
+func (p *Processor) needsRadius() bool {
 	return p.Type == ClusterPlot
 }
 
-func (p *PlotProcessor) storeSample(sample *bitflow.Sample) {
+func (p *Processor) storeSample(sample *bitflow.Sample) {
 	key := ""
 	if p.ColorTag != "" {
 		key = sample.Tag(p.ColorTag)
@@ -180,10 +180,10 @@ func (p *PlotProcessor) storeSample(sample *bitflow.Sample) {
 	}
 }
 
-func (p *PlotProcessor) getVal(index int, key string, sample *bitflow.Sample) (res float64) {
-	if index == PlotAxisTime {
+func (p *Processor) getVal(index int, key string, sample *bitflow.Sample) (res float64) {
+	if index == AxisTime {
 		res = float64(sample.Time.Unix())
-	} else if index == PlotAxisNum {
+	} else if index == AxisNum {
 		res = float64(len(p.data[key]))
 	} else if index < len(sample.Values) {
 		res = float64(sample.Values[index])
@@ -191,7 +191,7 @@ func (p *PlotProcessor) getVal(index int, key string, sample *bitflow.Sample) (r
 	return
 }
 
-func (p *PlotProcessor) Close() {
+func (p *Processor) Close() {
 	if p.Type >= InvalidPlotType || p.OutputFile == "" {
 		return
 	}
@@ -207,19 +207,25 @@ func (p *PlotProcessor) Close() {
 		Type:     p.Type,
 		NoLegend: p.NoLegend,
 	}
+	plotBounds := bounds{
+		xMin: p.ForceXmin,
+		xMax: p.ForceXmax,
+		yMin: p.ForceYmin,
+		yMax: p.ForceYmax,
+	}
 	var err error
 	if p.SeparatePlots {
 		_ = os.Remove(p.OutputFile) // Delete file created in Start(), drop error.
-		err = plot.saveSeparatePlots(p.data, p.radiuses, p.OutputFile, p.ForceXmin, p.ForceXmax, p.ForceYmin, p.ForceYmax)
+		err = plot.saveSeparatePlots(p.data, p.radiuses, p.OutputFile, plotBounds)
 	} else {
-		err = plot.savePlot(p.data, p.radiuses, p.OutputFile, p.ForceXmin, p.ForceXmax, p.ForceYmin, p.ForceYmax)
+		err = plot.savePlot(p.data, p.radiuses, p.OutputFile, plotBounds)
 	}
 	if err != nil {
 		p.Error(err)
 	}
 }
 
-func (p *PlotProcessor) String() string {
+func (p *Processor) String() string {
 	colorTag := "not colored"
 	if p.ColorTag != "" {
 		colorTag = "color: " + p.ColorTag
@@ -237,61 +243,69 @@ func (p *PlotProcessor) String() string {
 
 type Plot struct {
 	LabelX, LabelY string
-	Type           PlotType
+	Type           Type
 	NoLegend       bool
 }
 
-func (p *Plot) saveSeparatePlots(plotData map[string]plotter.XYs, radiuses map[string][]float64, targetFile string, xMin, xMax, yMin, yMax *float64) error {
-	if xMin == nil || xMax == nil || yMin == nil || yMax == nil {
-		bounds, err := p.createPlot(plotData, radiuses, xMin, xMax, yMin, yMax)
+type bounds struct {
+	xMin, xMax, yMin, yMax *float64
+}
+
+func (b bounds) hasAllBounds() bool {
+	return b.xMin != nil && b.xMax != nil && b.yMin != nil && b.yMax != nil
+}
+
+func (p *Plot) saveSeparatePlots(plotData map[string]plotter.XYs, radiuses map[string][]float64, targetFile string, bounds bounds) error {
+	if !bounds.hasAllBounds() {
+		boundsPlot, err := p.createPlot(plotData, radiuses, bounds)
 		if err != nil {
 			return err
 		}
-		xMin = &bounds.X.Min
-		xMax = &bounds.X.Max
-		yMin = &bounds.Y.Min
-		yMax = &bounds.Y.Max
+		bounds.xMin = &boundsPlot.X.Min
+		bounds.xMax = &boundsPlot.X.Max
+		bounds.yMin = &boundsPlot.Y.Min
+		bounds.yMax = &boundsPlot.Y.Max
 	}
 
 	group := bitflow.NewFileGroup(targetFile)
 	for name, data := range plotData {
-		plotData := map[string]plotter.XYs{name: data}
+		subPlotData := map[string]plotter.XYs{name: data}
 		plotFile := group.BuildFilenameStr(name)
-		if err := p.savePlot(plotData, radiuses, plotFile, xMin, xMax, yMin, yMax); err != nil {
+		if err := p.savePlot(subPlotData, radiuses, plotFile, bounds); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (p *Plot) savePlot(plotData map[string]plotter.XYs, radiuses map[string][]float64, targetFile string, xMin, xMax, yMin, yMax *float64) error {
-	plot, err := p.createPlot(plotData, radiuses, xMin, xMax, yMin, yMax)
+func (p *Plot) savePlot(plotData map[string]plotter.XYs, radiuses map[string][]float64, targetFile string, bounds bounds) error {
+	plot, err := p.createPlot(plotData, radiuses, bounds)
 	if err != nil {
 		return err
 	}
-	err = plot.Save(PlotWidth, PlotHeight, targetFile)
+	err = plot.Save(DefaultWidth, DefaultHeight, targetFile)
 	if err != nil {
 		err = errors.New("Error saving plot: " + err.Error())
 	}
 	return err
 }
 
-func (p *Plot) createPlot(plotData map[string]plotter.XYs, radiuses map[string][]float64, xMin, xMax, yMin, yMax *float64) (*plotLib.Plot, error) {
+func (p *Plot) createPlot(plotData map[string]plotter.XYs, radiuses map[string][]float64, bounds bounds) (*plotLib.Plot, error) {
 	plot, err := plotLib.New()
 	if err != nil {
 		return nil, errors.New("Error creating new plot: " + err.Error())
 	}
-	if xMin != nil {
-		plot.X.Min = *xMin
+	if bounds.xMin != nil {
+		plot.X.Min = *bounds.xMin
 	}
-	if xMax != nil {
-		plot.X.Max = *xMax
+	if bounds.xMax != nil {
+		plot.X.Max = *bounds.xMax
 	}
-	if yMin != nil {
-		plot.Y.Min = *yMin
+	if bounds.yMin != nil {
+		plot.Y.Min = *bounds.yMin
 	}
-	if yMax != nil {
-		plot.Y.Max = *yMax
+	if bounds.yMax != nil {
+		plot.Y.Max = *bounds.yMax
 	}
 	p.configureAxes(plot)
 	return plot, p.fillPlot(plot, plotData, radiuses)
@@ -360,7 +374,7 @@ func (p *Plot) fillPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs, rad
 				}
 			}
 		default:
-			return fmt.Errorf("Invalid PlotType: %v", p.Type)
+			return fmt.Errorf("Invalid Type: %v", p.Type)
 		}
 		if err != nil {
 			return fmt.Errorf("Error creating plot (type %v): %v", p.Type, err)
@@ -413,9 +427,9 @@ func (p *Plot) fillBoxPlot(plot *plotLib.Plot, plotData map[string]plotter.XYs) 
 	}
 
 	minWidth, maxWidth := float64(5), float64(30)
-	for i, values := range values {
-		width := (float64(len(values))/float64(maxLen))*(maxWidth-minWidth) + minWidth
-		box, err := plotter.NewBoxPlot(vg.Length(width), float64(i), values)
+	for i, value := range values {
+		width := (float64(len(value))/float64(maxLen))*(maxWidth-minWidth) + minWidth
+		box, err := plotter.NewBoxPlot(vg.Length(width), float64(i), value)
 		if err != nil {
 			return err
 		}
@@ -430,10 +444,10 @@ type boxThumbnail struct {
 
 func (b *boxThumbnail) Thumbnail(c *draw.Canvas) {
 	points := []vg.Point{
-        {X: c.Min.X, Y: c.Min.Y},
-        {X: c.Min.X, Y: c.Max.Y},
-        {X: c.Max.X, Y: c.Max.Y},
-        {X: c.Max.X, Y: c.Min.Y},
+		{X: c.Min.X, Y: c.Min.Y},
+		{X: c.Min.X, Y: c.Max.Y},
+		{X: c.Max.X, Y: c.Max.Y},
+		{X: c.Max.X, Y: c.Min.Y},
 	}
 	poly := c.ClipPolygonY(points)
 	c.FillPolygon(b.color, poly)
@@ -441,18 +455,18 @@ func (b *boxThumbnail) Thumbnail(c *draw.Canvas) {
 
 // ================================= Random Colors/Shapes =================================
 
-type PlotShapeGenerator struct {
+type ShapeGenerator struct {
 	Colors *ColorGenerator
 	Glyphs *GlyphGenerator
 	Dashes *DashesGenerator
 }
 
-func NewPlotShapeGenerator(numColors int) (*PlotShapeGenerator, error) {
+func NewPlotShapeGenerator(numColors int) (*ShapeGenerator, error) {
 	colors, err := NewColorGenerator(numColors)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to generate %v colors: %v", numColors, err)
 	}
-	return &PlotShapeGenerator{
+	return &ShapeGenerator{
 		Colors: colors,
 		Glyphs: NewGlyphGenerator(),
 		Dashes: NewDashesGenerator(),
@@ -503,9 +517,9 @@ func NewGlyphGenerator() *GlyphGenerator {
 			draw.TriangleGlyph{},
 			draw.CrossGlyph{},
 			draw.PlusGlyph{},
-			//		draw.CircleGlyph{},
-			//		draw.BoxGlyph{},
-			//		draw.PyramidGlyph{},
+			// 		draw.CircleGlyph{},
+			// 		draw.BoxGlyph{},
+			// 		draw.PyramidGlyph{},
 		},
 	}
 }
@@ -553,9 +567,9 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 	}
 
 	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
-		plot := &PlotProcessor{
-			AxisX:      PlotAxisAuto,
-			AxisY:      PlotAxisAuto,
+		plot := &Processor{
+			AxisX:      AxisAuto,
+			AxisY:      AxisAuto,
 			OutputFile: params["file"],
 			Type:       ScatterPlot,
 		}
@@ -589,7 +603,7 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 					plot.AxisY = 2
 				case "box":
 					plot.Type = BoxPlot
-					plot.AxisX = PlotAxisNum
+					plot.AxisX = AxisNum
 					plot.AxisY = 0
 				case "separate":
 					plot.SeparatePlots = true
@@ -597,11 +611,11 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 					plot.AxisX = 0
 					plot.AxisY = 1
 				case "force_time":
-					plot.AxisX = PlotAxisTime
+					plot.AxisX = AxisTime
 					plot.AxisY = 0
 				default:
-					all_flags := []string{"nolegend", "line", "linepoint", "cluster", "separate", "force_scatter", "force_time"}
-					return fmt.Errorf("Unkown flag: '%v'. The 'flags' parameter is a comma-separated list of flags: %v", part, all_flags)
+					allFlags := []string{"nolegend", "line", "linepoint", "cluster", "separate", "force_scatter", "force_time"}
+					return fmt.Errorf("Unkown flag: '%v'. The 'flags' parameter is a comma-separated list of flags: %v", part, allFlags)
 				}
 			}
 		}

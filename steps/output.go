@@ -24,11 +24,11 @@ func RegisterOutputFiles(b reg.ProcessorRegistry) {
 		}
 		delete(params, "parallelize")
 
-		distributor, err := _make_multi_file_pipeline_builder(params)
+		distributor, err := makeMultiFilePipelineBuilder(params)
 		if err == nil {
 			distributor.Template = filename
 			if parallelize > 0 {
-				distributor.ExtendSubpipelines = func(fileName string, pipe *bitflow.SamplePipeline) {
+				distributor.ExtendSubpipelines = func(_ string, pipe *bitflow.SamplePipeline) {
 					pipe.Add(&DecouplingProcessor{ChannelBuffer: parallelize})
 				}
 			}
@@ -41,7 +41,7 @@ func RegisterOutputFiles(b reg.ProcessorRegistry) {
 		reg.VariableParams())
 }
 
-func _make_multi_file_pipeline_builder(params map[string]string) (*fork.MultiFileDistributor, error) {
+func makeMultiFilePipelineBuilder(params map[string]string) (*fork.MultiFileDistributor, error) {
 	if err := bitflow.DefaultEndpointFactory.ParseParameters(params); err != nil {
 		return nil, fmt.Errorf("Error parsing parameters: %v", err)
 	}

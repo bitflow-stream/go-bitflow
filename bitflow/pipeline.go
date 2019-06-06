@@ -64,7 +64,7 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 			tasks.Add(&ProcessorTaskWrapper{proc})
 		}
 	}
-    tasks.Add(&SourceTaskWrapper{firstSource})
+	tasks.Add(&SourceTaskWrapper{firstSource})
 }
 
 // Add adds the SampleProcessor parameter to the list of SampleProcessors in the
@@ -74,11 +74,10 @@ func (p *SamplePipeline) Construct(tasks *golib.TaskGroup) {
 //   pipeline.Add(processor1).Add(processor2)
 func (p *SamplePipeline) Add(processor SampleProcessor) *SamplePipeline {
 	if p.lastProcessor != nil {
-		if merger, ok := p.lastProcessor.(MergeableProcessor); ok {
-			if merger.MergeProcessor(processor) {
-				// Merge successful: drop the incoming step
-				return p
-			}
+		merger, ok := p.lastProcessor.(MergeableProcessor)
+		if ok && merger.MergeProcessor(processor) {
+			// Merge successful: drop the incoming step
+			return p
 		}
 	}
 	p.lastProcessor = processor

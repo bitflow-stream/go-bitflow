@@ -137,7 +137,7 @@ func (sink *HttpServerSink) sendSamples(wg *sync.WaitGroup, conn *TcpWriteConn, 
 		log.Printf("Serving samples over HTTP, containing tag %v=%v", sink.SubPathTag, filterTagValue)
 	}
 	sink.buf.sendFilteredSamples(conn, flusher.Flush,
-		func(sample *Sample, header *Header) bool {
+		func(sample *Sample, _ *Header) bool {
 			if sink.SubPathTag != "" && filterTagValue != "" {
 				tagVal := sample.Tag(sink.SubPathTag)
 				return filterTagValue == tagVal

@@ -70,11 +70,7 @@ func (p *HttpPlotter) Start(wg *sync.WaitGroup) golib.StopChan {
 }
 
 func (p *HttpPlotter) String() string {
-	endpoint := p.Endpoint
-	if endpoint == "" {
-		endpoint = "0.0.0.0:80"
-	}
-	return fmt.Sprintf("HTTP plotter on %v (window size %v)", endpoint, p.WindowSize)
+	return fmt.Sprintf("HTTP plotter on %v (window size %v)", p.Endpoint, p.WindowSize)
 }
 
 func (p *HttpPlotter) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

@@ -9,7 +9,7 @@ import (
 
 func RegisterRMS(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("rms",
-		func(params map[string]string) (bitflow.BatchProcessingStep, error) {
+		func(_ map[string]string) (bitflow.BatchProcessingStep, error) {
 			return new(BatchRms), nil
 		},
 		"Compute the Root Mean Square value for every metric in a data batch. Output a single sample with all values.")

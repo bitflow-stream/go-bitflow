@@ -55,7 +55,8 @@ func RegisterSubprocessRunner(b reg.ProcessorRegistry) {
 		p.Add(runner)
 		return nil
 	}
-	b.RegisterStep("subprocess", create, "Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", reg.RequiredParams("cmd"), reg.OptionalParams("format"))
+	b.RegisterStep("subprocess", create,
+		"Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", reg.RequiredParams("cmd"), reg.OptionalParams("format"))
 }
 
 func (r *SubprocessRunner) Configure(marshallingFormat string, f *bitflow.EndpointFactory) error {
@@ -81,12 +82,12 @@ func (r *SubprocessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
 	var tasks golib.TaskGroup
 	if r.input != nil {
 		// (Optionally) start the input first
-        tasks.Add(&bitflow.SourceTaskWrapper{SampleSource: r.input})
+		tasks.Add(&bitflow.SourceTaskWrapper{SampleSource: r.input})
 	}
 	tasks.Add(&golib.NoopTask{
 		Description: "",
 		Chan:        golib.WaitErrFunc(wg, r.runProcess),
-    }, &bitflow.ProcessorTaskWrapper{SampleProcessor: r.output})
+	}, &bitflow.ProcessorTaskWrapper{SampleProcessor: r.output})
 
 	channels := tasks.StartTasks(wg)
 	return golib.WaitErrFunc(wg, func() error {

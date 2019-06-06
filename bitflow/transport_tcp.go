@@ -258,10 +258,8 @@ func (sink *TCPSink) getOutputConnection() (conn *TcpWriteConn, err error) {
 	}, func() {
 		if !sink.conn.IsRunning() {
 			// Cleanup failed connection or stop existing connection to negotiate new header
-			if sink.conn != nil {
-				if !sink.countConnectionClosed() {
-					closeSink = true
-				}
+			if sink.conn != nil && !sink.countConnectionClosed() {
+				closeSink = true
 			}
 			sink.closeConnection()
 		}
