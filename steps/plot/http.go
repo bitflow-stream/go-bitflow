@@ -1,10 +1,8 @@
 package plot
 
 import (
-	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"sync"
 
 	"github.com/antongulenko/golib"
@@ -14,29 +12,17 @@ import (
 )
 
 func RegisterHttpPlotter(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
-		windowSize := 100
-		if windowStr, ok := params["window"]; ok {
-			var err error
-			windowSize, err = strconv.Atoi(windowStr)
-			if err != nil {
-				return reg.ParameterError("window", err)
-			}
-		}
-		useLocalStatic := false
-		static, ok := params["local_static"]
-		if ok {
-			if static == "true" {
-				useLocalStatic = true
-			} else {
-				return reg.ParameterError("local_static", errors.New("The only accepted value is 'true'"))
-			}
-		}
-		p.Add(NewHttpPlotter(params["endpoint"], windowSize, useLocalStatic))
+	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+		windowSize := params["window"].(int)
+		static := params["local-static"].(bool)
+		p.Add(NewHttpPlotter(params["endpoint"].(string), windowSize, static))
 		return nil
 	}
-
-	b.RegisterStep("http", create, "Serve HTTP-based plots about processed metrics values to the given HTTP endpoint", reg.RequiredParams("endpoint"), reg.OptionalParams("window", "local_static"))
+	b.RegisterStep("http", create,
+		"Serve HTTP-based plots about processed metrics values to the given HTTP endpoint").
+		Required("endpoint", reg.String()).
+		Optional("window", reg.Int(), 100).
+		Optional("local-static", reg.Bool(), false)
 }
 
 func NewHttpPlotter(endpoint string, windowSize int, useLocalStatic bool) *HttpPlotter {

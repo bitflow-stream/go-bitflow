@@ -395,7 +395,7 @@ func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 			return nil, err
 		}
 	}
-	resultSink, marshallingSink, err := f.createOutput(endpoint, marshaller)
+	resultSink, marshallingSink, err := f.createOutput(endpoint, &marshaller)
 	if err != nil {
 		return nil, err
 	}
@@ -406,15 +406,15 @@ func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 	return resultSink, nil
 }
 
-func (f *EndpointFactory) createOutput(endpoint EndpointDescription, marshaller Marshaller) (SampleProcessor, *AbstractMarshallingSampleOutput, error) {
+func (f *EndpointFactory) createOutput(endpoint EndpointDescription, marshaller *Marshaller) (SampleProcessor, *AbstractMarshallingSampleOutput, error) {
 	switch endpoint.Type {
 	case StdEndpoint:
 		sink := NewConsoleSink()
-		if txt, ok := marshaller.(TextMarshaller); ok {
+		if txt, ok := (*marshaller).(TextMarshaller); ok {
 			txt.AssumeStdout = true
-			marshaller = txt
-		} else if txt, ok := marshaller.(*TextMarshaller); ok {
-			txt.AssumeStdout = true
+			*marshaller = txt
+		} else if txt2, ok2 := (*marshaller).(*TextMarshaller); ok2 {
+			txt2.AssumeStdout = true
 		}
 		return sink, &sink.AbstractMarshallingSampleOutput, nil
 	case FileEndpoint:
@@ -468,7 +468,7 @@ func (f *EndpointFactory) createOutput(endpoint EndpointDescription, marshaller 
 			if err != nil {
 				err = fmt.Errorf("Error creating '%v' output: %v", endpoint.Type, err)
 			}
-			return sink, nil, nil
+			return sink, nil, err
 		} else {
 			return nil, nil, errors.New("Unknown output endpoint type: " + string(endpoint.Type))
 		}

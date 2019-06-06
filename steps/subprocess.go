@@ -32,31 +32,30 @@ type SubprocessRunner struct {
 }
 
 func RegisterSubprocessRunner(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
-		cmd := SplitShellCommand(params["cmd"])
-		format, ok := params["format"]
-		if !ok {
-			format = "bin"
-		}
-		delete(params, "cmd")
-		delete(params, "format")
-
-		if err := bitflow.DefaultEndpointFactory.ParseParameters(params); err != nil {
-			return fmt.Errorf("Error parsing parameters: %v", err)
+	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+		cmd := SplitShellCommand(params["cmd"].(string))
+		format := params["format"].(string)
+		factory := bitflow.DefaultEndpointFactory
+		err := factory.ParseParameters(params["endpoint-config"].(map[string]string))
+		if err != nil {
+			return fmt.Errorf("Error parsing endpoint parameters: %v", err)
 		}
 
 		runner := &SubprocessRunner{
 			Cmd:  cmd[0],
 			Args: cmd[1:],
 		}
-		if err := runner.Configure(format, &bitflow.DefaultEndpointFactory); err != nil {
+		if err = runner.Configure(format, &factory); err != nil {
 			return err
 		}
 		p.Add(runner)
 		return nil
 	}
 	b.RegisterStep("subprocess", create,
-		"Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format (default: binary)", reg.RequiredParams("cmd"), reg.OptionalParams("format"))
+		"Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format.").
+		Required("cmd", reg.String()).
+		Optional("format", reg.String(), "bin").
+		Optional("endpoint-config", reg.Map(reg.String()), map[string]string{})
 }
 
 func (r *SubprocessRunner) Configure(marshallingFormat string, f *bitflow.EndpointFactory) error {

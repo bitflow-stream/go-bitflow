@@ -1,7 +1,6 @@
 package steps
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/bitflow-stream/go-bitflow/bitflow"
@@ -10,23 +9,11 @@ import (
 )
 
 func RegisterOutputFiles(b reg.ProcessorRegistry) {
-	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
-		filename := params["file"]
-		if filename == "" {
-			return reg.ParameterError("file", errors.New("Missing required parameter"))
-		}
-		delete(params, "file")
-
-		var err error
-		parallelize := reg.IntParam(params, "parallelize", 0, true, &err)
-		if err != nil {
-			return err
-		}
-		delete(params, "parallelize")
-
-		distributor, err := makeMultiFilePipelineBuilder(params)
+	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+		distributor, err := makeMultiFilePipelineBuilder(params["endpoint-config"].(map[string]string))
 		if err == nil {
-			distributor.Template = filename
+			distributor.Template = params["file"].(string)
+			parallelize := params["parallelize"].(int)
 			if parallelize > 0 {
 				distributor.ExtendSubpipelines = func(_ string, pipe *bitflow.SamplePipeline) {
 					pipe.Add(&DecouplingProcessor{ChannelBuffer: parallelize})
@@ -37,8 +24,11 @@ func RegisterOutputFiles(b reg.ProcessorRegistry) {
 		return err
 	}
 
-	b.RegisterStep("output_files", create, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values",
-		reg.VariableParams())
+	b.RegisterStep("output_files", create, "Output samples to multiple files, filenames are built from the given template, where placeholders like ${xxx} will be replaced with tag values").
+		Required("file", reg.String()).
+		Optional("parallelize", reg.Int(), 0).
+		Optional("endpoint-config", reg.Map(reg.String()), map[string]string{})
+
 }
 
 func makeMultiFilePipelineBuilder(params map[string]string) (*fork.MultiFileDistributor, error) {

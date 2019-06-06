@@ -12,12 +12,20 @@ import (
 
 // This function is placed in this package to avoid circular dependency between the fork and the query package.
 func RegisterForks(b reg.ProcessorRegistry) {
-	b.RegisterFork("rr", fork_round_robin, "The round-robin fork distributes the samples to the subpipelines based on weights. The pipeline selector keys must be positive integers denoting the weight of the respective pipeline.")
-	b.RegisterFork("fork_tag", fork_tag, "Fork based on the values of the given tag", reg.RequiredParams("tag"), reg.OptionalParams("regex", "exact"))
-	b.RegisterFork("fork_tag_template", fork_tag_template, "Fork based on a template string, placeholders like ${xxx} are replaced by tag values.", reg.RequiredParams("template"), reg.OptionalParams("regex", "exact"))
+	b.RegisterFork("rr", fork_round_robin,
+		"The round-robin fork distributes the samples to the subpipelines based on weights. The pipeline selector keys must be positive integers denoting the weight of the respective pipeline.")
+	b.RegisterFork("fork_tag", fork_tag, "Fork based on the values of the given tag").
+		Required("tag", reg.String()).
+		Optional("regex", reg.Bool(), false).
+		Optional("exact", reg.Bool(), false)
+	b.RegisterFork("fork_tag_template", fork_tag_template,
+		"Fork based on a template string, placeholders like ${xxx} are replaced by tag values.").
+		Required("template", reg.String()).
+		Optional("regex", reg.Bool(), false).
+		Optional("exact", reg.Bool(), false)
 }
 
-func fork_round_robin(subpipelines []reg.Subpipeline, _ map[string]string) (fork.Distributor, error) {
+func fork_round_robin(subpipelines []reg.Subpipeline, _ map[string]interface{}) (fork.Distributor, error) {
 	res := new(fork.RoundRobinDistributor)
 	res.Weights = make([]int, len(subpipelines))
 	res.Subpipelines = make([]*bitflow.SamplePipeline, len(subpipelines))
@@ -44,14 +52,14 @@ func fork_round_robin(subpipelines []reg.Subpipeline, _ map[string]string) (fork
 	return res, nil
 }
 
-func fork_tag(subpipelines []reg.Subpipeline, params map[string]string) (fork.Distributor, error) {
-	tag := params["tag"]
+func fork_tag(subpipelines []reg.Subpipeline, params map[string]interface{}) (fork.Distributor, error) {
+	tag := params["tag"].(string)
 	delete(params, "tag")
 	params["template"] = "${" + tag + "}"
 	return fork_tag_template(subpipelines, params)
 }
 
-func fork_tag_template(subpipelines []reg.Subpipeline, params map[string]string) (fork.Distributor, error) {
+func fork_tag_template(subpipelines []reg.Subpipeline, params map[string]interface{}) (fork.Distributor, error) {
 	wildcardPipelines := make(map[string]func() ([]*bitflow.SamplePipeline, error))
 	var keysArray []string
 	for _, pipe := range subpipelines {
@@ -68,12 +76,12 @@ func fork_tag_template(subpipelines []reg.Subpipeline, params map[string]string)
 	var err error
 	dist := &fork.TagDistributor{
 		TagTemplate: bitflow.TagTemplate{
-			Template: params["template"],
+			Template: params["template"].(string),
 		},
 		RegexDistributor: fork.RegexDistributor{
 			Pipelines:  wildcardPipelines,
-			ExactMatch: reg.BoolParam(params, "exact", false, true, &err),
-			RegexMatch: reg.BoolParam(params, "regex", false, true, &err),
+			ExactMatch: params["exact"].(bool),
+			RegexMatch: params["regex"].(bool),
 		},
 	}
 	if err == nil {

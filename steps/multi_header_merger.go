@@ -26,7 +26,7 @@ func NewMultiHeaderMerger() *MultiHeaderMerger {
 
 func RegisterMergeHeaders(b reg.ProcessorRegistry) {
 	b.RegisterStep("merge_headers",
-		func(p *bitflow.SamplePipeline, _ map[string]string) error {
+		func(p *bitflow.SamplePipeline, _ map[string]interface{}) error {
 			p.Add(NewMultiHeaderMerger())
 			return nil
 		},

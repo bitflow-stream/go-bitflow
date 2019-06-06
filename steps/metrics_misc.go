@@ -13,7 +13,7 @@ import (
 
 func RegisterSetCurrentTime(b reg.ProcessorRegistry) {
 	b.RegisterStep("set_time",
-		func(p *bitflow.SamplePipeline, _ map[string]string) error {
+		func(p *bitflow.SamplePipeline, _ map[string]interface{}) error {
 			p.Add(&bitflow.SimpleProcessor{
 				Description: "reset time to now",
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -33,7 +33,7 @@ func RegisterAppendTimeDifference(b reg.ProcessorRegistry) {
 	var lastTime time.Time
 
 	b.RegisterStep("append_latency",
-		func(p *bitflow.SamplePipeline, _ map[string]string) error {
+		func(p *bitflow.SamplePipeline, _ map[string]interface{}) error {
 			p.Add(&bitflow.SimpleProcessor{
 				Description: "Append time difference as metric " + fieldName,
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -56,7 +56,7 @@ func RegisterAppendTimeDifference(b reg.ProcessorRegistry) {
 
 func RegisterStripMetrics(b reg.ProcessorRegistry) {
 	b.RegisterStep("strip",
-		func(p *bitflow.SamplePipeline, _ map[string]string) error {
+		func(p *bitflow.SamplePipeline, _ map[string]interface{}) error {
 			p.Add(&bitflow.SimpleProcessor{
 				Description: "remove metric values, keep timestamp and tags",
 				Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
@@ -70,12 +70,12 @@ func RegisterStripMetrics(b reg.ProcessorRegistry) {
 
 func RegisterParseTags(b reg.ProcessorRegistry) {
 	b.RegisterStep("parse_tags",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 			var checker bitflow.HeaderChecker
 			var outHeader *bitflow.Header
 			var sorted bitflow.SortedStringPairs
 			warnedMissingTags := make(map[string]bool)
-			sorted.FillFromMap(params)
+			sorted.FillFromMap(params["tags"].(map[string]string))
 			sort.Sort(&sorted)
 
 			p.Add(&bitflow.SimpleProcessor{
@@ -107,6 +107,6 @@ func RegisterParseTags(b reg.ProcessorRegistry) {
 			})
 			return nil
 		},
-		"Append metrics based on tag values. Keys are new metric names, values are tag names",
-		reg.VariableParams())
+		"Append metrics based on tag values. Keys are new metric names, values are tag names").
+		Required("tags", reg.Map(reg.String()))
 }

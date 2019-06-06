@@ -13,19 +13,21 @@ type MinMaxScaling struct {
 
 func RegisterMinMaxScaling(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("scale_min_max",
-		func(params map[string]string) (res bitflow.BatchProcessingStep, err error) {
+		func(params map[string]interface{}) (res bitflow.BatchProcessingStep, err error) {
 			res = &MinMaxScaling{
-				Min: reg.FloatParam(params, "min", 0, true, &err),
-				Max: reg.FloatParam(params, "max", 1, true, &err),
+				Min: params["min"].(float64),
+				Max: params["max"].(float64),
 			}
 			return
 		},
-		"Normalize a batch of samples using a min-max scale. The output value range is 0..1 by default, but can be customized.")
+		"Normalize a batch of samples using a min-max scale. The output value range is 0..1 by default, but can be customized.").
+		Optional("min", reg.Float(), 0).
+		Optional("max", reg.Float(), 1)
 }
 
 func RegisterStandardizationScaling(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("standardize",
-		func(_ map[string]string) (res bitflow.BatchProcessingStep, err error) {
+		func(_ map[string]interface{}) (res bitflow.BatchProcessingStep, err error) {
 			return new(StandardizationScaling), nil
 		},
 		"Normalize a batch of samples based on the mean and std-deviation")

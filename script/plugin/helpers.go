@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -41,6 +42,14 @@ func ParseQueryParameters(queryStr string) (map[string]string, error) {
 		result[key] = strings.Join(val, " ")
 	}
 	return result, nil
+}
+
+func ParseTypedQueryParameters(queryStr string, params reg.RegisteredParameters) (map[string]interface{}, error) {
+	paramMap, err := ParseQueryParameters(queryStr)
+	if err != nil {
+		return nil, err
+	}
+	return params.ParsePrimitives(paramMap)
 }
 
 func LogPluginDataSource(p BitflowPlugin, sourceName bitflow.EndpointType) {

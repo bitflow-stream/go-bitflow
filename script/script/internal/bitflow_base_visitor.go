@@ -27,6 +27,26 @@ func (v *BaseBitflowVisitor) VisitParameter(ctx *ParameterContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseBitflowVisitor) VisitParameterValue(ctx *ParameterValueContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseBitflowVisitor) VisitPrimitiveValue(ctx *PrimitiveValueContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseBitflowVisitor) VisitListValue(ctx *ListValueContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseBitflowVisitor) VisitMapValue(ctx *MapValueContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseBitflowVisitor) VisitMapValueElement(ctx *MapValueElementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseBitflowVisitor) VisitParameterList(ctx *ParameterListContext) interface{} {
 	return v.VisitChildren(ctx)
 }

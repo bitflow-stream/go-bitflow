@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
 	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
@@ -198,7 +197,7 @@ func FeatureWindowSlope(stats *FeatureWindowStats) bitflow.Value {
 
 func RegisterAggregateAvg(b reg.ProcessorRegistry) {
 	b.RegisterStep("avg",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 			agg, err := create_aggregator(params)
 			if err != nil {
 				return err
@@ -206,12 +205,15 @@ func RegisterAggregateAvg(b reg.ProcessorRegistry) {
 			p.Add(agg.AddAvg("_avg"))
 			return nil
 		},
-		"Add an average metric for every incoming metric. Optional parameter: duration or number of samples", reg.OptionalParams("window"))
+		"Add an average metric for every incoming metric. Optional parameter: duration or number of samples").
+		Optional("windowDuration", reg.Duration(), 0).
+		Optional("windowSize", reg.Int(), 0).
+		Optional("useCurrentTime", reg.Bool(), false)
 }
 
 func RegisterAggregateSlope(b reg.ProcessorRegistry) {
 	b.RegisterStep("slope",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 			agg, err := create_aggregator(params)
 			if err != nil {
 				return err
@@ -219,21 +221,16 @@ func RegisterAggregateSlope(b reg.ProcessorRegistry) {
 			p.Add(agg.AddSlope("_slope"))
 			return nil
 		},
-		"Add a slope metric for every incoming metric. Optional parameter: duration or number of samples", reg.OptionalParams("window"))
+		"Add a slope metric for every incoming metric.").
+		Optional("windowDuration", reg.Duration(), 0).
+		Optional("windowSize", reg.Int(), 0).
+		Optional("useCurrentTime", reg.Bool(), false)
 }
 
-func create_aggregator(params map[string]string) (*FeatureAggregator, error) {
-	window, haveWindow := params["window"]
-	if !haveWindow {
-		return &FeatureAggregator{}, nil
-	}
-	dur, err1 := time.ParseDuration(window)
-	if err1 == nil {
-		return &FeatureAggregator{WindowDuration: dur}, nil
-	}
-	num, err2 := strconv.Atoi(window)
-	if err2 == nil {
-		return &FeatureAggregator{WindowSize: num}, nil
-	}
-	return nil, reg.ParameterError("window", golib.MultiError{err1, err2})
+func create_aggregator(params map[string]interface{}) (*FeatureAggregator, error) {
+	return &FeatureAggregator{
+		WindowDuration: params["windowDuration"].(time.Duration),
+		WindowSize:     params["windowSize"].(int),
+		UseCurrentTime: params["useCurrentTime"].(bool),
+	}, nil
 }

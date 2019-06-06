@@ -11,12 +11,9 @@ import (
 
 func RegisterPickPercent(b reg.ProcessorRegistry) {
 	b.RegisterStep("pick",
-		func(p *bitflow.SamplePipeline, params map[string]string) error {
-			pick_percentage, err := strconv.ParseFloat(params["percent"], 64)
-			if err != nil {
-				return reg.ParameterError("percent", err)
-			}
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 			counter := float64(0)
+			pick_percentage := params["percent"].(float64)
 			p.Add(&SampleFilter{
 				Description: bitflow.String(fmt.Sprintf("Pick %.2f%%", pick_percentage*100)),
 				IncludeFilter: func(_ *bitflow.Sample, _ *bitflow.Header) (bool, error) {
@@ -30,14 +27,15 @@ func RegisterPickPercent(b reg.ProcessorRegistry) {
 			})
 			return nil
 		},
-		"Forward only a percentage of samples, parameter is in the range 0..1", reg.OptionalParams("percent"))
+		"Forward only a percentage of samples, parameter is in the range 0..1").
+		Required("percent", reg.Float())
 }
 
 func RegisterPickHead(b reg.ProcessorRegistry) {
 	b.RegisterStep("head",
-		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
-			doClose := reg.BoolParam(params, "close", false, true, &err)
-			num := reg.IntParam(params, "num", 0, false, &err)
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) (err error) {
+			doClose := params["close"].(bool)
+			num := params["num"].(int)
 			if err == nil {
 				processed := 0
 				proc := &bitflow.SimpleProcessor{
@@ -58,13 +56,15 @@ func RegisterPickHead(b reg.ProcessorRegistry) {
 			}
 			return
 		},
-		"Forward only a number of the first processed samples. The whole pipeline is closed afterwards, unless close=false is given.", reg.RequiredParams("num"), reg.OptionalParams("close"))
+		"Forward only a number of the first processed samples. The whole pipeline is closed afterwards, unless close=false is given.").
+		Required("num", reg.Int()).
+		Optional("close", reg.Bool(), false)
 }
 
 func RegisterSkipHead(b reg.ProcessorRegistry) {
 	b.RegisterStep("skip",
-		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
-			num := reg.IntParam(params, "num", 0, false, &err)
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) (err error) {
+			num := params["num"].(int)
 			if err == nil {
 				dropped := 0
 				p.Add(&bitflow.SimpleProcessor{
@@ -81,13 +81,14 @@ func RegisterSkipHead(b reg.ProcessorRegistry) {
 			}
 			return
 		},
-		"Drop a number of samples in the beginning", reg.OptionalParams("num"))
+		"Drop a number of samples in the beginning").
+		Required("num", reg.Int())
 }
 
 func RegisterPickTail(b reg.ProcessorRegistry) {
 	b.RegisterStep("tail",
-		func(p *bitflow.SamplePipeline, params map[string]string) (err error) {
-			num := reg.IntParam(params, "num", 0, false, &err)
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) (err error) {
+			num := params["num"].(int)
 			if err == nil {
 				ring := bitflow.NewSampleRing(num)
 				proc := &bitflow.SimpleProcessor{
@@ -111,5 +112,6 @@ func RegisterPickTail(b reg.ProcessorRegistry) {
 			}
 			return
 		},
-		"Forward only a number of the first processed samples. The whole pipeline is closed afterwards, unless close=false is given.", reg.RequiredParams("num"))
+		"Forward only a number of the first processed samples. The whole pipeline is closed afterwards, unless close=false is given.").
+		Required("num", reg.Int())
 }

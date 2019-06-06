@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"image/color"
 	"os"
-	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/antongulenko/golib"
@@ -554,74 +552,65 @@ func (g *DashesGenerator) Next() []vg.Length {
 }
 
 func RegisterPlot(b reg.ProcessorRegistry) {
-	setPlotBoundParam := func(outErr *error, params map[string]string, paramName string, target **float64) {
-		param, hasParam := params[paramName]
-		if *outErr == nil && hasParam {
-			val, err := strconv.ParseFloat(param, 64)
-			if err != nil {
-				*outErr = fmt.Errorf("Failed to parse argument of '%s': %v", paramName, err)
-				return
-			}
-			*target = &val
-		}
-	}
-
-	create := func(p *bitflow.SamplePipeline, params map[string]string) error {
+	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+		xMin := params["xMin"].(float64)
+		xMax := params["xMax"].(float64)
+		yMin := params["yMin"].(float64)
+		yMax := params["yMax"].(float64)
 		plot := &Processor{
 			AxisX:      AxisAuto,
 			AxisY:      AxisAuto,
-			OutputFile: params["file"],
+			OutputFile: params["file"].(string),
+			ColorTag:   params["color"].(string),
 			Type:       ScatterPlot,
-		}
-		if colorName, hasColor := params["color"]; hasColor {
-			plot.ColorTag = colorName
-		}
-		var err error
-		setPlotBoundParam(&err, params, "xMin", &plot.ForceXmin)
-		setPlotBoundParam(&err, params, "xMax", &plot.ForceXmax)
-		setPlotBoundParam(&err, params, "yMin", &plot.ForceYmin)
-		setPlotBoundParam(&err, params, "yMax", &plot.ForceYmax)
-		if err != nil {
-			return err
+			ForceXmin:  &xMin,
+			ForceXmax:  &xMax,
+			ForceYmin:  &yMin,
+			ForceYmax:  &yMax,
 		}
 
-		if flagsStr, hasFlags := params["flags"]; hasFlags {
-			flags := strings.Split(flagsStr, ",")
-			for _, part := range flags {
-				switch part {
-				case "nolegend":
-					plot.NoLegend = true
-				case "line":
-					plot.Type = LinePlot
-				case "linepoint":
-					plot.Type = LinePointPlot
-				case "cluster":
-					plot.SeparatePlots = false
-					plot.Type = ClusterPlot
-					plot.RadiusDimension = 0
-					plot.AxisX = 1
-					plot.AxisY = 2
-				case "box":
-					plot.Type = BoxPlot
-					plot.AxisX = AxisNum
-					plot.AxisY = 0
-				case "separate":
-					plot.SeparatePlots = true
-				case "force_scatter":
-					plot.AxisX = 0
-					plot.AxisY = 1
-				case "force_time":
-					plot.AxisX = AxisTime
-					plot.AxisY = 0
-				default:
-					allFlags := []string{"nolegend", "line", "linepoint", "cluster", "separate", "force_scatter", "force_time"}
-					return fmt.Errorf("Unkown flag: '%v'. The 'flags' parameter is a comma-separated list of flags: %v", part, allFlags)
-				}
+		for _, part := range params["flags"].([]string) {
+			switch part {
+			case "nolegend":
+				plot.NoLegend = true
+			case "line":
+				plot.Type = LinePlot
+			case "linepoint":
+				plot.Type = LinePointPlot
+			case "cluster":
+				plot.SeparatePlots = false
+				plot.Type = ClusterPlot
+				plot.RadiusDimension = 0
+				plot.AxisX = 1
+				plot.AxisY = 2
+			case "box":
+				plot.Type = BoxPlot
+				plot.AxisX = AxisNum
+				plot.AxisY = 0
+			case "separate":
+				plot.SeparatePlots = true
+			case "force_scatter":
+				plot.AxisX = 0
+				plot.AxisY = 1
+			case "force_time":
+				plot.AxisX = AxisTime
+				plot.AxisY = 0
+			default:
+				allFlags := []string{"nolegend", "line", "linepoint", "cluster", "separate", "force_scatter", "force_time"}
+				return fmt.Errorf("Unkown flag: '%v'. The 'flags' parameter is a comma-separated list of flags: %v", part, allFlags)
 			}
 		}
 		p.Add(plot)
 		return nil
 	}
 
-	b.RegisterStep("plot", create, "Plot a batch of samples to a given filename. The file ending denotes the file type", reg.RequiredParams("file"), reg.OptionalParams("color", "flags", "xMin", "xMax", "yMin", "yMax"))
+	b.RegisterStep("plot", create,
+		"Plot a batch of samples to a given filename. The file ending denotes the file type").
+		Required("file", reg.String()).
+		Optional("color", reg.String(), "").
+		Optional("flags", reg.List(reg.String()), "").
+		Optional("xMin", reg.Int(), 0).
+		Optional("xMax", reg.Int(), 0).
+		Optional("yMin", reg.Int(), 0).
+		Optional("yMax", reg.Int(), 0)
 }

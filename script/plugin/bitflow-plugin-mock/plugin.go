@@ -44,24 +44,25 @@ func (*pluginImpl) Name() string {
 func (p *pluginImpl) Init(registry reg.ProcessorRegistry) error {
 	plugin.LogPluginDataSource(p, DataSourceType)
 	registry.Endpoints.CustomDataSources[bitflow.EndpointType(DataSourceType)] = func(query string) (bitflow.SampleSource, error) {
-		params, err := plugin.ParseQueryParameters(query)
+		params, err := plugin.ParseTypedQueryParameters(query, SampleGeneratorParameters)
 		if err != nil {
 			return nil, err
 		}
 		generator := defaultDataSource
-		err = generator.ParseParams(params)
+		generator.SetValues(params)
 		return &generator, err
 	}
 
 	plugin.LogPluginProcessor(p, DataProcessorName)
-	registry.RegisterStep(DataProcessorName, func(pipeline *bitflow.SamplePipeline, params map[string]string) error {
-		var res MockSampleProcessor
-		err := res.ParseParams(params)
-		if err == nil {
-			pipeline.Add(&res)
-		}
-		return err
-	}, DataProcessorName, reg.RequiredParams("print", "error"))
+	registry.RegisterStep(DataProcessorName, func(pipeline *bitflow.SamplePipeline, params map[string]interface{}) error {
+		pipeline.Add(&MockSampleProcessor{
+			PrintModulo: params["print"].(int),
+			ErrorAfter:  params["error"].(int),
+		})
+		return nil
+	}, DataProcessorName).
+		Required("print", reg.Int()).
+		Required("error", reg.Int())
 
 	return nil
 }

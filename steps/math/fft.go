@@ -32,7 +32,7 @@ var (
 
 func RegisterFFT(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("fft",
-		func(_ map[string]string) (bitflow.BatchProcessingStep, error) {
+		func(_ map[string]interface{}) (bitflow.BatchProcessingStep, error) {
 			return new(BatchFft), nil
 		},
 		"Compute a radix-2 FFT on every metric of the batch. Output the real and imaginary parts of the result")
