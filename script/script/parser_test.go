@@ -150,6 +150,7 @@ func TestParseScript_listAndMapParams(t *testing.T) {
 		optional2     string
 		list1         []time.Duration
 		list2         []int
+		list3         []time.Time
 		emptyList     []float64
 		map1          map[string]string
 		map2          map[string]int
@@ -165,6 +166,7 @@ func TestParseScript_listAndMapParams(t *testing.T) {
 		func(pipeline *bitflow.SamplePipeline, params map[string]interface{}) error {
 			list1 = params["list1"].([]time.Duration)
 			list2 = params["list2"].([]int)
+			list3 = params["list3"].([]time.Time)
 			map1 = params["map1"].(map[string]string)
 			map2 = params["map2"].(map[string]int)
 			emptyMap = params["emptyMap"].(map[string]float64)
@@ -181,6 +183,7 @@ func TestParseScript_listAndMapParams(t *testing.T) {
 		}, "step with list and map parameters").
 		Required("list1", reg.List(reg.Duration())).
 		Required("list2", reg.List(reg.Int())).
+		Required("list3", reg.List(reg.Time())).
 		Required("map1", reg.Map(reg.String())).
 		Required("map2", reg.Map(reg.Int())).
 		Required("emptyMap", reg.Map(reg.Float())).
@@ -196,7 +199,7 @@ func TestParseScript_listAndMapParams(t *testing.T) {
 
 	testScript := "special_params(list2=[ 1,'2',3], map1 = { x=y, 1=2, ' '=v } , list1 =    [1s   ,2h,    3m]  " +
 		", map2 = { 4=5 }, emptyList=[], emptyMap={}, optionalList2= [50,60],  optionalMap1={ g=40, h=60 }," +
-		"normal1= 'true', 'normal2'=  33, optional1=  3.444)"
+		"normal1= 'true', 'normal2'=  33, optional1=  3.444,   list3=['2100-10-10 10:10:10.123456', '1990-05-06 07:15:06.1'])"
 	_, errs := parser.ParseScript(testScript)
 	assert.NoError(errs.NilOrError())
 
@@ -214,6 +217,11 @@ func TestParseScript_listAndMapParams(t *testing.T) {
 	assert.Equal(33, normal2)
 	assert.Equal(3.444, optional1)
 	assert.Equal("defaultVal2", optional2)
+
+	assert.Len(list3, 2)
+	format := "2006-01-02 15:04:05.999999"
+	assert.Equal(time.Date(2100, time.October, 10, 10, 10, 10, 123456*1000, time.Local).Format(format), list3[0].Format(format))
+	assert.Equal(time.Date(1990, time.May, 6, 7, 15, 06, 100*1000*1000, time.Local).Format(format), list3[1].Format(format))
 }
 
 func createTestParser() (BitflowScriptParser, *testOutputCatcher) {
