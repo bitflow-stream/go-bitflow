@@ -65,18 +65,17 @@ func (s *JsonProcessingStep) formatTo(buf *bytes.Buffer) {
 	buf.WriteString("\n - ")
 	buf.WriteString(s.Name)
 	if s.Description != "" {
-		buf.WriteString(":\n      Description: ")
+		buf.WriteString("\n      Description: ")
 		buf.WriteString(s.Description)
 	}
 	if len(s.Params) > 0 {
 		buf.WriteString("\n      Parameters:")
 		for _, param := range s.Params {
-			buf.WriteString("\n          ")
 			requiredOrOptional := "required"
 			if !param.Required {
 				requiredOrOptional = fmt.Sprintf("optional, default: %v", param.Default)
 			}
-			fmt.Fprintf(buf, "\n          %v (%v): %v", param.Name, requiredOrOptional, param.Type)
+			fmt.Fprintf(buf, "\n          %v (%v), %v", param.Name, param.Type, requiredOrOptional)
 		}
 	}
 }
@@ -117,7 +116,7 @@ func (r ProcessorRegistry) formatSection(buf *bytes.Buffer, steps ProcessingStep
 		for _, step := range steps {
 			step.formatTo(buf)
 		}
-		return true
+		started = true
 	}
 	return started
 }
@@ -129,7 +128,7 @@ func (r ProcessorRegistry) FormatCapabilities(out io.Writer) error {
 	started = r.formatSection(&buf, steps, "Processing steps:", started)
 	started = r.formatSection(&buf, batchSteps, "Batch processing steps:", started)
 	started = r.formatSection(&buf, forks, "Forks:", started)
-	buf.WriteString("\n")
+	buf.WriteString("\n\n")
 	_, err := buf.WriteTo(out)
 	return err
 }
