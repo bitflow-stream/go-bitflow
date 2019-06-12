@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/antongulenko/golib"
 )
 
 func ParameterError(name string, err error) error {
@@ -50,6 +52,10 @@ func Float() ParameterParser {
 
 func Duration() ParameterParser {
 	return primitiveParser{primitive: durationParser{}}
+}
+
+func Time() ParameterParser {
+	return primitiveParser{primitive: timeParser{}}
 }
 
 func Bool() ParameterParser {
@@ -225,6 +231,51 @@ func (durationParser) CorrectListType(val interface{}) (res bool) {
 }
 func (durationParser) CorrectMapType(val interface{}) (res bool) {
 	_, res = val.(map[string]time.Duration)
+	return
+}
+
+type timeParser struct {
+}
+
+func (timeParser) String() string {
+	return "time"
+}
+func (timeParser) ParsePrimitive(val string) (interface{}, error) {
+
+	return time.Parse(golib.SimpleTimeLayout+".999999", val)
+}
+func (p timeParser) ParseList(val []string) (interface{}, error) {
+	result := make([]time.Time, len(val))
+	for i, v := range val {
+		parsed, err := p.ParsePrimitive(v)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = parsed.(time.Time)
+	}
+	return result, nil
+}
+func (p timeParser) ParseMap(val map[string]string) (interface{}, error) {
+	result := make(map[string]time.Time, len(val))
+	for key, v := range val {
+		parsed, err := p.ParsePrimitive(v)
+		if err != nil {
+			return nil, err
+		}
+		result[key] = parsed.(time.Time)
+	}
+	return result, nil
+}
+func (timeParser) CorrectPrimitiveType(val interface{}) (res bool) {
+	_, res = val.(time.Time)
+	return
+}
+func (timeParser) CorrectListType(val interface{}) (res bool) {
+	_, res = val.([]time.Time)
+	return
+}
+func (timeParser) CorrectMapType(val interface{}) (res bool) {
+	_, res = val.(map[string]time.Time)
 	return
 }
 

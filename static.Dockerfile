@@ -1,6 +1,5 @@
 # teambitflow/go-bitflow:static
 FROM golang:1.12-alpine as build
-ENV GO111MODULE=on
 RUN apk --no-cache add git gcc g++ musl-dev
 WORKDIR /build
 COPY . .
