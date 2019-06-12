@@ -79,7 +79,7 @@ func (endpoint *RestEndpoint) NewDataSource(outgoingSampleBuffer int) *RestDataS
 	stopper := golib.NewStopChan()
 	endpoint.stoppers = append(endpoint.stoppers, stopper)
 	return &RestDataSource{
-		outgoing: make(chan bitflow.SampleAndHeader, outgoingSampleBuffer),
+		outgoing: make(chan []bitflow.SampleAndHeader, outgoingSampleBuffer),
 		endpoint: endpoint,
 		stop:     stopper,
 	}
@@ -88,7 +88,7 @@ func (endpoint *RestEndpoint) NewDataSource(outgoingSampleBuffer int) *RestDataS
 type RestDataSource struct {
 	bitflow.AbstractSampleSource
 
-	outgoing  chan bitflow.SampleAndHeader
+	outgoing  chan []bitflow.SampleAndHeader
 	stop      golib.StopChan
 	closeOnce sync.Once
 	endpoint  *RestEndpoint
@@ -103,8 +103,16 @@ func (source *RestDataSource) Serve(verb string, path string, httpLogFile string
 	return source.endpoint.serve(verb, path, httpLogFile, serve)
 }
 
+func (source *RestDataSource) EmitSamples(samples []bitflow.SampleAndHeader) {
+	source.outgoing <- samples
+}
+
+func (source *RestDataSource) EmitSampleAndHeader(sample bitflow.SampleAndHeader) {
+	source.EmitSamples([]bitflow.SampleAndHeader{sample})
+}
+
 func (source *RestDataSource) EmitSample(sample *bitflow.Sample, header *bitflow.Header) {
-    source.outgoing <- bitflow.SampleAndHeader{Sample: sample, Header: header}
+	source.EmitSampleAndHeader(bitflow.SampleAndHeader{Sample: sample, Header: header})
 }
 
 func (source *RestDataSource) Start(wg *sync.WaitGroup) golib.StopChan {
@@ -126,11 +134,17 @@ func (source *RestDataSource) Close() {
 	})
 }
 
+func (source *RestDataSource) String() string {
+	return fmt.Sprintf("REST data source (%v, buffer %v)", source.endpoint.endpoint, cap(source.outgoing))
+}
+
 func (source *RestDataSource) sinkSamples(wg *sync.WaitGroup) {
 	defer wg.Done()
-	for sample := range source.outgoing {
-		if err := source.GetSink().Sample(sample.Sample, sample.Header); err != nil {
-			log.Errorln("Error sinking sample:", err)
+	for samples := range source.outgoing {
+		for _, sample := range samples {
+			if err := source.GetSink().Sample(sample.Sample, sample.Header); err != nil {
+				log.Errorf("%v: Error sinking sample: %v", source, err)
+			}
 		}
 	}
 }
