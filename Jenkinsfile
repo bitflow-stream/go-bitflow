@@ -27,7 +27,7 @@ pipeline {
                     sh 'go clean -i -v ./...'
                     sh 'go install -v ./...'
                     sh 'rm -rf reports && mkdir -p reports'
-                    sh 'go test -v ./... -coverprofile=reports/test-coverage.txt 2>&1 | go-junit-report > reports/test.xml'
+                    sh 'go test -v ./... -coverprofile=reports/test-coverage.txt 2>&1 | tee /dev/stderr | go-junit-report > reports/test.xml'
                     sh 'go vet ./... &> reports/vet.txt'
                     sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
             }
