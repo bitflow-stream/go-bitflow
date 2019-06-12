@@ -98,7 +98,7 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 			sample.SetTag(args[0], args[1])
 			return args[1], nil
 		}),
-		"timestamp": p.makeStringFunction("timestamp", 0, func(sample *bitflow.Sample, args ...string) (interface{}, error) {
+		"timestamp": p.makeStringFunction("timestamp", 0, func(sample *bitflow.Sample, _ ...string) (interface{}, error) {
 			return float64(sample.Time.Unix()), nil
 		}),
 		// Dates are parsed automatically by the govaluate library if a date/time formatted string is encountered. The Unix() value is used.
@@ -107,10 +107,10 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 		//  	date, err := time.Parse(bitflow.TextMarshallerDateFormat, args[0])
 		//  	return float64(date.Unix()), fmt.Errorf("Cannot parse date (format: %v): %v", bitflow.TextMarshallerDateFormat, err)
 		// }),
-		"now": p.makeStringFunction("now", 0, func(sample *bitflow.Sample, args ...string) (interface{}, error) {
+		"now": p.makeStringFunction("now", 0, func(_ *bitflow.Sample, _ ...string) (interface{}, error) {
 			return float64(time.Now().Unix()), nil
 		}),
-		"num": p.makeStringFunction("num", 0, func(sample *bitflow.Sample, args ...string) (interface{}, error) {
+		"num": p.makeStringFunction("num", 0, func(_ *bitflow.Sample, _ ...string) (interface{}, error) {
 			return p.num, nil
 		}),
 		"str": func(arguments ...interface{}) (interface{}, error) {

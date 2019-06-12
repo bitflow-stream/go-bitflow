@@ -24,7 +24,7 @@ func NewSampleShuffler() *bitflow.SimpleBatchProcessingStep {
 
 func RegisterSampleShuffler(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("shuffle",
-		func(params map[string]interface{}) (bitflow.BatchProcessingStep, error) {
+		func(_ map[string]interface{}) (bitflow.BatchProcessingStep, error) {
 			return NewSampleShuffler(), nil
 		},
 		"Shuffle a batch of samples to a random ordering")

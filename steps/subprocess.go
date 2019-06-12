@@ -45,7 +45,7 @@ func RegisterSubprocessRunner(b reg.ProcessorRegistry) {
 			Cmd:  cmd[0],
 			Args: cmd[1:],
 		}
-		if err := runner.Configure(format, &factory); err != nil {
+		if err = runner.Configure(format, &factory); err != nil {
 			return err
 		}
 		p.Add(runner)
@@ -141,21 +141,19 @@ func (r *SubprocessRunner) createProcess() error {
 
 func (r *SubprocessRunner) runProcess() error {
 	err := r.cmd.Run()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if exitErr.Success() {
-				err = nil
-			} else {
-				if r.stderr.Len() > 0 {
-					log.Warnf("Stderr output of %v:", r)
-					scanner := bufio.NewScanner(&r.stderr)
-					scanner.Split(bufio.ScanLines)
-					for scanner.Scan() {
-						log.Warnln(" > " + scanner.Text())
-					}
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if exitErr.Success() {
+			err = nil
+		} else {
+			if r.stderr.Len() > 0 {
+				log.Warnf("Stderr output of %v:", r)
+				scanner := bufio.NewScanner(&r.stderr)
+				scanner.Split(bufio.ScanLines)
+				for scanner.Scan() {
+					log.Warnln(" > " + scanner.Text())
 				}
-				return fmt.Errorf("Subprocess '%v' exited abnormally (%v)", r.Cmd, exitErr.ProcessState.String())
 			}
+			return fmt.Errorf("Subprocess '%v' exited abnormally (%v)", r.Cmd, exitErr.ProcessState.String())
 		}
 	}
 	return err

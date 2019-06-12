@@ -296,52 +296,10 @@ func (f *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 			return nil, fmt.Errorf("Format cannot be specified for data input: %v", input)
 		}
 		if result == nil {
-			reader := f.Reader(nil) // nil as Unmarshaller makes the SampleSource auto-detect the format
-			if f.FlagSourceTag != "" {
-				reader.Handler = sourceTagger(f.FlagSourceTag)
-			}
 			inputType = endpoint.Type
-			switch endpoint.Type {
-			case StdEndpoint:
-				source := NewConsoleSource()
-				source.Reader = reader
-				result = source
-			case TcpEndpoint, HttpEndpoint:
-				source := &TCPSource{
-					RemoteAddrs:   []string{endpoint.Target},
-					PrintErrors:   !f.FlagTcpSourceDropErrors,
-					RetryInterval: tcp_download_retry_interval,
-					DialTimeout:   tcp_dial_timeout,
-					UseHTTP:       endpoint.Type == HttpEndpoint,
-				}
-				source.TcpConnLimit = f.FlagTcpConnectionLimit
-				source.Reader = reader
-				result = source
-			case TcpListenEndpoint:
-				source := NewTcpListenerSource(endpoint.Target)
-				source.SimultaneousConnections = f.FlagInputTcpAcceptLimit
-				source.TcpConnLimit = f.FlagTcpConnectionLimit
-				source.Reader = reader
-				result = source
-			case FileEndpoint:
-				source := &FileSource{
-					FileNames: []string{endpoint.Target},
-					IoBuffer:  f.FlagIoBuffer,
-					Robust:    f.FlagInputFilesRobust,
-					KeepAlive: f.FlagFilesKeepAlive,
-				}
-				source.Reader = reader
-				result = source
-			default:
-				if factory, ok := f.CustomDataSources[endpoint.Type]; ok && endpoint.IsCustomType {
-					var factoryErr error
-					result, factoryErr = factory(endpoint.Target)
-					if factoryErr != nil {
-						return nil, fmt.Errorf("Error creating '%v' input: %v", endpoint.Type, factoryErr)
-					}
-				} else {
-					return nil, errors.New("Unknown input endpoint type: " + string(endpoint.Type))
-				}
+			result, err = f.createInput(endpoint)
+			if err != nil {
+				return nil, err
 			}
 		} else {
 			if inputType != endpoint.Type {
@@ -369,6 +327,55 @@ func (f *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 	return result, nil
 }
 
+func (f *EndpointFactory) createInput(endpoint EndpointDescription) (SampleSource, error) {
+	reader := f.Reader(nil) // nil as Unmarshaller makes the SampleSource auto-detect the format
+	if f.FlagSourceTag != "" {
+		reader.Handler = sourceTagger(f.FlagSourceTag)
+	}
+	switch endpoint.Type {
+	case StdEndpoint:
+		source := NewConsoleSource()
+		source.Reader = reader
+		return source, nil
+	case TcpEndpoint, HttpEndpoint:
+		source := &TCPSource{
+			RemoteAddrs:   []string{endpoint.Target},
+			PrintErrors:   !f.FlagTcpSourceDropErrors,
+			RetryInterval: tcp_download_retry_interval,
+			DialTimeout:   tcp_dial_timeout,
+			UseHTTP:       endpoint.Type == HttpEndpoint,
+		}
+		source.TcpConnLimit = f.FlagTcpConnectionLimit
+		source.Reader = reader
+		return source, nil
+	case TcpListenEndpoint:
+		source := NewTcpListenerSource(endpoint.Target)
+		source.SimultaneousConnections = f.FlagInputTcpAcceptLimit
+		source.TcpConnLimit = f.FlagTcpConnectionLimit
+		source.Reader = reader
+		return source, nil
+	case FileEndpoint:
+		source := &FileSource{
+			FileNames: []string{endpoint.Target},
+			IoBuffer:  f.FlagIoBuffer,
+			Robust:    f.FlagInputFilesRobust,
+			KeepAlive: f.FlagFilesKeepAlive,
+		}
+		source.Reader = reader
+		return source, nil
+	default:
+		if factory, ok := f.CustomDataSources[endpoint.Type]; ok && endpoint.IsCustomType {
+			result, err := factory(endpoint.Target)
+			if err != nil {
+				err = fmt.Errorf("Error creating '%v' input: %v", endpoint.Type, err)
+			}
+			return result, err
+		} else {
+			return nil, errors.New("Unknown input endpoint type: " + string(endpoint.Type))
+		}
+	}
+}
+
 // Writer returns an instance of SampleWriter, configured by the values stored in the EndpointFactory.
 func (f *EndpointFactory) Writer() SampleWriter {
 	return SampleWriter{f.FlagParallelHandler}
@@ -377,7 +384,6 @@ func (f *EndpointFactory) Writer() SampleWriter {
 // CreateInput creates a SampleSink object based on the given output endpoint description
 // and the configuration flags in the EndpointFactory.
 func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
-	var resultSink SampleProcessor
 	endpoint, err := f.ParseEndpointDescription(output, true)
 	if err != nil {
 		return nil, err
@@ -389,18 +395,28 @@ func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 			return nil, err
 		}
 	}
-	var marshallingSink *AbstractMarshallingSampleOutput
+	resultSink, marshallingSink, err := f.createOutput(endpoint, &marshaller)
+	if err != nil {
+		return nil, err
+	}
+	if marshallingSink != nil {
+		marshallingSink.SetMarshaller(marshaller)
+		marshallingSink.Writer = f.Writer()
+	}
+	return resultSink, nil
+}
+
+func (f *EndpointFactory) createOutput(endpoint EndpointDescription, marshaller *Marshaller) (SampleProcessor, *AbstractMarshallingSampleOutput, error) {
 	switch endpoint.Type {
 	case StdEndpoint:
 		sink := NewConsoleSink()
-		marshallingSink = &sink.AbstractMarshallingSampleOutput
-		if txt, ok := marshaller.(TextMarshaller); ok {
+		if txt, ok := (*marshaller).(TextMarshaller); ok {
 			txt.AssumeStdout = true
-			marshaller = txt
-		} else if txt, ok := marshaller.(*TextMarshaller); ok {
-			txt.AssumeStdout = true
+			*marshaller = txt
+		} else if txt2, ok2 := (*marshaller).(*TextMarshaller); ok2 {
+			txt2.AssumeStdout = true
 		}
-		resultSink = sink
+		return sink, &sink.AbstractMarshallingSampleOutput, nil
 	case FileEndpoint:
 		sink := &FileSink{
 			Filename:          endpoint.Target,
@@ -409,8 +425,7 @@ func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 			Append:            f.FlagFilesAppend,
 			VanishedFileCheck: f.FlagFileVanishedCheck,
 		}
-		marshallingSink = &sink.AbstractMarshallingSampleOutput
-		resultSink = sink
+		return sink, &sink.AbstractMarshallingSampleOutput, nil
 	case TcpEndpoint:
 		sink := &TCPSink{
 			Endpoint:    endpoint.Target,
@@ -420,8 +435,7 @@ func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 		if f.FlagTcpLogReceivedData {
 			sink.LogReceivedTraffic = log.ErrorLevel
 		}
-		marshallingSink = &sink.AbstractMarshallingSampleOutput
-		resultSink = sink
+		return sink, &sink.AbstractMarshallingSampleOutput, nil
 	case TcpListenEndpoint:
 		sink := &TCPListenerSink{
 			Endpoint:        endpoint.Target,
@@ -431,12 +445,11 @@ func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 		if f.FlagTcpLogReceivedData {
 			sink.LogReceivedTraffic = log.ErrorLevel
 		}
-		marshallingSink = &sink.AbstractMarshallingSampleOutput
-		resultSink = sink
+		return sink, &sink.AbstractMarshallingSampleOutput, nil
 	case HttpEndpoint:
 		theUrl, err := url.Parse("http://" + endpoint.Target)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		sink := &HttpServerSink{
 			Endpoint:        theUrl.Host,
@@ -448,24 +461,18 @@ func (f *EndpointFactory) CreateOutput(output string) (SampleProcessor, error) {
 		if f.FlagTcpLogReceivedData {
 			sink.LogReceivedTraffic = log.ErrorLevel
 		}
-		marshallingSink = &sink.AbstractMarshallingSampleOutput
-		resultSink = sink
+		return sink, &sink.AbstractMarshallingSampleOutput, nil
 	default:
 		if factory, ok := f.CustomDataSinks[endpoint.Type]; ok && endpoint.IsCustomType {
-			var factoryErr error
-			resultSink, factoryErr = factory(endpoint.Target)
-			if factoryErr != nil {
-				return nil, fmt.Errorf("Error creating '%v' output: %v", endpoint.Type, factoryErr)
+			sink, err := factory(endpoint.Target)
+			if err != nil {
+				err = fmt.Errorf("Error creating '%v' output: %v", endpoint.Type, err)
 			}
+			return sink, nil, err
 		} else {
-			return nil, errors.New("Unknown output endpoint type: " + string(endpoint.Type))
+			return nil, nil, errors.New("Unknown output endpoint type: " + string(endpoint.Type))
 		}
 	}
-	if marshallingSink != nil {
-		marshallingSink.SetMarshaller(marshaller)
-		marshallingSink.Writer = f.Writer()
-	}
-	return resultSink, nil
 }
 
 func (f *EndpointFactory) CreateMarshaller(format MarshallingFormat) (Marshaller, error) {
@@ -562,31 +569,8 @@ func (f *EndpointFactory) ParseUrlEndpointDescription(endpoint string) (res Endp
 	target := urlParts[1]
 	res.Target = target
 	for _, part := range strings.Split(urlParts[0], "+") {
-		// TODO unclean: this parsing method is used for both marshalling/unmarshalling endpoints
-		if f.isMarshallingFormat(part) {
-			if res.Format != "" {
-				err = fmt.Errorf("Multiple formats defined in: %v", endpoint)
-				return
-			}
-			res.Format = MarshallingFormat(part)
-		} else {
-			if res.Type != UndefinedEndpoint {
-				err = fmt.Errorf("Multiple transport types defined: %v", endpoint)
-				return
-			}
-			switch EndpointType(part) {
-			case TcpEndpoint, TcpListenEndpoint, FileEndpoint, HttpEndpoint:
-				res.Type = EndpointType(part)
-			case StdEndpoint:
-				if target != stdTransportTarget {
-					err = fmt.Errorf("Transport '%v' can only be defined with target '%v'", part, stdTransportTarget)
-					return
-				}
-				res.Type = StdEndpoint
-			default:
-				res.IsCustomType = true
-				res.Type = EndpointType(part)
-			}
+		if err = f.parseEndpointUrlPart(part, &res, endpoint, target); err != nil {
+			return
 		}
 	}
 	if res.Type == UndefinedEndpoint {
@@ -600,6 +584,33 @@ func (f *EndpointFactory) ParseUrlEndpointDescription(endpoint string) (res Endp
 		err = fmt.Errorf("Cannot define the data format for transport '%v'", res.Type)
 	}
 	return
+}
+
+func (f *EndpointFactory) parseEndpointUrlPart(part string, res *EndpointDescription, endpoint, target string) error {
+	// TODO unclean: this parsing method is used for both marshalling/unmarshalling endpoints
+	if f.isMarshallingFormat(part) {
+		if res.Format != "" {
+			return fmt.Errorf("Multiple formats defined in: %v", endpoint)
+		}
+		res.Format = MarshallingFormat(part)
+	} else {
+		if res.Type != UndefinedEndpoint {
+			return fmt.Errorf("Multiple transport types defined: %v", endpoint)
+		}
+		switch EndpointType(part) {
+		case TcpEndpoint, TcpListenEndpoint, FileEndpoint, HttpEndpoint:
+			res.Type = EndpointType(part)
+		case StdEndpoint:
+			if target != stdTransportTarget {
+				return fmt.Errorf("Transport '%v' can only be defined with target '%v'", part, stdTransportTarget)
+			}
+			res.Type = StdEndpoint
+		default:
+			res.IsCustomType = true
+			res.Type = EndpointType(part)
+		}
+	}
+	return nil
 }
 
 func (f *EndpointFactory) isMarshallingFormat(formatName string) bool {

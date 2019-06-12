@@ -27,7 +27,7 @@ func RegisterMinMaxScaling(b reg.ProcessorRegistry) {
 
 func RegisterStandardizationScaling(b reg.ProcessorRegistry) {
 	b.RegisterBatchStep("standardize",
-		func(params map[string]interface{}) (res bitflow.BatchProcessingStep, err error) {
+		func(_ map[string]interface{}) (res bitflow.BatchProcessingStep, err error) {
 			return new(StandardizationScaling), nil
 		},
 		"Normalize a batch of samples based on the mean and std-deviation")

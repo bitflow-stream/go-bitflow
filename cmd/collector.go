@@ -44,7 +44,7 @@ func (c *CmdDataCollector) RegisterFlags() {
 }
 
 func (c *CmdDataCollector) BuildPipeline() (*bitflow.SamplePipeline, error) {
-	p, err := c.CmdPipelineBuilder.BuildPipeline(c.get_script)
+	p, err := c.CmdPipelineBuilder.BuildPipeline(c.getScript)
 	if err != nil || p == nil {
 		return p, err
 	}
@@ -67,14 +67,14 @@ func (c *CmdDataCollector) BuildPipeline() (*bitflow.SamplePipeline, error) {
 		}()
 		p.Add(tagger)
 	}
-	if err := c.add_outputs(p); err != nil {
+	if err := c.addOutputs(p); err != nil {
 		return nil, err
 	}
 	p = c.CmdPipelineBuilder.PrintPipeline(p)
 	return p, nil
 }
 
-func (c *CmdDataCollector) get_script() (string, error) {
+func (c *CmdDataCollector) getScript() (string, error) {
 	if c.script != "" && c.scriptFile != "" {
 		return "", fmt.Errorf("Cannot specify both an immediate Bitflow script through -s and a Bitflow script file through -f")
 	}
@@ -93,19 +93,19 @@ func (c *CmdDataCollector) get_script() (string, error) {
 	return script, nil
 }
 
-func (c *CmdDataCollector) add_outputs(p *bitflow.SamplePipeline) error {
-	outputs, err := c.create_outputs()
+func (c *CmdDataCollector) addOutputs(p *bitflow.SamplePipeline) error {
+	outputs, err := c.createOutputs()
 	if err != nil {
 		return err
 	}
 	if len(outputs) == 1 {
-		c.set_sink(p, outputs[0])
+		c.setSink(p, outputs[0])
 	} else {
 		// Create a multiplex-fork for all outputs
 		dist := new(fork.MultiplexDistributor)
 		for _, sink := range outputs {
 			pipe := new(bitflow.SamplePipeline)
-			c.set_sink(pipe, sink)
+			c.setSink(pipe, sink)
 			dist.Subpipelines = append(dist.Subpipelines, pipe)
 		}
 		p.Add(&fork.SampleFork{Distributor: dist})
@@ -113,7 +113,7 @@ func (c *CmdDataCollector) add_outputs(p *bitflow.SamplePipeline) error {
 	return nil
 }
 
-func (c *CmdDataCollector) create_outputs() ([]bitflow.SampleProcessor, error) {
+func (c *CmdDataCollector) createOutputs() ([]bitflow.SampleProcessor, error) {
 	if len(c.outputs) == 0 && c.DefaultOutput != "" {
 		c.outputs = []string{c.DefaultOutput}
 	}
@@ -135,17 +135,16 @@ func (c *CmdDataCollector) create_outputs() ([]bitflow.SampleProcessor, error) {
 	return sinks, nil
 }
 
-func (c *CmdDataCollector) set_sink(p *bitflow.SamplePipeline, sink bitflow.SampleProcessor) {
+func (c *CmdDataCollector) setSink(p *bitflow.SamplePipeline, sink bitflow.SampleProcessor) {
 	// Add a filter to file outputs
-	if _, isFile := sink.(*bitflow.FileSink); isFile {
-		if c.restApiEndpoint != "" {
-			p.Add(&steps.SampleFilter{
-				Description: bitflow.String("Filter samples based on /file_output REST API."),
-				IncludeFilter: func(sample *bitflow.Sample, header *bitflow.Header) (bool, error) {
-					return c.fileOutputApi.FileOutputEnabled, nil
-				},
-			})
-		}
+	_, isFile := sink.(*bitflow.FileSink)
+	if isFile && c.restApiEndpoint != "" {
+		p.Add(&steps.SampleFilter{
+			Description: bitflow.String("Filter samples based on /file_output REST API."),
+			IncludeFilter: func(sample *bitflow.Sample, header *bitflow.Header) (bool, error) {
+				return c.fileOutputApi.FileOutputEnabled, nil
+			},
+		})
 	}
 	p.Add(sink)
 }

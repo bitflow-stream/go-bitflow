@@ -130,6 +130,16 @@ func (d *PipelineCache) getPipelines(key string, build PipelineBuildFunc) ([]Sub
 		}
 		d.pipelines[key] = pipes
 	}
+	d.updateSortedPipelineKeys(key, pipes)
+	result := make([]Subpipeline, len(pipes))
+	for i, pipe := range pipes {
+		result[i].Key = key
+		result[i].Pipe = pipe
+	}
+	return result, nil
+}
+
+func (d *PipelineCache) updateSortedPipelineKeys(key string, pipes []*bitflow.SamplePipeline) {
 	// Maintain a sorted list of keys that lead to each pipeline
 	for _, pipe := range pipes {
 		if keys, ok := d.keys[pipe]; ok {
@@ -146,12 +156,6 @@ func (d *PipelineCache) getPipelines(key string, build PipelineBuildFunc) ([]Sub
 			d.keys[pipe] = []string{key}
 		}
 	}
-	result := make([]Subpipeline, len(pipes))
-	for i, pipe := range pipes {
-		result[i].Key = key
-		result[i].Pipe = pipe
-	}
-	return result, nil
 }
 
 func (d *PipelineCache) ContainedStringers() []fmt.Stringer {

@@ -24,8 +24,8 @@ func NewHttpTagger(pathPrefix string, r *mux.Router) *HttpTagger {
 		currentHttpTags: make(map[string]string),
 		listenEndpoint:  pathPrefix,
 	}
-	r.HandleFunc(pathPrefix+"/tag/{name}", tagger.handleTagRequest).Methods("GET", "DELETE")
-	r.HandleFunc(pathPrefix+"/tags", tagger.handleTagsRequest).Methods("GET", "PUT", "POST", "DELETE")
+	r.HandleFunc(pathPrefix+"/tag/{name}", tagger.handleTagRequest).Methods(http.MethodGet, http.MethodDelete)
+	r.HandleFunc(pathPrefix+"/tags", tagger.handleTagsRequest).Methods(http.MethodGet, http.MethodDelete, http.MethodPut, http.MethodPost)
 	return tagger
 }
 

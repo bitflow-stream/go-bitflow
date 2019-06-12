@@ -29,7 +29,6 @@ const (
 // in a key = value format. The width of the header line, the number of columns
 // in the table, and the spacing between the columns in the table can be configured.
 type TextMarshaller struct {
-
 	// TextWidths sets the width of the header line and value table.
 	// If Columns > 0, this value is ignored as the width is determined by the
 	// number of columns. If this is 0, the width will be determined automatically:
@@ -174,22 +173,28 @@ func (m TextMarshaller) writeHeader(header string, textWidth int, writer io.Writ
 }
 
 func (m TextMarshaller) writeLines(lines []string, widths []int, writer io.Writer) error {
-	columns := len(widths)
 	for i, line := range lines {
-		if _, err := writer.Write([]byte(line)); err != nil {
+		if err := m.writeLine(line, i, lines, widths, writer); err != nil {
 			return err
 		}
-		col := i % columns
-		if col >= columns-1 || i == len(lines)-1 {
-			if _, err := writer.Write([]byte("\n")); err != nil {
+	}
+	return nil
+}
+
+func (m TextMarshaller) writeLine(line string, lineIndex int, lines []string, widths []int, writer io.Writer) error {
+	if _, err := writer.Write([]byte(line)); err != nil {
+		return err
+	}
+	col := lineIndex % len(widths)
+	if col >= len(widths)-1 || lineIndex == len(lines)-1 {
+		if _, err := writer.Write([]byte("\n")); err != nil {
+			return err
+		}
+	} else {
+		extraSpace := widths[col] - len(line)
+		for j := 0; j < extraSpace; j++ {
+			if _, err := writer.Write([]byte(" ")); err != nil {
 				return err
-			}
-		} else {
-			extraSpace := widths[col] - len(line)
-			for j := 0; j < extraSpace; j++ {
-				if _, err := writer.Write([]byte(" ")); err != nil {
-					return err
-				}
 			}
 		}
 	}

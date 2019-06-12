@@ -137,17 +137,28 @@ func (s *TagSynchronizer) pushSample(sample *bitflow.Sample, header *bitflow.Hea
 	}
 }
 
+type multiSender struct {
+	err          golib.MultiError
+	synchronizer *TagSynchronizer
+}
+
+func (sender multiSender) send(sample bitflow.SampleAndHeader) {
+	sender.err.Add(sender.synchronizer.NoopProcessor.Sample(sample.Sample, sample.Header))
+}
+
 func (s *TagSynchronizer) synchronize() error {
 	if len(s.referenceStream) == 0 {
 		// No reference samples currently - cannot synchronize any tags
 		return nil
 	}
 
-	var err golib.MultiError
-	send := func(sample bitflow.SampleAndHeader) {
-		err.Add(s.NoopProcessor.Sample(sample.Sample, sample.Header))
-	}
+	sender := multiSender{synchronizer: s}
+	s.flushStreams(sender)
+	s.flushReferenceSamples(sender)
+	return sender.err.NilOrError()
+}
 
+func (s *TagSynchronizer) flushStreams(sender multiSender) {
 	for streamName, stream := range s.streams {
 		for i := stream.samples.Front(); i != nil; i = i.Next() {
 			sample := i.Value.(bitflow.SampleAndHeader)
@@ -170,10 +181,12 @@ func (s *TagSynchronizer) synchronize() error {
 			}
 			stream.position = sample.Time
 			stream.samples.Remove(i)
-			send(sample)
+			sender.send(sample)
 		}
 	}
+}
 
+func (s *TagSynchronizer) flushReferenceSamples(sender multiSender) {
 	// If we have already seen all required streams, flush all reference samples from the past
 	if len(s.streams) >= s.NumTargetStreams {
 
@@ -197,12 +210,11 @@ func (s *TagSynchronizer) synchronize() error {
 					copy(r[i:], r[i+1:])
 				}
 				r = r[:len(r)-1]
-				send(sample)
+				sender.send(sample)
 			}
 			s.referenceStream = r
 		}
 	}
-	return err.NilOrError()
 }
 
 func (s *TagSynchronizer) copyTags(from, to *bitflow.Sample) {
