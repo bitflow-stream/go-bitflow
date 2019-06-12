@@ -111,7 +111,7 @@ func (r ProcessorRegistry) getSortedProcessingSteps() (steps ProcessingSteps, ba
 func (r ProcessorRegistry) formatSection(buf *bytes.Buffer, steps ProcessingSteps, title string, started bool) bool {
 	if len(steps) > 0 {
 		if started {
-			buf.WriteString("\n\n")
+			buf.WriteString("\n")
 		}
 		buf.WriteString(title)
 		for _, step := range steps {
