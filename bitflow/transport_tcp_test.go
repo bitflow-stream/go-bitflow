@@ -1,6 +1,8 @@
 package bitflow
 
 import (
+	"net"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -9,6 +11,23 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 )
+
+func GetLocalPort() string {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		panic(err)
+	}
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		if closeErr := l.Close(); closeErr != nil {
+			panic(closeErr)
+		}
+	}()
+	return strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
+}
 
 type TcpListenerTestSuite struct {
 	testSuiteWithSamples
@@ -35,9 +54,10 @@ func (suite *TcpListenerTestSuite) runGroup(sender golib.Task, generator SampleP
 
 func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 	testSink := suite.newFilledTestSink()
+	port := GetLocalPort()
 
 	l := &TCPListenerSink{
-		Endpoint:        ":7878",
+		Endpoint:        ":" + port,
 		BufferedSamples: 100,
 	}
 	l.Writer.ParallelSampleHandler = parallel_handler
@@ -45,7 +65,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 
 	s := &TCPSource{
 		PrintErrors:   true,
-		RemoteAddrs:   []string{"localhost:7878"},
+		RemoteAddrs:   []string{"localhost:" + port},
 		RetryInterval: time.Second,
 		DialTimeout:   tcp_dial_timeout,
 	}
@@ -69,11 +89,12 @@ func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 	for i := range suite.headers {
 		testSink := suite.newTestSinkFor(i)
+		port := GetLocalPort()
 
 		// TODO test that a smaller buffer leads to dropped samples
 
 		l := &TCPListenerSink{
-			Endpoint:        ":7878",
+			Endpoint:        ":" + port,
 			BufferedSamples: 100,
 		}
 		l.Writer.ParallelSampleHandler = parallel_handler
@@ -81,7 +102,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 
 		s := &TCPSource{
 			PrintErrors:   true,
-			RemoteAddrs:   []string{"localhost:7878"},
+			RemoteAddrs:   []string{"localhost:" + port},
 			RetryInterval: tcp_download_retry_interval,
 			DialTimeout:   tcp_dial_timeout,
 		}
@@ -121,14 +142,15 @@ func (suite *TcpListenerTestSuite) TestListenerSinkAllBinary() {
 
 func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 	testSink := suite.newFilledTestSink()
+	port := GetLocalPort()
 
-	l := NewTcpListenerSource(":7878")
+	l := NewTcpListenerSource(":" + port)
 	l.Reader = SampleReader{
 		ParallelSampleHandler: parallel_handler,
 	}
 
 	s := &TCPSink{
-		Endpoint:    "localhost:7878",
+		Endpoint:    "localhost:" + port,
 		DialTimeout: tcp_dial_timeout,
 	}
 	s.Writer.ParallelSampleHandler = parallel_handler
@@ -152,14 +174,15 @@ func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller) {
 	for i := range suite.headers {
 		testSink := suite.newTestSinkFor(i)
+		port := GetLocalPort()
 
-		l := NewTcpListenerSource(":7878")
+		l := NewTcpListenerSource(":" + port)
 		l.Reader = SampleReader{
 			ParallelSampleHandler: parallel_handler,
 		}
 
 		s := &TCPSink{
-			Endpoint:    "localhost:7878",
+			Endpoint:    "localhost:" + port,
 			DialTimeout: tcp_dial_timeout,
 		}
 		s.Writer.ParallelSampleHandler = parallel_handler
