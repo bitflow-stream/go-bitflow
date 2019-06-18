@@ -181,6 +181,7 @@ func (p *Processor) storeSample(sample *bitflow.Sample) {
 func (p *Processor) getVal(index int, key string, sample *bitflow.Sample) (res float64) {
 	if index == AxisTime {
 		res = float64(sample.Time.Unix())
+
 	} else if index == AxisNum {
 		res = float64(len(p.data[key]))
 	} else if index < len(sample.Values) {
@@ -557,16 +558,23 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		xMax := params["xMax"].(float64)
 		yMin := params["yMin"].(float64)
 		yMax := params["yMax"].(float64)
+
 		plot := &Processor{
 			AxisX:      AxisAuto,
 			AxisY:      AxisAuto,
 			OutputFile: params["file"].(string),
 			ColorTag:   params["color"].(string),
 			Type:       ScatterPlot,
-			ForceXmin:  &xMin,
-			ForceXmax:  &xMax,
-			ForceYmin:  &yMin,
-			ForceYmax:  &yMax,
+			ForceXmin:  nil,
+			ForceXmax:  nil,
+			ForceYmin:  nil,
+			ForceYmax:  nil,
+		}
+		if ! params["autoscale"].(bool) {
+			plot.ForceXmin = &xMin
+			plot.ForceXmax = &xMax
+			plot.ForceYmin = &yMin
+			plot.ForceYmax = &yMax
 		}
 
 		for _, part := range params["flags"].([]string) {
@@ -597,7 +605,7 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 				plot.AxisY = 0
 			default:
 				allFlags := []string{"nolegend", "line", "linepoint", "cluster", "separate", "force_scatter", "force_time"}
-				return fmt.Errorf("Unkown flag: '%v'. The 'flags' parameter is a comma-separated list of flags: %v", part, allFlags)
+				return fmt.Errorf("Unkown flag: '%v'. Supported flags: %v", part, allFlags)
 			}
 		}
 		p.Add(plot)
@@ -608,9 +616,10 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		"Plot a batch of samples to a given filename. The file ending denotes the file type").
 		Required("file", reg.String()).
 		Optional("color", reg.String(), "").
-		Optional("flags", reg.List(reg.String()), "").
-		Optional("xMin", reg.Int(), 0).
-		Optional("xMax", reg.Int(), 0).
-		Optional("yMin", reg.Int(), 0).
-		Optional("yMax", reg.Int(), 0)
+		Optional("flags", reg.List(reg.String()), []string{}).
+		Optional("autoscale", reg.Bool(), true).
+		Optional("xMin", reg.Float(), 0.0).
+		Optional("xMax", reg.Float(), 0.0).
+		Optional("yMin", reg.Float(), 0.0).
+		Optional("yMax", reg.Float(), 0.0)
 }
