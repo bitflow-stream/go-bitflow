@@ -11,7 +11,7 @@ import (
 func RegisterSleep(b reg.ProcessorRegistry) {
 	b.RegisterStep("sleep", _create_sleep_processor,
 		"Between every two samples, sleep the time difference between their timestamps").
-		Optional("time", reg.Duration(), 0).
+		Optional("time", reg.Duration(), time.Duration(0)).
 		Optional("onChangedTag", reg.String(), "")
 }
 

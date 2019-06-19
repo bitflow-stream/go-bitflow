@@ -109,6 +109,9 @@ func (params RegisteredParameters) Param(name string, parser ParameterParser, de
 	if _, ok := params[name]; ok {
 		panic(fmt.Sprintf("Parameter %v already registered", name))
 	}
+	if !isRequired && !parser.CorrectType(defaultValue) {
+		panic(fmt.Sprintf("Default value for parameter '%v' (type %v) is of unexpected type %T: %v", name, parser, defaultValue, defaultValue))
+	}
 	params[name] = RegisteredParameter{
 		Name:     name,
 		Parser:   parser,

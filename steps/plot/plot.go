@@ -608,7 +608,7 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		"Plot a batch of samples to a given filename. The file ending denotes the file type").
 		Required("file", reg.String()).
 		Optional("color", reg.String(), "").
-		Optional("flags", reg.List(reg.String()), "").
+		Optional("flags", reg.List(reg.String()), []string{}).
 		Optional("xMin", reg.Int(), 0).
 		Optional("xMax", reg.Int(), 0).
 		Optional("yMin", reg.Int(), 0).

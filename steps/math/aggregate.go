@@ -206,7 +206,7 @@ func RegisterAggregateAvg(b reg.ProcessorRegistry) {
 			return nil
 		},
 		"Add an average metric for every incoming metric. Optional parameter: duration or number of samples").
-		Optional("windowDuration", reg.Duration(), 0).
+		Optional("windowDuration", reg.Duration(), time.Duration(0)).
 		Optional("windowSize", reg.Int(), 0).
 		Optional("useCurrentTime", reg.Bool(), false)
 }
@@ -222,7 +222,7 @@ func RegisterAggregateSlope(b reg.ProcessorRegistry) {
 			return nil
 		},
 		"Add a slope metric for every incoming metric.").
-		Optional("windowDuration", reg.Duration(), 0).
+		Optional("windowDuration", reg.Duration(), time.Duration(0)).
 		Optional("windowSize", reg.Int(), 0).
 		Optional("useCurrentTime", reg.Bool(), false)
 }
