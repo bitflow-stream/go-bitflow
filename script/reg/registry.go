@@ -142,7 +142,7 @@ func (params RegisteredParameters) ParsePrimitives(stringParams map[string]strin
 			return nil, err
 		}
 	}
-	return result, nil
+	return result, params.ValidateAndSetDefaults(result)
 }
 
 // Check if required parameters are defined and fill defaults for optional parameters

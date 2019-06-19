@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
@@ -103,16 +104,38 @@ func (source *RestDataSource) Serve(verb string, path string, httpLogFile string
 	return source.endpoint.serve(verb, path, httpLogFile, serve)
 }
 
+func (source *RestDataSource) EmitSamplesTimeout(samples []bitflow.SampleAndHeader, timeout time.Duration) bool {
+	if timeout > 0 {
+		select {
+		case source.outgoing <- samples:
+			return true
+		case <-time.After(timeout):
+			return false
+		}
+	} else {
+		source.outgoing <- samples
+		return true
+	}
+}
+
+func (source *RestDataSource) EmitSampleAndHeaderTimeout(sample bitflow.SampleAndHeader, timeout time.Duration) bool {
+	return source.EmitSamplesTimeout([]bitflow.SampleAndHeader{sample}, timeout)
+}
+
+func (source *RestDataSource) EmitSampleTimeout(sample *bitflow.Sample, header *bitflow.Header, timeout time.Duration) bool {
+	return source.EmitSampleAndHeaderTimeout(bitflow.SampleAndHeader{Sample: sample, Header: header}, timeout)
+}
+
 func (source *RestDataSource) EmitSamples(samples []bitflow.SampleAndHeader) {
-	source.outgoing <- samples
+	source.EmitSamplesTimeout(samples, 0)
 }
 
 func (source *RestDataSource) EmitSampleAndHeader(sample bitflow.SampleAndHeader) {
-	source.EmitSamples([]bitflow.SampleAndHeader{sample})
+	source.EmitSampleAndHeaderTimeout(sample, 0)
 }
 
 func (source *RestDataSource) EmitSample(sample *bitflow.Sample, header *bitflow.Header) {
-	source.EmitSampleAndHeader(bitflow.SampleAndHeader{Sample: sample, Header: header})
+	source.EmitSampleTimeout(sample, header, 0)
 }
 
 func (source *RestDataSource) Start(wg *sync.WaitGroup) golib.StopChan {

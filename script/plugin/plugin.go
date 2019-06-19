@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"plugin"
 
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
@@ -37,4 +38,12 @@ func LoadPluginSymbol(registry reg.ProcessorRegistry, path string, symbol string
 	p := *sourcePlugin
 	log.Debugf("Initializing plugin '%v' loaded from symbol '%v' in %v...", p.Name(), symbol, path)
 	return p.Name(), p.Init(registry)
+}
+
+func LogPluginDataSource(p BitflowPlugin, sourceName bitflow.EndpointType) {
+	log.Debugf("Plugin %v: Registering data source '%v'", p.Name(), sourceName)
+}
+
+func LogPluginProcessor(p BitflowPlugin, stepName string) {
+	log.Debugf("Plugin %v: Registering processing step '%v'", p.Name(), stepName)
 }

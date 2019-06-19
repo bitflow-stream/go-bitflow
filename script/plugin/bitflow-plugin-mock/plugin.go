@@ -43,8 +43,8 @@ func (*pluginImpl) Name() string {
 
 func (p *pluginImpl) Init(registry reg.ProcessorRegistry) error {
 	plugin.LogPluginDataSource(p, DataSourceType)
-	registry.Endpoints.CustomDataSources[bitflow.EndpointType(DataSourceType)] = func(query string) (bitflow.SampleSource, error) {
-		params, err := plugin.ParseTypedQueryParameters(query, SampleGeneratorParameters)
+	registry.Endpoints.CustomDataSources[bitflow.EndpointType(DataSourceType)] = func(endpointUrl string) (bitflow.SampleSource, error) {
+		_, params, err := reg.ParseEndpointUrlParams(endpointUrl, SampleGeneratorParameters)
 		if err != nil {
 			return nil, err
 		}
