@@ -91,7 +91,7 @@ func RegisterFillUpStep(b reg.ProcessorRegistry) {
 		},
 		"If the timestamp different between two consecutive samples is larger than the given interval, send copies of the first sample to fill the gap").
 		Required("interval", reg.Duration()).
-		Optional("step-interval", reg.Duration(), 0)
+		Optional("step-interval", reg.Duration(), time.Duration(0))
 }
 
 type FillUpProcessor struct {

@@ -35,7 +35,7 @@ func RegisterSphere(b reg.ProcessorRegistry) {
 		"Treat every sample as the center of a multi-dimensional sphere, and output a number of random points on the hull of the resulting sphere. The radius can either be fixed or given as one of the metrics").
 		Required("points", reg.Int()).
 		Optional("seed", reg.Int(), 1).
-		Optional("radius", reg.Float(), 0).
+		Optional("radius", reg.Float(), 0.0).
 		Optional("radius_metric", reg.Int(), -1)
 }
 
