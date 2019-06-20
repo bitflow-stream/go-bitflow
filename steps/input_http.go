@@ -175,21 +175,29 @@ func (source *RestDataSource) sinkSamples(wg *sync.WaitGroup) {
 type RestReplyHelpers struct {
 }
 
-func (h RestReplyHelpers) ReplySuccess(context *gin.Context, message string) {
-	context.Writer.Header().Set("Content-Type", "text/plain")
+func (h RestReplyHelpers) Reply(context *gin.Context, message string, statusCode int, contentType string) {
+	if statusCode != http.StatusOK {
+		log.Warnf("REST status %v: %v", statusCode, message)
+	}
+
+	context.Writer.Header().Set("Content-Type", contentType)
+	context.Writer.WriteHeader(statusCode)
 	_, err := context.Writer.WriteString(message + "\n")
 	if err != nil {
-		log.Errorln("REST: Error sending success-reply to client:", err)
+		log.Errorf("REST: Error sending %v reply (len %v, content-type %v) to client: %v", statusCode, len(message), contentType, err)
 	}
 }
 
+func (h RestReplyHelpers) ReplyCode(context *gin.Context, message string, statusCode int) {
+	h.Reply(context, message, statusCode, "text/plain")
+}
+
+func (h RestReplyHelpers) ReplySuccess(context *gin.Context, message string) {
+	h.ReplyCode(context, message, http.StatusOK)
+}
+
 func (h RestReplyHelpers) ReplyGenericError(context *gin.Context, errorMessage string) {
-	log.Warnln("REST:", errorMessage)
-	_, err := context.Writer.WriteString(errorMessage + "\n")
-	context.Writer.WriteHeader(http.StatusBadRequest)
-	if err != nil {
-		log.Errorln("REST: Error sending error-reply to client:", err)
-	}
+	h.ReplyCode(context, errorMessage, http.StatusBadRequest)
 }
 
 func (h RestReplyHelpers) ReplyError(context *gin.Context, errorMessage string) {
