@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
@@ -103,16 +104,38 @@ func (source *RestDataSource) Serve(verb string, path string, httpLogFile string
 	return source.endpoint.serve(verb, path, httpLogFile, serve)
 }
 
+func (source *RestDataSource) EmitSamplesTimeout(samples []bitflow.SampleAndHeader, timeout time.Duration) bool {
+	if timeout > 0 {
+		select {
+		case source.outgoing <- samples:
+			return true
+		case <-time.After(timeout):
+			return false
+		}
+	} else {
+		source.outgoing <- samples
+		return true
+	}
+}
+
+func (source *RestDataSource) EmitSampleAndHeaderTimeout(sample bitflow.SampleAndHeader, timeout time.Duration) bool {
+	return source.EmitSamplesTimeout([]bitflow.SampleAndHeader{sample}, timeout)
+}
+
+func (source *RestDataSource) EmitSampleTimeout(sample *bitflow.Sample, header *bitflow.Header, timeout time.Duration) bool {
+	return source.EmitSampleAndHeaderTimeout(bitflow.SampleAndHeader{Sample: sample, Header: header}, timeout)
+}
+
 func (source *RestDataSource) EmitSamples(samples []bitflow.SampleAndHeader) {
-	source.outgoing <- samples
+	source.EmitSamplesTimeout(samples, 0)
 }
 
 func (source *RestDataSource) EmitSampleAndHeader(sample bitflow.SampleAndHeader) {
-	source.EmitSamples([]bitflow.SampleAndHeader{sample})
+	source.EmitSampleAndHeaderTimeout(sample, 0)
 }
 
 func (source *RestDataSource) EmitSample(sample *bitflow.Sample, header *bitflow.Header) {
-	source.EmitSampleAndHeader(bitflow.SampleAndHeader{Sample: sample, Header: header})
+	source.EmitSampleTimeout(sample, header, 0)
 }
 
 func (source *RestDataSource) Start(wg *sync.WaitGroup) golib.StopChan {
@@ -152,21 +175,29 @@ func (source *RestDataSource) sinkSamples(wg *sync.WaitGroup) {
 type RestReplyHelpers struct {
 }
 
-func (h RestReplyHelpers) ReplySuccess(context *gin.Context, message string) {
-	context.Writer.Header().Set("Content-Type", "text/plain")
+func (h RestReplyHelpers) Reply(context *gin.Context, message string, statusCode int, contentType string) {
+	if statusCode != http.StatusOK {
+		log.Warnf("REST status %v: %v", statusCode, message)
+	}
+
+	context.Writer.Header().Set("Content-Type", contentType)
+	context.Writer.WriteHeader(statusCode)
 	_, err := context.Writer.WriteString(message + "\n")
 	if err != nil {
-		log.Errorln("REST: Error sending success-reply to client:", err)
+		log.Errorf("REST: Error sending %v reply (len %v, content-type %v) to client: %v", statusCode, len(message), contentType, err)
 	}
 }
 
+func (h RestReplyHelpers) ReplyCode(context *gin.Context, message string, statusCode int) {
+	h.Reply(context, message, statusCode, "text/plain")
+}
+
+func (h RestReplyHelpers) ReplySuccess(context *gin.Context, message string) {
+	h.ReplyCode(context, message, http.StatusOK)
+}
+
 func (h RestReplyHelpers) ReplyGenericError(context *gin.Context, errorMessage string) {
-	log.Warnln("REST:", errorMessage)
-	_, err := context.Writer.WriteString(errorMessage + "\n")
-	context.Writer.WriteHeader(http.StatusBadRequest)
-	if err != nil {
-		log.Errorln("REST: Error sending error-reply to client:", err)
-	}
+	h.ReplyCode(context, errorMessage, http.StatusBadRequest)
 }
 
 func (h RestReplyHelpers) ReplyError(context *gin.Context, errorMessage string) {

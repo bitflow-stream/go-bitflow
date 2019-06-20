@@ -105,6 +105,14 @@ func (r *RegisteredStep) Required(name string, parser ParameterParser) *Register
 	return r
 }
 
+func (params RegisteredParameters) Clone() RegisteredParameters {
+	result := make(RegisteredParameters, len(params))
+	for key, param := range params {
+		result[key] = param
+	}
+	return result
+}
+
 func (params RegisteredParameters) Param(name string, parser ParameterParser, defaultValue interface{}, isRequired bool) RegisteredParameters {
 	if _, ok := params[name]; ok {
 		panic(fmt.Sprintf("Parameter %v already registered", name))
@@ -142,7 +150,7 @@ func (params RegisteredParameters) ParsePrimitives(stringParams map[string]strin
 			return nil, err
 		}
 	}
-	return result, nil
+	return result, params.ValidateAndSetDefaults(result)
 }
 
 // Check if required parameters are defined and fill defaults for optional parameters

@@ -48,6 +48,9 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 	blockMgr.RegisterReleasingProcessor(b)
 	steps.RegisterTagSynchronizer(b)
 
+	// Data input
+	steps.RegisterDynamicSource(&b.Endpoints)
+
 	// Data output
 	steps.RegisterOutputFiles(b)
 	steps.RegisterGraphiteOutput(b)
