@@ -23,3 +23,4 @@ require (
 	gonum.org/v1/plot v0.0.0-20190515093506-e2840ee46a6b
 	vbom.ml/util v0.0.0-20180919145318-efcd4e0f9787
 )
+
