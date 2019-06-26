@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/antongulenko/golib"
+	"github.com/antongulenko/golib/gotermBox"
 )
 
 const (
@@ -122,10 +122,10 @@ func (m TextMarshaller) fixedColumnWidths(lines []string, columns int, spacing i
 
 func (m TextMarshaller) defaultTextWidth(writer io.Writer) int {
 	if m.AssumeStdout || writer == os.Stdout {
-		size := golib.GetTerminalSize()
+		size := gotermBox.GetTerminalSize()
 		return int(size.Col)
 	} else {
-		return int(golib.DefaultTerminalWindowSize.Col)
+		return int(gotermBox.DefaultTerminalWindowSize.Col)
 	}
 }
 
