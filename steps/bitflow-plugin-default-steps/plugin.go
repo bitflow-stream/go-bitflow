@@ -50,6 +50,7 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 
 	// Data input
 	steps.RegisterDynamicSource(&b.Endpoints)
+	steps.RegisterGeneratorSource(&b.Endpoints)
 
 	// Data output
 	steps.RegisterOutputFiles(b)

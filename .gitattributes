@@ -1,0 +1,5 @@
+# This allows to define filter scripts in .gitconfig for modifying the local version of go.mod, while never pushing those changes to the server.
+# This can be used to replace requirements with local version of the modules, to facilitate working with multiple co-dependent modules.
+# See here: https://www.reddit.com/r/golang/comments/ah0w1q/modules_and_local_imports/
+# See here: https://stackoverflow.com/questions/16244969/how-to-tell-git-to-ignore-individual-lines-i-e-gitignore-for-specific-lines-of
+go.mod filter=golang-local-development
