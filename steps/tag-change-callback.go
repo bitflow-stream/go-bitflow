@@ -144,7 +144,7 @@ func (t *TagChangeListener) getCurrentTags(newTag string, added bool) []string {
 		}
 		result = append(result, tag)
 	}
-	if added {
+	if _, seen := t.lastSeen[newTag]; !seen && added {
 		result = append(result, newTag)
 	}
 	return result

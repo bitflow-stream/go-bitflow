@@ -8,7 +8,7 @@ require (
 	github.com/antlr/antlr4 v0.0.0-20190518164840-edae2a1c9b4b
 	github.com/antongulenko/go-onlinestats v0.0.0-20160514060630-5ff69410145c
 	github.com/antongulenko/golearn v0.0.1
-	github.com/antongulenko/golib v0.0.16
+	github.com/antongulenko/golib v0.0.17
 	github.com/bugsnag/bugsnag-go v1.5.2
 	github.com/gin-gonic/gin v1.4.0
 	github.com/go-ini/ini v1.42.0
