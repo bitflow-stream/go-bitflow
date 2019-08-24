@@ -56,7 +56,7 @@ func RegisterHttpTagger(b reg.ProcessorRegistry) {
 	b.RegisterStep("listen_tags", create,
 		"Listen for HTTP requests on the given port at /api/tag and /api/tags to configure tags").
 		Required("listen", reg.String()).
-		Optional("default", reg.Map(reg.String()), nil)
+		Optional("default", reg.Map(reg.String()), map[string]string{})
 }
 
 func (tagger *HttpTagger) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

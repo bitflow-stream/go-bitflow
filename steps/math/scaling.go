@@ -21,8 +21,8 @@ func RegisterMinMaxScaling(b reg.ProcessorRegistry) {
 			return
 		},
 		"Normalize a batch of samples using a min-max scale. The output value range is 0..1 by default, but can be customized.").
-		Optional("min", reg.Float(), 0).
-		Optional("max", reg.Float(), 1)
+		Optional("min", reg.Float(), 0.0).
+		Optional("max", reg.Float(), 1.0)
 }
 
 func RegisterStandardizationScaling(b reg.ProcessorRegistry) {

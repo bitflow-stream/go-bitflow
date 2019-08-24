@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strings"
 
 	"github.com/antongulenko/go-onlinestats"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
@@ -230,12 +229,11 @@ func NewMetricMapper(metrics []string) *MetricMapper {
 func RegisterMetricMapper(b reg.ProcessorRegistry) {
 	b.RegisterStep("remap",
 		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
-			metrics := strings.Split(params["header"].(string), ",")
-			p.Add(NewMetricMapper(metrics))
+			p.Add(NewMetricMapper(params["header"].([]string)))
 			return nil
 		},
-		"Change (reorder) the header to the given comma-separated list of metrics").
-		Required("header", reg.String())
+		"Change (reorder & filter) the header to the given list of metrics").
+		Required("header", reg.List(reg.String()))
 }
 
 func (mapper *MetricMapper) constructIndices(header *bitflow.Header) ([]int, []string) {

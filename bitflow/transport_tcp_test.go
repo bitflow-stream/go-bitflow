@@ -67,7 +67,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 		PrintErrors:   true,
 		RemoteAddrs:   []string{"localhost:" + port},
 		RetryInterval: time.Second,
-		DialTimeout:   tcp_dial_timeout,
+		DialTimeout:   tcpDialTimeout,
 	}
 	s.Reader.ParallelSampleHandler = parallel_handler
 
@@ -103,8 +103,8 @@ func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 		s := &TCPSource{
 			PrintErrors:   true,
 			RemoteAddrs:   []string{"localhost:" + port},
-			RetryInterval: tcp_download_retry_interval,
-			DialTimeout:   tcp_dial_timeout,
+			RetryInterval: tcpDownloadRetryInterval,
+			DialTimeout:   tcpDialTimeout,
 		}
 		s.Reader.ParallelSampleHandler = parallel_handler
 
@@ -151,7 +151,7 @@ func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 
 	s := &TCPSink{
 		Endpoint:    "localhost:" + port,
-		DialTimeout: tcp_dial_timeout,
+		DialTimeout: tcpDialTimeout,
 	}
 	s.Writer.ParallelSampleHandler = parallel_handler
 	s.SetMarshaller(m)
@@ -183,7 +183,7 @@ func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller
 
 		s := &TCPSink{
 			Endpoint:    "localhost:" + port,
-			DialTimeout: tcp_dial_timeout,
+			DialTimeout: tcpDialTimeout,
 		}
 		s.Writer.ParallelSampleHandler = parallel_handler
 		s.SetMarshaller(m)

@@ -34,8 +34,8 @@ const (
 	BinaryFormat     = MarshallingFormat("bin")
 	PrometheusFormat = MarshallingFormat("prometheus")
 
-	tcp_download_retry_interval = 1000 * time.Millisecond
-	tcp_dial_timeout            = 2000 * time.Millisecond
+	tcpDownloadRetryInterval = 1000 * time.Millisecond
+	tcpDialTimeout           = 2000 * time.Millisecond
 )
 
 var (
@@ -97,8 +97,8 @@ type EndpointFactory struct {
 	// CustomDataSources can be filled by client code before EndpointFactory.CreateInput or similar
 	// methods to allow creation of custom data sources. The map key is a short name of the data source
 	// that can be used in URL endpoint descriptions. The parameter for the function will be
-	// the URL path of the endpoint. Example: When registering a function with the key "http", the following
-	// URL endpoint:
+	// the URL of the endpoint, with the scheme part stripped.
+	// Example: When registering a function with the key "http", the following URL endpoint:
 	//   http://localhost:5555/abc
 	// will invoke the factory function with the parameter "localhost:5555/abc"
 	CustomDataSources map[EndpointType]func(string) (SampleSource, error)
@@ -140,7 +140,6 @@ func RegisterDefaults(factory *EndpointFactory) {
 	RegisterBuiltinMarshallers(factory)
 	RegisterConsoleBoxOutput(factory)
 	RegisterEmptyInputOutput(factory)
-	RegisterDynamicSource(factory)
 }
 
 func RegisterEmptyInputOutput(factory *EndpointFactory) {
@@ -341,8 +340,8 @@ func (f *EndpointFactory) createInput(endpoint EndpointDescription) (SampleSourc
 		source := &TCPSource{
 			RemoteAddrs:   []string{endpoint.Target},
 			PrintErrors:   !f.FlagTcpSourceDropErrors,
-			RetryInterval: tcp_download_retry_interval,
-			DialTimeout:   tcp_dial_timeout,
+			RetryInterval: tcpDownloadRetryInterval,
+			DialTimeout:   tcpDialTimeout,
 			UseHTTP:       endpoint.Type == HttpEndpoint,
 		}
 		source.TcpConnLimit = f.FlagTcpConnectionLimit
@@ -429,7 +428,7 @@ func (f *EndpointFactory) createOutput(endpoint EndpointDescription, marshaller 
 	case TcpEndpoint:
 		sink := &TCPSink{
 			Endpoint:    endpoint.Target,
-			DialTimeout: tcp_dial_timeout,
+			DialTimeout: tcpDialTimeout,
 		}
 		sink.TcpConnLimit = f.FlagTcpConnectionLimit
 		if f.FlagTcpLogReceivedData {

@@ -41,7 +41,7 @@ func (factory *consoleBoxFactory) registerFlags(f *flag.FlagSet) {
 
 func (factory *consoleBoxFactory) createConsoleBox(target string) (SampleProcessor, error) {
 	if target != stdTransportTarget {
-		return nil, fmt.Errorf("Transport '%v' can only be defined with target '%v'", ConsoleBoxEndpoint, stdTransportTarget)
+		return nil, fmt.Errorf("Transport '%v' can only be defined with target '%v' (received '%v')", ConsoleBoxEndpoint, stdTransportTarget, target)
 	}
 	sink := &ConsoleBoxSink{
 		CliLogBoxTask: gotermBox.CliLogBoxTask{

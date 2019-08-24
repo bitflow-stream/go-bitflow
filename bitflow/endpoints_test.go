@@ -234,8 +234,8 @@ func (suite *PipelineTestSuite) Test_input_tcp() {
 	expected := &TCPSource{
 		RemoteAddrs:   hosts,
 		PrintErrors:   false,
-		RetryInterval: tcp_download_retry_interval,
-		DialTimeout:   tcp_dial_timeout,
+		RetryInterval: tcpDownloadRetryInterval,
+		DialTimeout:   tcpDialTimeout,
 	}
 	expected.TcpConnLimit = 10
 	expected.Reader.Handler = handler
@@ -307,7 +307,7 @@ func (suite *PipelineTestSuite) Test_custom_endpoint_errors() {
 	factory := suite.make_factory()
 
 	sink, err := factory.CreateOutput("box://x")
-	suite.EqualError(err, "Error creating 'box' output: Transport 'box' can only be defined with target '-'")
+	suite.EqualError(err, "Error creating 'box' output: Transport 'box' can only be defined with target '-' (received 'x')")
 	suite.Nil(sink)
 
 	sink, err = factory.CreateOutput("box+csv://x")
@@ -394,7 +394,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 	tcp := func(endpoint string, format string) SampleSink {
 		s := &TCPSink{
 			Endpoint:    endpoint,
-			DialTimeout: tcp_dial_timeout,
+			DialTimeout: tcpDialTimeout,
 		}
 		s.TcpConnLimit = 10
 		setup(&s.AbstractMarshallingSampleOutput, format, false)

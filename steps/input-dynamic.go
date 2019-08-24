@@ -1,67 +1,58 @@
-package bitflow
+package steps
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/bitflow-stream/go-bitflow/script/reg"
 	log "github.com/sirupsen/logrus"
 )
 
-var _ SampleSource = new(DynamicSource)
+var _ bitflow.SampleSource = new(DynamicSource)
 
-const (
-	DynamicSourceDefaultFetchTimeout = 2 * time.Second
-	DynamicSourceEndpointType        = "dynamic"
-	DynamicSourceUpdateTimeParam     = "update-time"
-)
+const DynamicSourceEndpointType = "dynamic"
+
+var DynamicSourceParameters = reg.RegisteredParameters{}.
+	Optional("update-time", reg.Duration(), 2*time.Second)
 
 type DynamicSource struct {
-	AbstractSampleSource
+	bitflow.AbstractSampleSource
 	URL          string
 	FetchTimeout time.Duration
-	Endpoints    *EndpointFactory
+	Endpoints    *bitflow.EndpointFactory
 
 	loop            golib.LoopTask
 	wg              *sync.WaitGroup
 	previousSources []string
 
-	currentSource  SampleSource
+	currentSource  bitflow.SampleSource
 	sourceStopChan golib.StopChan
 	sourceWg       *sync.WaitGroup
 	sourceClosed   *golib.BoolCondition
 }
 
-func RegisterDynamicSource(factory *EndpointFactory) {
-	factory.CustomDataSources[DynamicSourceEndpointType] = func(urlStr string) (SampleSource, error) {
-		u, err := url.Parse(urlStr)
+func RegisterDynamicSource(factory *bitflow.EndpointFactory) {
+	factory.CustomDataSources[DynamicSourceEndpointType] = func(urlStr string) (bitflow.SampleSource, error) {
+		url, params, err := reg.ParseEndpointUrlParams(urlStr, DynamicSourceParameters)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to parse dynamic URL '%v': %v", urlStr, err)
 		}
-		if u.Scheme != "http" && u.Scheme != "https" {
-			return nil, fmt.Errorf("Dynamic URL scheme must be http:// or https:// (instead of '%v')", u.Scheme)
-		}
-		query := u.Query()
-		timeout := DynamicSourceDefaultFetchTimeout
-		if val, ok := query[DynamicSourceUpdateTimeParam]; ok && len(val) >= 1 {
-			timeout, err = time.ParseDuration(val[0])
-			if err != nil {
-				return nil, fmt.Errorf("Failed to parse %v parameter '%v': %v", DynamicSourceUpdateTimeParam, val[0], err)
-			}
-			delete(query, DynamicSourceUpdateTimeParam)
-			u.RawQuery = query.Encode()
-		}
+
+		// TODO support https and query parameters (collides with endpoint specification)
+		url.Scheme = "http"
+		url.RawQuery = ""
 
 		return &DynamicSource{
-			URL:          u.String(),
+			URL:          url.String(),
 			Endpoints:    factory,
-			FetchTimeout: timeout,
+			FetchTimeout: params["update-time"].(time.Duration),
 		}, nil
 	}
 }
@@ -80,7 +71,7 @@ func (s *DynamicSource) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
 
 func (s *DynamicSource) Close() {
 	s.loop.Stop()
-	s.AbstractSampleSource.CloseSink()
+	s.CloseSink()
 }
 
 func (s *DynamicSource) updateSource(stop golib.StopChan) error {
@@ -139,7 +130,7 @@ func (s *DynamicSource) stopSource() {
 	}
 }
 
-func (s *DynamicSource) startSource(src SampleSource) {
+func (s *DynamicSource) startSource(src bitflow.SampleSource) {
 	s.stopSource()
 	s.currentSource = src
 	s.sourceWg = new(sync.WaitGroup)
@@ -157,7 +148,7 @@ func (s *DynamicSource) startSource(src SampleSource) {
 	log.Printf("%v: Started data source %v", s, src)
 }
 
-func (s *DynamicSource) observeSourceStopChan(source SampleSource, stopChan golib.StopChan, sourceClosed *golib.BoolCondition) {
+func (s *DynamicSource) observeSourceStopChan(source bitflow.SampleSource, stopChan golib.StopChan, sourceClosed *golib.BoolCondition) {
 	defer s.wg.Done()
 
 	stopChan.Wait()
@@ -171,7 +162,7 @@ func (s *DynamicSource) observeSourceStopChan(source SampleSource, stopChan goli
 }
 
 type closeNotifier struct {
-	SampleProcessor
+	bitflow.SampleProcessor
 	cond *golib.BoolCondition
 }
 
