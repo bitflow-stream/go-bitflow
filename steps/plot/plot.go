@@ -565,47 +565,64 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 			OutputFile: params["file"].(string),
 			ColorTag:   params["color"].(string),
 			Type:       ScatterPlot,
-			ForceXmin:  nil,
-			ForceXmax:  nil,
-			ForceYmin:  nil,
-			ForceYmax:  nil,
-		}
-		if ! params["autoscale"].(bool) {
-			plot.ForceXmin = &xMin
-			plot.ForceXmax = &xMax
-			plot.ForceYmin = &yMin
-			plot.ForceYmax = &yMax
+			ForceXmin:  &xMin,
+			ForceXmax:  &xMax,
+			ForceYmin:  &yMin,
+			ForceYmax:  &yMax,
 		}
 
-		for _, part := range params["flags"].([]string) {
-			switch part {
-			case "nolegend":
-				plot.NoLegend = true
-			case "line":
-				plot.Type = LinePlot
-			case "linepoint":
-				plot.Type = LinePointPlot
-			case "cluster":
-				plot.SeparatePlots = false
-				plot.Type = ClusterPlot
-				plot.RadiusDimension = 0
-				plot.AxisX = 1
-				plot.AxisY = 2
-			case "box":
-				plot.Type = BoxPlot
-				plot.AxisX = AxisNum
-				plot.AxisY = 0
-			case "separate":
-				plot.SeparatePlots = true
-			case "force_scatter":
-				plot.AxisX = 0
-				plot.AxisY = 1
-			case "force_time":
-				plot.AxisX = AxisTime
-				plot.AxisY = 0
-			default:
-				allFlags := []string{"nolegend", "line", "linepoint", "cluster", "separate", "force_scatter", "force_time"}
-				return fmt.Errorf("Unkown flag: '%v'. Supported flags: %v", part, allFlags)
+		plot.NoLegend = params["nolegend"].(bool)
+		plot.SeparatePlots = params["separate"].(bool)
+
+		is_line := params["line"].(bool)
+		is_linepoint := params["linepoint"].(bool)
+		is_cluster := params["cluster"].(bool)
+		is_box := params["box"].(bool)
+		// Check if exactly one of the following flags is true
+		areAnyTrue := is_line || is_linepoint || is_cluster || is_box
+		areTwoTrue := (is_line && areAnyTrue) || (is_linepoint && areAnyTrue) || (is_cluster && areAnyTrue) ||
+			(is_box && areAnyTrue)
+		if !(areAnyTrue && !areTwoTrue) {
+			return fmt.Errorf("Parameters: Only one of the follwoing parameters can be true, but is " +
+				"line=%v, linepoint=%v, clusetr=%v, box=%v.", is_line, is_linepoint, is_cluster, is_box)
+		}
+		if is_line {
+			plot.Type = LinePlot
+		}
+		if is_linepoint {
+			plot.Type = LinePointPlot
+		}
+		if is_cluster {
+			plot.SeparatePlots = false
+			plot.Type = ClusterPlot
+			plot.RadiusDimension = 0
+			plot.AxisX = 1
+			plot.AxisY = 2
+		}
+		if is_box {
+			plot.Type = BoxPlot
+			plot.AxisX = AxisNum
+			plot.AxisY = 0
+		}
+
+		force_scatter := params["force_scatter"].(bool)
+		force_time := params["force_time"].(bool)
+		if force_scatter && force_time {
+			return fmt.Errorf("Parameters: Only one of the follwoing parameters can be true, but is "+
+				"force_scatter=%v, force_time=%v.", force_scatter, force_time)
+		}
+		if force_scatter {
+			plot.AxisX = 0
+			plot.AxisY = 1
+		}
+		if force_time {
+			plot.AxisX = AxisTime
+			plot.AxisY = 0
+			if *plot.ForceXmin == 0.0 {
+				plot.ForceXmin = nil
+			}
+			if *plot.ForceXmax == 0.0 {
+				plot.ForceXmin = nil
 			}
 		}
 		p.Add(plot)
@@ -617,7 +634,18 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		Required("file", reg.String()).
 		Optional("color", reg.String(), "").
 		Optional("flags", reg.List(reg.String()), []string{}).
-		Optional("autoscale", reg.Bool(), true).
+		Optional("nolegend", reg.Bool(), false).
+		Optional("line", reg.Bool(), false).
+		Optional("linepoint", reg.Bool(), false).
+		Optional("cluster", reg.Bool(), false).
+		Optional("box", reg.Bool(), false).
+		Optional("separate", reg.Bool(), false).
+		Optional("force_scatter", reg.Bool(), true).
+		Optional("force_time", reg.Bool(), true).
+		Optional("xMinScale", reg.Float(), 0.0).
+		Optional("xMaxScale", reg.Float(), 0.0).
+		Optional("yMinScale", reg.Float(), 0.0).
+		Optional("yMaxScale", reg.Float(), 0.0).
 		Optional("xMin", reg.Float(), 0.0).
 		Optional("xMax", reg.Float(), 0.0).
 		Optional("yMin", reg.Float(), 0.0).
