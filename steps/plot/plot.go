@@ -642,10 +642,6 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		Optional("separate", reg.Bool(), false).
 		Optional("force_scatter", reg.Bool(), true).
 		Optional("force_time", reg.Bool(), true).
-		Optional("xMinScale", reg.Float(), 0.0).
-		Optional("xMaxScale", reg.Float(), 0.0).
-		Optional("yMinScale", reg.Float(), 0.0).
-		Optional("yMaxScale", reg.Float(), 0.0).
 		Optional("xMin", reg.Float(), 0.0).
 		Optional("xMax", reg.Float(), 0.0).
 		Optional("yMin", reg.Float(), 0.0).
