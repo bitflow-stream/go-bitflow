@@ -33,7 +33,7 @@ func MakeBatchProcessor(params map[string]interface{}) (res *bitflow.BatchProces
 		FlushTags:            params["flush-tags"].([]string),
 		FlushNoSampleTimeout: params["flush-no-samples-timeout"].(time.Duration),
 		FlushSampleLag:       params["flush-sample-lag-timeout"].(time.Duration),
-		FlushAfterNumSamples: params["flush-num-samples"].(int32),
+		FlushAfterNumSamples: params["flush-num-samples"].(int),
 		FlushAfterTime:       params["flush-time-diff"].(time.Duration),
 		DontFlushOnClose:     params["ignore-close"].(bool),
 		ForwardImmediately:   params["forward-immediately"].(bool),

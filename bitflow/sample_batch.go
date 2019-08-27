@@ -29,7 +29,7 @@ type BatchProcessor struct {
 
 	FlushNoSampleTimeout time.Duration // If > 0, flush when no new samples are received for the given duration. The wall-time is used for this (not sample timestamps)
 	FlushSampleLag       time.Duration // If > 0, flush when a sample is received with a timestamp jump bigger than this
-	FlushAfterNumSamples int32 //If > 0, flush after batch  window contains this amount of samples
+	FlushAfterNumSamples int //If > 0, flush after batch  window contains this amount of samples
 	FlushAfterTime       time.Duration // If > 0, flush after time difference between the first and the last received sample in batch is greater than this
 	lastAutoFlushError   error
 	lastSample           time.Time // Wall time when receiving last sample
@@ -84,6 +84,14 @@ func (p *BatchProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 	oldHeader := p.checker.LastHeader
 	flush := p.checker.InitializedHeaderChanged(header)
+	if p.FlushAfterNumSamples > 0 { // FlushAfterNumSamples and  FlushAfterTime are mutually exclusive. FlushAfterNumSamples is prioritized over FlushAfterTime.
+		flush = len(p.samples) > p.FlushAfterNumSamples
+	} else if p.FlushAfterTime > 0 {
+		if len(p.samples) > 1 { // At least 2 sample are required
+			diff := p.samples[len(p.samples) - 1].Time.Sub(p.samples[0].Time)
+			flush = (p.FlushAfterTime - diff) < 0
+		}
+	}
 	if len(p.FlushTags) > 0 {
 		values := make([]string, len(p.FlushTags))
 		for i, tag := range p.FlushTags {
