@@ -618,6 +618,7 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		if force_time {
 			plot.AxisX = AxisTime
 			plot.AxisY = 0
+			//  Fix to make time axis autoscale. If it is 0.0, the time axis starts at 1970...
 			if *plot.ForceXmin == 0.0 {
 				plot.ForceXmin = nil
 			}
