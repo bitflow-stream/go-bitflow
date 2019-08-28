@@ -85,11 +85,13 @@ func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 	oldHeader := p.checker.LastHeader
 	flush := p.checker.InitializedHeaderChanged(header)
 	if p.FlushAfterNumSamples > 0 { // FlushAfterNumSamples and  FlushAfterTime are mutually exclusive. FlushAfterNumSamples is prioritized over FlushAfterTime.
-		flush = len(p.samples) > p.FlushAfterNumSamples
+		flush = len(p.samples) >= p.FlushAfterNumSamples
 	} else if p.FlushAfterTime > 0 {
-		if len(p.samples) > 1 { // At least 2 sample are required
-			diff := p.samples[len(p.samples) - 1].Time.Sub(p.samples[0].Time)
-			flush = (p.FlushAfterTime - diff) < 0
+		if len(p.samples) > 1 { // At least 2 samples are required
+			start := p.samples[0].Time
+			end := p.samples[len(p.samples) - 1].Time
+			diff := end.Sub(start)
+			flush = (p.FlushAfterTime - diff) <= 0
 		}
 	}
 	if len(p.FlushTags) > 0 {
