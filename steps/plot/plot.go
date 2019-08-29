@@ -574,19 +574,6 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		plot.NoLegend = params["nolegend"].(bool)
 		plot.SeparatePlots = params["separate"].(bool)
 
-		is_line := params["line"].(bool)
-		is_linepoint := params["linepoint"].(bool)
-		is_cluster := params["cluster"].(bool)
-		is_box := params["box"].(bool)
-		// Check if exactly one of the following flags is true
-		areAnyTrue := is_line || is_linepoint || is_cluster || is_box
-		areTwoTrue := (is_line && areAnyTrue) || (is_linepoint && areAnyTrue) || (is_cluster && areAnyTrue) ||
-			(is_box && areAnyTrue)
-		if !(areAnyTrue && !areTwoTrue) {
-			return fmt.Errorf("Parameters: Only one of the follwoing parameters can be true, but is " +
-				"line=%v, linepoint=%v, clusetr=%v, box=%v.", is_line, is_linepoint, is_cluster, is_box)
-		}
-
 		plotType := params["plot_type"].(string)
 		switch  plotType {
 			case "line":
