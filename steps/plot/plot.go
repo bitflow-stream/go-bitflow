@@ -586,23 +586,26 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 			return fmt.Errorf("Parameters: Only one of the follwoing parameters can be true, but is " +
 				"line=%v, linepoint=%v, clusetr=%v, box=%v.", is_line, is_linepoint, is_cluster, is_box)
 		}
-		if is_line {
-			plot.Type = LinePlot
-		}
-		if is_linepoint {
-			plot.Type = LinePointPlot
-		}
-		if is_cluster {
-			plot.SeparatePlots = false
-			plot.Type = ClusterPlot
-			plot.RadiusDimension = 0
-			plot.AxisX = 1
-			plot.AxisY = 2
-		}
-		if is_box {
-			plot.Type = BoxPlot
-			plot.AxisX = AxisNum
-			plot.AxisY = 0
+
+		plotType := params["plot_type"].(string)
+		switch  plotType {
+			case "line":
+				plot.Type = LinePlot
+			case "linepoint":
+				plot.Type = LinePointPlot
+			case "cluster":
+				plot.SeparatePlots = false
+				plot.Type = ClusterPlot
+				plot.RadiusDimension = 0
+				plot.AxisX = 1
+				plot.AxisY = 2
+			case "box":
+				plot.Type = BoxPlot
+				plot.AxisX = AxisNum
+				plot.AxisY = 0
+			default:
+				allowed_plot_types := []string{"line", "linepoint", "cluster", "box"}
+				return fmt.Errorf("Unkown plot type: '%v'. Supported plot types are: %v.", plotType, allowed_plot_types)
 		}
 
 		force_scatter := params["force_scatter"].(bool)
@@ -634,12 +637,8 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		"Plot a batch of samples to a given filename. The file ending denotes the file type").
 		Required("file", reg.String()).
 		Optional("color", reg.String(), "").
-		Optional("flags", reg.List(reg.String()), []string{}).
+		Optional("plot_type", reg.String(), "cluster").
 		Optional("nolegend", reg.Bool(), false).
-		Optional("line", reg.Bool(), false).
-		Optional("linepoint", reg.Bool(), false).
-		Optional("cluster", reg.Bool(), false).
-		Optional("box", reg.Bool(), false).
 		Optional("separate", reg.Bool(), false).
 		Optional("force_scatter", reg.Bool(), true).
 		Optional("force_time", reg.Bool(), true).
