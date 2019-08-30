@@ -27,11 +27,13 @@ type BatchProcessor struct {
 	// certain special cases.
 	DontFlushOnClose bool
 
-	FlushTimeout                time.Duration // If > 0, flush when no new samples are received for the given duration. The wall-time is used for this (not sample timestamps)
-	SampleTimestampFlushTimeout time.Duration // If > 0, flush when a sample is received with a timestamp jump bigger than this
-	lastAutoFlushError          error
-	lastSample                  time.Time // Wall time when receiving last sample
-	lastSampleTimestamp         time.Time // Timestamp of last sample
+	FlushNoSampleTimeout time.Duration // If > 0, flush when no new samples are received for the given duration. The wall-time is used for this (not sample timestamps)
+	FlushSampleLag       time.Duration // If > 0, flush when a sample is received with a timestamp jump bigger than this
+	FlushAfterNumSamples int //If > 0, flush after batch  window contains this amount of samples
+	FlushAfterTime       time.Duration // If > 0, flush after time difference between the first and the last received sample in batch is greater than this
+	lastAutoFlushError   error
+	lastSample           time.Time // Wall time when receiving last sample
+	lastSampleTimestamp  time.Time // Timestamp of last sample
 
 	FlushTags     []string // If set, flush every time any of these tags change
 	lastFlushTags []string
@@ -82,6 +84,16 @@ func (p *BatchProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 	oldHeader := p.checker.LastHeader
 	flush := p.checker.InitializedHeaderChanged(header)
+	if p.FlushAfterNumSamples > 0 { // FlushAfterNumSamples and  FlushAfterTime are mutually exclusive. FlushAfterNumSamples is prioritized over FlushAfterTime.
+		flush = len(p.samples) >= p.FlushAfterNumSamples
+	} else if p.FlushAfterTime > 0 {
+		if len(p.samples) > 1 { // At least 2 samples are required
+			start := p.samples[0].Time
+			end := p.samples[len(p.samples) - 1].Time
+			diff := end.Sub(start)
+			flush = (p.FlushAfterTime - diff) <= 0
+		}
+	}
 	if len(p.FlushTags) > 0 {
 		values := make([]string, len(p.FlushTags))
 		for i, tag := range p.FlushTags {
@@ -92,8 +104,8 @@ func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 		}
 		p.lastFlushTags = values
 	}
-	if p.SampleTimestampFlushTimeout > 0 {
-		if !p.lastSampleTimestamp.IsZero() && sample.Time.Sub(p.lastSampleTimestamp) >= p.SampleTimestampFlushTimeout {
+	if p.FlushSampleLag > 0 {
+		if !p.lastSampleTimestamp.IsZero() && sample.Time.Sub(p.lastSampleTimestamp) >= p.FlushSampleLag {
 			flush = true
 		}
 		p.lastSampleTimestamp = sample.Time
@@ -101,7 +113,7 @@ func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 	if flush {
 		err = p.triggerFlush(oldHeader, false)
 	}
-	if p.FlushTimeout > 0 {
+	if p.FlushNoSampleTimeout > 0 {
 		p.lastSample = time.Now()
 		if err == nil {
 			err = p.lastAutoFlushError
@@ -157,8 +169,8 @@ func (p *BatchProcessor) waitAndExecuteFlush() bool {
 	p.flushTrigger.L.Lock()
 	defer p.flushTrigger.L.Unlock()
 	for p.flushHeader == nil && !p.shutdown && !p.flushTimedOut() {
-		if p.FlushTimeout > 0 {
-			p.flushTrigger.WaitTimeout(p.FlushTimeout)
+		if p.FlushNoSampleTimeout > 0 {
+			p.flushTrigger.WaitTimeout(p.FlushNoSampleTimeout)
 		} else {
 			p.flushTrigger.Wait()
 		}
@@ -180,10 +192,10 @@ func (p *BatchProcessor) waitAndExecuteFlush() bool {
 }
 
 func (p *BatchProcessor) flushTimedOut() bool {
-	if p.FlushTimeout <= 0 || p.lastSample.IsZero() {
+	if p.FlushNoSampleTimeout <= 0 || p.lastSample.IsZero() {
 		return false
 	}
-	return time.Now().Sub(p.lastSample) >= p.FlushTimeout
+	return time.Now().Sub(p.lastSample) >= p.FlushNoSampleTimeout
 }
 
 func (p *BatchProcessor) executeFlush(header *Header) error {
@@ -242,11 +254,11 @@ func (p *BatchProcessor) String() string {
 	if len(p.FlushTags) > 0 {
 		flushed = fmt.Sprintf(", flushed with tags %v", p.FlushTags)
 	}
-	if p.FlushTimeout > 0 {
-		flushed += fmt.Sprintf(", auto-flushed after %v", p.FlushTimeout)
+	if p.FlushNoSampleTimeout > 0 {
+		flushed += fmt.Sprintf(", auto-flushed after %v", p.FlushNoSampleTimeout)
 	}
-	if p.SampleTimestampFlushTimeout > 0 {
-		flushed += fmt.Sprintf(", flushed when sample timestamp difference over %v", p.SampleTimestampFlushTimeout)
+	if p.FlushSampleLag > 0 {
+		flushed += fmt.Sprintf(", flushed when sample timestamp difference over %v", p.FlushSampleLag)
 	}
 	return fmt.Sprintf("BatchProcessor (%v step%s%s)", len(p.Steps), extra, flushed)
 }
@@ -261,8 +273,8 @@ func (p *BatchProcessor) MergeProcessor(other SampleProcessor) bool {
 }
 
 func (p *BatchProcessor) compatibleParameters(other *BatchProcessor) bool {
-	if (other.FlushTimeout != 0 && other.FlushTimeout != p.FlushTimeout) ||
-		(other.SampleTimestampFlushTimeout != 0 && other.SampleTimestampFlushTimeout != p.SampleTimestampFlushTimeout) {
+	if (other.FlushNoSampleTimeout != 0 && other.FlushNoSampleTimeout != p.FlushNoSampleTimeout) ||
+		(other.FlushSampleLag != 0 && other.FlushSampleLag != p.FlushSampleLag) {
 		return false
 	}
 	if len(other.FlushTags) == 0 {
