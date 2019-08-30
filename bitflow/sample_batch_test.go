@@ -27,7 +27,7 @@ func _do_test_batch(processor *BatchProcessor, samples []Sample, bStep *TestBatc
 	assert := assert.New(t)
 	processor.Start(&sync.WaitGroup{})
 	for i := range samples {
-		processor.Sample(&samples[i], &Header{Fields: []string{"dummy"}})
+		_ = processor.Sample(&samples[i], &Header{Fields: []string{"dummy"}})
 	}
 	processor.Close()
 	assert.Equal(len(bStep.expectedBatchSizes), bStep.batchCounter)

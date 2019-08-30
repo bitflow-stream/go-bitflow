@@ -33,9 +33,13 @@ type MultiplyAggregator struct{}
 
 func (a *MultiplyAggregator) Aggregate(header *bitflow.Header, samples []*bitflow.Sample, refSample *bitflow.Sample) (*bitflow.Sample, error){
 	values := make([]bitflow.Value, len(header.Fields))
-	for _, sample := range samples{
-		for i, value := range sample.Values {
-			values[i] *= value
+	for i, sample := range samples{
+		for j, value := range sample.Values {
+			if i ==  0 {
+				values[j] = value
+			} else {
+				values[j] *= value
+			}
 		}
 	}
 	sample := refSample.Clone()
@@ -53,8 +57,11 @@ func (a *AverageAggregator) Aggregate(header *bitflow.Header, samples []*bitflow
 	values := make([]bitflow.Value, len(header.Fields))
 	for _, sample := range samples{
 		for i, value := range sample.Values {
-			values[i] += value * (1.0 / bitflow.Value(len(samples)))
+			values[i] += value
 		}
+	}
+	for i, _ := range values {
+		values[i] /= bitflow.Value(len(samples))
 	}
 	sample := refSample.Clone()
 	sample.Values = values
