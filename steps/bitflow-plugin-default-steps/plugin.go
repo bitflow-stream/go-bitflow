@@ -79,6 +79,7 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 	math.RegisterStandardizationScaling(b)
 	math.RegisterAggregateAvg(b)
 	math.RegisterAggregateSlope(b)
+	math.RegisterBatchAggregator(b)
 
 	// Filter samples
 	steps.RegisterFilterExpression(b)
