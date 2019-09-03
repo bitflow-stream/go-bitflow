@@ -181,6 +181,7 @@ func (p *Processor) storeSample(sample *bitflow.Sample) {
 func (p *Processor) getVal(index int, key string, sample *bitflow.Sample) (res float64) {
 	if index == AxisTime {
 		res = float64(sample.Time.Unix())
+
 	} else if index == AxisNum {
 		res = float64(len(p.data[key]))
 	} else if index < len(sample.Values) {
@@ -557,6 +558,7 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		xMax := params["xMax"].(float64)
 		yMin := params["yMin"].(float64)
 		yMax := params["yMax"].(float64)
+
 		plot := &Processor{
 			AxisX:      AxisAuto,
 			AxisY:      AxisAuto,
@@ -569,10 +571,11 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 			ForceYmax:  &yMax,
 		}
 
-		for _, part := range params["flags"].([]string) {
-			switch part {
-			case "nolegend":
-				plot.NoLegend = true
+		plot.NoLegend = params["nolegend"].(bool)
+		plot.SeparatePlots = params["separate"].(bool)
+
+		plotType := params["plot_type"].(string)
+		switch  plotType {
 			case "line":
 				plot.Type = LinePlot
 			case "linepoint":
@@ -587,17 +590,30 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 				plot.Type = BoxPlot
 				plot.AxisX = AxisNum
 				plot.AxisY = 0
-			case "separate":
-				plot.SeparatePlots = true
-			case "force_scatter":
-				plot.AxisX = 0
-				plot.AxisY = 1
-			case "force_time":
-				plot.AxisX = AxisTime
-				plot.AxisY = 0
 			default:
-				allFlags := []string{"nolegend", "line", "linepoint", "cluster", "separate", "force_scatter", "force_time"}
-				return fmt.Errorf("Unkown flag: '%v'. The 'flags' parameter is a comma-separated list of flags: %v", part, allFlags)
+				allowed_plot_types := []string{"line", "linepoint", "cluster", "box"}
+				return fmt.Errorf("Unkown plot type: '%v'. Supported plot types are: %v.", plotType, allowed_plot_types)
+		}
+
+		force_scatter := params["force_scatter"].(bool)
+		force_time := params["force_time"].(bool)
+		if force_scatter && force_time {
+			return fmt.Errorf("Parameters: Only one of the follwoing parameters can be true, but is "+
+				"force_scatter=%v, force_time=%v.", force_scatter, force_time)
+		}
+		if force_scatter {
+			plot.AxisX = 0
+			plot.AxisY = 1
+		}
+		if force_time {
+			plot.AxisX = AxisTime
+			plot.AxisY = 0
+			//  Fix to make time axis autoscale. If it is 0.0, the time axis starts at 1970...
+			if *plot.ForceXmin == 0.0 {
+				plot.ForceXmin = nil
+			}
+			if *plot.ForceXmax == 0.0 {
+				plot.ForceXmin = nil
 			}
 		}
 		p.Add(plot)
@@ -608,9 +624,13 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		"Plot a batch of samples to a given filename. The file ending denotes the file type").
 		Required("file", reg.String()).
 		Optional("color", reg.String(), "").
-		Optional("flags", reg.List(reg.String()), []string{}).
-		Optional("xMin", reg.Int(), 0).
-		Optional("xMax", reg.Int(), 0).
-		Optional("yMin", reg.Int(), 0).
-		Optional("yMax", reg.Int(), 0)
+		Optional("plot_type", reg.String(), "cluster").
+		Optional("nolegend", reg.Bool(), false).
+		Optional("separate", reg.Bool(), false).
+		Optional("force_scatter", reg.Bool(), true).
+		Optional("force_time", reg.Bool(), true).
+		Optional("xMin", reg.Float(), 0.0).
+		Optional("xMax", reg.Float(), 0.0).
+		Optional("yMin", reg.Float(), 0.0).
+		Optional("yMax", reg.Float(), 0.0)
 }
