@@ -7,11 +7,10 @@ import (
 	"time"
 )
 
-func _testAggregator(aggregator Aggregator, header *bitflow.Header, samples []*bitflow.Sample, expectedSample *bitflow.Sample, t *testing.T) {
+func _testAggregator(aggregator Aggregator, header *bitflow.Header, samples []*bitflow.Sample, expectedValues []bitflow.Value, t *testing.T) {
 	assert := assert.New(t)
-	sample, err := aggregator.Aggregate(header, samples, samples[len(samples) - 1])
-	assert.NoError(err)
-	assert.Equal(expectedSample.Values, sample.Values)
+	values := aggregator.Aggregate(header, samples)
+	assert.Equal(expectedValues, values)
 }
 
 func getTestSamples() (*bitflow.Header, []*bitflow.Sample) {
@@ -32,28 +31,19 @@ func getTestSamples() (*bitflow.Header, []*bitflow.Sample) {
 }
 
 func TestSumAggregator(t *testing.T) {
-	expectedSample := &bitflow.Sample{
-		Values: []bitflow.Value{9,9,9},
-		Time:   time.Time{},
-	}
+	expectedValues := []bitflow.Value{20,20,27}
 	header, samples := getTestSamples()
-	_testAggregator(&SumAggregator{}, header, samples, expectedSample, t)
+	_testAggregator(&SumAggregator{}, header, samples, expectedValues, t)
 }
 
 func TestMultiplyAggregator(t *testing.T) {
-	expectedSample := &bitflow.Sample{
-		Values: []bitflow.Value{20,20,27},
-		Time:   time.Time{},
-	}
+	expectedValues := []bitflow.Value{20,20,27}
 	header, samples := getTestSamples()
-	_testAggregator(&MultiplyAggregator{}, header, samples, expectedSample, t)
+	_testAggregator(&MultiplyAggregator{}, header, samples, expectedValues, t)
 }
 
 func TestAvgAggregator(t *testing.T) {
-	expectedSample := &bitflow.Sample{
-		Values: []bitflow.Value{3,3,3},
-		Time:   time.Time{},
-	}
+	expectedValues := []bitflow.Value{3,3,3}
 	header, samples := getTestSamples()
-	_testAggregator(&AverageAggregator{}, header, samples, expectedSample, t)
+	_testAggregator(&AverageAggregator{}, header, samples, expectedValues, t)
 }
