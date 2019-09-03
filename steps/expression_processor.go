@@ -54,8 +54,14 @@ func (p *ExpressionProcessor) AddExpression(expressionString string) error {
 func (p *ExpressionProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if res, err := p.evaluate(sample, header); err != nil {
 		return err
-	} else if res {
-		return p.NoopProcessor.Sample(sample, header)
+	} else if res != nil {
+		if sampleAndHeader, ok := res.(*bitflow.SampleAndHeader); ok {
+			return p.NoopProcessor.Sample(sampleAndHeader.Sample, sampleAndHeader.Header)
+		} else if keepSample, ok := res.(bool); ok && keepSample {
+			return p.NoopProcessor.Sample(sample, header)
+		} else {
+			return p.NoopProcessor.Sample(sample, header)
+		}
 	}
 	return nil
 }
@@ -91,26 +97,29 @@ func (p *ExpressionProcessor) String() string {
 	return res + ": " + str.String()
 }
 
-func (p *ExpressionProcessor) evaluate(sample *bitflow.Sample, header *bitflow.Header) (bool, error) {
+func (p *ExpressionProcessor) evaluate(sample *bitflow.Sample, header *bitflow.Header) (interface{}, error) {
 	if p.checker.HeaderChanged(header) {
-		for _, expr := range p.expressions {
+		for res, expr := range p.expressions {
 			if err := expr.UpdateHeader(header); err != nil {
-				return false, err
+				return res, err
 			}
 		}
 	}
+	var result interface{}
 	for _, expr := range p.expressions {
 		if p.Filter {
 			if res, err := expr.EvaluateBool(sample, header); err != nil {
-				return false, err
+				return res, err
 			} else if !res {
-				return false, nil
+				return res, nil
 			}
 		} else {
-			if _, err := expr.Evaluate(sample, header); err != nil {
-				return false, err
+			if res, err := expr.Evaluate(sample, header); err != nil {
+				return res, err
+			} else {
+				result = res
 			}
 		}
 	}
-	return true, nil
+	return result, nil
 }

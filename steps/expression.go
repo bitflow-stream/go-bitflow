@@ -11,12 +11,13 @@ import (
 )
 
 type Expression struct {
-	expr       *govaluate.EvaluableExpression
-	vars       map[string]bool
-	varIndices map[int]string
-	sample     *bitflow.Sample
-	header     *bitflow.Header
-	num        int
+	expr        *govaluate.EvaluableExpression
+	orderedVars []string // Required to make the order of parameters traceable
+	vars        map[string]bool
+	varIndices  map[int]string
+	sample      *bitflow.Sample
+	header      *bitflow.Header
+	num         int
 }
 
 func NewExpression(expressionString string) (*Expression, error) {
@@ -30,6 +31,7 @@ func NewExpression(expressionString string) (*Expression, error) {
 	expr.expr = compiled
 	for _, variable := range compiled.Vars() {
 		expr.vars[variable] = true
+		expr.orderedVars = append(expr.orderedVars, variable)
 	}
 	return expr, nil
 }
@@ -121,16 +123,16 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 		},
 		"date_str": func(arguments ...interface{}) (interface{}, error) {
 			if len(arguments) == 1 {
-				if numArg, ok := arguments[0].(float64); ok {
-					return time.Unix(int64(numArg), 0).Format(bitflow.TextMarshallerDateFormat), nil
+				if numArg, err := p.argsToFloat64(arguments); err == nil {
+					return time.Unix(int64(numArg[0]), 0).Format(bitflow.TextMarshallerDateFormat), nil
 				}
 			}
 			return nil, fmt.Errorf("date_str() needs 1 float64 parameter, but received: %v", printParamStrings(arguments))
 		},
 		"set_timestamp": func(arguments ...interface{}) (interface{}, error) {
 			if len(arguments) == 1 {
-				if numArg, ok := arguments[0].(float64); ok {
-					p.currentSample().Time = time.Unix(int64(numArg), 0)
+				if numArg, err := p.argsToFloat64(arguments); err == nil {
+					p.currentSample().Time = time.Unix(int64(numArg[0]), 0)
 					return arguments[0], nil
 				}
 			}
@@ -138,13 +140,140 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 		},
 		"floor": func(arguments ...interface{}) (interface{}, error) {
 			if len(arguments) == 1 {
-				if numArg, ok := arguments[0].(float64); ok {
-					return math.Floor(numArg), nil
+				if numArg, err := p.argsToFloat64(arguments); err == nil {
+					return math.Floor(numArg[0]), nil
 				}
 			}
 			return nil, fmt.Errorf("floor() needs 1 float64 parameter, but received: %v", printParamStrings(arguments))
 		},
+		"sub": func(arguments ...interface{}) (interface{}, error) {
+			if len(arguments) == 2 {
+				op := func(args []float64) float64 {
+					minuend := args[0]
+					subtrahend := args[1]
+					return minuend - subtrahend
+				}
+				result, err := p.applyArithmeticOperation(op, "sub", arguments)
+				if err != nil {
+					return nil, fmt.Errorf("Error while performing sub() operation: %v", err)
+				}
+				return result, nil
+			}
+			return nil, fmt.Errorf("sub() needs exact 2 parameters, but received: %v", printParamStrings(arguments))
+		},
+		"div": func(arguments ...interface{}) (interface{}, error) {
+			if len(arguments) == 2 {
+				op := func(args []float64) float64 {
+					result := -1.0
+					dividend := args[0]
+					divisor := args[1]
+					// Catch division by zero
+					if divisor > 0 {
+						result = dividend / divisor
+					}
+					return result
+				}
+				result, err := p.applyArithmeticOperation(op, "div", arguments)
+				if err != nil {
+					return nil, fmt.Errorf("Error while performing div() operation: %v", err)
+				}
+				return result, nil
+			}
+			return nil, fmt.Errorf("div() needs exact 2 parameters, but received: %v", printParamStrings(arguments))
+		},
+		"pow": func(arguments ...interface{}) (interface{}, error) {
+			if len(arguments) == 2 {
+				op := func(args []float64) float64 {
+					base := args[0]
+					exponent := args[1]
+					return math.Pow(base, exponent)
+				}
+				result, err := p.applyArithmeticOperation(op, "pow", arguments)
+				if err != nil {
+					return nil, fmt.Errorf("Error while performing pow() operation: %v", err)
+				}
+				return result, nil
+			}
+			return nil, fmt.Errorf("pow() needs exact 2 parameters, but received: %v", printParamStrings(arguments))
+		},
+		"add": func(arguments ...interface{}) (interface{}, error) {
+			if len(arguments) > 1 {
+				op := func(args []float64) float64 {
+					result := 1.0
+					for _, arg := range args {
+						result += arg
+					}
+					return result
+				}
+				result, err := p.applyArithmeticOperation(op, "add", arguments)
+				if err != nil {
+					return nil, fmt.Errorf("Error while performing add() operation: %v", err)
+				}
+				return result, nil
+			}
+			return nil, fmt.Errorf("add() needs at least 2 parameters, but received: %v", printParamStrings(arguments))
+		},
+		"mul": func(arguments ...interface{}) (interface{}, error) {
+			if len(arguments) > 1 {
+				op := func(args []float64) float64 {
+					result := 1.0
+					for _, arg := range args {
+						result *= arg
+					}
+					return result
+				}
+				result, err := p.applyArithmeticOperation(op, "mul", arguments)
+				if err != nil {
+					return nil, fmt.Errorf("Error while performing mul() operation: %v", err)
+				}
+				return result, nil
+			}
+			return nil, fmt.Errorf("mul() needs at least 2 parameters, but received: %v", printParamStrings(arguments))
+		},
+
 	}
+}
+
+func (p *Expression) argsToFloat64(arguments interface{}) ([]float64, error) {
+	args := arguments.([]interface{})
+	floats := make([]float64, len(args))
+	for i, arg := range args {
+		floatArg, ok := args[i].(float64)
+		if ! ok {
+			return nil, fmt.Errorf("failed to parse float64 parameter: %v ... %v", args[i], arg)
+		}
+		floats[i] = floatArg
+	}
+	return floats, nil
+}
+
+func (p *Expression) applyArithmeticOperation(op func([]float64)float64, opStr string, arguments interface{}) (*bitflow.SampleAndHeader, error) {
+	floatArgs, err := p.argsToFloat64(arguments)
+	if err != nil {
+		return nil, fmt.Errorf("Argument parsing error: %v", err)
+	}
+	result := op(floatArgs)
+
+	newField := opStr + "("
+	for i, arg := range p.orderedVars {
+		if i > 0 {
+			newField += "#"
+		}
+		newField += arg
+	}
+	newField += ")"
+
+	outSample := p.sample.Clone()
+	outSample.Values = append(outSample.Values, bitflow.Value(result))
+	outHeader := p.header
+	if len(outSample.Values) > len(p.header.Fields) {
+		outHeader = p.header.Clone(append(p.header.Fields, newField))
+	}
+
+	return &bitflow.SampleAndHeader{
+		Sample: outSample,
+		Header: outHeader,
+	}, nil
 }
 
 func (p *Expression) makeStringFunction(funcName string, numArgs int, f func(sample *bitflow.Sample, args ...string) (interface{}, error)) govaluate.ExpressionFunction {
