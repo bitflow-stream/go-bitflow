@@ -7,7 +7,6 @@ require (
 	github.com/aclements/go-moremath v0.0.0-20190506201756-286cc0be6f75 // indirect
 	github.com/antlr/antlr4 v0.0.0-20190518164840-edae2a1c9b4b
 	github.com/antongulenko/go-onlinestats v0.0.0-20160514060630-5ff69410145c
-	github.com/antongulenko/golearn v0.0.1
 	github.com/antongulenko/golib v0.0.17
 	github.com/bugsnag/bugsnag-go v1.5.2
 	github.com/gin-gonic/gin v1.4.0

@@ -69,8 +69,6 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 	// Basic Math
 	math.RegisterFFT(b)
 	math.RegisterRMS(b)
-	math.RegisterLinearRegression(b)
-	math.RegisterLinearRegressionBruteForce(b)
 	math.RegisterPCA(b)
 	math.RegisterPCAStore(b)
 	math.RegisterPCALoad(b)
