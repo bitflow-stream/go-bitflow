@@ -7,22 +7,20 @@ import (
 )
 
 type Aggregator interface {
-	Aggregate(header *bitflow.Header, samples []*bitflow.Sample, refSample *bitflow.Sample) (*bitflow.Sample, error)
+	Aggregate(header *bitflow.Header, samples []*bitflow.Sample) []bitflow.Value
 	String() string
 }
 
 type SumAggregator struct{}
 
-func (a *SumAggregator) Aggregate(header *bitflow.Header, samples []*bitflow.Sample, refSample *bitflow.Sample) (*bitflow.Sample, error){
+func (a *SumAggregator) Aggregate(header *bitflow.Header, samples []*bitflow.Sample) []bitflow.Value {
 	values := make([]bitflow.Value, len(header.Fields))
-	for _, sample := range samples{
+	for _, sample := range samples {
 		for i, value := range sample.Values {
 			values[i] += value
 		}
 	}
-	sample := refSample.Clone()
-	sample.Values = values
-	return sample, nil
+	return values
 }
 
 func (a *SumAggregator) String() string {
@@ -31,20 +29,18 @@ func (a *SumAggregator) String() string {
 
 type MultiplyAggregator struct{}
 
-func (a *MultiplyAggregator) Aggregate(header *bitflow.Header, samples []*bitflow.Sample, refSample *bitflow.Sample) (*bitflow.Sample, error){
+func (a *MultiplyAggregator) Aggregate(header *bitflow.Header, samples []*bitflow.Sample) []bitflow.Value {
 	values := make([]bitflow.Value, len(header.Fields))
-	for i, sample := range samples{
+	for i, sample := range samples {
 		for j, value := range sample.Values {
-			if i ==  0 {
+			if i == 0 {
 				values[j] = value
 			} else {
 				values[j] *= value
 			}
 		}
 	}
-	sample := refSample.Clone()
-	sample.Values = values
-	return sample, nil
+	return values
 }
 
 func (a *MultiplyAggregator) String() string {
@@ -53,19 +49,17 @@ func (a *MultiplyAggregator) String() string {
 
 type AverageAggregator struct{}
 
-func (a *AverageAggregator) Aggregate(header *bitflow.Header, samples []*bitflow.Sample, refSample *bitflow.Sample) (*bitflow.Sample, error){
+func (a *AverageAggregator) Aggregate(header *bitflow.Header, samples []*bitflow.Sample) []bitflow.Value {
 	values := make([]bitflow.Value, len(header.Fields))
-	for _, sample := range samples{
+	for _, sample := range samples {
 		for i, value := range sample.Values {
 			values[i] += value
 		}
 	}
-	for i, _ := range values {
+	for i := range values {
 		values[i] /= bitflow.Value(len(samples))
 	}
-	sample := refSample.Clone()
-	sample.Values = values
-	return sample, nil
+	return values
 }
 
 func (a *AverageAggregator) String() string {
@@ -73,15 +67,14 @@ func (a *AverageAggregator) String() string {
 }
 
 type BatchAggregator struct {
-	bitflow.NoopProcessor
-
 	aggregator Aggregator
 }
 
 func (ba *BatchAggregator) ProcessBatch(header *bitflow.Header, samples []*bitflow.Sample) (*bitflow.Header, []*bitflow.Sample, error) {
-	samples = make([]*bitflow.Sample, 1)
-	samples[0], _= ba.aggregator.Aggregate(header, samples, samples[len(samples) -1])
-	return header, samples, nil
+	resultSample := make([]*bitflow.Sample, 1)
+	resultSample[0] = samples[len(samples)-1].Clone()
+	resultSample[0].Values = ba.aggregator.Aggregate(header, samples)
+	return header, resultSample, nil
 }
 
 func (ba *BatchAggregator) String() string {
@@ -100,7 +93,7 @@ func RegisterBatchAggregator(b reg.ProcessorRegistry) {
 			case "avg":
 				return &BatchAggregator{aggregator: &AverageAggregator{}}, nil
 			default:
-				validTypes := []string{"sum", "multiply","avg"}
+				validTypes := []string{"sum", "multiply", "avg"}
 				return nil, fmt.Errorf("Invalid aggregator type %v. Valid types: %v", aggregatorType, validTypes)
 			}
 		},
