@@ -31,7 +31,7 @@ func getTestSamples() (*bitflow.Header, []*bitflow.Sample) {
 }
 
 func TestSumAggregator(t *testing.T) {
-	expectedValues := []bitflow.Value{20,20,27}
+	expectedValues := []bitflow.Value{9,9,9}
 	header, samples := getTestSamples()
 	_testAggregator(&SumAggregator{}, header, samples, expectedValues, t)
 }
