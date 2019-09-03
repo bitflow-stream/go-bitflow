@@ -25,7 +25,7 @@ var BatchProcessorParameters = reg.RegisteredParameters{}.
 
 func MakeBatchProcessor(params map[string]interface{}) (res *bitflow.BatchProcessor, err error) {
 
-	if params["flush-time-diff"].(time.Duration) != 0 && params["flush-num-samples"].(int32) != 0 {
+	if params["flush-time-diff"].(time.Duration) != 0 && params["flush-num-samples"].(int) != 0 {
 		return nil, fmt.Errorf("Arguments 'flush-time-diff' and 'flush-num-samples' are mutually exclusive." +
 			" Set either the one or the other.")
 	}
