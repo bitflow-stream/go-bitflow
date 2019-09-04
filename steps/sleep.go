@@ -11,8 +11,8 @@ import (
 func RegisterSleep(b reg.ProcessorRegistry) {
 	b.RegisterStep("sleep", _create_sleep_processor,
 		"Between every two samples, sleep the time difference between their timestamps").
-		Optional("time", reg.Duration(), time.Duration(0)).
-		Optional("onChangedTag", reg.String(), "")
+		Optional("time", reg.Duration(), time.Duration(0), "Optionally defines a fixed sleep duration").
+		Optional("onChangedTag", reg.String(), "", "When defined, sleep only when a new value is observed for the given tag", "The default is to sleep after each sample")
 }
 
 func _create_sleep_processor(p *bitflow.SamplePipeline, params map[string]interface{}) error {
