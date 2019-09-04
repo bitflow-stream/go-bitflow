@@ -62,7 +62,7 @@ func RegisterExpression(b reg.ProcessorRegistry) {
 			"'expr'='set(\"field1\", \"field1\" * 10)'",
 			"'expr'='set(\"field3\", \"field1\" * 10, set(\"field2\", now(), set_tag(\"new_tag\", \"awesome\")))'",
 			"",
-			"Currently the field to value mapping is done once before the first sample is read.",
+			"Currently the field to value mapping is done once before each sample is processed.",
 			"Therefore, interdependent arithmetic operations produce possibly unexpected results.",
 			"Example: 'expr'='set(\"field1\", \"field1\" + 10, set(\"field1\", 10))'",
 			"The expected value for \"field1\" would be 20.",
