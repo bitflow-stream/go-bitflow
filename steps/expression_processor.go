@@ -21,7 +21,21 @@ func RegisterExpression(b reg.ProcessorRegistry) {
 			return add_expression(p, params, false)
 		},
 		"Execute the given expression on every sample").
-		Required("expr", reg.String())
+		Required("expr", reg.String(), "Allows arithmetic operations on sample fields (e.g. \"field1\" [+,-,*,/] \"field2\").",
+			"Following functions are implemented:",
+			"tag(string) string: Access tag by tag key (string). Returns tag string or empty string if key does not exist.",
+			"has_tag(string) bool: Check existence of tag ",
+			"set_set(string, string) bitflow.SampleAndHeader:",
+			"timestamp() float64: ",
+			"now() float64:",
+			"num() float64:",
+			"str(_) string:",
+			"strToFloat(string) float64:",
+			"date_str(float64) string:",
+			"set_timestamp(float64) bitflow.SampleAndHeader:",
+			"floor(float64) float64:",
+			"set(string, float64, bitflow.SampleAndHeader) bitflow.SampleAndHeader: ",
+			"get_sample_and_header(): bitflow.SampleAndHeader: ")
 }
 
 func RegisterFilterExpression(b reg.ProcessorRegistry) {
@@ -52,16 +66,10 @@ func (p *ExpressionProcessor) AddExpression(expressionString string) error {
 }
 
 func (p *ExpressionProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
-	if res, err := p.evaluate(sample, header); err != nil {
+	if outSample, outHeader, err := p.evaluate(sample, header); err != nil {
 		return err
-	} else if res != nil {
-		if sampleAndHeader, ok := res.(*bitflow.SampleAndHeader); ok {
-			return p.NoopProcessor.Sample(sampleAndHeader.Sample, sampleAndHeader.Header)
-		} else if keepSample, ok := res.(bool); ok && keepSample {
-			return p.NoopProcessor.Sample(sample, header)
-		} else {
-			return p.NoopProcessor.Sample(sample, header)
-		}
+	} else if sample != nil || header != nil {
+		return p.NoopProcessor.Sample(outSample, outHeader)
 	}
 	return nil
 }
@@ -97,29 +105,34 @@ func (p *ExpressionProcessor) String() string {
 	return res + ": " + str.String()
 }
 
-func (p *ExpressionProcessor) evaluate(sample *bitflow.Sample, header *bitflow.Header) (interface{}, error) {
+func (p *ExpressionProcessor) evaluate(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
 	if p.checker.HeaderChanged(header) {
-		for res, expr := range p.expressions {
+		for _, expr := range p.expressions {
 			if err := expr.UpdateHeader(header); err != nil {
-				return res, err
+				return nil, nil, err
 			}
 		}
 	}
-	var result interface{}
+	outSample := sample
+	outHeader := header
+	var err error
+	var res bool
 	for _, expr := range p.expressions {
 		if p.Filter {
-			if res, err := expr.EvaluateBool(sample, header); err != nil {
-				return res, err
-			} else if !res {
-				return res, nil
+			res, err = expr.EvaluateBool(outSample, outHeader)
+			if err != nil {
+				return nil, nil, err
+			}
+			if ! res {
+				return nil, nil, nil
 			}
 		} else {
-			if res, err := expr.Evaluate(sample, header); err != nil {
-				return res, err
-			} else {
-				result = res
+			outSample, outHeader, err = expr.Evaluate(outSample, outHeader)
+			if err != nil {
+				return nil, nil, err
 			}
 		}
 	}
-	return result, nil
+
+	return outSample, outHeader, err
 }

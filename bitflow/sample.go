@@ -45,6 +45,9 @@ func (v Value) String() string {
 type Header struct {
 	// Fields defines the names of the metrics of samples belonging to this header.
 	Fields []string
+
+	// Buffer for checking of contained field values
+	buffer map[string]bool
 }
 
 // Clone creates a copy of the Header receiver, using a new string-array as
@@ -69,6 +72,23 @@ func (h *Header) BuildIndex() map[string]int {
 		result[field] = i
 	}
 	return result
+}
+
+// Check if header contains a field
+func (h *Header) ContainsField(field string) bool {
+	if h.buffer == nil {
+		h.buffer = make(map[string]bool)
+	}
+	if _, ok := h.buffer[field]; !ok {
+		h.buffer[field] = false
+		for _, f := range h.Fields {
+			if f == field {
+				h.buffer[field] = true
+				break
+			}
+		}
+	}
+	return h.buffer[field]
 }
 
 // Sample contains an array of Values, a timestamp, and a string-to-string map of tags.
