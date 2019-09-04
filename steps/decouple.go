@@ -26,7 +26,7 @@ func AddDecoupleStep(p *bitflow.SamplePipeline, params map[string]interface{}) e
 func RegisterDecouple(b reg.ProcessorRegistry) {
 	b.RegisterStep("decouple", AddDecoupleStep,
 		"Start a new concurrent routine for handling samples. The parameter is the size of the FIFO-buffer for handing over the samples").
-		Required("buf", reg.Int())
+		Required("buf", reg.Int(), "The number of samples that can be buffered between the incoming goroutine, and the concurrent routine that forwards the samples")
 }
 
 func (p *DecouplingProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {

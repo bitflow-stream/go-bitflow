@@ -2,6 +2,7 @@ package reg
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/bitflow-stream/go-bitflow/bitflow"
 	"github.com/bitflow-stream/go-bitflow/bitflow/fork"
@@ -20,10 +21,11 @@ type ForkFunc func(subpiplines []Subpipeline, params map[string]interface{}) (fo
 type RegisteredParameters map[string]RegisteredParameter
 
 type RegisteredParameter struct {
-	Name     string
-	Parser   ParameterParser
-	Default  interface{}
-	Required bool
+	Name        string
+	Parser      ParameterParser
+	Default     interface{}
+	Required    bool
+	Description string
 }
 
 type RegisteredStep struct {
@@ -90,18 +92,18 @@ func (r *ProcessorRegistryImpl) GetBatchStep(name string) *RegisteredBatchStep {
 	return r.batchRegistry[name]
 }
 
-func (r *RegisteredStep) Param(name string, parser ParameterParser, defaultValue interface{}, isRequired bool) *RegisteredStep {
-	r.Params.Param(name, parser, defaultValue, isRequired)
+func (r *RegisteredStep) Param(name string, parser ParameterParser, defaultValue interface{}, isRequired bool, description ...string) *RegisteredStep {
+	r.Params.Param(name, parser, defaultValue, isRequired, description...)
 	return r
 }
 
-func (r *RegisteredStep) Optional(name string, parser ParameterParser, defaultValue interface{}) *RegisteredStep {
-	r.Params.Optional(name, parser, defaultValue)
+func (r *RegisteredStep) Optional(name string, parser ParameterParser, defaultValue interface{}, description ...string) *RegisteredStep {
+	r.Params.Optional(name, parser, defaultValue, description...)
 	return r
 }
 
-func (r *RegisteredStep) Required(name string, parser ParameterParser) *RegisteredStep {
-	r.Params.Required(name, parser)
+func (r *RegisteredStep) Required(name string, parser ParameterParser, description ...string) *RegisteredStep {
+	r.Params.Required(name, parser, description...)
 	return r
 }
 
@@ -113,7 +115,7 @@ func (params RegisteredParameters) Clone() RegisteredParameters {
 	return result
 }
 
-func (params RegisteredParameters) Param(name string, parser ParameterParser, defaultValue interface{}, isRequired bool) RegisteredParameters {
+func (params RegisteredParameters) Param(name string, parser ParameterParser, defaultValue interface{}, isRequired bool, description ...string) RegisteredParameters {
 	if _, ok := params[name]; ok {
 		panic(fmt.Sprintf("Parameter %v already registered", name))
 	}
@@ -121,20 +123,21 @@ func (params RegisteredParameters) Param(name string, parser ParameterParser, de
 		panic(fmt.Sprintf("Default value for parameter '%v' (type %v) is of unexpected type %T: %v", name, parser, defaultValue, defaultValue))
 	}
 	params[name] = RegisteredParameter{
-		Name:     name,
-		Parser:   parser,
-		Default:  defaultValue,
-		Required: isRequired,
+		Name:        name,
+		Parser:      parser,
+		Default:     defaultValue,
+		Required:    isRequired,
+		Description: strings.Join(description, "\n"),
 	}
 	return params
 }
 
-func (params RegisteredParameters) Optional(name string, parser ParameterParser, defaultValue interface{}) RegisteredParameters {
-	return params.Param(name, parser, defaultValue, false)
+func (params RegisteredParameters) Optional(name string, parser ParameterParser, defaultValue interface{}, description ...string) RegisteredParameters {
+	return params.Param(name, parser, defaultValue, false, description...)
 }
 
-func (params RegisteredParameters) Required(name string, parser ParameterParser) RegisteredParameters {
-	return params.Param(name, parser, nil, true)
+func (params RegisteredParameters) Required(name string, parser ParameterParser, description ...string) RegisteredParameters {
+	return params.Param(name, parser, nil, true, description...)
 }
 
 func (params RegisteredParameters) ParsePrimitives(stringParams map[string]string) (map[string]interface{}, error) {
