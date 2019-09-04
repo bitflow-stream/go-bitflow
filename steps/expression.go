@@ -235,12 +235,15 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 }
 
 func (p *Expression) argsToFloat64(arguments interface{}) ([]float64, error) {
-	args := arguments.([]interface{})
+	args, ok := arguments.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid argument format. array expected but received: %v", args)
+	}
 	floats := make([]float64, len(args))
 	for i, arg := range args {
-		floatArg, ok := args[i].(float64)
+		floatArg, ok := arg.(float64)
 		if ! ok {
-			return nil, fmt.Errorf("failed to parse float64 parameter: %v ... %v", args[i], arg)
+			return nil, fmt.Errorf("failed to parse float64 parameter: %v", arg)
 		}
 		floats[i] = floatArg
 	}
@@ -265,10 +268,7 @@ func (p *Expression) applyArithmeticOperation(op func([]float64)float64, opStr s
 
 	outSample := p.sample.Clone()
 	outSample.Values = append(outSample.Values, bitflow.Value(result))
-	outHeader := p.header
-	if len(outSample.Values) > len(p.header.Fields) {
-		outHeader = p.header.Clone(append(p.header.Fields, newField))
-	}
+	outHeader := p.header.Clone(append(p.header.Fields, newField))
 
 	return &bitflow.SampleAndHeader{
 		Sample: outSample,
