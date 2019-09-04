@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 )
 
 type ProcessingSteps []JsonProcessingStep
@@ -32,10 +33,11 @@ type JsonProcessingStep struct {
 }
 
 type JsonParameter struct {
-	Name     string
-	Type     string
-	Default  interface{}
-	Required bool
+	Name        string
+	Type        string
+	Default     interface{}
+	Required    bool
+	Description string
 }
 
 func makeJsonProcessingStep(reg RegisteredStep, batch, fork bool) JsonProcessingStep {
@@ -52,10 +54,11 @@ func makeJsonParameters(params RegisteredParameters) []JsonParameter {
 	result := make([]JsonParameter, 0, len(params))
 	for _, param := range params {
 		result = append(result, JsonParameter{
-			Name:     param.Name,
-			Type:     param.Parser.String(),
-			Default:  param.Default,
-			Required: param.Required,
+			Name:        param.Name,
+			Type:        param.Parser.String(),
+			Default:     param.Default,
+			Required:    param.Required,
+			Description: param.Description,
 		})
 	}
 	return result
@@ -65,8 +68,9 @@ func (s *JsonProcessingStep) formatTo(buf *bytes.Buffer) {
 	buf.WriteString("\n - ")
 	buf.WriteString(s.Name)
 	if s.Description != "" {
-		buf.WriteString("\n      Description: ")
-		buf.WriteString(s.Description)
+		descPrefix := "\n      Description: "
+		buf.WriteString(descPrefix)
+		buf.WriteString(s.indentDescription(descPrefix, s.Description))
 	}
 	if len(s.Params) > 0 {
 		buf.WriteString("\n      Parameters:")
@@ -75,9 +79,21 @@ func (s *JsonProcessingStep) formatTo(buf *bytes.Buffer) {
 			if !param.Required {
 				requiredOrOptional = fmt.Sprintf("optional, default: %v", param.Default)
 			}
-			fmt.Fprintf(buf, "\n          %v (%v), %v", param.Name, param.Type, requiredOrOptional)
+			paramLine := fmt.Sprintf("\n          %v (%v), %v", param.Name, param.Type, requiredOrOptional)
+			buf.WriteString(paramLine)
+			if param.Description != "" {
+				descPrefix := ". Description: "
+				buf.WriteString(descPrefix)
+				buf.WriteString(s.indentDescription(paramLine+descPrefix, param.Description))
+			}
 		}
 	}
+}
+
+func (s *JsonProcessingStep) indentDescription(lineStart, description string) string {
+	// Replace newline-characters appropriately to ensure correct indentation of multi-line description text
+	replacement := "\n" + strings.Repeat(" ", len(strings.TrimPrefix(lineStart, "\n")))
+	return strings.ReplaceAll(description, "\n", replacement)
 }
 
 func (r ProcessorRegistry) getSortedProcessingSteps() (steps ProcessingSteps, batchSteps ProcessingSteps, forks ProcessingSteps) {
