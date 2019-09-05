@@ -202,7 +202,7 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 				return nil, fmt.Errorf("Error while parsing first string argument: %v", arguments[0])
 			}
 			if _, exists := p.varsToIndices[field]; !exists {
-				outSampleAndHeader = bitflow.SampleAndHeader{}.AddField(field, bitflow.Value(value))
+				outSampleAndHeader = (&bitflow.SampleAndHeader{}).AddField(field, bitflow.Value(value))
 			} else {
 				outSampleAndHeader.Sample.Values[p.varsToIndices[field]] = bitflow.Value(value)
 			}
