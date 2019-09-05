@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/Knetic/govaluate"
@@ -11,12 +12,13 @@ import (
 )
 
 type Expression struct {
-	expr       *govaluate.EvaluableExpression
-	vars       map[string]bool
-	varIndices map[int]string
-	sample     *bitflow.Sample
-	header     *bitflow.Header
-	num        int
+	expr          *govaluate.EvaluableExpression
+	vars          map[string]bool
+	indicesToVars map[int]string
+	varsToIndices map[string]int
+	sample        *bitflow.Sample
+	header        *bitflow.Header
+	num           int
 }
 
 func NewExpression(expressionString string) (*Expression, error) {
@@ -36,11 +38,11 @@ func NewExpression(expressionString string) (*Expression, error) {
 
 func (p *Expression) UpdateHeader(header *bitflow.Header) error {
 	resolvedVariables := make(map[string]bool)
-	p.varIndices = make(map[int]string)
+	p.indicesToVars = make(map[int]string)
 
 	for i, field := range header.Fields {
 		if p.vars[field] {
-			p.varIndices[i] = field
+			p.indicesToVars[i] = field
 			resolvedVariables[field] = true
 		}
 	}
@@ -50,10 +52,32 @@ func (p *Expression) UpdateHeader(header *bitflow.Header) error {
 			return fmt.Errorf("%v: Variable %v cannot be resolved in header", p.expr, variable)
 		}
 	}
+	p.varsToIndices = header.BuildIndex()
+
 	return nil
 }
 
-func (p *Expression) Evaluate(sample *bitflow.Sample, header *bitflow.Header) (interface{}, error) {
+func (p *Expression) Evaluate(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
+	res, err := p.doEvaluate(sample, header)
+	if outSampleAndHeader, ok := res.(bitflow.SampleAndHeader); ok {
+		return outSampleAndHeader.Sample, outSampleAndHeader.Header, err
+	}
+	return sample, header, err
+}
+
+func (p *Expression) EvaluateBool(sample *bitflow.Sample, header *bitflow.Header) (bool, error) {
+	result, err := p.doEvaluate(sample, header)
+	if err != nil {
+		return false, err
+	}
+	if boolResult, ok := result.(bool); ok {
+		return boolResult, nil
+	} else {
+		return false, fmt.Errorf("%v: Non-boolean result returned: %v (%T)", p.expr, result, result)
+	}
+}
+
+func (p *Expression) doEvaluate(sample *bitflow.Sample, header *bitflow.Header) (interface{}, error) {
 	parameters := p.makeParameters(sample)
 	p.sample = sample // Set the sample/header so that the functions in makeFunctions() can access its values
 	p.header = header
@@ -66,21 +90,9 @@ func (p *Expression) Evaluate(sample *bitflow.Sample, header *bitflow.Header) (i
 	return res, err
 }
 
-func (p *Expression) EvaluateBool(sample *bitflow.Sample, header *bitflow.Header) (bool, error) {
-	result, err := p.Evaluate(sample, header)
-	if err != nil {
-		return false, err
-	}
-	if boolResult, ok := result.(bool); ok {
-		return boolResult, nil
-	} else {
-		return false, fmt.Errorf("%v: Non-boolean result returned: %v (%T)", p.expr, result, result)
-	}
-}
-
 func (p *Expression) makeParameters(sample *bitflow.Sample) map[string]interface{} {
 	parameters := make(map[string]interface{})
-	for index, variable := range p.varIndices {
+	for index, variable := range p.indicesToVars {
 		parameters[variable] = float64(sample.Values[index])
 	}
 	return parameters
@@ -96,7 +108,10 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 		}),
 		"set_tag": p.makeStringFunction("set_tag", 2, func(sample *bitflow.Sample, args ...string) (interface{}, error) {
 			sample.SetTag(args[0], args[1])
-			return args[1], nil
+			return &bitflow.SampleAndHeader{
+				Sample: sample,
+				Header: p.currentHeader(),
+			}, nil
 		}),
 		"timestamp": p.makeStringFunction("timestamp", 0, func(sample *bitflow.Sample, _ ...string) (interface{}, error) {
 			return float64(sample.Time.Unix()), nil
@@ -111,13 +126,25 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 			return float64(time.Now().Unix()), nil
 		}),
 		"num": p.makeStringFunction("num", 0, func(_ *bitflow.Sample, _ ...string) (interface{}, error) {
-			return p.num, nil
+			return float64(p.num), nil
 		}),
 		"str": func(arguments ...interface{}) (interface{}, error) {
 			if len(arguments) == 1 {
 				return fmt.Sprintf("%v", arguments[0]), nil
 			}
 			return nil, fmt.Errorf("str() needs 1 parameter, but received: %v", printParamStrings(arguments))
+		},
+		"parse_float": func(arguments ...interface{}) (interface{}, error) {
+			if len(arguments) == 1 {
+				if strValue, ok := arguments[0].(string); ok {
+					if value, err := strconv.ParseFloat(strValue, 64); err == nil {
+						return value, nil
+					} else {
+						return nil, fmt.Errorf("error parsing float64 from string %v", strValue)
+					}
+				}
+			}
+			return nil, fmt.Errorf("strToFloat() needs 1 string parameter, but received: %v", printParamStrings(arguments))
 		},
 		"date_str": func(arguments ...interface{}) (interface{}, error) {
 			if len(arguments) == 1 {
@@ -130,8 +157,12 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 		"set_timestamp": func(arguments ...interface{}) (interface{}, error) {
 			if len(arguments) == 1 {
 				if numArg, ok := arguments[0].(float64); ok {
+					outSampleAndHeader := &bitflow.SampleAndHeader{
+						Sample: p.currentSample(),
+						Header: p.currentHeader(),
+					}
 					p.currentSample().Time = time.Unix(int64(numArg), 0)
-					return arguments[0], nil
+					return outSampleAndHeader, nil
 				}
 			}
 			return nil, fmt.Errorf("set_timestamp() needs 1 float64 parameter, but received: %v", printParamStrings(arguments))
@@ -143,6 +174,45 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 				}
 			}
 			return nil, fmt.Errorf("floor() needs 1 float64 parameter, but received: %v", printParamStrings(arguments))
+		},
+		"set": func(arguments ...interface{}) (interface{}, error) {
+			if len(arguments) != 2 && len(arguments) != 3 {
+				return nil, fmt.Errorf("following parametrization required: set(required(string), required(float64),"+
+					" optional(*bitflow.SampleAndHeader)), but received: %v", printParamStrings(arguments))
+			}
+			var ok bool
+			outSampleAndHeader := &bitflow.SampleAndHeader{
+				Sample: p.currentSample(),
+				Header: p.currentHeader(),
+			}
+			if len(arguments) == 3 {
+				outSampleAndHeader, ok = arguments[2].(*bitflow.SampleAndHeader)
+				if !ok {
+					return nil, fmt.Errorf("Error while parsing third sample and header argument: %v", arguments[2])
+				}
+			}
+			value, ok := arguments[1].(float64)
+			if !ok {
+				return nil, fmt.Errorf("Error while parsing second float64 argument: %v", arguments[1])
+			}
+			field, ok := arguments[0].(string)
+			if !ok {
+				return nil, fmt.Errorf("Error while parsing first string argument: %v", arguments[0])
+			}
+			if _, exists := p.varsToIndices[field]; !exists {
+				outSampleAndHeader = (&bitflow.SampleAndHeader{}).AddField(field, bitflow.Value(value))
+			} else {
+				outSampleAndHeader.Sample.Values[p.varsToIndices[field]] = bitflow.Value(value)
+			}
+
+			return outSampleAndHeader, nil
+		},
+		"get_sample_and_header": func(arguments ...interface{}) (interface{}, error) {
+			outSampleAndHeader := &bitflow.SampleAndHeader{
+				Sample: p.currentSample(),
+				Header: p.currentHeader(),
+			}
+			return outSampleAndHeader, nil
 		},
 	}
 }
