@@ -13,7 +13,6 @@ import (
 
 type Expression struct {
 	expr          *govaluate.EvaluableExpression
-	orderedVars   []string // Required to make the order of parameters traceable
 	vars          map[string]bool
 	indicesToVars map[int]string
 	varsToIndices map[string]int
@@ -33,7 +32,6 @@ func NewExpression(expressionString string) (*Expression, error) {
 	expr.expr = compiled
 	for _, variable := range compiled.Vars() {
 		expr.vars[variable] = true
-		expr.orderedVars = append(expr.orderedVars, variable)
 	}
 	return expr, nil
 }
