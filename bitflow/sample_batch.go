@@ -9,11 +9,108 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type WindowHandler interface {
+	ClearWindow() []*Sample
+	MoveWindow() []*Sample
+	Add(sample *Sample)
+	FlushRequired() bool
+}
+
+type SampleWindowHandler struct {
+	Size     int
+	StepSize int
+
+	// Current sample window
+	Samples []*Sample
+	// Helper to track window position in sample stream
+	diff int
+}
+
+func (s *SampleWindowHandler) ClearWindow() []*Sample {
+	s.diff = 0
+	samples := s.Samples
+	s.Samples = nil
+	return samples
+}
+
+func (s *SampleWindowHandler) MoveWindow() []*Sample {
+	s.diff = s.Size - s.StepSize
+	if s.diff <= 0 {
+		s.Samples = nil
+	}
+	samples := s.Samples
+	// Remove first s.diff Samples
+	return samples
+}
+
+func (s *SampleWindowHandler) Add(sample *Sample) {
+	if s.diff >= 0 {
+		s.Samples = append(s.Samples, sample)
+	}
+	s.diff++
+}
+
+func (s *SampleWindowHandler) FlushRequired() bool {
+	return s.diff >= s.Size
+}
+
+type TimeWindowHandler struct {
+	Size     time.Duration
+	StepSize time.Duration
+
+	// Current sample window
+	samples []*Sample
+	// Helper to track window position in sample stream
+	diff time.Duration
+}
+
+func (t *TimeWindowHandler) ClearWindow() []*Sample {
+	t.diff = time.Duration(0)
+	samples :=  t.samples
+	t.samples = nil
+	return samples
+}
+
+func (t *TimeWindowHandler) MoveWindow() []*Sample {
+	t.diff = t.Size - t.StepSize
+	if t.diff <= 0 {
+		t.samples = nil
+	}
+
+	samples := t.samples
+	for i, sample := range t.samples {
+		if i > 0 {
+			difference := sample.Time.Sub(t.samples[0].Time)
+			if difference >= t.StepSize {
+
+				// Remove Samples until i (i is incl.)
+			}
+		}
+	}
+	return samples
+}
+
+func (t *TimeWindowHandler) Add(sample *Sample) {
+	if t.diff >= 0 {
+		t.samples = append(t.samples, sample)
+	}
+	if len(t.samples) > 1 {
+		lastSample := t.samples[len(t.samples)-1]
+		secondLastSample := t.samples[len(t.samples)-1]
+		t.diff += lastSample.Time.Sub(secondLastSample.Time)
+	}
+}
+
+func (t *TimeWindowHandler) FlushRequired() bool {
+	return t.diff >= t.Size
+}
+
 type BatchProcessor struct {
 	NoopProcessor
-	checker  HeaderChecker
-	samples  []*Sample
+	checker HeaderChecker
+
 	shutdown bool
+	flushAll bool
 
 	Steps []BatchProcessingStep
 
@@ -27,13 +124,13 @@ type BatchProcessor struct {
 	// certain special cases.
 	DontFlushOnClose bool
 
-	FlushNoSampleTimeout time.Duration // If > 0, flush when no new samples are received for the given duration. The wall-time is used for this (not sample timestamps)
+	FlushNoSampleTimeout time.Duration // If > 0, flush when no new Samples are received for the given duration. The wall-time is used for this (not sample timestamps)
 	FlushSampleLag       time.Duration // If > 0, flush when a sample is received with a timestamp jump bigger than this
-	FlushAfterNumSamples int //If > 0, flush after batch  window contains this amount of samples
-	FlushAfterTime       time.Duration // If > 0, flush after time difference between the first and the last received sample in batch is greater than this
 	lastAutoFlushError   error
 	lastSample           time.Time // Wall time when receiving last sample
 	lastSampleTimestamp  time.Time // Timestamp of last sample
+
+	Handler WindowHandler
 
 	FlushTags     []string // If set, flush every time any of these tags change
 	lastFlushTags []string
@@ -83,16 +180,11 @@ func (p *BatchProcessor) Start(wg *sync.WaitGroup) golib.StopChan {
 
 func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 	oldHeader := p.checker.LastHeader
-	flush := p.checker.InitializedHeaderChanged(header)
-	if p.FlushAfterNumSamples > 0 { // FlushAfterNumSamples and  FlushAfterTime are mutually exclusive. FlushAfterNumSamples is prioritized over FlushAfterTime.
-		flush = len(p.samples) >= p.FlushAfterNumSamples
-	} else if p.FlushAfterTime > 0 {
-		if len(p.samples) > 1 { // At least 2 samples are required
-			start := p.samples[0].Time
-			end := p.samples[len(p.samples) - 1].Time
-			diff := end.Sub(start)
-			flush = (p.FlushAfterTime - diff) <= 0
-		}
+	flushAll := false
+	flush := p.Handler.FlushRequired()
+	if p.checker.InitializedHeaderChanged(header) {
+		flushAll = true
+		flush = true
 	}
 	if len(p.FlushTags) > 0 {
 		values := make([]string, len(p.FlushTags))
@@ -100,6 +192,7 @@ func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 			values[i] = sample.Tag(tag)
 			if oldHeader != nil && len(p.lastFlushTags) > i && p.lastFlushTags[i] != values[i] {
 				flush = true
+				flushAll = true
 			}
 		}
 		p.lastFlushTags = values
@@ -107,11 +200,12 @@ func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 	if p.FlushSampleLag > 0 {
 		if !p.lastSampleTimestamp.IsZero() && sample.Time.Sub(p.lastSampleTimestamp) >= p.FlushSampleLag {
 			flush = true
+			flushAll = true
 		}
 		p.lastSampleTimestamp = sample.Time
 	}
 	if flush {
-		err = p.triggerFlush(oldHeader, false)
+		err = p.triggerFlush(oldHeader, false, flushAll)
 	}
 	if p.FlushNoSampleTimeout > 0 {
 		p.lastSample = time.Now()
@@ -120,11 +214,11 @@ func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 		}
 		p.lastAutoFlushError = nil
 	}
-	p.samples = append(p.samples, sample)
+	p.Handler.Add(sample)
 
 	if p.ForwardImmediately {
 		if err != nil {
-			log.Errorln("Dropping error, because forward-immediately mode is enabled:", err)
+			log.Errorf("Dropping error, because forward-immediately mode is enabled: %v", err)
 		}
 		return p.NoopProcessor.Sample(sample, header)
 	} else {
@@ -137,16 +231,18 @@ func (p *BatchProcessor) Close() {
 	if !p.DontFlushOnClose {
 		header := p.checker.LastHeader
 		if header == nil {
-			log.Warnln(p.String(), "received no samples")
+			log.Warnln(p.String(), "received no Samples")
 		}
-		if err := p.triggerFlush(header, true); err != nil {
+		if err := p.triggerFlush(header, true, true); err != nil {
 			p.Error(err)
 		}
 	}
 }
 
-func (p *BatchProcessor) triggerFlush(header *Header, shutdown bool) error {
+func (p *BatchProcessor) triggerFlush(header *Header, shutdown bool, flushAll bool) error {
 	p.flushTrigger.L.Lock()
+	p.flushAll = flushAll
+	defer func() { p.flushAll = false }()
 	defer p.flushTrigger.L.Unlock()
 	p.flushHeader = header
 	p.flushTrigger.Broadcast()
@@ -199,22 +295,27 @@ func (p *BatchProcessor) flushTimedOut() bool {
 }
 
 func (p *BatchProcessor) executeFlush(header *Header) error {
-	samples := p.samples
+	var samples []*Sample
+	if p.flushAll {
+		samples = p.Handler.ClearWindow()
+	} else {
+		samples = p.Handler.MoveWindow()
+	}
 	if len(samples) == 0 || header == nil {
 		return nil
 	}
-	p.samples = nil // Allow garbage collection
+
 	if samples, header, err := p.executeSteps(samples, header); err != nil {
 		return err
 	} else if p.ForwardImmediately {
-		log.Println("Dropping", len(samples), "batched samples (forward immediately mode is enabled)")
+		log.Printf("Dropping %v batched Samples (forward immediately mode is enabled)", len(samples))
 		return nil
 	} else {
 		if header == nil {
-			return fmt.Errorf("Cannot flush %v samples because nil-header was returned by last batch processing step", len(samples))
+			return fmt.Errorf("Cannot flush %v Samples because nil-header was returned by last batch processing step", len(samples))
 		}
 		if len(samples) > 0 {
-			log.Println("Flushing", len(samples), "batched samples with", len(header.Fields), "metrics")
+			log.Printf("Flushing %v Samples with %v metrics as result of the batch steps", len(samples), len(header.Fields))
 			for _, sample := range samples {
 				if err := p.NoopProcessor.Sample(sample, header); err != nil {
 					return fmt.Errorf("Error flushing batch: %v", err)
@@ -230,10 +331,10 @@ func (p *BatchProcessor) executeSteps(samples []*Sample, header *Header) ([]*Sam
 		log.Debugln("Executing", len(p.Steps), "batch processing step(s)")
 		for i, step := range p.Steps {
 			if len(samples) == 0 {
-				log.Warnln("Cannot execute remaining", len(p.Steps)-i, "batch step(s) because the batch with", len(header.Fields), "has no samples")
+				log.Warnln("Cannot execute remaining", len(p.Steps)-i, "batch step(s) because the batch with", len(header.Fields), "has no Samples")
 				break
 			} else {
-				log.Println("Executing", step, "on", len(samples), "samples with", len(header.Fields), "metrics")
+				log.Println("Executing", step, "on", len(samples), "Samples with", len(header.Fields), "metrics")
 				var err error
 				header, samples, err = step.ProcessBatch(header, samples)
 				if err != nil {
