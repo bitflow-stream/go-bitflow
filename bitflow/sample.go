@@ -420,11 +420,11 @@ type SampleAndHeader struct {
 	*Header
 }
 
-func (s *SampleAndHeader) AddField(name string, value Value) *SampleAndHeader {
+func (s *SampleAndHeader) AddFields(names []string, values []Value) *SampleAndHeader {
 	s.Sample = s.Sample.DeepClone()
-	s.Sample.Values = append(s.Sample.Values, value)
+	s.Sample.Values = append(s.Sample.Values, values...)
 
-	s.Header = s.Header.Clone(append(s.Header.Fields, name))
+	s.Header = s.Header.Clone(append(s.Header.Fields, names...))
 	return s
 }
 

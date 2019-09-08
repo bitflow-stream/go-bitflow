@@ -18,43 +18,48 @@ var BatchProcessorParameters = reg.RegisteredParameters{}.
 	Optional("flush-tags", reg.List(reg.String()), []string{}, "Flush the current batch when one or more of the given tags change").
 	Optional("flush-no-samples-timeout", reg.Duration(), time.Duration(0)).
 	Optional("flush-sample-lag-timeout", reg.Duration(), time.Duration(0)).
-	Optional("window-size-samples", reg.Int(), 0).
-	Optional("step-size-samples", reg.Int(), 0).
-	Optional("window-size-time", reg.Duration(), time.Duration(0)).
-	Optional("step-size-time", reg.Duration(), time.Duration(0)).
-	Optional("ignore-close", reg.Bool(), false, "Do not flush the remaining samples, when the pipeline is closed", "The default behavior is to flush on close").
-	Optional("forward-immediately", reg.Bool(), false, "In addition to the regular batching functionality, output each incoming sample immediately", "This will possibly duplicate each incoming sample, since the regular batch processing results are forwarded as well")
+	Optional("sample-window-size", reg.Int(), 0).
+	Optional("sample-step-size", reg.Int(), 0).
+	Optional("time_window-size", reg.Duration(), time.Duration(0)).
+	Optional("time-step-size", reg.Duration(), time.Duration(0)).
+	Optional("ignore-close", reg.Bool(), false,
+		"Do not flush the remaining samples, when the pipeline is closed",
+		"The default behavior is to flush on close").
+	Optional("forward-immediately", reg.Bool(), false,
+		"In addition to the regular batching functionality, output each incoming sample immediately",
+		"This will possibly duplicate each incoming sample, since the regular batch processing results are forwarded as well")
 
 func MakeBatchProcessor(params map[string]interface{}) (res *bitflow.BatchProcessor, err error) {
-	windowSizeSamples := params["window-size-samples"].(int)
-	windowSizeTime := params["window-size-time"].(time.Duration)
+	sampleWindowSize := params["sample-window-size"].(int)
+	timeWindowSize := params["time-window-size"].(time.Duration)
 
-	isSampleWindow := windowSizeSamples > 0
-	isTimeWindow := windowSizeTime > 0
-	if isSampleWindow && isTimeWindow { // Can only be either sample or time window. Both false is OK
-		return nil, fmt.Errorf("Arguments 'window-size-samples' and 'window-size-samples' are mutually exclusive." +
-			" Set either none of them or the one or the other to a positive int value.")
+	if sampleWindowSize > 0 && timeWindowSize > 0 { // Can only be either sample or time window. Both false is OK
+		return nil, fmt.Errorf("arguments 'sample-window-size' and 'time-window-size' are mutually exclusive."+
+			" Set either none of them or the one or the other to a positive int value. Current setting: "+
+			"'sample-window-size'=%v and 'time-window-size'=%v", sampleWindowSize, timeWindowSize)
 	}
 
 	var handler bitflow.WindowHandler
-	if isSampleWindow {
-		stepSizeSamples := params["step-size-samples"].(int)
-		if stepSizeSamples <= 0 {
-			stepSizeSamples = windowSizeSamples
-		}
-		handler = &bitflow.SampleWindowHandler{
-			Size:     windowSizeSamples,
-			StepSize: stepSizeSamples,
-		}
-	} else if isTimeWindow {
-		stepSizeTime := params["step-size-time"].(time.Duration)
-		if stepSizeTime <= 0 {
-			stepSizeTime = windowSizeTime
+	if timeWindowSize > 0 {
+		timeStepSize := params["time-step-size"].(time.Duration)
+		if timeStepSize <= 0 {
+			timeStepSize = timeWindowSize
 		}
 		handler = &bitflow.TimeWindowHandler{
-			Size:     windowSizeTime,
-			StepSize: stepSizeTime,
+			Size:     timeStepSize,
+			StepSize: timeStepSize,
 		}
+	} else if sampleWindowSize > 0 {
+		sampleStepSize := params["sample-step-size"].(int)
+		if sampleStepSize <= 0 {
+			sampleStepSize = sampleWindowSize
+		}
+		handler = &bitflow.SampleWindowHandler{
+			Size:     sampleWindowSize,
+			StepSize: sampleStepSize,
+		}
+	} else {
+		handler = &bitflow.SimpleWindowHandler{}
 	}
 
 	return &bitflow.BatchProcessor{

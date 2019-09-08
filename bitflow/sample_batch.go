@@ -10,10 +10,28 @@ import (
 )
 
 type WindowHandler interface {
-	ClearWindow() []*Sample
-	MoveWindow() []*Sample
+	MoveWindow(clear bool) []*Sample
 	Add(sample *Sample)
 	FlushRequired() bool
+}
+
+type SimpleWindowHandler struct {
+	// Current sample window
+	samples []*Sample
+}
+
+func (si *SimpleWindowHandler) MoveWindow(clear bool) []*Sample {
+	samples := si.samples
+	si.samples = nil
+	return samples
+}
+
+func (si *SimpleWindowHandler) Add(sample *Sample) {
+	si.samples = append(si.samples, sample)
+}
+
+func (si *SimpleWindowHandler) FlushRequired() bool {
+	return false
 }
 
 type SampleWindowHandler struct {
@@ -21,37 +39,41 @@ type SampleWindowHandler struct {
 	StepSize int
 
 	// Current sample window
-	Samples []*Sample
+	samples []*Sample
 	// Helper to track window position in sample stream
 	diff int
 }
 
-func (s *SampleWindowHandler) ClearWindow() []*Sample {
-	s.diff = 0
-	samples := s.Samples
-	s.Samples = nil
-	return samples
-}
+func (s *SampleWindowHandler) MoveWindow(clear bool) []*Sample {
+	samples := s.samples
 
-func (s *SampleWindowHandler) MoveWindow() []*Sample {
-	s.diff = s.Size - s.StepSize
-	if s.diff <= 0 {
-		s.Samples = nil
+	if s.StepSize <= 0 || clear { // Flush whole window
+		s.diff = 0
+	} else {
+		s.diff = s.Size - s.StepSize
 	}
-	samples := s.Samples
-	// Remove first s.diff Samples
+
+	if s.diff <= 0 { // Complete clearing or shifting beyond window
+		s.samples = nil
+	} else {
+		s.samples = s.samples[s.StepSize:] // Shifting window
+	}
 	return samples
 }
 
 func (s *SampleWindowHandler) Add(sample *Sample) {
 	if s.diff >= 0 {
-		s.Samples = append(s.Samples, sample)
+		s.samples = append(s.samples, sample)
 	}
 	s.diff++
 }
 
 func (s *SampleWindowHandler) FlushRequired() bool {
-	return s.diff >= s.Size
+	if s.Size > 0 {
+		return s.diff >= s.Size
+	} else {
+		return false
+	}
 }
 
 type TimeWindowHandler struct {
@@ -64,26 +86,29 @@ type TimeWindowHandler struct {
 	diff time.Duration
 }
 
-func (t *TimeWindowHandler) ClearWindow() []*Sample {
-	t.diff = time.Duration(0)
-	samples :=  t.samples
-	t.samples = nil
-	return samples
-}
+func (t *TimeWindowHandler) MoveWindow(clear bool) []*Sample {
+	samples := t.samples
 
-func (t *TimeWindowHandler) MoveWindow() []*Sample {
-	t.diff = t.Size - t.StepSize
-	if t.diff <= 0 {
-		t.samples = nil
+	if t.StepSize <= 0 || clear { // Flush whole window
+		t.diff = 0
+	} else {
+		t.diff = t.Size - t.StepSize
 	}
 
-	samples := t.samples
-	for i, sample := range t.samples {
-		if i > 0 {
-			difference := sample.Time.Sub(t.samples[0].Time)
-			if difference >= t.StepSize {
-
-				// Remove Samples until i (i is incl.)
+	if t.diff <= 0 { // Complete clearing or shifting beyond window
+		t.samples = nil
+	} else {
+		for i, sample := range t.samples {
+			if i > 0 { // Skip first iteration
+				difference := sample.Time.Sub(t.samples[0].Time)
+				if difference >= t.StepSize {
+					if i < len(t.samples)-1 {
+						t.samples = t.samples[i:] // Window shift operation
+					} else { // Rare corner case but might happen
+						t.samples = nil
+					}
+					break
+				}
 			}
 		}
 	}
@@ -96,21 +121,25 @@ func (t *TimeWindowHandler) Add(sample *Sample) {
 	}
 	if len(t.samples) > 1 {
 		lastSample := t.samples[len(t.samples)-1]
-		secondLastSample := t.samples[len(t.samples)-1]
+		secondLastSample := t.samples[len(t.samples)-2]
 		t.diff += lastSample.Time.Sub(secondLastSample.Time)
 	}
 }
 
 func (t *TimeWindowHandler) FlushRequired() bool {
-	return t.diff >= t.Size
+	if t.Size > 0 {
+		return t.diff >= t.Size
+	} else {
+		return false
+	}
 }
 
 type BatchProcessor struct {
 	NoopProcessor
 	checker HeaderChecker
 
-	shutdown bool
-	flushAll bool
+	shutdown    bool
+	clearWindow bool
 
 	Steps []BatchProcessingStep
 
@@ -239,10 +268,10 @@ func (p *BatchProcessor) Close() {
 	}
 }
 
-func (p *BatchProcessor) triggerFlush(header *Header, shutdown bool, flushAll bool) error {
+func (p *BatchProcessor) triggerFlush(header *Header, shutdown bool, clearWindow bool) error {
 	p.flushTrigger.L.Lock()
-	p.flushAll = flushAll
-	defer func() { p.flushAll = false }()
+	p.clearWindow = clearWindow
+	defer func() { p.clearWindow = false }()
 	defer p.flushTrigger.L.Unlock()
 	p.flushHeader = header
 	p.flushTrigger.Broadcast()
@@ -296,11 +325,7 @@ func (p *BatchProcessor) flushTimedOut() bool {
 
 func (p *BatchProcessor) executeFlush(header *Header) error {
 	var samples []*Sample
-	if p.flushAll {
-		samples = p.Handler.ClearWindow()
-	} else {
-		samples = p.Handler.MoveWindow()
-	}
+	samples = p.Handler.MoveWindow(p.clearWindow)
 	if len(samples) == 0 || header == nil {
 		return nil
 	}
