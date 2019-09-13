@@ -424,6 +424,14 @@ type SampleAndHeader struct {
 	*Header
 }
 
+func (s *SampleAndHeader) AddField(name string, value Value) *SampleAndHeader {
+	s.Sample = s.Sample.DeepClone()
+	s.Sample.Values = append(s.Sample.Values, value)
+
+	s.Header = s.Header.Clone(append(s.Header.Fields, name))
+	return s
+}
+
 const TAG_TEMPLATE_ENV_PREFIX = "ENV_"
 
 func ResolveTagTemplate(template string, missingValues string, sample *Sample) string {

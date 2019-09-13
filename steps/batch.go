@@ -15,13 +15,13 @@ import (
 
 // TODO "ignore-header-change"
 var BatchProcessorParameters = reg.RegisteredParameters{}.
-	Optional("flush-tags", reg.List(reg.String()), []string{}).
+	Optional("flush-tags", reg.List(reg.String()), []string{}, "Flush the current batch when one or more of the given tags change").
 	Optional("flush-no-samples-timeout", reg.Duration(), time.Duration(0)).
 	Optional("flush-sample-lag-timeout", reg.Duration(), time.Duration(0)).
 	Optional("flush-num-samples", reg.Int(), 0).
 	Optional("flush-time-diff", reg.Duration(), time.Duration(0)).
-	Optional("ignore-close", reg.Bool(), false).
-	Optional("forward-immediately", reg.Bool(), false)
+	Optional("ignore-close", reg.Bool(), false, "Do not flush the remaining samples, when the pipeline is closed", "The default behavior is to flush on close").
+	Optional("forward-immediately", reg.Bool(), false, "In addition to the regular batching functionality, output each incoming sample immediately", "This will possibly duplicate each incoming sample, since the regular batch processing results are forwarded as well")
 
 func MakeBatchProcessor(params map[string]interface{}) (res *bitflow.BatchProcessor, err error) {
 
