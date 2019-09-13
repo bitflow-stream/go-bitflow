@@ -186,9 +186,7 @@ func (CsvMarshaller) ParseSample(header *UnmarshalledHeader, minValueCapacity in
 			err = fmt.Errorf("Sample too short: %v", fields)
 			return
 		}
-		if err = sample.ParseTagString(fields[1]); err != nil {
-			return
-		}
+		sample.ParseTagString(fields[1])
 		start++
 	}
 
