@@ -252,9 +252,7 @@ func (BinaryMarshaller) ParseSample(header *UnmarshalledHeader, minValueCapacity
 			err = fmt.Errorf("Data slice wrong len (%v != %v)", len(data), size)
 			return
 		}
-		if err = sample.ParseTagString(string(data[:index])); err != nil {
-			return
-		}
+		sample.ParseTagString(string(data[:index]))
 		data = data[index+1:]
 	}
 

@@ -116,3 +116,20 @@ func (suite *MarshallerTestSuite) TestCsvEOF() {
 func (suite *MarshallerTestSuite) TestBinaryEOF() {
 	suite.testEOF(new(BinaryMarshaller))
 }
+
+func (suite *MarshallerTestSuite) TestParseTags() {
+	testParse := func(input string, output map[string]string) {
+		s := new(Sample)
+		s.ParseTagString(input)
+		suite.EqualValues(output, s.tags)
+	}
+
+	testParse("a=b c=d", map[string]string{"a": "b", "c": "d"})
+	testParse("", map[string]string(nil))
+	testParse("   ", map[string]string(nil))
+	testParse("a=", map[string]string{"a": ""})
+	testParse("   a=b    c=d   ", map[string]string{"a": "b", "c": "d"})
+	testParse("   a=    c=d   ", map[string]string{"a": "", "c": "d"})
+	testParse("   a=    c=dx=y   ", map[string]string{"a": "", "c": "dx=y"})
+	testParse("a=    c=d   x=", map[string]string{"a": "", "c": "d", "x": ""})
+}

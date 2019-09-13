@@ -18,7 +18,7 @@ var parallel_handler = ParallelSampleHandler{
 	ParallelParsers: 6,
 }
 
-var debug_tests = false
+var debug_tests = true
 
 //noinspection GoBoolExpressions
 func init() {

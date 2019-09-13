@@ -230,29 +230,33 @@ func EncodeTags(tags map[string]string) string {
 // The resulting tags and tag values directly replace the tags inside the
 // receiving Sample. Old tags are discarded.
 //
-// A non-nil error is returned if the format of the input string does not
-// follow the defined format (see TagString).
+// The parsing is resilient to wrongly formatted inputs. Empty tag values are allowed,
+// additional whitespace separators are ignored.
 //
 // This method is used on freshly created Samples by CsvMarshaller and
 // BinaryMarshaller when unmarshalling Samples from the respective format.
-func (sample *Sample) ParseTagString(tags string) (err error) {
+func (sample *Sample) ParseTagString(tags string) {
 	sample.lockWrite(func() {
 		sample.tags = nil
-		fields := strings.FieldsFunc(tags, func(r rune) bool {
-			return r == tag_equals_rune || r == tag_separator_rune
+		pairs := strings.FieldsFunc(tags, func(r rune) bool {
+			return r == tag_separator_rune
 		})
-		if len(fields)%2 == 1 {
-			err = fmt.Errorf("Illegal tags string: %v", tags)
+		if len(pairs) == 0 {
 			return
 		}
-		if len(fields) > 0 {
-			sample.tags = make(map[string]string)
-			for i := 0; i < len(fields); i += 2 {
-				sample.setTag(fields[i], fields[i+1])
+		sample.tags = make(map[string]string)
+		for _, pair := range pairs {
+			parts := strings.SplitN(pair, tag_equals, 2)
+			if len(parts) > 0 {
+				key := parts[0]
+				value := ""
+				if len(parts) > 1 {
+					value = parts[1]
+				}
+				sample.setTag(key, value)
 			}
 		}
 	})
-	return
 }
 
 // HACK global lock to avoid potential deadlock in CopyMetadataFrom() because of acquiring 2 locks.
