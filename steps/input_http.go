@@ -60,10 +60,11 @@ func (endpoint *RestEndpoint) serve(verb string, path string, logFile string, se
 	pathStr := fmt.Sprintf("[%s] %s", verb, path)
 	// TODO check if pathStr is already present in paths, raise error if so
 
-	handlers := gin.HandlersChain{serve}
+	handlers := gin.HandlersChain{golib.DecodeHeadersToUtf8}
 	if logFile != "" {
 		handlers = append(handlers, golib.LogGinRequests(logFile, true, true))
 	}
+	handlers = append(handlers, serve)
 
 	defer func() {
 		if p := recover(); p != nil {
