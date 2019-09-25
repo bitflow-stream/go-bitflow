@@ -56,15 +56,9 @@ func (endpoint *RestEndpoint) start() {
 	})
 }
 
-func (endpoint *RestEndpoint) serve(verb string, path string, logFile string, logBody, logHeaders bool, serve func(*gin.Context)) (err error) {
+func (endpoint *RestEndpoint) serve(verb string, path string, handlers ...gin.HandlerFunc) (err error) {
 	pathStr := fmt.Sprintf("[%s] %s", verb, path)
 	// TODO check if pathStr is already present in paths, raise error if so
-
-	handlers := gin.HandlersChain{golib.DecodeHeadersToUtf8}
-	if logFile != "" {
-		handlers = append(handlers, golib.LogGinRequests(logFile, logBody, logHeaders))
-	}
-	handlers = append(handlers, serve)
 
 	defer func() {
 		if p := recover(); p != nil {
@@ -101,8 +95,8 @@ func (source *RestDataSource) Endpoint() string {
 	return source.endpoint.endpoint
 }
 
-func (source *RestDataSource) Serve(verb string, path string, httpLogFile string, logBody, logHeaders bool, serve func(*gin.Context)) error {
-	return source.endpoint.serve(verb, path, httpLogFile, logBody, logHeaders, serve)
+func (source *RestDataSource) Serve(verb string, path string, handlers ...gin.HandlerFunc) error {
+	return source.endpoint.serve(verb, path, handlers...)
 }
 
 func (source *RestDataSource) EmitSamplesTimeout(samples []bitflow.SampleAndHeader, timeout time.Duration) bool {
