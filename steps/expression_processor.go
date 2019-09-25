@@ -18,7 +18,7 @@ type ExpressionProcessor struct {
 func RegisterExpression(b reg.ProcessorRegistry) {
 	b.RegisterStep("do",
 		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
-			return add_expression(p, params, false)
+			return addExpression(p, params, false)
 		},
 		"Execute the given expression on every sample").
 		Required("expr", reg.String(), "Allows arithmetic and boolean operations. Can also perform them on sample fields "+
@@ -72,13 +72,13 @@ func RegisterExpression(b reg.ProcessorRegistry) {
 func RegisterFilterExpression(b reg.ProcessorRegistry) {
 	b.RegisterStep("filter",
 		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
-			return add_expression(p, params, true)
+			return addExpression(p, params, true)
 		},
 		"Filter the samples based on a boolean expression").
 		Required("expr", reg.String())
 }
 
-func add_expression(p *bitflow.SamplePipeline, params map[string]interface{}, filter bool) error {
+func addExpression(p *bitflow.SamplePipeline, params map[string]interface{}, filter bool) error {
 	proc := &ExpressionProcessor{Filter: filter}
 	err := proc.AddExpression(params["expr"].(string))
 	if err == nil {
@@ -99,7 +99,7 @@ func (p *ExpressionProcessor) AddExpression(expressionString string) error {
 func (p *ExpressionProcessor) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	if outSample, outHeader, err := p.evaluate(sample, header); err != nil {
 		return err
-	} else if sample != nil && header != nil {
+	} else if outSample != nil && outHeader != nil {
 		return p.NoopProcessor.Sample(outSample, outHeader)
 	}
 	return nil
@@ -155,7 +155,7 @@ func (p *ExpressionProcessor) evaluate(sample *bitflow.Sample, header *bitflow.H
 			if err != nil {
 				return nil, nil, err
 			}
-			if ! res {
+			if !res {
 				return nil, nil, nil
 			}
 		} else {
