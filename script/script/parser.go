@@ -195,8 +195,8 @@ func (s *_bitflowScriptParser) buildPipelineElement(pipe *bitflow.SamplePipeline
 		s.buildProcessingStep(pipe, ctx.ProcessingStep().(*internal.ProcessingStepContext))
 	case ctx.Fork() != nil:
 		s.buildFork(pipe, ctx.Fork().(*internal.ForkContext))
-	case ctx.Window() != nil:
-		s.buildWindow(pipe, ctx.Window().(*internal.WindowContext))
+	case ctx.Batch() != nil:
+		s.buildBatch(pipe, ctx.Batch().(*internal.BatchContext))
 	}
 }
 
@@ -363,7 +363,7 @@ func (s *_bitflowScriptParser) buildMultiplexFork(pipe *bitflow.SamplePipeline, 
 	}
 }
 
-func (s *_bitflowScriptParser) buildWindow(pipe *bitflow.SamplePipeline, ctx *internal.WindowContext) {
+func (s *_bitflowScriptParser) buildBatch(pipe *bitflow.SamplePipeline, ctx *internal.BatchContext) {
 	params, err := s.buildParameters(steps.BatchProcessorParameters, ctx.Parameters().(*internal.ParametersContext))
 	if err != nil {
 		s.pushError(ctx, "Invalid batch parameters: %v", err)
@@ -374,7 +374,9 @@ func (s *_bitflowScriptParser) buildWindow(pipe *bitflow.SamplePipeline, ctx *in
 		s.pushError(ctx, "Failed to create batch step: %v", err)
 		return
 	}
-	for _, batchStepI := range ctx.AllProcessingStep() {
+
+	allSteps := ctx.BatchPipeline().(*internal.BatchPipelineContext).AllProcessingStep()
+	for _, batchStepI := range allSteps {
 		batchStep := batchStepI.(*internal.ProcessingStepContext)
 		stepName := unwrapString(batchStep.Name().(*internal.NameContext))
 		registeredStep := s.registry.GetBatchStep(stepName)

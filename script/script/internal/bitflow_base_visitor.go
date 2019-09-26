@@ -87,11 +87,15 @@ func (v *BaseBitflowVisitor) VisitSubPipeline(ctx *SubPipelineContext) interface
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseBitflowVisitor) VisitBatchPipeline(ctx *BatchPipelineContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseBitflowVisitor) VisitMultiplexFork(ctx *MultiplexForkContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseBitflowVisitor) VisitWindow(ctx *WindowContext) interface{} {
+func (v *BaseBitflowVisitor) VisitBatch(ctx *BatchContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

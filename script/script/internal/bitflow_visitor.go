@@ -67,11 +67,14 @@ type BitflowVisitor interface {
 	// Visit a parse tree produced by BitflowParser#subPipeline.
 	VisitSubPipeline(ctx *SubPipelineContext) interface{}
 
+	// Visit a parse tree produced by BitflowParser#batchPipeline.
+	VisitBatchPipeline(ctx *BatchPipelineContext) interface{}
+
 	// Visit a parse tree produced by BitflowParser#multiplexFork.
 	VisitMultiplexFork(ctx *MultiplexForkContext) interface{}
 
-	// Visit a parse tree produced by BitflowParser#window.
-	VisitWindow(ctx *WindowContext) interface{}
+	// Visit a parse tree produced by BitflowParser#batch.
+	VisitBatch(ctx *BatchContext) interface{}
 
 	// Visit a parse tree produced by BitflowParser#schedulingHints.
 	VisitSchedulingHints(ctx *SchedulingHintsContext) interface{}
