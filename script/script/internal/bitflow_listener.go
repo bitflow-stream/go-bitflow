@@ -67,11 +67,14 @@ type BitflowListener interface {
 	// EnterSubPipeline is called when entering the subPipeline production.
 	EnterSubPipeline(c *SubPipelineContext)
 
+	// EnterBatchPipeline is called when entering the batchPipeline production.
+	EnterBatchPipeline(c *BatchPipelineContext)
+
 	// EnterMultiplexFork is called when entering the multiplexFork production.
 	EnterMultiplexFork(c *MultiplexForkContext)
 
-	// EnterWindow is called when entering the window production.
-	EnterWindow(c *WindowContext)
+	// EnterBatch is called when entering the batch production.
+	EnterBatch(c *BatchContext)
 
 	// EnterSchedulingHints is called when entering the schedulingHints production.
 	EnterSchedulingHints(c *SchedulingHintsContext)
@@ -136,11 +139,14 @@ type BitflowListener interface {
 	// ExitSubPipeline is called when exiting the subPipeline production.
 	ExitSubPipeline(c *SubPipelineContext)
 
+	// ExitBatchPipeline is called when exiting the batchPipeline production.
+	ExitBatchPipeline(c *BatchPipelineContext)
+
 	// ExitMultiplexFork is called when exiting the multiplexFork production.
 	ExitMultiplexFork(c *MultiplexForkContext)
 
-	// ExitWindow is called when exiting the window production.
-	ExitWindow(c *WindowContext)
+	// ExitBatch is called when exiting the batch production.
+	ExitBatch(c *BatchContext)
 
 	// ExitSchedulingHints is called when exiting the schedulingHints production.
 	ExitSchedulingHints(c *SchedulingHintsContext)

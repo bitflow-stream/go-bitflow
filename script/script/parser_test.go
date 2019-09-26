@@ -137,7 +137,7 @@ func TestParseScript_withWindowInWindow_shouldReturnError(t *testing.T) {
 
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Equal(4, len(errs))
+	assert.Len(errs, 3)
 	assert.Contains(errs.Error(), "mismatched input 'batch'")
 }
 

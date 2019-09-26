@@ -140,17 +140,23 @@ func (s *BaseBitflowListener) EnterSubPipeline(ctx *SubPipelineContext) {}
 // ExitSubPipeline is called when production subPipeline is exited.
 func (s *BaseBitflowListener) ExitSubPipeline(ctx *SubPipelineContext) {}
 
+// EnterBatchPipeline is called when production batchPipeline is entered.
+func (s *BaseBitflowListener) EnterBatchPipeline(ctx *BatchPipelineContext) {}
+
+// ExitBatchPipeline is called when production batchPipeline is exited.
+func (s *BaseBitflowListener) ExitBatchPipeline(ctx *BatchPipelineContext) {}
+
 // EnterMultiplexFork is called when production multiplexFork is entered.
 func (s *BaseBitflowListener) EnterMultiplexFork(ctx *MultiplexForkContext) {}
 
 // ExitMultiplexFork is called when production multiplexFork is exited.
 func (s *BaseBitflowListener) ExitMultiplexFork(ctx *MultiplexForkContext) {}
 
-// EnterWindow is called when production window is entered.
-func (s *BaseBitflowListener) EnterWindow(ctx *WindowContext) {}
+// EnterBatch is called when production batch is entered.
+func (s *BaseBitflowListener) EnterBatch(ctx *BatchContext) {}
 
-// ExitWindow is called when production window is exited.
-func (s *BaseBitflowListener) ExitWindow(ctx *WindowContext) {}
+// ExitBatch is called when production batch is exited.
+func (s *BaseBitflowListener) ExitBatch(ctx *BatchContext) {}
 
 // EnterSchedulingHints is called when production schedulingHints is entered.
 func (s *BaseBitflowListener) EnterSchedulingHints(ctx *SchedulingHintsContext) {}

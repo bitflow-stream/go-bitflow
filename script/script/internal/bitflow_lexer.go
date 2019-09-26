@@ -89,13 +89,13 @@ var lexerLiteralNames = []string{
 
 var lexerSymbolicNames = []string{
 	"", "OPEN", "CLOSE", "EOP", "NEXT", "OPEN_PARAMS", "CLOSE_PARAMS", "EQ",
-	"SEP", "OPEN_HINTS", "CLOSE_HINTS", "WINDOW", "STRING", "IDENTIFIER", "COMMENT",
+	"SEP", "OPEN_HINTS", "CLOSE_HINTS", "BATCH", "STRING", "IDENTIFIER", "COMMENT",
 	"NEWLINE", "WHITESPACE", "TAB",
 }
 
 var lexerRuleNames = []string{
 	"OPEN", "CLOSE", "EOP", "NEXT", "OPEN_PARAMS", "CLOSE_PARAMS", "EQ", "SEP",
-	"OPEN_HINTS", "CLOSE_HINTS", "WINDOW", "STRING", "IDENTIFIER", "COMMENT",
+	"OPEN_HINTS", "CLOSE_HINTS", "BATCH", "STRING", "IDENTIFIER", "COMMENT",
 	"NEWLINE", "WHITESPACE", "TAB",
 }
 
@@ -144,7 +144,7 @@ const (
 	BitflowLexerSEP          = 8
 	BitflowLexerOPEN_HINTS   = 9
 	BitflowLexerCLOSE_HINTS  = 10
-	BitflowLexerWINDOW       = 11
+	BitflowLexerBATCH        = 11
 	BitflowLexerSTRING       = 12
 	BitflowLexerIDENTIFIER   = 13
 	BitflowLexerCOMMENT      = 14
