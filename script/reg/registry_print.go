@@ -29,7 +29,21 @@ type JsonProcessingStep struct {
 	IsFork      bool
 	IsBatch     bool
 	Description string
-	Params      []JsonParameter
+	Params      JsonParameters
+}
+
+type JsonParameters []JsonParameter
+
+func (slice JsonParameters) Len() int {
+	return len(slice)
+}
+
+func (slice JsonParameters) Less(i, j int) bool {
+	return slice[i].Name < slice[j].Name
+}
+
+func (slice JsonParameters) Swap(i, j int) {
+	slice[i], slice[j] = slice[j], slice[i]
 }
 
 type JsonParameter struct {
@@ -50,8 +64,8 @@ func makeJsonProcessingStep(reg RegisteredStep, batch, fork bool) JsonProcessing
 	}
 }
 
-func makeJsonParameters(params RegisteredParameters) []JsonParameter {
-	result := make([]JsonParameter, 0, len(params))
+func makeJsonParameters(params RegisteredParameters) JsonParameters {
+	result := make(JsonParameters, 0, len(params))
 	for _, param := range params {
 		result = append(result, JsonParameter{
 			Name:        param.Name,
@@ -61,6 +75,7 @@ func makeJsonParameters(params RegisteredParameters) []JsonParameter {
 			Description: param.Description,
 		})
 	}
+	sort.Sort(result)
 	return result
 }
 
