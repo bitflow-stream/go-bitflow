@@ -7,6 +7,7 @@ nav:
 - Home:
   - The Bitflow Project: https://bitflow.readthedocs.io/en/latest/
   - Data Sources, Sinks and Format: https://bitflow.readthedocs.io/en/latest/data-format/
+  - Core functionality: https://bitflow.readthedocs.io/en/latest/core-functionality/
   - Bitflow Script: https://bitflow.readthedocs.io/projects/bitflow-antlr-grammars/en/latest/bitflow-script/
   - Naming Conventions: https://bitflow.readthedocs.io/en/latest/naming/
   - Development Process: https://bitflow.readthedocs.io/en/latest/development/
