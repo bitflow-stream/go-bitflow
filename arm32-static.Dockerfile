@@ -1,4 +1,4 @@
-# teambitflow/go-bitflow:static-arm
+# teambitflow/go-bitflow:static-arm32
 FROM teambitflow/golang-build:1.12-stretch as build
 RUN apt-get update && apt-get install -y git gcc-arm-linux-gnueabi
 WORKDIR /build
