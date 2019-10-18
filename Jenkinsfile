@@ -13,6 +13,7 @@ pipeline {
         registryCredential = 'dockerhub'
         normalImage = '' // Empty variable must be declared here to allow passing an object between the stages.
         staticImage = ''
+        staticImageARM32 = ''
     }
     stages {
         stage('Git') {
@@ -69,6 +70,7 @@ pipeline {
                 script {
                     normalImage = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER"
                     staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f static.Dockerfile .'
+                    staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32", '-f arm32-static.Dockerfile .'
                 }
             }
         }
@@ -83,6 +85,8 @@ pipeline {
                         normalImage.push("latest")
                         staticImage.push("static-build-$BUILD_NUMBER")
                         staticImage.push("static")
+                        staticImageARM32.push("static-build-$BUILD_NUMBER-arm32")
+                        staticImageARM32.push("static-arm32")
                     }
                 }
             }
