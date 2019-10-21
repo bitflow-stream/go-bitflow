@@ -115,7 +115,7 @@ pipeline {
                     echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
                     '''
                     // teambitflow/bitflow4j:latest manifest
-                    sh "docker manifest create ${registry}:latest ${registr}:latest-amd64 ${registry}:latest-arm32v7 ${registry}:latest-arm64v8"
+                    sh "docker manifest create ${registry}:latest ${registry}:latest-amd64 ${registry}:latest-arm32v7 ${registry}:latest-arm64v8"
                     sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm32v7 --os=linux --arch=arm --variant=v7"
                     sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm64v8 --os=linux --arch=arm64 --variant=v8"
                     sh "docker manifest push --purge ${registry}:latest"
