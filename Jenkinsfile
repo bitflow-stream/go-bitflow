@@ -4,7 +4,7 @@ pipeline {
     }
     agent {
         docker {
-            image 'teambitflow/golang-build:1.12-stretch'
+            image 'teambitflow/golang-build:1.13.3-stretch'
             args '-v /root/.goroot:/go -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
@@ -12,8 +12,11 @@ pipeline {
         registry = 'teambitflow/go-bitflow'
         registryCredential = 'dockerhub'
         normalImage = '' // Empty variable must be declared here to allow passing an object between the stages.
+        normalImageARM32 = ''
+        normalImageARM64 = ''
         staticImage = ''
         staticImageARM32 = ''
+        staticImageARM64 = ''
     }
     stages {
         stage('Git') {
@@ -69,8 +72,11 @@ pipeline {
             steps {
                 script {
                     normalImage = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER"
+                    normalImageARM32 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f arm32v7.Dockerfile .'
+                    normalImageARM64 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f arm64v8.Dockerfile .'
                     staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f static.Dockerfile .'
-                    staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32", '-f arm32-static.Dockerfile .'
+                    staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f arm32v7-static.Dockerfile .'
+                    staticImageARM64 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f arm64v8-static.Dockerfile .'
                 }
             }
         }
@@ -82,12 +88,37 @@ pipeline {
                 script {
                     docker.withRegistry('', registryCredential) {
                         normalImage.push("build-$BUILD_NUMBER")
-                        normalImage.push("latest")
+                        normalImage.push("latest-amd64")
+                        normalImageARM32.push("build-$BUILD_NUMBER-arm32v7")
+                        normalImageARM32.push("latest-arm32v7")
+                        normalImageARM64.push("build-$BUILD_NUMBER-arm64v8")
+                        normalImageARM64.push("latest-arm64v8")
+                        // static images with dependencies
                         staticImage.push("static-build-$BUILD_NUMBER")
                         staticImage.push("static")
-                        staticImageARM32.push("static-build-$BUILD_NUMBER-arm32")
-                        staticImageARM32.push("static-arm32")
+                        staticImageARM32.push("static-build-$BUILD_NUMBER-arm32v7")
+                        staticImageARM32.push("static-arm32v7")
+                        staticImageARM64.push("static-build-$BUILD_NUMBER-arm64v8")
+                        staticImageARM64.push("static-arm64v8")
                     }
+                }
+                withCredentials([
+                  [
+                    $class: 'UsernamePasswordMultiBinding',
+                    credentialsId: 'dockerhub',
+                    usernameVariable: 'DOCKERUSER',
+                    passwordVariable: 'DOCKERPASS'
+                  ]
+                ]) {
+                    // Dockerhub Login
+                    sh '''#! /bin/bash
+                    echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
+                    '''
+                    // teambitflow/bitflow4j:latest manifest
+                    sh "docker manifest create ${registry}:latest ${registr}:latest-amd64 ${registry}:latest-arm32v7 ${registry}:latest-arm64v8"
+                    sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm32v7 --os=linux --arch=arm --variant=v7"
+                    sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm64v8 --os=linux --arch=arm64 --variant=v8"
+                    sh "docker manifest push --purge ${registry}:latest"
                 }
             }
         }
