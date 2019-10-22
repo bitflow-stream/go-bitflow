@@ -5,9 +5,22 @@ import (
 	"net/url"
 )
 
+// Parses URL fragments that contain the entire URL except for the scheme
 func ParseEndpointUrl(urlStr string) (*url.URL, error) {
 	urlStr = "http://" + urlStr // the url.Parse() routine requires a schema, which is stripped in bitflow.EndpointFactory.Create*
 	return url.Parse(urlStr)
+}
+
+// Parses URL-fragments containing the path and query parameters of the following forms:
+//  - `relative/path?param1=a&param2=b`
+//  - `/absolute/path?a=b`
+func ParseEndpointFilepath(urlStr string) (*url.URL, error) {
+	parsedUrl, err := ParseEndpointUrl("host/" + urlStr) // Prefix mock host value to enable URL parsing
+	if err == nil {
+		parsedUrl.Host = ""                 // Delete mock host value
+		parsedUrl.Path = parsedUrl.Path[1:] // Strip leading slash
+	}
+	return parsedUrl, err
 }
 
 func ParseEndpointUrlParams(urlStr string, params RegisteredParameters) (*url.URL, map[string]interface{}, error) {

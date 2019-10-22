@@ -137,8 +137,7 @@ func (c *CmdDataCollector) createOutputs() ([]bitflow.SampleProcessor, error) {
 
 func (c *CmdDataCollector) setSink(p *bitflow.SamplePipeline, sink bitflow.SampleProcessor) {
 	// Add a filter to file outputs
-	_, isFile := sink.(*bitflow.FileSink)
-	if isFile && c.restApiEndpoint != "" {
+	if c.isFileSink(sink) && c.restApiEndpoint != "" {
 		p.Add(&steps.SampleFilter{
 			Description: bitflow.String("Filter samples based on /file_output REST API."),
 			IncludeFilter: func(sample *bitflow.Sample, header *bitflow.Header) (bool, error) {
@@ -147,6 +146,17 @@ func (c *CmdDataCollector) setSink(p *bitflow.SamplePipeline, sink bitflow.Sampl
 		})
 	}
 	p.Add(sink)
+}
+
+func (c *CmdDataCollector) isFileSink(sink bitflow.SampleProcessor) (res bool) {
+	// A file sink is either a simple FileSink object, or a fork with a MultiFileDistributor
+	_, res = sink.(*bitflow.FileSink)
+	if !res {
+		if sampleFork, isFork := sink.(*fork.SampleFork); isFork {
+			_, res = sampleFork.Distributor.(*fork.MultiFileDistributor)
+		}
+	}
+	return
 }
 
 type RestApiPath interface {
