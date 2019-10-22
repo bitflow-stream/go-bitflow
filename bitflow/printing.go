@@ -70,10 +70,11 @@ func (s *SortedStringPairs) String() string {
 // ====================== Printing ======================
 
 type IndentPrinter struct {
-	OuterIndent  string
-	InnerIndent  string
-	FillerIndent string
-	CornerIndent string
+	OuterIndent         string
+	InnerIndent         string
+	FillerIndent        string
+	CornerIndent        string
+	MarkEmptyContainers bool
 }
 
 type StringerContainer interface {
@@ -98,7 +99,7 @@ func (p IndentPrinter) printLines(obj fmt.Stringer, headerIndent, childIndent st
 	res := []string{str}
 	if container, ok := obj.(StringerContainer); ok {
 		parts := container.ContainedStringers()
-		if len(parts) == 0 {
+		if len(parts) == 0 && p.MarkEmptyContainers {
 			parts = append(parts, String("empty"))
 		}
 		for i, part := range parts {
