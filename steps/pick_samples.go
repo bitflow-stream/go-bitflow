@@ -115,3 +115,22 @@ func RegisterPickTail(b reg.ProcessorRegistry) {
 		"Forward only a number of the first processed samples. The whole pipeline is closed afterwards, unless close=false is given.").
 		Required("num", reg.Int())
 }
+
+func RegisterDropInvalid(b reg.ProcessorRegistry) {
+	b.RegisterStep("drop-invalid",
+		func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+			p.Add(&SampleFilter{
+				Description: bitflow.String("Drop samples with invalid values (NaN/Inf)"),
+				IncludeFilter: func(s *bitflow.Sample, _ *bitflow.Header) (bool, error) {
+					for _, val := range s.Values {
+						if !IsValidNumber(float64(val)) {
+							return false, nil
+						}
+					}
+					return true, nil
+				},
+			})
+			return nil
+		},
+		"Drop samples that contain NaN or Inf values.")
+}

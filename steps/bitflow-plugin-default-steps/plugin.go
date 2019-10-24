@@ -84,6 +84,8 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 	steps.RegisterPickPercent(b)
 	steps.RegisterPickHead(b)
 	steps.RegisterSkipHead(b)
+	steps.RegisterPickTail(b)
+	steps.RegisterDropInvalid(b)
 	math.RegisterConvexHull(b)
 	steps.RegisterDuplicateTimestampFilter(b)
 
