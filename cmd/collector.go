@@ -38,16 +38,17 @@ func (c *CmdDataCollector) RegisterFlags() {
 	flag.StringVar(&c.script, "s", "", "Provide a Bitflow Script snippet, that will be executed before outputting the produced samples. The script must not contain an input.")
 	flag.StringVar(&c.scriptFile, "f", "", "Like -s, but provide a script file instead.")
 	flag.Var(&c.outputs, "o", "Data sink(s) for outputting data. Will be appended at the end of provided Bitflow script(s), if any.")
-	flag.BoolVar(&c.fileOutputApi.FileOutputEnabled, "default-enable-file-output", false, "Enables file output immediately. By default it must be enable through the REST API first.")
+	flag.BoolVar(&c.fileOutputApi.FileOutputEnabled, "default-enable-file-output", false, "Enables file output immediately. By default it must be enabled through the REST API first.")
 	flag.StringVar(&c.restApiEndpoint, "api", "", "Enable REST API for controlling the collector. "+
 		"The API can be used to control tags and enable/disable file output.")
 }
 
-func (c *CmdDataCollector) BuildPipeline() (*bitflow.SamplePipeline, error) {
+func (c *CmdDataCollector) BuildPipeline(source bitflow.SampleSource) (*bitflow.SamplePipeline, error) {
 	p, err := c.CmdPipelineBuilder.BuildPipeline(c.getScript)
 	if err != nil || p == nil {
 		return p, err
 	}
+	p.Source = source
 
 	// TODO move this extra functionality to reusable pipeline steps. Probably define some default script snippet to load.
 	if c.restApiEndpoint != "" {
