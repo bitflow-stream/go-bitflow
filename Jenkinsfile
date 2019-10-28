@@ -4,7 +4,7 @@ pipeline {
     }
     agent {
         docker {
-            image 'teambitflow/golang-build:1.13.3-stretch'
+            image 'teambitflow/golang-build'
             args '-v /root/.goroot:/go -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
