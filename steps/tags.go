@@ -59,12 +59,13 @@ func RegisterTagMapping(b reg.ProcessorRegistry) {
 				if err != nil {
 					return fmt.Errorf("Failed to read file '%v': %v", mappingFile, err)
 				}
+				mapping = make(map[string]string)
 				err = json.Unmarshal(jsonData, &mapping)
 				if err != nil {
 					return fmt.Errorf("Failed to parse file '%v' as map[string]string: %v", mappingFile, err)
 				}
 			} else if mappingFile != "" {
-				return fmt.Errorf("Cannot define both 'mapping' and 'mapping-file' parameters")
+				return fmt.Errorf("Cannot define both 'mapping' and 'mapping-file' parameters: %v, %v", mapping, mappingFile)
 			}
 
 			p.Add(NewTagMapper(sourceTag, targetTag, mapping))
@@ -86,7 +87,11 @@ func NewTagMapper(sourceTag, targetTag string, mapping map[string]string) bitflo
 	return &bitflow.SimpleProcessor{
 		Description: fmt.Sprintf("Map tag %v based on %v map entries", tagDescription, len(mapping)),
 		Process: func(sample *bitflow.Sample, header *bitflow.Header) (*bitflow.Sample, *bitflow.Header, error) {
-			targetValue := mapping[sample.Tag(sourceTag)]
+			sourceValue := sample.Tag(sourceTag)
+			targetValue, exists := mapping[sourceValue]
+			if !exists {
+				targetValue = sourceValue
+			}
 			sample.SetTag(targetTag, targetValue)
 			return sample, header, nil
 		},
