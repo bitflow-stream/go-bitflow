@@ -97,6 +97,7 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 	// Metadata
 	steps.RegisterSetCurrentTime(b)
 	steps.RegisterTaggingProcessor(b)
+	steps.RegisterTagMapping(b)
 	steps.RegisterHttpTagger(b)
 	steps.RegisterPauseTagger(b)
 
