@@ -27,8 +27,8 @@ var (
 		tag_equals, tag_replacement,
 		tag_separator, tag_replacement,
 		string(BinarySeparator), tag_replacement,
-		string(CsvSeparator), tag_replacement,
-		string(CsvNewline), tag_replacement)
+		string(DefaultCsvSeparator), tag_replacement,
+		string(DefaultCsvNewline), tag_replacement)
 )
 
 // Value is a type alias for float64 and defines the type for metric values.

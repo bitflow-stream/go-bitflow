@@ -9,12 +9,12 @@ import (
 )
 
 const (
-	csv_time_col    = "time"
-	tags_col        = "tags"
-	binary_time_col = "timB" // Must not collide with csv_time_col, but have same length
+	DefaultCsvTimeColumn = "time"
+	TagsColumn           = "tags"
+	BinaryTimeColumn     = "timB" // Must not collide with csv_time_col, but have same length
 
-	detect_format_peek        = len(csv_time_col)
-	illegal_header_characters = string(CsvSeparator) + string(CsvNewline) + string(BinarySeparator)
+	detect_format_peek        = len(DefaultCsvTimeColumn)
+	illegal_header_characters = string(DefaultCsvSeparator) + string(DefaultCsvNewline) + string(BinarySeparator)
 )
 
 // Marshaller is an interface for converting Samples and Headers into byte streams.
@@ -145,9 +145,9 @@ func DetectFormatFrom(start string) (Unmarshaller, error) {
 	}
 
 	switch start {
-	case csv_time_col:
+	case DefaultCsvTimeColumn:
 		return new(CsvMarshaller), nil
-	case binary_time_col:
+	case BinaryTimeColumn:
 		return new(BinaryMarshaller), nil
 	default:
 		return nil, errors.New("Failed to auto-detect format of stream starting with: " + start)
@@ -168,28 +168,26 @@ type WriteCascade struct {
 
 // Write forwards the call to the contained Writer, but only of no error
 // has been encountered yet. If an error occurs, it is stored in the Error field.
-func (w *WriteCascade) Write(bytes []byte) error {
+func (w *WriteCascade) Write(bytes []byte) {
 	if w.Err == nil {
 		_, w.Err = w.Writer.Write(bytes)
 	}
-	return nil
 }
 
 // WriteStr calls Write with a []byte representation of the string parameter.
-func (w *WriteCascade) WriteStr(str string) error {
-	return w.Write([]byte(str))
+func (w *WriteCascade) WriteStr(str string) {
+	w.Write([]byte(str))
 }
 
 // WriteByte calls Write with the single parameter byte.
-func (w *WriteCascade) WriteByte(b byte) error {
-	return w.Write([]byte{b})
+func (w *WriteCascade) WriteByte(b byte) {
+	w.Write([]byte{b})
 }
 
 // WriteAny uses the fmt package to format he given object directly into the underlying
 // writer. The write is only executed, if previous writes have been successful.
-func (w *WriteCascade) WriteAny(i interface{}) error {
+func (w *WriteCascade) WriteAny(i interface{}) {
 	if w.Err == nil {
 		_, w.Err = fmt.Fprintf(w.Writer, "%v", i)
 	}
-	return nil
 }

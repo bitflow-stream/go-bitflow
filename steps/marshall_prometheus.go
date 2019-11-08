@@ -1,10 +1,20 @@
-package bitflow
+package steps
 
 import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
+
+const PrometheusMarshallingFormat = bitflow.MarshallingFormat("prometheus")
+
+func RegisterPrometheusMarshaller(endpoints *bitflow.EndpointFactory) {
+	endpoints.Marshallers[PrometheusMarshallingFormat] = func() bitflow.Marshaller {
+		return new(PrometheusMarshaller)
+	}
+}
 
 // PrometheusMarshaller marshals Headers and Samples to the prometheus exposition format
 type PrometheusMarshaller struct {
@@ -12,7 +22,7 @@ type PrometheusMarshaller struct {
 
 // String implements the Marshaller interface.
 func (PrometheusMarshaller) String() string {
-	return "prometheus"
+	return string(PrometheusMarshallingFormat)
 }
 
 // ShouldCloseAfterFirstSample defines that prometheus streams should close after first sent sample
@@ -22,13 +32,13 @@ func (PrometheusMarshaller) ShouldCloseAfterFirstSample() bool {
 
 // WriteHeader implements the Marshaller interface. It is empty, because
 // the prometheus exposition format doesn't need one
-func (PrometheusMarshaller) WriteHeader(header *Header, withTags bool, output io.Writer) error {
+func (PrometheusMarshaller) WriteHeader(header *bitflow.Header, withTags bool, output io.Writer) error {
 	return nil
 }
 
 // WriteSample implements the Marshaller interface. See the PrometheusMarshaller godoc
 // for information about the format.
-func (m PrometheusMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
+func (m PrometheusMarshaller) WriteSample(sample *bitflow.Sample, header *bitflow.Header, withTags bool, writer io.Writer) error {
 	for i, value := range sample.Values {
 		line := fmt.Sprintf("%s\t%f\n",
 			m.renderMetricLine(header.Fields[i], "all"),

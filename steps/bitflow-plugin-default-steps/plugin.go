@@ -54,9 +54,13 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 	steps.RegisterGeneratorSource(&b.Endpoints)
 
 	// Data output
+	steps.RegisterConsoleBoxOutput(&b.Endpoints)
 	steps.RegisterOutputFiles(b)
 	steps.RegisterGraphiteOutput(b)
 	steps.RegisterOpentsdbOutput(b)
+
+	// Data formats
+	steps.RegisterPrometheusMarshaller(&b.Endpoints)
 
 	// Logging, output metadata
 	steps.RegisterStoreStats(b)

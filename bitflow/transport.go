@@ -28,6 +28,12 @@ func (s *SynchronizingSampleSink) Sample(sample *Sample, header *Header) error {
 	return s.Out.Sample(sample, header)
 }
 
+// ConsoleSampleSink is a marking interface for SampleSink implementations that notifies the framework that the sink
+// writes to the standard output. This is used to avoid multiple such sinks that would conflict with each other.
+type ConsoleSampleSink interface {
+	WritesToConsole() bool
+}
+
 // ==================== Configuration types ====================
 
 // ParallelSampleHandler is a configuration type that is included in

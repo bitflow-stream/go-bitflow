@@ -16,8 +16,8 @@ const (
 	valBytes  = 8
 
 	// This is arbitrary and was chosen human-readable for convenience. It must
-	// not collide with binary_time_col.
-	binary_sample_start = "X"
+	// not collide with BinaryTimeColumn.
+	BinarySampleStart = "X"
 
 	// BinarySeparator is the character separating fields in the marshalled output
 	// of BinaryMarshaller. Every field is marshalled on a separate line.
@@ -60,10 +60,10 @@ func (BinaryMarshaller) String() string {
 // list of header field strings and an additional empty line.
 func (BinaryMarshaller) WriteHeader(header *Header, withTags bool, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
-	w.WriteStr(binary_time_col)
+	w.WriteStr(BinaryTimeColumn)
 	w.WriteByte(BinarySeparator)
 	if withTags {
-		w.WriteStr(tags_col)
+		w.WriteStr(TagsColumn)
 		w.WriteByte(BinarySeparator)
 	}
 	for _, name := range header.Fields {
@@ -81,7 +81,7 @@ func (BinaryMarshaller) WriteHeader(header *Header, withTags bool, writer io.Wri
 // dense binary format. See the BinaryMarshaller godoc for information on the format.
 func (m BinaryMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
 	// Special bytes preceding each sample
-	if _, err := writer.Write([]byte(binary_sample_start)); err != nil {
+	if _, err := writer.Write([]byte(BinarySampleStart)); err != nil {
 		return err
 	}
 
@@ -124,7 +124,7 @@ func (m BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *Unmarshalle
 		return m.readHeader(reader)
 	}
 
-	start, err := reader.Peek(len(binary_sample_start))
+	start, err := reader.Peek(len(BinarySampleStart))
 	if err == bufio.ErrBufferFull {
 		return nil, nil, errors.New("Buffer too small to distinguish between binary sample and header")
 	} else if err != nil {
@@ -135,15 +135,15 @@ func (m BinaryMarshaller) Read(reader *bufio.Reader, previousHeader *Unmarshalle
 	}
 
 	switch {
-	case bytes.HasPrefix([]byte(binary_time_col), start):
+	case bytes.HasPrefix([]byte(BinaryTimeColumn), start):
 		return m.readHeader(reader)
-	case bytes.Equal(start, []byte(binary_sample_start)):
+	case bytes.Equal(start, []byte(BinarySampleStart)):
 		_, _ = reader.Discard(len(start)) // No error
 		data, err := m.readSampleData(previousHeader, reader)
 		return nil, data, err
 	default:
 		return nil, nil, fmt.Errorf("Bitflow binary protocol error, unexpected: %s. Expected %s or %s.",
-			start, binary_sample_start, binary_time_col[:len(binary_sample_start)])
+			start, BinarySampleStart, BinaryTimeColumn[:len(BinarySampleStart)])
 	}
 }
 
@@ -158,7 +158,7 @@ func (BinaryMarshaller) readHeader(reader *bufio.Reader) (*UnmarshalledHeader, [
 		}
 		return nil, nil, err
 	}
-	if err = checkFirstField(binary_time_col, string(name[:len(name)-1])); err != nil {
+	if err = checkFirstField(BinaryTimeColumn, string(name[:len(name)-1])); err != nil {
 		return nil, nil, err
 	}
 
@@ -175,7 +175,7 @@ func (BinaryMarshaller) readHeader(reader *bufio.Reader) (*UnmarshalledHeader, [
 			return header, nil, unexpectedEOF(err)
 		}
 		name := string(nameBytes[:len(nameBytes)-1])
-		if first && name == tags_col {
+		if first && name == TagsColumn {
 			header.HasTags = true
 		} else {
 			header.Fields = append(header.Fields, name)

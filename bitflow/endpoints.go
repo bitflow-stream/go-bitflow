@@ -28,19 +28,16 @@ const (
 	HttpEndpoint      = EndpointType("http")
 	EmptyEndpoint     = EndpointType("empty")
 
-	UndefinedFormat  = MarshallingFormat("")
-	TextFormat       = MarshallingFormat("text")
-	CsvFormat        = MarshallingFormat("csv")
-	BinaryFormat     = MarshallingFormat("bin")
-	PrometheusFormat = MarshallingFormat("prometheus")
+	UndefinedFormat = MarshallingFormat("")
+	TextFormat      = MarshallingFormat("text")
+	CsvFormat       = MarshallingFormat("csv")
+	BinaryFormat    = MarshallingFormat("bin")
 
 	tcpDownloadRetryInterval = 1000 * time.Millisecond
 	tcpDialTimeout           = 2000 * time.Millisecond
-)
 
-var (
-	stdTransportTarget = "-"
-	binaryFileSuffix   = ".bin"
+	StdTransportTarget = "-"
+	BinaryFileSuffix   = ".bin"
 )
 
 var DefaultEndpointFactory = EndpointFactory{
@@ -112,6 +109,10 @@ type EndpointFactory struct {
 	// methods to allow custom marshalling formats in output files, network connections and so on.
 	Marshallers map[MarshallingFormat]func() Marshaller
 
+	// Unmarshallers can be filled by client code before EndpointFactory.CreateInput or similar
+	// methods to allow custom unmarshalling formats in input files, network connections and so on.
+	Unmarshallers map[MarshallingFormat]func() Unmarshaller
+
 	// CustomGeneralFlags, CustomInputFlags and CustomOutputFlags lets client code
 	// register custom command line flags that configure aspects of endpoints created
 	// through CustomDataSources and CustomDataSinks.
@@ -131,6 +132,7 @@ func (f *EndpointFactory) Clear() {
 	f.CustomDataSources = make(map[EndpointType]func(string) (SampleSource, error))
 	f.CustomDataSinks = make(map[EndpointType]func(string) (SampleProcessor, error))
 	f.Marshallers = make(map[MarshallingFormat]func() Marshaller)
+	f.Unmarshallers = make(map[MarshallingFormat]func() Unmarshaller)
 	f.CustomGeneralFlags = nil
 	f.CustomInputFlags = nil
 	f.CustomOutputFlags = nil
@@ -138,7 +140,6 @@ func (f *EndpointFactory) Clear() {
 
 func RegisterDefaults(factory *EndpointFactory) {
 	RegisterBuiltinMarshallers(factory)
-	RegisterConsoleBoxOutput(factory)
 	RegisterEmptyInputOutput(factory)
 }
 
@@ -156,13 +157,16 @@ func RegisterBuiltinMarshallers(factory *EndpointFactory) {
 		return TextMarshaller{}
 	}
 	factory.Marshallers[CsvFormat] = func() Marshaller {
-		return CsvMarshaller{}
+		return &CsvMarshaller{}
 	}
 	factory.Marshallers[BinaryFormat] = func() Marshaller {
 		return BinaryMarshaller{}
 	}
-	factory.Marshallers[PrometheusFormat] = func() Marshaller {
-		return PrometheusMarshaller{}
+	factory.Unmarshallers[CsvFormat] = func() Unmarshaller {
+		return &CsvMarshaller{}
+	}
+	factory.Unmarshallers[BinaryFormat] = func() Unmarshaller {
+		return BinaryMarshaller{}
 	}
 }
 
@@ -291,8 +295,8 @@ func (f *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 		if err != nil {
 			return nil, err
 		}
-		if endpoint.Format != UndefinedFormat {
-			return nil, fmt.Errorf("Format cannot be specified for data input: %v", input)
+		if endpoint.Format != UndefinedFormat && len(inputs) > 1 {
+			return nil, fmt.Errorf("Format cannot be specified for multi data input (have %v inputs): %v", len(inputs), input)
 		}
 		if result == nil {
 			inputType = endpoint.Type
@@ -327,7 +331,16 @@ func (f *EndpointFactory) CreateInput(inputs ...string) (SampleSource, error) {
 }
 
 func (f *EndpointFactory) createInput(endpoint EndpointDescription) (SampleSource, error) {
-	reader := f.Reader(nil) // nil as Unmarshaller makes the SampleSource auto-detect the format
+	var unmarshaller Unmarshaller // nil as Unmarshaller makes the SampleSource auto-detect the format
+	if endpoint.Format != UndefinedFormat {
+		var err error
+		unmarshaller, err = f.CreateUnmarshaller(endpoint.Format)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	reader := f.Reader(unmarshaller)
 	if f.FlagSourceTag != "" {
 		reader.Handler = sourceTagger(f.FlagSourceTag)
 	}
@@ -482,11 +495,12 @@ func (f *EndpointFactory) CreateMarshaller(format MarshallingFormat) (Marshaller
 	return factory(), nil
 }
 
-// IsConsoleOutput returns true if the given processor will output to the standard output when started.
-func IsConsoleOutput(sink SampleProcessor) bool {
-	writer, ok1 := sink.(*WriterSink)
-	_, ok2 := sink.(*ConsoleBoxSink)
-	return (ok1 && writer.Output == os.Stdout) || ok2
+func (f *EndpointFactory) CreateUnmarshaller(format MarshallingFormat) (Unmarshaller, error) {
+	factory, ok := f.Unmarshallers[format]
+	if !ok {
+		return nil, fmt.Errorf("Unknown unmarshaller format: %v", format)
+	}
+	return factory(), nil
 }
 
 // EndpointDescription describes a data endpoint, regardless of the data direction
@@ -516,7 +530,7 @@ func (e EndpointDescription) DefaultOutputFormat() MarshallingFormat {
 	case TcpEndpoint, TcpListenEndpoint:
 		return BinaryFormat
 	case FileEndpoint:
-		if strings.HasSuffix(e.Target, binaryFileSuffix) {
+		if strings.HasSuffix(e.Target, BinaryFileSuffix) {
 			return BinaryFormat
 		}
 		return CsvFormat
@@ -538,17 +552,9 @@ func (e EndpointDescription) DefaultOutputFormat() MarshallingFormat {
 // ParseUrlEndpointDescription, other descriptions will be parsed by GuessEndpointDescription.
 func (f *EndpointFactory) ParseEndpointDescription(endpoint string, isOutput bool) (EndpointDescription, error) {
 	if strings.Contains(endpoint, "://") {
-		return f.ParseUrlEndpointDescription(endpoint)
+		return f.ParseUrlEndpointDescription(endpoint, isOutput)
 	} else {
-		guessed, err := GuessEndpointDescription(endpoint)
-		// Special case: Correct the default output transport type for standard output to ConsoleBoxEndpoint
-		if err == nil && isOutput {
-			if guessed.Target == stdTransportTarget && guessed.Format == UndefinedFormat {
-				guessed.Type = ConsoleBoxEndpoint
-				guessed.IsCustomType = true
-			}
-		}
-		return guessed, err
+		return GuessEndpointDescription(endpoint)
 	}
 }
 
@@ -559,7 +565,7 @@ func (f *EndpointFactory) ParseEndpointDescription(endpoint string, isOutput boo
 // One of the format and transport parts must be specified, optionally both.
 // If one of format or transport is missing, it will be guessed.
 // The order does not matter. The 'target' part must not be empty.
-func (f *EndpointFactory) ParseUrlEndpointDescription(endpoint string) (res EndpointDescription, err error) {
+func (f *EndpointFactory) ParseUrlEndpointDescription(endpoint string, isOutput bool) (res EndpointDescription, err error) {
 	urlParts := strings.SplitN(endpoint, "://", 2)
 	if len(urlParts) != 2 || urlParts[0] == "" || urlParts[1] == "" {
 		err = fmt.Errorf("Invalid URL endpoint: %v", endpoint)
@@ -568,7 +574,7 @@ func (f *EndpointFactory) ParseUrlEndpointDescription(endpoint string) (res Endp
 	target := urlParts[1]
 	res.Target = target
 	for _, part := range strings.Split(urlParts[0], "+") {
-		if err = f.parseEndpointUrlPart(part, &res, endpoint, target); err != nil {
+		if err = f.parseEndpointUrlPart(part, &res, endpoint, target, isOutput); err != nil {
 			return
 		}
 	}
@@ -585,9 +591,10 @@ func (f *EndpointFactory) ParseUrlEndpointDescription(endpoint string) (res Endp
 	return
 }
 
-func (f *EndpointFactory) parseEndpointUrlPart(part string, res *EndpointDescription, endpoint, target string) error {
-	// TODO unclean: this parsing method is used for both marshalling/unmarshalling endpoints
-	if f.isMarshallingFormat(part) {
+func (f *EndpointFactory) parseEndpointUrlPart(part string, res *EndpointDescription, endpoint, target string, isOutput bool) error {
+	_, isMarshalling := f.Marshallers[MarshallingFormat(part)]
+	_, isUnmarshalling := f.Unmarshallers[MarshallingFormat(part)]
+	if (isMarshalling && isOutput) || (isUnmarshalling && !isOutput) {
 		if res.Format != "" {
 			return fmt.Errorf("Multiple formats defined in: %v", endpoint)
 		}
@@ -600,8 +607,8 @@ func (f *EndpointFactory) parseEndpointUrlPart(part string, res *EndpointDescrip
 		case TcpEndpoint, TcpListenEndpoint, FileEndpoint, HttpEndpoint:
 			res.Type = EndpointType(part)
 		case StdEndpoint:
-			if target != stdTransportTarget {
-				return fmt.Errorf("Transport '%v' can only be defined with target '%v'", part, stdTransportTarget)
+			if target != StdTransportTarget {
+				return fmt.Errorf("Transport '%v' can only be defined with target '%v'", part, StdTransportTarget)
 			}
 			res.Type = StdEndpoint
 		default:
@@ -610,11 +617,6 @@ func (f *EndpointFactory) parseEndpointUrlPart(part string, res *EndpointDescrip
 		}
 	}
 	return nil
-}
-
-func (f *EndpointFactory) isMarshallingFormat(formatName string) bool {
-	_, ok := f.Marshallers[MarshallingFormat(formatName)]
-	return ok
 }
 
 // GuessEndpointDescription guesses the transport type and format of the given endpoint target.
@@ -635,7 +637,7 @@ func GuessEndpointType(target string) (EndpointType, error) {
 	var typ EndpointType
 	if target == "" {
 		return UndefinedEndpoint, errors.New("Empty endpoint/file is not valid")
-	} else if target == stdTransportTarget {
+	} else if target == StdTransportTarget {
 		typ = StdEndpoint
 	} else {
 		host, port, err1 := net.SplitHostPort(target)

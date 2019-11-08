@@ -27,6 +27,10 @@ func NewConsoleSink() *WriterSink {
 	}
 }
 
+func (sink *WriterSink) WritesToConsole() bool {
+	return sink.Output == os.Stdout
+}
+
 // String implements the SampleSink interface.
 func (sink *WriterSink) String() string {
 	return sink.Description + " printer"

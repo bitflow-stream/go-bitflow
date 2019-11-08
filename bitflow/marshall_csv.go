@@ -9,24 +9,20 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
-
-var WarnObsoleteBinaryFormat = true
 
 const (
 	// CsvSeparator is the character separating fields in the marshalled output
 	// of CsvMarshaller.
-	CsvSeparator = ','
+	DefaultCsvSeparator = ','
 
 	// CsvNewline is used by CsvMarshaller after outputting the header line and
 	// each sample.
-	CsvNewline = '\n'
+	DefaultCsvNewline = '\n'
 
 	// CsvDateFormat is the format used by CsvMarshaller to marshall the timestamp
 	// of samples.
-	CsvDateFormat = "2006-01-02 15:04:05.999999999"
+	DefaultCsvDateFormat = "2006-01-02 15:04:05.999999999"
 )
 
 // CsvMarshaller marshals Headers and Samples to a CSV format.
@@ -50,6 +46,47 @@ const (
 //
 // There are no configuration options for CsvMarshaller.
 type CsvMarshaller struct {
+	ValueSeparator        byte
+	LineSeparator         byte
+	DateFormat            string
+	TimeColumn            string
+	TagsColumn            string
+	UnmarshallSkipColumns uint
+}
+
+func (c *CsvMarshaller) valSep() byte {
+	if c.ValueSeparator == 0 {
+		return DefaultCsvSeparator
+	}
+	return c.ValueSeparator
+}
+
+func (c *CsvMarshaller) lineSep() byte {
+	if c.LineSeparator == 0 {
+		return DefaultCsvNewline
+	}
+	return c.LineSeparator
+}
+
+func (c *CsvMarshaller) dateFormat() string {
+	if c.DateFormat == "" {
+		return DefaultCsvDateFormat
+	}
+	return c.DateFormat
+}
+
+func (c *CsvMarshaller) timeCol() string {
+	if c.TimeColumn == "" {
+		return DefaultCsvTimeColumn
+	}
+	return c.TimeColumn
+}
+
+func (c *CsvMarshaller) tagsCol() string {
+	if c.TagsColumn == "" {
+		return TagsColumn
+	}
+	return c.TagsColumn
 }
 
 // ShouldCloseAfterFirstSample defines that csv streams can stream without closing
@@ -63,51 +100,51 @@ func (CsvMarshaller) String() string {
 }
 
 // WriteHeader implements the Marshaller interface by printing a CSV header line.
-func (CsvMarshaller) WriteHeader(header *Header, withTags bool, writer io.Writer) error {
+func (c *CsvMarshaller) WriteHeader(header *Header, withTags bool, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
-	w.WriteStr(csv_time_col)
+	w.WriteStr(c.timeCol())
 	if withTags {
-		w.WriteByte(CsvSeparator)
-		w.WriteStr(tags_col)
+		w.WriteByte(c.valSep())
+		w.WriteStr(c.tagsCol())
 	}
 	for _, name := range header.Fields {
 		if err := checkHeaderField(name); err != nil {
 			return err
 		}
-		w.WriteByte(CsvSeparator)
+		w.WriteByte(c.valSep())
 		w.WriteStr(name)
 	}
-	w.WriteStr(string(CsvNewline))
+	w.WriteStr(string(c.lineSep()))
 	return w.Err
 }
 
 // WriteSample implements the Marshaller interface by writing a CSV line.
-func (CsvMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
+func (c *CsvMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
-	w.WriteStr(sample.Time.UTC().Format(CsvDateFormat))
+	w.WriteStr(sample.Time.UTC().Format(c.dateFormat()))
 	if withTags {
 		tags := sample.TagString()
-		w.WriteByte(CsvSeparator)
+		w.WriteByte(c.valSep())
 		w.WriteStr(tags)
 	}
 	for _, value := range sample.Values {
-		w.WriteByte(CsvSeparator)
+		w.WriteByte(c.valSep())
 		w.WriteAny(value)
 	}
-	w.WriteStr(string(CsvNewline))
+	w.WriteStr(string(c.lineSep()))
 	return w.Err
 }
 
-func splitCsvLine(line []byte) []string {
-	return strings.Split(string(line), string(CsvSeparator))
+func (c *CsvMarshaller) splitCsvLine(line []byte) []string {
+	return strings.Split(string(line), string(c.valSep()))
 }
 
 // Read implements the Unmarshaller interface by reading CSV line from the input stream.
 // Based on the first field, Read decides whether the line represents a header or a Sample.
 // In case of a header, the CSV fields are split and parsed to a Header instance.
 // In case of a Sample, the data for the line is returned without parsing it.
-func (c CsvMarshaller) Read(reader *bufio.Reader, previousHeader *UnmarshalledHeader) (*UnmarshalledHeader, []byte, error) {
-	line, err := readUntil(reader, CsvNewline)
+func (c *CsvMarshaller) Read(reader *bufio.Reader, previousHeader *UnmarshalledHeader) (*UnmarshalledHeader, []byte, error) {
+	line, err := readUntil(reader, c.lineSep())
 	if err == io.EOF {
 		if len(line) == 0 {
 			return nil, nil, err
@@ -121,7 +158,7 @@ func (c CsvMarshaller) Read(reader *bufio.Reader, previousHeader *UnmarshalledHe
 	} else if len(line) > 0 {
 		line = line[:len(line)-1] // Strip newline char
 	}
-	index := bytes.Index(line, []byte{CsvSeparator})
+	index := bytes.Index(line, []byte{c.valSep()})
 	var firstField string
 	if index < 0 {
 		firstField = string(line) // Only one field
@@ -131,24 +168,29 @@ func (c CsvMarshaller) Read(reader *bufio.Reader, previousHeader *UnmarshalledHe
 
 	switch {
 	case previousHeader == nil:
-		if checkErr := checkFirstField(csv_time_col, firstField); checkErr != nil {
+		if checkErr := checkFirstField(c.timeCol(), firstField); checkErr != nil {
 			return nil, nil, checkErr
 		}
 		return c.parseHeader(line), nil, err
-	case firstField == csv_time_col:
+	case firstField == c.timeCol():
 		return c.parseHeader(line), nil, err
 	default:
 		return nil, line, err
 	}
 }
 
-func (CsvMarshaller) parseHeader(line []byte) *UnmarshalledHeader {
-	fields := splitCsvLine(line)
-	if WarnObsoleteBinaryFormat && len(fields) == 1 {
-		log.Warnln("CSV header contains only time field. This might be the old binary format, " +
-			"use the 'old_binary_format' tag from the go-bitflow-pipeline repository.")
+func (c *CsvMarshaller) skipFields(fields []string) []string {
+	skip := int(c.UnmarshallSkipColumns)
+	if skip >= len(fields) {
+		return nil
+	} else {
+		return fields[skip:]
 	}
-	hasTags := len(fields) >= 2 && fields[1] == tags_col
+}
+
+func (c *CsvMarshaller) parseHeader(line []byte) *UnmarshalledHeader {
+	fields := c.splitCsvLine(line)
+	hasTags := len(fields) >= 2 && fields[1] == c.tagsCol()
 	header := &UnmarshalledHeader{
 		HasTags: hasTags,
 	}
@@ -156,18 +198,19 @@ func (CsvMarshaller) parseHeader(line []byte) *UnmarshalledHeader {
 	if hasTags {
 		start++
 	}
-	header.Fields = fields[start:]
-	if len(header.Fields) == 0 {
-		header.Fields = nil
+	fields = c.skipFields(fields[start:])
+	if len(fields) == 0 {
+		fields = nil
 	}
+	header.Fields = fields
 	return header
 }
 
 // ParseSample implements the Unmarshaller interface by parsing a CSV line.
-func (CsvMarshaller) ParseSample(header *UnmarshalledHeader, minValueCapacity int, data []byte) (sample *Sample, err error) {
-	fields := splitCsvLine(data)
+func (c *CsvMarshaller) ParseSample(header *UnmarshalledHeader, minValueCapacity int, data []byte) (sample *Sample, err error) {
+	fields := c.splitCsvLine(data)
 	var t time.Time
-	t, err = time.Parse(CsvDateFormat, fields[0])
+	t, err = time.Parse(c.dateFormat(), fields[0])
 	if err != nil {
 		return
 	}
@@ -190,7 +233,8 @@ func (CsvMarshaller) ParseSample(header *UnmarshalledHeader, minValueCapacity in
 		start++
 	}
 
-	for _, field := range fields[start:] {
+	fields = c.skipFields(fields[start:])
+	for _, field := range fields {
 		var val float64
 		if val, err = strconv.ParseFloat(field, 64); err != nil {
 			return

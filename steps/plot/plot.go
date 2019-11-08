@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
+	"math"
 	"os"
 	"sync"
 
@@ -181,7 +182,6 @@ func (p *Processor) storeSample(sample *bitflow.Sample) {
 func (p *Processor) getVal(index int, key string, sample *bitflow.Sample) (res float64) {
 	if index == AxisTime {
 		res = float64(sample.Time.Unix())
-
 	} else if index == AxisNum {
 		res = float64(len(p.data[key]))
 	} else if index < len(sample.Values) {
@@ -554,45 +554,49 @@ func (g *DashesGenerator) Next() []vg.Length {
 
 func RegisterPlot(b reg.ProcessorRegistry) {
 	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
-		xMin := params["xMin"].(float64)
-		xMax := params["xMax"].(float64)
-		yMin := params["yMin"].(float64)
-		yMax := params["yMax"].(float64)
-
 		plot := &Processor{
 			AxisX:      AxisAuto,
 			AxisY:      AxisAuto,
 			OutputFile: params["file"].(string),
 			ColorTag:   params["color"].(string),
 			Type:       ScatterPlot,
-			ForceXmin:  &xMin,
-			ForceXmax:  &xMax,
-			ForceYmin:  &yMin,
-			ForceYmax:  &yMax,
+		}
+
+		if n := params["xMin"].(float64); !math.IsInf(n, -1) {
+			plot.ForceXmin = &n
+		}
+		if n := params["xMax"].(float64); !math.IsInf(n, -1) {
+			plot.ForceXmax = &n
+		}
+		if n := params["yMin"].(float64); !math.IsInf(n, -1) {
+			plot.ForceYmin = &n
+		}
+		if n := params["yMax"].(float64); !math.IsInf(n, -1) {
+			plot.ForceYmax = &n
 		}
 
 		plot.NoLegend = params["nolegend"].(bool)
 		plot.SeparatePlots = params["separate"].(bool)
 
 		plotType := params["plot_type"].(string)
-		switch  plotType {
-			case "line":
-				plot.Type = LinePlot
-			case "linepoint":
-				plot.Type = LinePointPlot
-			case "cluster":
-				plot.SeparatePlots = false
-				plot.Type = ClusterPlot
-				plot.RadiusDimension = 0
-				plot.AxisX = 1
-				plot.AxisY = 2
-			case "box":
-				plot.Type = BoxPlot
-				plot.AxisX = AxisNum
-				plot.AxisY = 0
-			default:
-				allowed_plot_types := []string{"line", "linepoint", "cluster", "box"}
-				return fmt.Errorf("Unkown plot type: '%v'. Supported plot types are: %v.", plotType, allowed_plot_types)
+		switch plotType {
+		case "line":
+			plot.Type = LinePlot
+		case "linepoint":
+			plot.Type = LinePointPlot
+		case "cluster":
+			plot.SeparatePlots = false
+			plot.Type = ClusterPlot
+			plot.RadiusDimension = 0
+			plot.AxisX = 1
+			plot.AxisY = 2
+		case "box":
+			plot.Type = BoxPlot
+			plot.AxisX = AxisNum
+			plot.AxisY = 0
+		default:
+			allowed_plot_types := []string{"line", "linepoint", "cluster", "box"}
+			return fmt.Errorf("Unkown plot type: '%v'. Supported plot types are: %v.", plotType, allowed_plot_types)
 		}
 
 		force_scatter := params["force_scatter"].(bool)
@@ -624,13 +628,13 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		"Plot a batch of samples to a given filename. The file ending denotes the file type").
 		Required("file", reg.String()).
 		Optional("color", reg.String(), "").
-		Optional("plot_type", reg.String(), "cluster").
+		Optional("plot_type", reg.String(), "line").
 		Optional("nolegend", reg.Bool(), false).
 		Optional("separate", reg.Bool(), false).
-		Optional("force_scatter", reg.Bool(), true).
-		Optional("force_time", reg.Bool(), true).
-		Optional("xMin", reg.Float(), 0.0).
-		Optional("xMax", reg.Float(), 0.0).
-		Optional("yMin", reg.Float(), 0.0).
-		Optional("yMax", reg.Float(), 0.0)
+		Optional("force_scatter", reg.Bool(), false).
+		Optional("force_time", reg.Bool(), false).
+		Optional("xMin", reg.Float(), math.Inf(-1)).
+		Optional("xMax", reg.Float(), math.Inf(-1)).
+		Optional("yMin", reg.Float(), math.Inf(-1)).
+		Optional("yMax", reg.Float(), math.Inf(-1))
 }
