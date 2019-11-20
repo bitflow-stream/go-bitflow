@@ -168,20 +168,21 @@ type WriteCascade struct {
 
 // Write forwards the call to the contained Writer, but only of no error
 // has been encountered yet. If an error occurs, it is stored in the Error field.
-func (w *WriteCascade) Write(bytes []byte) {
+func (w *WriteCascade) Write(bytes []byte) error {
 	if w.Err == nil {
 		_, w.Err = w.Writer.Write(bytes)
 	}
+	return nil
 }
 
 // WriteStr calls Write with a []byte representation of the string parameter.
 func (w *WriteCascade) WriteStr(str string) {
-	w.Write([]byte(str))
+	_ = w.Write([]byte(str))
 }
 
 // WriteByte calls Write with the single parameter byte.
-func (w *WriteCascade) WriteByte(b byte) {
-	w.Write([]byte{b})
+func (w *WriteCascade) WriteByte(b byte) error {
+	return w.Write([]byte{b})
 }
 
 // WriteAny uses the fmt package to format he given object directly into the underlying
