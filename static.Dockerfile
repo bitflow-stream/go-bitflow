@@ -3,8 +3,9 @@ FROM golang:1.12-alpine as build
 RUN apk --no-cache add git gcc g++ musl-dev
 WORKDIR /build
 
-ENV CC=aarch64-linux-gnu-gcc
 ENV CGO_ENABLED=1
+ENV GOOS=linux
+ENV GOARCH=amd64
 
 # Copy go.mod first and download dependencies, to enable the Docker build cache
 COPY go.mod .
