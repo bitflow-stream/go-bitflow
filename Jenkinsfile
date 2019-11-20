@@ -34,7 +34,8 @@ pipeline {
                     sh 'go clean -i -v ./...'
                     sh 'go install -v ./...'
                     sh 'rm -rf reports && mkdir -p reports'
-                    sh 'go test -v ./... -coverprofile=reports/test-coverage.txt | tee /dev/stderr | go-junit-report -set-exit-code > reports/test.xml'
+                    sh 'stdbuf -o 0 go test -v ./... -coverprofile=reports/test-coverage.txt | tee reports/test-output.txt' // Use stdbuf to disable buffering of the tee output
+                    sh 'cat reports/test-output.txt | go-junit-report -set-exit-code > reports/test.xml'
                     sh 'go vet ./... &> reports/vet.txt'
                     sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
             }
