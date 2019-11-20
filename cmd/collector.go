@@ -126,7 +126,7 @@ func (c *CmdDataCollector) createOutputs() ([]bitflow.SampleProcessor, error) {
 			return nil, err
 		}
 		sinks = append(sinks, sink)
-		if bitflow.IsConsoleOutput(sink) {
+		if IsConsoleOutput(sink) {
 			consoleOutputs++
 		}
 		if consoleOutputs > 1 {
@@ -134,6 +134,14 @@ func (c *CmdDataCollector) createOutputs() ([]bitflow.SampleProcessor, error) {
 		}
 	}
 	return sinks, nil
+}
+
+// IsConsoleOutput returns true if the given processor will output to the standard output when started.
+func IsConsoleOutput(sink bitflow.SampleSink) bool {
+	if consoleSink, ok := sink.(bitflow.ConsoleSampleSink); ok {
+		return consoleSink.WritesToConsole()
+	}
+	return false
 }
 
 func (c *CmdDataCollector) setSink(p *bitflow.SamplePipeline, sink bitflow.SampleProcessor) {

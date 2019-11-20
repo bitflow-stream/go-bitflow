@@ -4,9 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
-	"github.com/antongulenko/golib/gotermBox"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -52,7 +50,7 @@ func (suite *PipelineTestSuite) TestGuessEndpoint() {
 		compareErr2(endpoint, "Not a filename and not a valid TCP endpoint")
 	}
 
-	compareX("-", UndefinedFormat, ConsoleBoxEndpoint, true, true)
+	compareX("-", TextFormat, StdEndpoint, false, true)
 	compareX("-", TextFormat, StdEndpoint, false, false)
 
 	// File names
@@ -83,11 +81,19 @@ func (suite *PipelineTestSuite) TestGuessEndpoint() {
 
 func (suite *PipelineTestSuite) TestUrlEndpoint() {
 	compare := func(endpoint string, format MarshallingFormat, outputFormat MarshallingFormat, typ EndpointType, target string) {
-		desc, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, false)
+		// Check for output
+		desc, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, true)
 		suite.NoError(err)
-		isCustom := typ == ConsoleBoxEndpoint
-		suite.Equal(EndpointDescription{Format: format, Type: typ, Target: target, IsCustomType: isCustom}, desc)
+		suite.Equal(EndpointDescription{Format: format, Type: typ, Target: target, IsCustomType: false}, desc)
 		suite.Equal(outputFormat, desc.OutputFormat())
+
+		// Check for input
+		if format != TextFormat {
+			desc, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, false)
+			suite.NoError(err)
+			suite.Equal(EndpointDescription{Format: format, Type: typ, Target: target, IsCustomType: false}, desc)
+			suite.Equal(outputFormat, desc.OutputFormat())
+		}
 	}
 
 	checkOne := func(typ EndpointType, outputFormat MarshallingFormat) {
@@ -145,14 +151,11 @@ func (suite *PipelineTestSuite) TestUrlEndpoint() {
 	compare("bin+std://-", BinaryFormat, BinaryFormat, StdEndpoint, "-")
 	compare("std+text://-", TextFormat, TextFormat, StdEndpoint, "-")
 	compare("text+std://-", TextFormat, TextFormat, StdEndpoint, "-")
-
-	// Test ConsoleBoxEndpoint (no variations)
-	compare("box://-", UndefinedFormat, UndefinedFormat, ConsoleBoxEndpoint, "-")
 }
 
 func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 	err := func(endpoint string, errStr string) {
-		_, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, false)
+		_, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, true)
 		suite.Error(err)
 		suite.Contains(err.Error(), errStr)
 	}
@@ -181,10 +184,6 @@ func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 
 	err("csv+box://-", "Cannot define the data format for transport 'box'")
 	err("box+box://-", "Multiple transport")
-}
-
-func init() {
-	console_box_testMode = true
 }
 
 func (suite *PipelineTestSuite) make_factory() *EndpointFactory {
@@ -303,18 +302,6 @@ func (suite *PipelineTestSuite) Test_unknown_endpoint_type() {
 	suite.Nil(sink)
 }
 
-func (suite *PipelineTestSuite) Test_custom_endpoint_errors() {
-	factory := suite.make_factory()
-
-	sink, err := factory.CreateOutput("box://x")
-	suite.EqualError(err, "Error creating 'box' output: Transport 'box' can only be defined with target '-' (received 'x')")
-	suite.Nil(sink)
-
-	sink, err = factory.CreateOutput("box+csv://x")
-	suite.EqualError(err, "Cannot define the data format for transport 'box'")
-	suite.Nil(sink)
-}
-
 func (suite *PipelineTestSuite) Test_input_multiple_listener() {
 	factory := suite.make_factory()
 	source, err := factory.CreateInput(":123", ":456")
@@ -344,37 +331,13 @@ func (suite *PipelineTestSuite) Test_outputs() {
 		case "bin":
 			sink.Marshaller = BinaryMarshaller{}
 		case "csv":
-			sink.Marshaller = CsvMarshaller{}
+			sink.Marshaller = &CsvMarshaller{}
 		case "text":
 			sink.Marshaller = TextMarshaller{AssumeStdout: isConsole}
 		default:
 			panic("Illegal format: " + format)
 		}
 		sink.Writer.ParallelSampleHandler = parallel_handler
-	}
-
-	box_settings := gotermBox.CliLogBox{
-		NoUtf8:        true,
-		LogLines:      22,
-		MessageBuffer: 1000,
-	}
-	box_interval := 666 * time.Millisecond
-
-	// Bad test: sets global configuration state
-	ConsoleBoxSettings = box_settings
-	ConsoleBoxUpdateInterval = box_interval
-	ConsoleBoxMinUpdateInterval = box_interval / 5
-
-	box := func() SampleSink {
-		s := &ConsoleBoxSink{
-			CliLogBoxTask: gotermBox.CliLogBoxTask{
-				UpdateInterval:    box_interval,
-				MinUpdateInterval: box_interval / 5,
-				CliLogBox:         box_settings,
-			},
-			ImmediateScreenUpdate: true,
-		}
-		return s
 	}
 
 	std := func(format string) SampleSink {
@@ -411,8 +374,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 	}
 
 	// Individual outputs
-	test("box://-", box())
-	test("-", box())
+	test("-", std("text"))
 	test("std://-", std("text"))
 	test("text+std://-", std("text"))
 	test("std+csv://-", std("csv"))

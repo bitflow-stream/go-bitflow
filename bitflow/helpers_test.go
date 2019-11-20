@@ -26,7 +26,6 @@ func init() {
 	if debug_tests {
 		golib.LogVerbose = true
 	} else {
-		WarnObsoleteBinaryFormat = false
 		golib.LogQuiet = true
 	}
 	golib.ConfigureLogging()

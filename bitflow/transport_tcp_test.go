@@ -46,6 +46,11 @@ func (suite *TcpListenerTestSuite) runGroup(sender golib.Task, generator SampleP
 		Source:     receiver,
 		Processors: []SampleProcessor{sink},
 	}).Construct(&group)
+	group.Add(&golib.SetupTask{Setup: func() {
+		// Before starting the sender, give the pipeline elements a moment to set up. This allows a TCP listener to open its port, before the TCP sender starts sending data.
+		// Otherwise, sometimes the port is not yet opened, and a Connection Refused error occurs
+		time.Sleep(50 * time.Millisecond)
+	}})
 	group.Add(sender)
 	group.Add(&golib.TimeoutTask{DumpGoroutines: false, Timeout: 1 * time.Second})
 	_, numErrs := group.WaitAndStop(1 * time.Second)

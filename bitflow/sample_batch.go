@@ -2,6 +2,7 @@ package bitflow
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -29,7 +30,7 @@ type BatchProcessor struct {
 
 	FlushNoSampleTimeout time.Duration // If > 0, flush when no new samples are received for the given duration. The wall-time is used for this (not sample timestamps)
 	FlushSampleLag       time.Duration // If > 0, flush when a sample is received with a timestamp jump bigger than this
-	FlushAfterNumSamples int //If > 0, flush after batch  window contains this amount of samples
+	FlushAfterNumSamples int           // If > 0, flush after batch  window contains this amount of samples
 	FlushAfterTime       time.Duration // If > 0, flush after time difference between the first and the last received sample in batch is greater than this
 	lastAutoFlushError   error
 	lastSample           time.Time // Wall time when receiving last sample
@@ -89,7 +90,7 @@ func (p *BatchProcessor) Sample(sample *Sample, header *Header) (err error) {
 	} else if p.FlushAfterTime > 0 {
 		if len(p.samples) > 1 { // At least 2 samples are required
 			start := p.samples[0].Time
-			end := p.samples[len(p.samples) - 1].Time
+			end := p.samples[len(p.samples)-1].Time
 			diff := end.Sub(start)
 			flush = (p.FlushAfterTime - diff) <= 0
 		}
@@ -273,14 +274,20 @@ func (p *BatchProcessor) MergeProcessor(other SampleProcessor) bool {
 }
 
 func (p *BatchProcessor) compatibleParameters(other *BatchProcessor) bool {
-	if (other.FlushNoSampleTimeout != 0 && other.FlushNoSampleTimeout != p.FlushNoSampleTimeout) ||
-		(other.FlushSampleLag != 0 && other.FlushSampleLag != p.FlushSampleLag) {
-		return false
+	return reflect.DeepEqual(p.copyOnlyParameters(), other.copyOnlyParameters())
+}
+
+func (p *BatchProcessor) copyOnlyParameters() *BatchProcessor {
+	return &BatchProcessor{
+		// This list must remain synchronized with the actual exported fields
+		ForwardImmediately:   p.ForwardImmediately,
+		DontFlushOnClose:     p.DontFlushOnClose,
+		FlushNoSampleTimeout: p.FlushNoSampleTimeout,
+		FlushSampleLag:       p.FlushSampleLag,
+		FlushAfterNumSamples: p.FlushAfterNumSamples,
+		FlushAfterTime:       p.FlushAfterTime,
+		FlushTags:            p.FlushTags,
 	}
-	if len(other.FlushTags) == 0 {
-		return true
-	}
-	return golib.EqualStrings(p.FlushTags, other.FlushTags)
 }
 
 // ==================== Simple implementation ====================

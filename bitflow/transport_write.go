@@ -89,7 +89,14 @@ func (w *SampleWriter) Open(writer io.WriteCloser, marshaller Marshaller) *Sampl
 		},
 	}
 
-	for i := 0; i < w.ParallelParsers || i < 1; i++ {
+	// TODO due to an unresolved race condition parallel writing is disabled here.
+	// The race is rare and has been so far only observed in tests, when running many tests that involve writing here, in a tight loop.
+	// Parallel reading does not seem to cause any problems. Since parallel writing is not very beneficial anyways, this entire functionality could be simplified.
+	// My guess is that the race condition is a bug somewhere deep within Gos mutex/scheduling code. It manifests in segfaults and unrecoverable panics from the mutex library.
+	// numParallelParsers := w.ParallelParsers
+	numParallelParsers := 1
+
+	for i := 0; i < numParallelParsers || i < 1; i++ {
 		stream.wg.Add(1)
 		go stream.marshall()
 	}
