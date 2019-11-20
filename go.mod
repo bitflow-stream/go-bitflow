@@ -8,7 +8,7 @@ require (
 	github.com/ajstarks/svgo v0.0.0-20190826172357-de52242f3d65 // indirect
 	github.com/antlr/antlr4 v0.0.0-20190910151933-cd81586d3d6a
 	github.com/antongulenko/go-onlinestats v0.0.0-20160514060630-5ff69410145c
-	github.com/antongulenko/golib v0.0.21
+	github.com/antongulenko/golib v0.0.22
 	github.com/bugsnag/bugsnag-go v1.5.3
 	github.com/fogleman/gg v1.3.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
