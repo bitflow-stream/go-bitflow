@@ -46,12 +46,14 @@ const (
 //
 // There are no configuration options for CsvMarshaller.
 type CsvMarshaller struct {
-	ValueSeparator        byte
-	LineSeparator         byte
-	DateFormat            string
-	TimeColumn            string
-	TagsColumn            string
-	UnmarshallSkipColumns uint
+	ValueSeparator byte
+	LineSeparator  byte
+	DateFormat     string
+	TimeColumn     string
+	TagsColumn     string
+
+	UnmarshallSkipColumns    uint
+	UnmarshallPreprocessDate func(string) string
 }
 
 func (c *CsvMarshaller) valSep() byte {
@@ -210,7 +212,12 @@ func (c *CsvMarshaller) parseHeader(line []byte) *UnmarshalledHeader {
 func (c *CsvMarshaller) ParseSample(header *UnmarshalledHeader, minValueCapacity int, data []byte) (sample *Sample, err error) {
 	fields := c.splitCsvLine(data)
 	var t time.Time
-	t, err = time.Parse(c.dateFormat(), fields[0])
+
+	dateStr := fields[0]
+	if preprocess := c.UnmarshallPreprocessDate; preprocess != nil {
+		dateStr = preprocess(dateStr)
+	}
+	t, err = time.Parse(c.dateFormat(), dateStr)
 	if err != nil {
 		return
 	}
