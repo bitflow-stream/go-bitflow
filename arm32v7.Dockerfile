@@ -3,6 +3,9 @@ FROM golang:1.12-alpine as build
 RUN apk --no-cache add git gcc g++ musl-dev
 WORKDIR /build
 
+ENV GOOS=linux
+ENV GOARCH=arm
+
 # Copy go.mod first and download dependencies, to enable the Docker build cache
 COPY go.mod .
 RUN sed -i $(find -name go.mod) -e '\_//.*gitignore$_d' -e '\_#.*gitignore$_d'
@@ -13,7 +16,7 @@ RUN go mod download
 COPY . .
 RUN find -name go.sum -delete
 RUN sed -i $(find -name go.mod) -e '\_//.*gitignore$_d' -e '\_#.*gitignore$_d'
-RUN env GOOS=linux GOARCH=arm go build -o /bitflow-pipeline ./cmd/bitflow-pipeline
+RUN go build -o /bitflow-pipeline ./cmd/bitflow-pipeline
 
 FROM arm32v7/alpine:3.9
 RUN apk --no-cache add libstdc++
