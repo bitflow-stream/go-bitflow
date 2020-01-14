@@ -32,7 +32,7 @@ const (
 // contain tags). After that the header contains a list of all metrics.
 //
 // Every sample is marshalled to a comma-separated line starting with a textual
-// representation of the timestamp (see CsvDateFormat, UTC timezone), then a space-separated
+// representation of the timestamp (see CsvDateFormat, local timezone), then a space-separated
 // key-value list for the tags (only if the 'tags' field was included in the header),
 // and then all the metric values in the same order as on the preceding header line.
 // To follow the semantics of a correct CSV file, every changed header should start
@@ -123,7 +123,7 @@ func (c *CsvMarshaller) WriteHeader(header *Header, withTags bool, writer io.Wri
 // WriteSample implements the Marshaller interface by writing a CSV line.
 func (c *CsvMarshaller) WriteSample(sample *Sample, header *Header, withTags bool, writer io.Writer) error {
 	w := WriteCascade{Writer: writer}
-	w.WriteStr(sample.Time.UTC().Format(c.dateFormat()))
+	w.WriteStr(sample.Time.Format(c.dateFormat()))
 	if withTags {
 		tags := sample.TagString()
 		w.WriteByte(c.valSep())
@@ -217,7 +217,7 @@ func (c *CsvMarshaller) ParseSample(header *UnmarshalledHeader, minValueCapacity
 	if preprocess := c.UnmarshallPreprocessDate; preprocess != nil {
 		dateStr = preprocess(dateStr)
 	}
-	t, err = time.Parse(c.dateFormat(), dateStr)
+	t, err = time.ParseInLocation(c.dateFormat(), dateStr, time.Local)
 	if err != nil {
 		return
 	}
