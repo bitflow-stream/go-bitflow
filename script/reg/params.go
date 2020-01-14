@@ -241,8 +241,7 @@ func (timeParser) String() string {
 	return "time"
 }
 func (timeParser) ParsePrimitive(val string) (interface{}, error) {
-
-	return time.Parse(golib.SimpleTimeLayout+".999999", val)
+	return time.ParseInLocation(golib.SimpleTimeLayout+".999999", val, time.Local)
 }
 func (p timeParser) ParseList(val []string) (interface{}, error) {
 	result := make([]time.Time, len(val))
