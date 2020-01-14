@@ -62,10 +62,11 @@ func RegisterOutputFiles(b reg.ProcessorRegistry) {
 }
 
 func makeMultiFilePipelineBuilder(params map[string]string) (*fork.MultiFileDistributor, error) {
-	if err := bitflow.DefaultEndpointFactory.ParseParameters(params); err != nil {
+	factory := bitflow.DefaultEndpointFactory
+	if err := factory.ParseParameters(params); err != nil {
 		return nil, fmt.Errorf("Error parsing parameters: %v", err)
 	}
-	output, err := bitflow.DefaultEndpointFactory.CreateOutput("file://-") // Create empty file output, will only be used as template with configuration values
+	output, err := factory.CreateOutput("file://-") // Create empty file output, will only be used as template with configuration values
 	if err != nil {
 		return nil, fmt.Errorf("Error creating template file output: %v", err)
 	}

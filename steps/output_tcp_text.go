@@ -89,10 +89,11 @@ func (f *SimpleTextMarshallerFactory) createTcpOutput(p *bitflow.SamplePipeline,
 }
 
 func _make_tcp_output(params map[string]string) (*bitflow.TCPSink, error) {
-	if err := bitflow.DefaultEndpointFactory.ParseParameters(params); err != nil {
+	factory := bitflow.DefaultEndpointFactory
+	if err := factory.ParseParameters(params); err != nil {
 		return nil, fmt.Errorf("Error parsing parameters: %v", err)
 	}
-	output, err := bitflow.DefaultEndpointFactory.CreateOutput("tcp://-") // Create empty TCP output, will only be used as template with configuration values
+	output, err := factory.CreateOutput("tcp://-") // Create empty TCP output, will only be used as template with configuration values
 	if err != nil {
 		return nil, fmt.Errorf("Error creating template TCP output: %v", err)
 	}

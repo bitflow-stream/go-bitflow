@@ -32,7 +32,8 @@ func (c *CmdPipelineBuilder) RegisterFlags() {
 	flag.BoolVar(&c.printJsonCapabilities, "json-capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
 	flag.Var(&c.pluginPaths, "p", "Plugins to load for additional functionality")
 
-	c.ProcessorRegistry = reg.NewProcessorRegistry()
+	// The DefaultEndpointFactory is used here, so that command line parameters set program-wide default values
+	c.ProcessorRegistry = reg.NewProcessorRegistry(&bitflow.DefaultEndpointFactory)
 	c.Endpoints.RegisterGeneralFlagsTo(flag.CommandLine)
 	c.Endpoints.RegisterOutputFlagsTo(flag.CommandLine)
 	if !c.SkipInputFlags {

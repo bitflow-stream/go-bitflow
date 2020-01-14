@@ -50,17 +50,17 @@ func (p *pluginImpl) Init(b reg.ProcessorRegistry) error {
 	steps.RegisterTagChangeRunner(b)
 
 	// Data input
-	steps.RegisterDynamicSource(&b.Endpoints)
-	steps.RegisterGeneratorSource(&b.Endpoints)
+	steps.RegisterDynamicSource(b.Endpoints)
+	steps.RegisterGeneratorSource(b.Endpoints)
 
 	// Data output
-	steps.RegisterConsoleBoxOutput(&b.Endpoints)
+	steps.RegisterConsoleBoxOutput(b.Endpoints)
 	steps.RegisterOutputFiles(b)
 	steps.RegisterGraphiteOutput(b)
 	steps.RegisterOpentsdbOutput(b)
 
 	// Data formats
-	steps.RegisterPrometheusMarshaller(&b.Endpoints)
+	steps.RegisterPrometheusMarshaller(b.Endpoints)
 
 	// Logging, output metadata
 	steps.RegisterStoreStats(b)
