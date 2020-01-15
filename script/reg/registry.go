@@ -60,17 +60,17 @@ type ProcessorRegistry struct {
 }
 
 type ProcessorRegistryImpl struct {
-	Endpoints bitflow.EndpointFactory
+	Endpoints *bitflow.EndpointFactory
 
 	stepRegistry  map[string]*RegisteredPipelineStep
 	batchRegistry map[string]*RegisteredBatchStep
 	forkRegistry  map[string]*RegisteredFork
 }
 
-func NewProcessorRegistry() ProcessorRegistry {
+func NewProcessorRegistry(endpointFactory *bitflow.EndpointFactory) ProcessorRegistry {
 	reg := ProcessorRegistry{
 		ProcessorRegistryImpl: &ProcessorRegistryImpl{
-			Endpoints:     *bitflow.NewEndpointFactory(),
+			Endpoints:     endpointFactory,
 			stepRegistry:  make(map[string]*RegisteredPipelineStep),
 			batchRegistry: make(map[string]*RegisteredBatchStep),
 			forkRegistry:  make(map[string]*RegisteredFork),

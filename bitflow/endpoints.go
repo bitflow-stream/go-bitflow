@@ -40,6 +40,8 @@ const (
 	BinaryFileSuffix   = ".bin"
 )
 
+// TODO if possible, make the DefaultEndpointFactory package-private by moving cmd.CmdPipelineBuilder here.
+// Deny external access to this struct, and distribute only copies through NewEndpointFactory (while copying the contained maps).
 var DefaultEndpointFactory = EndpointFactory{
 	FlagOutputFilesClean:   false,
 	FlagIoBuffer:           4096,

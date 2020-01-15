@@ -226,8 +226,7 @@ func TestParseScript_listAndMapParams(t *testing.T) {
 
 func createTestParser() (BitflowScriptParser, *testOutputCatcher) {
 	out := &testOutputCatcher{}
-	registry := reg.NewProcessorRegistry()
-	registry.Endpoints = *bitflow.NewEndpointFactory()
+	registry := reg.NewProcessorRegistry(bitflow.NewEndpointFactory())
 	registry.RegisterStep("normal_transform",
 		func(pipeline *bitflow.SamplePipeline, params map[string]interface{}) error {
 			out.calledSteps = append(out.calledSteps, "normal_transform")

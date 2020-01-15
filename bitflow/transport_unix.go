@@ -24,7 +24,7 @@ func (f *fileVanishChecker) setCurrentFile(name string) error {
 func (f *fileVanishChecker) hasFileVanished(name string) bool {
 	info, err := os.Stat(name)
 	if err != nil {
-		log.WithField("file", name).Warn("Error stating opened output file:", err)
+		log.WithField("file", name).Warnln("Error stating opened output file:", err)
 		return true
 	} else {
 		newIno := info.Sys().(*syscall.Stat_t).Ino
