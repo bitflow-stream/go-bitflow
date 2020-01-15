@@ -14,7 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type SubprocessRunner struct {
+type SubProcessRunner struct {
 	bitflow.NoopProcessor
 	Cmd  string
 	Args []string
@@ -31,37 +31,36 @@ type SubprocessRunner struct {
 	stderr bytes.Buffer
 }
 
-func RegisterSubprocessRunner(b reg.ProcessorRegistry) {
+func RegisterSubProcessRunner(b reg.ProcessorRegistry) {
 	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 		cmd := SplitShellCommand(params["cmd"].(string))
 		format := params["format"].(string)
-		factory := bitflow.DefaultEndpointFactory
-		err := factory.ParseParameters(params["endpoint-config"].(map[string]string))
+		factory, err := b.Endpoints.CloneWithParams(params["endpoint-config"].(map[string]string))
 		if err != nil {
 			return fmt.Errorf("Error parsing endpoint parameters: %v", err)
 		}
 
-		runner := &SubprocessRunner{
+		runner := &SubProcessRunner{
 			Cmd:  cmd[0],
 			Args: cmd[1:],
 		}
-		if err = runner.Configure(format, &factory); err != nil {
+		if err = runner.Configure(format, factory); err != nil {
 			return err
 		}
 		p.Add(runner)
 		return nil
 	}
-	b.RegisterStep("subprocess", create,
-		"Start a subprocess for processing samples. Samples will be sent/received over std in/out in the given format.").
+	b.RegisterStep("sub-process", create,
+		"Start a sub-process for processing samples. Samples will be sent/received over std in/out in the given format.").
 		Required("cmd", reg.String()).
 		Optional("format", reg.String(), "bin").
 		Optional("endpoint-config", reg.Map(reg.String()), map[string]string{})
 }
 
-func (r *SubprocessRunner) Configure(marshallingFormat string, f *bitflow.EndpointFactory) error {
+func (r *SubProcessRunner) Configure(marshallingFormat string, f *bitflow.EndpointFactory) error {
 	format := bitflow.MarshallingFormat(marshallingFormat)
 	var err error
-	r.Marshaller, err = bitflow.DefaultEndpointFactory.CreateMarshaller(format)
+	r.Marshaller, err = f.CreateMarshaller(format)
 	if err != nil {
 		return err
 	}
@@ -73,7 +72,7 @@ func (r *SubprocessRunner) Configure(marshallingFormat string, f *bitflow.Endpoi
 	return nil
 }
 
-func (r *SubprocessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
+func (r *SubProcessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
 	if err := r.createProcess(); err != nil {
 		return golib.NewStoppedChan(err)
 	}
@@ -106,7 +105,7 @@ func (r *SubprocessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
 	})
 }
 
-func (r *SubprocessRunner) createProcess() error {
+func (r *SubProcessRunner) createProcess() error {
 	r.cmd = exec.Command(r.Cmd, r.Args...)
 	r.cmd.Stderr = &r.stderr
 	desc := r.String()
@@ -139,7 +138,7 @@ func (r *SubprocessRunner) createProcess() error {
 	return nil
 }
 
-func (r *SubprocessRunner) runProcess() error {
+func (r *SubProcessRunner) runProcess() error {
 	err := r.cmd.Run()
 	if exitErr, ok := err.(*exec.ExitError); ok {
 		if exitErr.Success() {
@@ -159,7 +158,7 @@ func (r *SubprocessRunner) runProcess() error {
 	return err
 }
 
-func (r *SubprocessRunner) String() string {
+func (r *SubProcessRunner) String() string {
 	var args bytes.Buffer
 	for _, arg := range r.Args {
 		if !strings.ContainsRune(arg, ' ') {
@@ -178,11 +177,11 @@ func (r *SubprocessRunner) String() string {
 	return fmt.Sprintf("Subprocess [%v%s]", r.Cmd, args.String())
 }
 
-func (r *SubprocessRunner) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
+func (r *SubProcessRunner) Sample(sample *bitflow.Sample, header *bitflow.Header) error {
 	return r.output.Sample(sample, header)
 }
 
-func (r *SubprocessRunner) Close() {
+func (r *SubProcessRunner) Close() {
 	r.output.Close()
 	// TODO if the process won't close, try to kill it
 	// r.cmd.Process.Kill()

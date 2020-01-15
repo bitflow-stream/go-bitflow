@@ -20,8 +20,9 @@ func AddTagChangeListenerParams(step *reg.RegisteredStep) {
 }
 
 type TagChangeCallback interface {
-	Expired(value string, allValues []string) error
-	Updated(value string, sample *bitflow.Sample, allValues []string) error
+	// Return value indicates if handling the expiration was successful. Returning false will trigger this method again later.
+	Expired(value string, allValues []string) bool
+	Updated(value string, sample *bitflow.Sample, allValues []string)
 }
 
 type TagChangeListener struct {
@@ -110,9 +111,7 @@ func (t *TagChangeListener) expireAllTagValues() {
 
 // t.lock must be locked when calling this
 func (t *TagChangeListener) handleTagValueExpired(tagValue string) {
-	if err := t.Callback.Expired(tagValue, t.getCurrentTags(tagValue, false)); err != nil {
-		log.Errorf("Failed to handle expiration of tag %v=%v: %v", t.Tag, tagValue, err)
-	} else {
+	if t.Callback.Expired(tagValue, t.getCurrentTags(tagValue, false)) {
 		delete(t.lastUpdated, tagValue)
 		delete(t.lastSeen, tagValue)
 	}
@@ -123,10 +122,7 @@ func (t *TagChangeListener) handleTagValueUpdated(tagValue string, sample *bitfl
 	now := time.Now()
 	updating := !ok || t.UpdateInterval <= 0 || now.Sub(last) > t.UpdateInterval
 	if updating {
-		err := t.Callback.Updated(tagValue, sample, t.getCurrentTags(tagValue, true))
-		if err != nil {
-			log.Errorln(err)
-		}
+		t.Callback.Updated(tagValue, sample, t.getCurrentTags(tagValue, true))
 	}
 	t.lock.Lock()
 	defer t.lock.Unlock()

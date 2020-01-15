@@ -42,14 +42,13 @@ func (r *TagChangeRunner) String() string {
 	return fmt.Sprintf("%v: Execute: %v %v", r.TagChangeListener.String(), r.Program, strings.Join(r.Args, " "))
 }
 
-func (r *TagChangeRunner) Expired(value string, allValues []string) error {
+func (r *TagChangeRunner) Expired(value string, allValues []string) bool {
 	r.run("expired", value, allValues)
-	return nil
+	return true
 }
 
-func (r *TagChangeRunner) Updated(value string, sample *bitflow.Sample, allValues []string) error {
+func (r *TagChangeRunner) Updated(value string, sample *bitflow.Sample, allValues []string) {
 	r.run("updated", value, allValues)
-	return nil
 }
 
 func (r *TagChangeRunner) run(action string, updatedTag string, allValues []string) {

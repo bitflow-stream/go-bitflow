@@ -33,6 +33,7 @@ func RegisterOpentsdbOutput(b reg.ProcessorRegistry) {
 	replacementString := "_"
 
 	factory := &SimpleTextMarshallerFactory{
+		Endpoints:   b.Endpoints,
 		Description: "opentsdb",
 		NameFixer: func(in string) string {
 			in = nameReplacer.Replace(in)
@@ -71,10 +72,12 @@ type SimpleTextMarshallerFactory struct {
 	Description string
 	NameFixer   func(string) string
 	WriteValue  func(name string, val float64, sample *bitflow.Sample, writer io.Writer) error
+
+	Endpoints *bitflow.EndpointFactory
 }
 
 func (f *SimpleTextMarshallerFactory) createTcpOutput(p *bitflow.SamplePipeline, params map[string]interface{}) error {
-	sink, err := _make_tcp_output(params["endpoint-config"].(map[string]string))
+	sink, err := _make_tcp_output(params["endpoint-config"].(map[string]string), f.Endpoints)
 	if err == nil {
 		sink.Endpoint = params["target"].(string)
 		sink.SetMarshaller(&SimpleTextMarshaller{
@@ -88,12 +91,12 @@ func (f *SimpleTextMarshallerFactory) createTcpOutput(p *bitflow.SamplePipeline,
 	return err
 }
 
-func _make_tcp_output(params map[string]string) (*bitflow.TCPSink, error) {
-	factory := bitflow.DefaultEndpointFactory
-	if err := factory.ParseParameters(params); err != nil {
+func _make_tcp_output(endpointParams map[string]string, endpoints *bitflow.EndpointFactory) (*bitflow.TCPSink, error) {
+	endpoints, err := endpoints.CloneWithParams(endpointParams)
+	if err != nil {
 		return nil, fmt.Errorf("Error parsing parameters: %v", err)
 	}
-	output, err := factory.CreateOutput("tcp://-") // Create empty TCP output, will only be used as template with configuration values
+	output, err := endpoints.CreateOutput("tcp://-") // Create empty TCP output, will only be used as template with configuration values
 	if err != nil {
 		return nil, fmt.Errorf("Error creating template TCP output: %v", err)
 	}

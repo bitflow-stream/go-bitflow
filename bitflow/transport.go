@@ -34,6 +34,14 @@ type ConsoleSampleSink interface {
 	WritesToConsole() bool
 }
 
+// IsConsoleOutput returns true if the given processor will output to the standard output when started.
+func IsConsoleOutput(sink SampleSink) bool {
+	if consoleSink, ok := sink.(ConsoleSampleSink); ok {
+		return consoleSink.WritesToConsole()
+	}
+	return false
+}
+
 // ==================== Configuration types ====================
 
 // ParallelSampleHandler is a configuration type that is included in

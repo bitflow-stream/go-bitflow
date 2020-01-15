@@ -40,9 +40,7 @@ const (
 	BinaryFileSuffix   = ".bin"
 )
 
-// TODO if possible, make the DefaultEndpointFactory package-private by moving cmd.CmdPipelineBuilder here.
-// Deny external access to this struct, and distribute only copies through NewEndpointFactory (while copying the contained maps).
-var DefaultEndpointFactory = EndpointFactory{
+var defaultEndpointFactory = EndpointFactory{
 	FlagOutputFilesClean:   false,
 	FlagIoBuffer:           4096,
 	FlagTcpConnectionLimit: 0,
@@ -60,8 +58,9 @@ var DefaultEndpointFactory = EndpointFactory{
 }
 
 func init() {
-	DefaultEndpointFactory.Clear()
-	RegisterDefaults(&DefaultEndpointFactory)
+	defaultEndpointFactory.Clear()
+	registerBuiltinMarshallers(&defaultEndpointFactory)
+	registerEmptyInputOutput(&defaultEndpointFactory)
 }
 
 // EndpointFactory creates SampleSink and SampleSource instances for a SamplePipeline.
@@ -123,11 +122,40 @@ type EndpointFactory struct {
 	CustomOutputFlags  []func(f *flag.FlagSet)
 }
 
+// NewEndpointFactory returns an EndpointFactory object filled with default values.
 func NewEndpointFactory() *EndpointFactory {
-	factory := DefaultEndpointFactory
-	factory.Clear()
-	RegisterDefaults(&factory)
-	return &factory
+	return defaultEndpointFactory.Clone()
+}
+
+func (f *EndpointFactory) Clone() *EndpointFactory {
+	result := *f   // Copy all non-map/slice fields
+	result.Clear() // Initialize map fields
+
+	for k, v := range f.CustomDataSources {
+		result.CustomDataSources[k] = v
+	}
+	for k, v := range f.CustomDataSinks {
+		result.CustomDataSinks[k] = v
+	}
+	for k, v := range f.Marshallers {
+		result.Marshallers[k] = v
+	}
+	for k, v := range f.Unmarshallers {
+		result.Unmarshallers[k] = v
+	}
+
+	copyFlags := func(flags []func(f *flag.FlagSet)) []func(f *flag.FlagSet) {
+		copied := make([]func(f *flag.FlagSet), len(flags))
+		for i, v := range flags {
+			copied[i   ] = v
+		}
+		return copied
+	}
+	result.CustomGeneralFlags = copyFlags(f.CustomGeneralFlags)
+	result.CustomInputFlags = copyFlags(f.CustomInputFlags)
+	result.CustomOutputFlags = copyFlags(f.CustomOutputFlags)
+
+	return &result
 }
 
 func (f *EndpointFactory) Clear() {
@@ -140,12 +168,12 @@ func (f *EndpointFactory) Clear() {
 	f.CustomOutputFlags = nil
 }
 
-func RegisterDefaults(factory *EndpointFactory) {
-	RegisterBuiltinMarshallers(factory)
-	RegisterEmptyInputOutput(factory)
+func (f *EndpointFactory) CloneWithParams(params map[string]string) (*EndpointFactory, error) {
+	result := f.Clone()
+	return result, result.ParseParameters(params)
 }
 
-func RegisterEmptyInputOutput(factory *EndpointFactory) {
+func registerEmptyInputOutput(factory *EndpointFactory) {
 	factory.CustomDataSinks[EmptyEndpoint] = func(string) (SampleProcessor, error) {
 		return new(DroppingSampleProcessor), nil
 	}
@@ -154,7 +182,7 @@ func RegisterEmptyInputOutput(factory *EndpointFactory) {
 	}
 }
 
-func RegisterBuiltinMarshallers(factory *EndpointFactory) {
+func registerBuiltinMarshallers(factory *EndpointFactory) {
 	factory.Marshallers[TextFormat] = func() Marshaller {
 		return TextMarshaller{}
 	}
