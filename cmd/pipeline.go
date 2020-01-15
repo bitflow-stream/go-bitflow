@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -32,8 +30,7 @@ func (c *CmdPipelineBuilder) RegisterFlags() {
 	flag.BoolVar(&c.printJsonCapabilities, "json-capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
 	flag.Var(&c.pluginPaths, "p", "Plugins to load for additional functionality")
 
-	// The DefaultEndpointFactory is used here, so that command line parameters set program-wide default values
-	c.ProcessorRegistry = reg.NewProcessorRegistry(&bitflow.DefaultEndpointFactory)
+	c.ProcessorRegistry = reg.NewProcessorRegistry(bitflow.NewEndpointFactory())
 	c.Endpoints.RegisterGeneralFlagsTo(flag.CommandLine)
 	c.Endpoints.RegisterOutputFlagsTo(flag.CommandLine)
 	if !c.SkipInputFlags {
@@ -42,7 +39,7 @@ func (c *CmdPipelineBuilder) RegisterFlags() {
 }
 
 func (c *CmdPipelineBuilder) BuildPipeline(getScript func() (string, error)) (*bitflow.SamplePipeline, error) {
-	err := load_plugins(c.ProcessorRegistry, c.pluginPaths)
+	err := loadPlugins(c.ProcessorRegistry, c.pluginPaths)
 	if err != nil {
 		return nil, err
 	}
@@ -62,31 +59,19 @@ func (c *CmdPipelineBuilder) BuildPipeline(getScript func() (string, error)) (*b
 	return s, parseErr.NilOrError()
 }
 
-func (c *CmdPipelineBuilder) PrintPipeline(pipe *bitflow.SamplePipeline) *bitflow.SamplePipeline {
+// Print the pipeline and return true, if the program should continue by executing it.
+// If false is returned, the program should exit after printing.
+func (c *CmdPipelineBuilder) PrintPipeline(pipe *bitflow.SamplePipeline) bool {
 	for _, str := range pipe.FormatLines() {
 		log.Println(str)
 	}
-	if c.printPipeline {
-		pipe = nil
-	}
-	return pipe
+	return !c.printPipeline
 }
 
-func JSONMarshal(t interface{}) ([]byte, error) {
-	buffer := &bytes.Buffer{}
-	encoder := json.NewEncoder(buffer)
-	encoder.SetEscapeHTML(false)
-	err := encoder.Encode(t)
-	return buffer.Bytes(), err
-}
-
-func load_plugins(registry reg.ProcessorRegistry, pluginPaths []string) error {
-	loadedNames := make(map[string]bool)
+func loadPlugins(registry reg.ProcessorRegistry, pluginPaths []string) error {
 	for _, path := range pluginPaths {
-		if name, err := plugin.LoadPlugin(registry, path); err != nil {
+		if _, err := plugin.LoadPlugin(registry, path); err != nil {
 			return fmt.Errorf("Failed to load plugin %v: %v", path, err)
-		} else {
-			loadedNames[name] = true
 		}
 	}
 

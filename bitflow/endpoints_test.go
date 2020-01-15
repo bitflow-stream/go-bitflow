@@ -28,8 +28,9 @@ func TestPipelineTestSuite(t *testing.T) {
 }
 
 func (suite *PipelineTestSuite) TestGuessEndpoint() {
+	factory := NewEndpointFactory()
 	compareX := func(endpoint string, format MarshallingFormat, typ EndpointType, isCustom bool, isOutput bool) {
-		desc, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, isOutput)
+		desc, err := factory.ParseEndpointDescription(endpoint, isOutput)
 		suite.NoError(err)
 		suite.Equal(EndpointDescription{Format: UndefinedFormat, Type: typ, Target: endpoint, IsCustomType: isCustom}, desc)
 		suite.Equal(format, desc.OutputFormat())
@@ -38,7 +39,7 @@ func (suite *PipelineTestSuite) TestGuessEndpoint() {
 		compareX(endpoint, format, typ, false, false)
 	}
 	compareErr2 := func(endpoint string, errStr string) {
-		desc, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, false)
+		desc, err := factory.ParseEndpointDescription(endpoint, false)
 		suite.Error(err)
 		suite.Contains(err.Error(), errStr)
 		suite.Equal(EndpointDescription{Format: UndefinedFormat, Type: UndefinedEndpoint, Target: endpoint}, desc)
@@ -80,16 +81,17 @@ func (suite *PipelineTestSuite) TestGuessEndpoint() {
 }
 
 func (suite *PipelineTestSuite) TestUrlEndpoint() {
+	factory := NewEndpointFactory()
 	compare := func(endpoint string, format MarshallingFormat, outputFormat MarshallingFormat, typ EndpointType, target string) {
 		// Check for output
-		desc, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, true)
+		desc, err := factory.ParseEndpointDescription(endpoint, true)
 		suite.NoError(err)
 		suite.Equal(EndpointDescription{Format: format, Type: typ, Target: target, IsCustomType: false}, desc)
 		suite.Equal(outputFormat, desc.OutputFormat())
 
 		// Check for input
 		if format != TextFormat {
-			desc, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, false)
+			desc, err := factory.ParseEndpointDescription(endpoint, false)
 			suite.NoError(err)
 			suite.Equal(EndpointDescription{Format: format, Type: typ, Target: target, IsCustomType: false}, desc)
 			suite.Equal(outputFormat, desc.OutputFormat())
@@ -154,8 +156,9 @@ func (suite *PipelineTestSuite) TestUrlEndpoint() {
 }
 
 func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
+	factory := NewEndpointFactory()
 	err := func(endpoint string, errStr string) {
-		_, err := DefaultEndpointFactory.ParseEndpointDescription(endpoint, true)
+		_, err := factory.ParseEndpointDescription(endpoint, true)
 		suite.Error(err)
 		suite.Contains(err.Error(), errStr)
 	}

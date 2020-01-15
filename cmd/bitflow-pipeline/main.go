@@ -53,8 +53,7 @@ func do_main() int {
 	if pipe == nil {
 		return 0
 	}
-	pipe = builder.PrintPipeline(pipe)
-	if pipe == nil {
+	if !builder.PrintPipeline(pipe) {
 		return 0
 	}
 	defer golib.ProfileCpu()()

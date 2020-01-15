@@ -296,8 +296,26 @@ var _ Distributor = new(MultiFileDistributor)
 type MultiFileDistributor struct {
 	bitflow.TagTemplate
 	PipelineCache
+
+	Endpoints          *bitflow.EndpointFactory
 	Config             bitflow.FileSink // Configuration parameters in this field will be used for file outputs
-	ExtendSubpipelines func(fileName string, pipe *bitflow.SamplePipeline)
+	ExtendSubPipelines func(fileName string, pipe *bitflow.SamplePipeline)
+}
+
+func MakeMultiFilePipelineBuilder(endpointParams map[string]string, endpoints *bitflow.EndpointFactory) (*MultiFileDistributor, error) {
+	endpoints, err := endpoints.CloneWithParams(endpointParams)
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing parameters: %v", err)
+	}
+	output, err := endpoints.CreateOutput("file://-") // Create empty file output, will only be used as template with configuration values
+	if err != nil {
+		return nil, fmt.Errorf("Error creating template file output: %v", err)
+	}
+	fileOutput, ok := output.(*bitflow.FileSink)
+	if !ok {
+		return nil, fmt.Errorf("Error creating template file output, received wrong type: %T", output)
+	}
+	return &MultiFileDistributor{Config: *fileOutput, Endpoints: endpoints}, nil
 }
 
 func (b *MultiFileDistributor) Distribute(sample *bitflow.Sample, _ *bitflow.Header) ([]Subpipeline, error) {
@@ -313,12 +331,12 @@ func (b *MultiFileDistributor) build(fileName string) ([]*bitflow.SamplePipeline
 	fileOut.Filename = fileName
 	format := bitflow.EndpointDescription{Target: fileName, Type: bitflow.FileEndpoint}.DefaultOutputFormat()
 	var err error
-	fileOut.Marshaller, err = bitflow.DefaultEndpointFactory.CreateMarshaller(format)
+	fileOut.Marshaller, err = b.Endpoints.CreateMarshaller(format)
 	if err != nil {
 		return nil, err
 	}
 	pipe := (new(bitflow.SamplePipeline)).Add(&fileOut)
-	if extend := b.ExtendSubpipelines; extend != nil {
+	if extend := b.ExtendSubPipelines; extend != nil {
 		extend(fileName, pipe)
 	}
 	return []*bitflow.SamplePipeline{pipe}, nil
