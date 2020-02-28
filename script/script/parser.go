@@ -366,7 +366,7 @@ func (s *_bitflowScriptParser) buildMultiplexFork(pipe *bitflow.SamplePipeline, 
 func (s *_bitflowScriptParser) buildBatch(pipe *bitflow.SamplePipeline, ctx *internal.BatchContext) {
 	params, err := s.buildParameters(steps.BatchProcessorParameters, ctx.Parameters().(*internal.ParametersContext))
 	if err != nil {
-		s.pushError(ctx, "Invalid batch parameters: %v", err)
+		s.pushError(ctx, "Invalid batch parameters: %v.", err)
 		return
 	}
 	batch, err := steps.MakeBatchProcessor(params)
