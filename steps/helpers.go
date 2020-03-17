@@ -105,10 +105,15 @@ type FeatureStats struct {
 }
 
 func NewFeatureStats() *FeatureStats {
-	return &FeatureStats{
-		Min: math.MaxFloat64,
-		Max: -math.MaxFloat64,
-	}
+	result := new(FeatureStats)
+	result.Reset()
+	return result
+}
+
+func (stats *FeatureStats) Reset() {
+	stats.Running = onlinestats.Running{}
+	stats.Min = math.MaxFloat64
+	stats.Max = -math.MaxFloat64
 }
 
 func (stats *FeatureStats) Push(values ...float64) {
@@ -145,6 +150,9 @@ func GetMinMax(header *bitflow.Header, samples []*bitflow.Sample) ([]float64, []
 
 func GetStats(header *bitflow.Header, samples []*bitflow.Sample) []FeatureStats {
 	res := make([]FeatureStats, len(header.Fields))
+	for i := range res {
+		res[i].Reset()
+	}
 	for _, sample := range samples {
 		for i, val := range sample.Values {
 			res[i].Push(float64(val))

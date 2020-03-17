@@ -42,23 +42,34 @@ func (a *BatchAggregator) String() string {
 	return "Batch Aggregation: " + a.Description
 }
 
-func RegisterBatchAggregators(b reg.ProcessorRegistry) {
-	makeAggregator := func(operation string, getValue BatchAggregateFunc) {
-		b.RegisterBatchStep(operation,
-			func(params map[string]interface{}) (bitflow.BatchProcessingStep, error) {
-				return &BatchAggregator{
-					Aggregator:  getValue,
-					Description: operation,
-				}, nil
-			}, "Compute for all values in the batch (per metric): "+operation)
-	}
+func registerAggregator(b reg.ProcessorRegistry, operation string, factoryFunc func() bitflow.BatchProcessingStep) {
+	b.RegisterBatchStep(operation,
+		func(params map[string]interface{}) (bitflow.BatchProcessingStep, error) {
+			return factoryFunc(), nil
+		}, "Compute for all values in the batch (per metric): "+operation)
+}
 
-	makeAggregator("multiply", func(aggregated bitflow.Value, newValue bitflow.Value) bitflow.Value {
-		return aggregated * newValue
-	})
-	makeAggregator("sum", func(aggregated bitflow.Value, newValue bitflow.Value) bitflow.Value {
-		return aggregated + newValue
-	})
+func RegisterBatchAggregators(b reg.ProcessorRegistry) {
+	registerAggregator(b, "multiply", NewBatchMultiplyAggregator)
+	registerAggregator(b, "sum", NewBatchSumAggregator)
+}
+
+func NewBatchMultiplyAggregator() bitflow.BatchProcessingStep {
+	return &BatchAggregator{
+		Aggregator: func(aggregated bitflow.Value, newValue bitflow.Value) bitflow.Value {
+			return aggregated * newValue
+		},
+		Description: "multiply",
+	}
+}
+
+func NewBatchSumAggregator() bitflow.BatchProcessingStep {
+	return &BatchAggregator{
+		Aggregator: func(aggregated bitflow.Value, newValue bitflow.Value) bitflow.Value {
+			return aggregated + newValue
+		},
+		Description: "sum",
+	}
 }
 
 type GetFeatureFunc func(stats steps.FeatureStats) float64
@@ -88,20 +99,52 @@ func (ba *BatchFeatureStatsAggregator) String() string {
 }
 
 func RegisterBatchFeatureStatsAggregators(b reg.ProcessorRegistry) {
-	makeAggregator := func(operation string, getValue GetFeatureFunc) {
-		b.RegisterBatchStep(operation,
-			func(params map[string]interface{}) (bitflow.BatchProcessingStep, error) {
-				return &BatchFeatureStatsAggregator{
-					Aggregate:   getValue,
-					Description: operation,
-				}, nil
-			}, "Compute for all values in the batch (per metric): "+operation)
-	}
+	registerAggregator(b, "avg", NewBatchAvgAggregator)
+	registerAggregator(b, "stddev", NewBatchStddevAggregator)
+	registerAggregator(b, "kurtosis", NewBatchKurtosisAggregator)
+	registerAggregator(b, "variance", NewBatchVarianceAggregator)
+	registerAggregator(b, "min", NewBatchMinAggregator)
+	registerAggregator(b, "max", NewBatchMaxAggregator)
+}
 
-	makeAggregator("avg", func(stats steps.FeatureStats) float64 { return stats.Mean() })
-	makeAggregator("stddev", func(stats steps.FeatureStats) float64 { return stats.Stddev() })
-	makeAggregator("kurtosis", func(stats steps.FeatureStats) float64 { return stats.Kurtosis() })
-	makeAggregator("variance", func(stats steps.FeatureStats) float64 { return stats.Var() })
-	makeAggregator("min", func(stats steps.FeatureStats) float64 { return stats.Min })
-	makeAggregator("max", func(stats steps.FeatureStats) float64 { return stats.Max })
+func NewBatchAvgAggregator() bitflow.BatchProcessingStep {
+	return &BatchFeatureStatsAggregator{
+		Aggregate:   func(stats steps.FeatureStats) float64 { return stats.Mean() },
+		Description: "avg",
+	}
+}
+
+func NewBatchStddevAggregator() bitflow.BatchProcessingStep {
+	return &BatchFeatureStatsAggregator{
+		Aggregate:   func(stats steps.FeatureStats) float64 { return stats.Stddev() },
+		Description: "stddev",
+	}
+}
+
+func NewBatchKurtosisAggregator() bitflow.BatchProcessingStep {
+	return &BatchFeatureStatsAggregator{
+		Aggregate:   func(stats steps.FeatureStats) float64 { return stats.Kurtosis() },
+		Description: "kurtosis",
+	}
+}
+
+func NewBatchVarianceAggregator() bitflow.BatchProcessingStep {
+	return &BatchFeatureStatsAggregator{
+		Aggregate:   func(stats steps.FeatureStats) float64 { return stats.Var() },
+		Description: "variance",
+	}
+}
+
+func NewBatchMinAggregator() bitflow.BatchProcessingStep {
+	return &BatchFeatureStatsAggregator{
+		Aggregate:   func(stats steps.FeatureStats) float64 { return stats.Min },
+		Description: "min",
+	}
+}
+
+func NewBatchMaxAggregator() bitflow.BatchProcessingStep {
+	return &BatchFeatureStatsAggregator{
+		Aggregate:   func(stats steps.FeatureStats) float64 { return stats.Max },
+		Description: "max",
+	}
 }
