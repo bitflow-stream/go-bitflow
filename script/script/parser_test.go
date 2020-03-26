@@ -4,145 +4,137 @@ import (
 	"testing"
 	"time"
 
+	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
 	"github.com/bitflow-stream/go-bitflow/script/reg"
 	"github.com/bitflow-stream/go-bitflow/steps"
 	"github.com/bugsnag/bugsnag-go/errors"
-	"github.com/stretchr/testify/require"
 )
 
-type testOutputCatcher struct {
-	calledSteps []string
+type ParserTestSuite struct {
+	golib.AbstractTestSuite
 }
 
-func TestParseScript_withFileInputAndOutput_shouldHaveFileSourceAndFileSink(t *testing.T) {
-	assert := require.New(t)
+func TestParser(t *testing.T) {
+	new(ParserTestSuite).Run(t)
+}
+
+func (s *ParserTestSuite) Test_withFileInputAndOutput_shouldHaveFileSourceAndFileSink() {
 	testScript := "./in -> noop() -> ./out"
-	parser, _ := createTestParser()
+	parser, _ := s.createTestParser()
 
 	pipe, errs := parser.ParseScript(testScript)
 
-	assert.Len(errs, 0)
+	s.Len(errs, 0)
 	_, isFileSource := pipe.Source.(*bitflow.FileSource)
-	assert.True(isFileSource)
+	s.True(isFileSource)
 	_, isFileSink := pipe.Processors[1].(*bitflow.FileSink)
-	assert.True(isFileSink)
+	s.True(isFileSink)
 }
 
-func TestParseScript_multipleOutputs(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_multipleOutputs() {
 	testScript := "./in -> normal_transform() -> error_returning_transform -> ./out"
-	parser, out := createTestParser()
+	parser, out := s.createTestParser()
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Len(errs, 0)
-	assert.Equal("normal_transform", out.calledSteps[0])
+	s.Len(errs, 0)
+	s.Equal("normal_transform", out.calledSteps[0])
 }
 
-func TestParseScript_withEnforcedBatchInStream_shouldReturnError(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_withEnforcedBatchInStream_shouldReturnError() {
 	testScript := "./in -> batch_transform() -> ./out"
-	parser, _ := createTestParser()
+	parser, _ := s.createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Len(errs, 1)
-	assert.Contains(errs[0].Error(), "Processing step 'batch_transform' is unknown, but a batch step with that name exists")
+	s.Len(errs, 1)
+	s.Contains(errs[0].Error(), "Processing step 'batch_transform' is unknown, but a batch step with that name exists")
 }
 
-func TestParseScript_withEnforcedBatchInStream_shouldReturnError_unknownStep(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_withEnforcedBatchInStream_shouldReturnError_unknownStep() {
 	testScript := "./in -> xxxYYY() -> ./out"
-	parser, _ := createTestParser()
+	parser, _ := s.createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Len(errs, 1)
-	assert.Contains(errs[0].Error(), "Processing step 'xxxYYY' is unknown")
-	assert.NotContains(errs[0].Error(), ", but a ") // no additional help, because the step is not known at all
+	s.Len(errs, 1)
+	s.Contains(errs[0].Error(), "Processing step 'xxxYYY' is unknown")
+	s.NotContains(errs[0].Error(), ", but a ") // no additional help, because the step is not known at all
 }
 
-func TestParseScript_withStreamTransformInWindow_shouldReturnError(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_withStreamTransformInWindow_shouldReturnError() {
 	testScript := "./in -> batch() { normal_transform() -> batch_transform()} -> ./out"
-	parser, _ := createTestParser()
+	parser, _ := s.createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Len(errs, 1)
-	assert.Contains(errs[0].Error(), "Batch step 'normal_transform' is unknown, but a non-batch step with that name exists")
+	s.Len(errs, 1)
+	s.Contains(errs[0].Error(), "Batch step 'normal_transform' is unknown, but a non-batch step with that name exists")
 }
 
-func TestParseScript_withStreamTransformInWindow_shouldReturnError_unknownStep(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_withStreamTransformInWindow_shouldReturnError_unknownStep() {
 	testScript := "./in -> batch() { xxxxYYYY() -> batch_transform()} -> ./out"
-	parser, _ := createTestParser()
+	parser, _ := s.createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Len(errs, 1)
-	assert.Contains(errs[0].Error(), "Batch step 'xxxxYYYY' is unknown")
-	assert.NotContains(errs[0].Error(), ", but a ") // no additional help, because the step is not known at all
+	s.Len(errs, 1)
+	s.Contains(errs[0].Error(), "Batch step 'xxxxYYYY' is unknown")
+	s.NotContains(errs[0].Error(), ", but a ") // no additional help, because the step is not known at all
 }
 
-func TestParseScript_missingRequiredParameter(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_missingRequiredParameter() {
 	testScript := "./in -> required_param_transform() -> ./out"
-	parser, _ := createTestParser()
+	parser, _ := s.createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Len(errs, 1)
-	assert.Contains(errs[0].Error(), "Missing required parameter 'requiredParam' (type string)")
+	s.Len(errs, 1)
+	s.Contains(errs[0].Error(), "Missing required parameter 'requiredParam' (type string)")
 }
 
-func TestParseScript_unknownParameter(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_unknownParameter() {
 	testScript := "./in -> required_param_transform(HELLO=1) -> ./out"
-	parser, _ := createTestParser()
+	parser, _ := s.createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Len(errs, 1)
-	assert.Contains(errs[0].Error(), "Unknown parameter 'HELLO'")
+	s.Len(errs, 1)
+	s.Contains(errs[0].Error(), "Unknown parameter 'HELLO'")
 }
 
-func TestParseScript_doubleParameter(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_doubleParameter() {
 	testScript := "./in -> required_param_transform(requiredParam=1, requiredParam=2) -> ./out"
-	parser, _ := createTestParser()
+	parser, _ := s.createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Len(errs, 1)
-	assert.Contains(errs[0].Error(), "Parameter 'requiredParam' is redefined")
+	s.Len(errs, 1)
+	s.Contains(errs[0].Error(), "Parameter 'requiredParam' is redefined")
 }
 
-func TestParseScript_withWindow_shouldWork(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_withWindow_shouldWork() {
 	testScript := "./in -> batch() { batch_transform()-> batch_transform()} -> normal_transform() -> ./out"
-	parser, out := createTestParser()
+	parser, out := s.createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
-	assert.NoError(errs.NilOrError())
-	assert.Equal("batch_transform", out.calledSteps[0])
-	assert.Equal("batch_transform", out.calledSteps[1])
-	assert.Equal("normal_transform", out.calledSteps[2])
+	s.NoError(errs.NilOrError())
+	s.Equal("batch_transform", out.calledSteps[0])
+	s.Equal("batch_transform", out.calledSteps[1])
+	s.Equal("normal_transform", out.calledSteps[2])
 }
 
-func TestParseScript_withWindowInWindow_shouldReturnError(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_withWindowInWindow_shouldReturnError() {
 	testScript := "./in -> batch() {batch_transform() -> batch() { batch_transform()}} -> normal_transform() -> ./out"
-	parser, _ := createTestParser()
+	parser, _ := s.createTestParser()
 
 	_, errs := parser.ParseScript(testScript)
 
-	assert.Len(errs, 3)
-	assert.Contains(errs.Error(), "mismatched input 'batch'")
+	s.Len(errs, 3)
+	s.Contains(errs.Error(), "mismatched input 'batch'")
 }
 
-func TestParseScript_listAndMapParams(t *testing.T) {
-	assert := require.New(t)
+func (s *ParserTestSuite) Test_listAndMapParams() {
 	var (
 		normal1       bool
 		normal2       int
@@ -161,7 +153,7 @@ func TestParseScript_listAndMapParams(t *testing.T) {
 		optionalMap2  map[string]int
 	)
 
-	parser, _ := createTestParser()
+	parser, _ := s.createTestParser()
 	parser.Registry.RegisterStep("special_params",
 		func(pipeline *bitflow.SamplePipeline, params map[string]interface{}) error {
 			list1 = params["list1"].([]time.Duration)
@@ -201,30 +193,34 @@ func TestParseScript_listAndMapParams(t *testing.T) {
 		", map2 = { 4=5 }, emptyList=[], emptyMap={}, optionalList2= [50,60],  optionalMap1={ g=40, h=60 }," +
 		"normal1= 'true', 'normal2'=  33, optional1=  3.444,   list3=['2100-10-10 10:10:10.123456', '1990-05-06 07:15:06.1'])"
 	_, errs := parser.ParseScript(testScript)
-	assert.NoError(errs.NilOrError())
+	s.NoError(errs.NilOrError())
 
-	assert.Equal([]time.Duration{1 * time.Second, 2 * time.Hour, 3 * time.Minute}, list1)
-	assert.Equal([]int{1, 2, 3}, list2)
-	assert.Equal([]float64{}, emptyList)
-	assert.Equal(map[string]string{"x": "y", "1": "2", " ": "v"}, map1)
-	assert.Equal(map[string]int{"4": 5}, map2)
-	assert.Equal(map[string]float64{}, emptyMap)
-	assert.Equal([]int{10, 11}, optionalList1) // default value
-	assert.Equal([]int{50, 60}, optionalList2)
-	assert.Equal(map[string]int{"g": 40, "h": 60}, optionalMap1)
-	assert.Equal(map[string]int{"c": 12, "d": 12}, optionalMap2) // default value
-	assert.Equal(true, normal1)
-	assert.Equal(33, normal2)
-	assert.Equal(3.444, optional1)
-	assert.Equal("defaultVal2", optional2)
+	s.Equal([]time.Duration{1 * time.Second, 2 * time.Hour, 3 * time.Minute}, list1)
+	s.Equal([]int{1, 2, 3}, list2)
+	s.Equal([]float64{}, emptyList)
+	s.Equal(map[string]string{"x": "y", "1": "2", " ": "v"}, map1)
+	s.Equal(map[string]int{"4": 5}, map2)
+	s.Equal(map[string]float64{}, emptyMap)
+	s.Equal([]int{10, 11}, optionalList1) // default value
+	s.Equal([]int{50, 60}, optionalList2)
+	s.Equal(map[string]int{"g": 40, "h": 60}, optionalMap1)
+	s.Equal(map[string]int{"c": 12, "d": 12}, optionalMap2) // default value
+	s.Equal(true, normal1)
+	s.Equal(33, normal2)
+	s.Equal(3.444, optional1)
+	s.Equal("defaultVal2", optional2)
 
-	assert.Len(list3, 2)
+	s.Len(list3, 2)
 	format := "2006-01-02 15:04:05.999999"
-	assert.Equal(time.Date(2100, time.October, 10, 10, 10, 10, 123456*1000, time.Local).Format(format), list3[0].Format(format))
-	assert.Equal(time.Date(1990, time.May, 6, 7, 15, 06, 100*1000*1000, time.Local).Format(format), list3[1].Format(format))
+	s.Equal(time.Date(2100, time.October, 10, 10, 10, 10, 123456*1000, time.Local).Format(format), list3[0].Format(format))
+	s.Equal(time.Date(1990, time.May, 6, 7, 15, 06, 100*1000*1000, time.Local).Format(format), list3[1].Format(format))
 }
 
-func createTestParser() (BitflowScriptParser, *testOutputCatcher) {
+type testOutputCatcher struct {
+	calledSteps []string
+}
+
+func (s *ParserTestSuite) createTestParser() (BitflowScriptParser, *testOutputCatcher) {
 	out := &testOutputCatcher{}
 	registry := reg.NewProcessorRegistry(bitflow.NewEndpointFactory())
 	registry.RegisterStep("normal_transform",

@@ -5,26 +5,15 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+	"github.com/antongulenko/golib"
 )
 
 type PipelineTestSuite struct {
-	t *testing.T
-	*require.Assertions
-}
-
-func (suite *PipelineTestSuite) T() *testing.T {
-	return suite.t
-}
-
-func (suite *PipelineTestSuite) SetT(t *testing.T) {
-	suite.t = t
-	suite.Assertions = require.New(t)
+	golib.AbstractTestSuite
 }
 
 func TestPipelineTestSuite(t *testing.T) {
-	suite.Run(t, new(PipelineTestSuite))
+	new(PipelineTestSuite).Run(t)
 }
 
 func (suite *PipelineTestSuite) TestGuessEndpoint() {
@@ -189,7 +178,7 @@ func (suite *PipelineTestSuite) TestUrlEndpointErrors() {
 	err("box+box://-", "Multiple transport")
 }
 
-func (suite *PipelineTestSuite) make_factory() *EndpointFactory {
+func (suite *PipelineTestSuite) makeFactory() *EndpointFactory {
 	f := NewEndpointFactory()
 	f.FlagInputFilesRobust = true
 	f.FlagOutputFilesClean = true
@@ -198,19 +187,19 @@ func (suite *PipelineTestSuite) make_factory() *EndpointFactory {
 	f.FlagTcpConnectionLimit = 10
 	f.FlagInputTcpAcceptLimit = 20
 	f.FlagTcpSourceDropErrors = true
-	f.FlagParallelHandler = parallel_handler
+	f.FlagParallelHandler = parallelHandler
 	return f
 }
 
 func (suite *PipelineTestSuite) Test_no_inputs() {
-	factory := suite.make_factory()
+	factory := suite.makeFactory()
 	source, err := factory.CreateInput()
 	suite.NoError(err)
 	suite.Equal(nil, source)
 }
 
 func (suite *PipelineTestSuite) Test_input_file() {
-	factory := suite.make_factory()
+	factory := suite.makeFactory()
 	files := []string{"file1", "file2", "file3"}
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(files...)
@@ -222,12 +211,12 @@ func (suite *PipelineTestSuite) Test_input_file() {
 		IoBuffer:  666,
 	}
 	expected.Reader.Handler = handler
-	expected.Reader.ParallelSampleHandler = parallel_handler
+	expected.Reader.ParallelSampleHandler = parallelHandler
 	suite.Equal(expected, source)
 }
 
 func (suite *PipelineTestSuite) Test_input_tcp() {
-	factory := suite.make_factory()
+	factory := suite.makeFactory()
 	hosts := []string{"host1:123", "host2:2", "host2:5"}
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(hosts...)
@@ -241,12 +230,12 @@ func (suite *PipelineTestSuite) Test_input_tcp() {
 	}
 	expected.TcpConnLimit = 10
 	expected.Reader.Handler = handler
-	expected.Reader.ParallelSampleHandler = parallel_handler
+	expected.Reader.ParallelSampleHandler = parallelHandler
 	suite.Equal(expected, source)
 }
 
 func (suite *PipelineTestSuite) Test_input_tcp_listen() {
-	factory := suite.make_factory()
+	factory := suite.makeFactory()
 	endpoint := ":123"
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(endpoint)
@@ -256,12 +245,12 @@ func (suite *PipelineTestSuite) Test_input_tcp_listen() {
 	expected.SimultaneousConnections = 20
 	expected.TcpConnLimit = 10
 	expected.Reader.Handler = handler
-	expected.Reader.ParallelSampleHandler = parallel_handler
+	expected.Reader.ParallelSampleHandler = parallelHandler
 	suite.Equal(expected, source)
 }
 
 func (suite *PipelineTestSuite) Test_input_std() {
-	factory := suite.make_factory()
+	factory := suite.makeFactory()
 	endpoint := "-"
 	handler := &testSampleHandler{source: "xxx"}
 	source, err := factory.CreateInput(endpoint)
@@ -269,13 +258,13 @@ func (suite *PipelineTestSuite) Test_input_std() {
 	source.(UnmarshallingSampleSource).SetSampleHandler(handler)
 	expected := NewConsoleSource()
 	expected.Reader.Handler = handler
-	expected.Reader.ParallelSampleHandler = parallel_handler
+	expected.Reader.ParallelSampleHandler = parallelHandler
 	suite.Equal(expected, source)
 }
 
 func (suite *PipelineTestSuite) Test_input_multiple() {
 	test := func(input1, input2 string, inputs ...string) {
-		factory := suite.make_factory()
+		factory := suite.makeFactory()
 		source, err := factory.CreateInput(inputs...)
 		suite.Error(err)
 		suite.Equal(err.Error(), fmt.Sprintf("Please provide only one data source (Provided %s and %s)", input1, input2))
@@ -290,7 +279,7 @@ func (suite *PipelineTestSuite) Test_input_multiple() {
 }
 
 func (suite *PipelineTestSuite) Test_unknown_endpoint_type() {
-	factory := suite.make_factory()
+	factory := suite.makeFactory()
 
 	source, err := factory.CreateInput("abc://x")
 	suite.EqualError(err, "Unknown input endpoint type: abc")
@@ -306,7 +295,7 @@ func (suite *PipelineTestSuite) Test_unknown_endpoint_type() {
 }
 
 func (suite *PipelineTestSuite) Test_input_multiple_listener() {
-	factory := suite.make_factory()
+	factory := suite.makeFactory()
 	source, err := factory.CreateInput(":123", ":456")
 	suite.Error(err)
 	suite.Equal(err.Error(), fmt.Sprint("Cannot listen for input on multiple TCP ports"))
@@ -314,7 +303,7 @@ func (suite *PipelineTestSuite) Test_input_multiple_listener() {
 }
 
 func (suite *PipelineTestSuite) Test_input_multiple_std() {
-	factory := suite.make_factory()
+	factory := suite.makeFactory()
 	source, err := factory.CreateInput("-", "-")
 	suite.Error(err)
 	suite.Equal(err.Error(), fmt.Sprint("Cannot read from stdin multiple times"))
@@ -323,7 +312,7 @@ func (suite *PipelineTestSuite) Test_input_multiple_std() {
 
 func (suite *PipelineTestSuite) Test_outputs() {
 	test := func(output string, expected SampleSink) {
-		factory := suite.make_factory()
+		factory := suite.makeFactory()
 		sink, err := factory.CreateOutput(output)
 		suite.NoError(err)
 		suite.Equal(expected, sink)
@@ -340,7 +329,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 		default:
 			panic("Illegal format: " + format)
 		}
-		sink.Writer.ParallelSampleHandler = parallel_handler
+		sink.Writer.ParallelSampleHandler = parallelHandler
 	}
 
 	std := func(format string) SampleSink {
@@ -403,7 +392,7 @@ func (suite *PipelineTestSuite) Test_outputs() {
 }
 
 func (suite *PipelineTestSuite) Test_custom_endpoints() {
-	factory := suite.make_factory()
+	factory := suite.makeFactory()
 	testEndpointType := EndpointType("testendpoint")
 	testSource := NewConsoleSource()
 	testSink := NewConsoleSink()

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/antongulenko/golib"
-	"github.com/stretchr/testify/suite"
 )
 
 // Tests for transport_read.go and transport_write.go
@@ -16,7 +15,7 @@ type TransportStreamTestSuite struct {
 }
 
 func TestTransportStreamTestSuite(t *testing.T) {
-	suite.Run(t, new(TransportStreamTestSuite))
+	new(TransportStreamTestSuite).Run(t)
 }
 
 func (suite *TransportStreamTestSuite) testAllHeaders(m BidiMarshaller) {
@@ -25,10 +24,10 @@ func (suite *TransportStreamTestSuite) testAllHeaders(m BidiMarshaller) {
 		suite: suite,
 	}
 	writer := SampleWriter{
-		ParallelSampleHandler: parallel_handler,
+		ParallelSampleHandler: parallelHandler,
 	}
 	stream := writer.Open(&buf, m)
-	total_samples := suite.sendAllSamples(stream)
+	totalSamples := suite.sendAllSamples(stream)
 	suite.NoError(stream.Close())
 	buf.checkClosed()
 
@@ -39,14 +38,14 @@ func (suite *TransportStreamTestSuite) testAllHeaders(m BidiMarshaller) {
 	source := "Test Source"
 	handler := suite.newHandler(source)
 	reader := SampleReader{
-		ParallelSampleHandler: parallel_handler,
+		ParallelSampleHandler: parallelHandler,
 		Handler:               handler,
 		Unmarshaller:          m,
 	}
 	readStream := reader.Open(counter, sink)
 	num, err := readStream.ReadSamples(source)
 	suite.NoError(err)
-	suite.Equal(total_samples, num)
+	suite.Equal(totalSamples, num)
 
 	counter.checkClosed(suite.Assertions)
 
@@ -62,7 +61,7 @@ func (suite *TransportStreamTestSuite) testIndividualHeaders(m BidiMarshaller) {
 			suite: suite,
 		}
 		writer := SampleWriter{
-			ParallelSampleHandler: parallel_handler,
+			ParallelSampleHandler: parallelHandler,
 		}
 		stream := writer.Open(&buf, m)
 		suite.sendSamples(stream, i)
@@ -77,7 +76,7 @@ func (suite *TransportStreamTestSuite) testIndividualHeaders(m BidiMarshaller) {
 		source := "Test Source"
 		handler := suite.newHandler(source)
 		reader := SampleReader{
-			ParallelSampleHandler: parallel_handler,
+			ParallelSampleHandler: parallelHandler,
 			Handler:               handler,
 			Unmarshaller:          m,
 		}

@@ -1,33 +1,22 @@
 package reg
 
-// TODO implement tests
-
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+	"github.com/antongulenko/golib"
 )
 
-type processorRegistryTestSuite struct {
-	t *testing.T
-	*require.Assertions
+type RegistryTestSuite struct {
+	golib.AbstractTestSuite
 }
 
-func TestProcessorRegistry(t *testing.T) {
-	suite.Run(t, new(processorRegistryTestSuite))
+func TestRegistry(t *testing.T) {
+	new(RegistryTestSuite).Run(t)
 }
 
-func (suite *processorRegistryTestSuite) T() *testing.T {
-	return suite.t
-}
+// TODO implement tests
 
-func (suite *processorRegistryTestSuite) SetT(t *testing.T) {
-	suite.t = t
-	suite.Assertions = require.New(t)
-}
-
-func (suite *processorRegistryTestSuite) TestGivenRegisteredStep_whenGetStep_returnRegisteredStep() {
+func (suite *RegistryTestSuite) TestGivenRegisteredStep_whenGetStep_returnRegisteredStep() {
 
 }
 
