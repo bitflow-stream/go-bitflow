@@ -72,12 +72,12 @@ pipeline {
         stage('Docker build') {
             steps {
                 script {
-                    normalImage = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER"
-                    normalImageARM32 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f arm32v7.Dockerfile .'
-                    normalImageARM64 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f arm64v8.Dockerfile .'
-                    staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f static.Dockerfile .'
-                    staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f arm32v7-static.Dockerfile .'
-                    staticImageARM64 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f arm64v8-static.Dockerfile .'
+                    normalImage = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER", '-f build/alpine-full.Dockerfile'
+                    normalImageARM32 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/arm32v7-full.Dockerfile .'
+                    normalImageARM64 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/arm64v8-full.Dockerfile .'
+                    staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f build/alpine-static.Dockerfile .'
+                    staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/arm32v7-static.Dockerfile .'
+                    staticImageARM64 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/arm64v8-static.Dockerfile .'
                 }
             }
         }
