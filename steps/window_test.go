@@ -3,130 +3,104 @@ package steps
 import (
 	"testing"
 
+	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
 
-type compare struct {
-	t   *testing.T
-	win *MetricWindow
-	num int
+type WindowTestSuite struct {
+	golib.AbstractTestSuite
 }
 
-func (c *compare) err(msg string, expected interface{}, actual interface{}) {
-	c.t.Fatal(c.num, msg, "Expected:", expected, "Actual:", actual, "Window:", c.win)
+func TestWindow(t *testing.T) {
+	new(WindowTestSuite).Run(t)
 }
 
-func (c *compare) compare(name string, actual []bitflow.Value, expected []float64) {
-	if len(actual) != len(expected) {
-		c.err(name+" wrong length", expected, actual)
-	}
-	for i, expect := range expected {
-		if actual[i] != bitflow.Value(expect) {
-			c.err(name+" wrong", expected, actual)
-		}
-	}
-}
+func (s *WindowTestSuite) do(win *MetricWindow, values ...float64) {
+	s.Equal(len(values) == 0, win.Empty())
+	s.Equal(len(values), win.Size())
+	winLen := len(win.data)
+	s.Equal(winLen == len(values), win.Full())
 
-func (c *compare) do(values ...float64) {
-	empty := len(values) == 0
-	if actual := c.win.Empty(); empty != actual {
-		c.err("Wrong Empty()-state", empty, actual)
-	}
-	if actual := c.win.Size(); len(values) != actual {
-		c.err("Wrong Size()", len(values), actual)
-	}
-	winLen := len(c.win.data)
-	expectedFull := winLen == len(values)
-	if actual := c.win.Full(); actual != expectedFull {
-		c.err("Wrong Full()-state", expectedFull, actual)
-	}
-
-	winValues := c.win.Data()
-	winFastValues := c.win.FastData()
-	c.compare("Data()", winValues, values)
-	c.compare("FastData()", winFastValues, values)
+	s.Equal(values, win.Data(), "Data()")
+	s.Equal(values, win.FastData(), "FastData()")
 
 	filled := make([]bitflow.Value, 3)
 	expected := make([]float64, 3)
 	copy(expected, values)
-	c.win.FillData(filled)
-	c.compare("FillData() [short]", filled, expected)
+	win.FillData(filled)
+	s.Equal(expected, filled, "FillData() [short]")
 
 	filled = make([]bitflow.Value, winLen+5)
 	expected = make([]float64, len(filled))
 	copy(expected, values)
-	c.win.FillData(filled)
-	c.compare("FillData() [long]", filled, expected)
-
-	c.num++
+	win.FillData(filled)
+	s.Equal(expected, filled, "FillData() [long]")
 }
 
-func TestWindow(t *testing.T) {
-	w := NewMetricWindow(5)
-	c := &compare{t: t, win: w}
-	c.do()
-
-	w.Push(1)
-	c.do(1)
-	w.Push(2)
-	c.do(1, 2)
-	w.Push(3)
-	c.do(1, 2, 3)
-	w.Push(4)
-	c.do(1, 2, 3, 4)
-	w.Push(5)
-	c.do(1, 2, 3, 4, 5)
-	w.Push(6)
-	c.do(2, 3, 4, 5, 6)
-	w.Push(7)
-	c.do(3, 4, 5, 6, 7)
-	w.Push(8)
-	c.do(4, 5, 6, 7, 8)
-	w.Push(9)
-	c.do(5, 6, 7, 8, 9)
-	w.Push(10)
-	c.do(6, 7, 8, 9, 10)
-	w.Push(11)
-	c.do(7, 8, 9, 10, 11)
-	w.Push(12)
-	c.do(8, 9, 10, 11, 12)
-
-	w.Pop()
-	w.Pop()
-	c.do(10, 11, 12)
-	w.Pop()
-	c.do(11, 12)
-	w.Pop()
-	w.Push(22)
-	c.do(12, 22)
-	w.Pop()
-	c.do(22)
-	w.Pop()
-	c.do()
-	w.Pop()
-	c.do()
-	w.Pop()
-	c.do()
-	w.Push(22)
-	c.do(22)
-	w.Pop()
-	w.Pop()
-	c.do()
-	w.Pop()
-	c.do()
-}
-
-func TestEmptyWindow(t *testing.T) {
+func (s *WindowTestSuite) TestEmptyWindow() {
 	w := NewMetricWindow(0) // Should behave like window size 1
-	c := &compare{t: t, win: w}
-	c.do()
+	s.do(w)
 
 	w.Push(1)
-	c.do(1)
+	s.do(w, 1)
 	w.Push(2)
 	w.Push(2)
-	c.do(2)
+	s.do(w, 2)
 	w.Pop()
 	w.Pop()
-	c.do()
+	s.do(w)
+}
+
+func (s *WindowTestSuite) TestWindow() {
+	w := NewMetricWindow(5)
+	s.do(w)
+
+	w.Push(1)
+	s.do(w, 1)
+	w.Push(2)
+	s.do(w, 1, 2)
+	w.Push(3)
+	s.do(w, 1, 2, 3)
+	w.Push(4)
+	s.do(w, 1, 2, 3, 4)
+	w.Push(5)
+	s.do(w, 1, 2, 3, 4, 5)
+	w.Push(6)
+	s.do(w, 2, 3, 4, 5, 6)
+	w.Push(7)
+	s.do(w, 3, 4, 5, 6, 7)
+	w.Push(8)
+	s.do(w, 4, 5, 6, 7, 8)
+	w.Push(9)
+	s.do(w, 5, 6, 7, 8, 9)
+	w.Push(10)
+	s.do(w, 6, 7, 8, 9, 10)
+	w.Push(11)
+	s.do(w, 7, 8, 9, 10, 11)
+	w.Push(12)
+	s.do(w, 8, 9, 10, 11, 12)
+
+	w.Pop()
+	w.Pop()
+	s.do(w, 10, 11, 12)
+	w.Pop()
+	s.do(w, 11, 12)
+	w.Pop()
+	w.Push(22)
+	s.do(w, 12, 22)
+	w.Pop()
+	s.do(w, 22)
+	w.Pop()
+	s.do(w)
+	w.Pop()
+	s.do(w)
+	w.Pop()
+	s.do(w)
+	w.Push(22)
+	s.do(w, 22)
+	w.Pop()
+	w.Pop()
+	s.do(w)
+	w.Pop()
+	s.do(w)
 }

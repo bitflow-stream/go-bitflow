@@ -1,39 +1,47 @@
 package bitflow
 
 import (
-	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/antongulenko/golib"
 )
 
-type TestBatchStep struct {
-	assert             *assert.Assertions
+type BatchStepTestSuite struct {
+	golib.AbstractTestSuite
+}
+
+func TestBatchStep(t *testing.T) {
+	new(BatchStepTestSuite).Run(t)
+}
+
+type testBatchStep struct {
+	*BatchStepTestSuite
 	expectedBatchSizes []int
 	batchCounter       int
 }
 
-func (tb *TestBatchStep) ProcessBatch(header *Header, samples []*Sample) (*Header, []*Sample, error) {
-	tb.assert.Equal(tb.expectedBatchSizes[tb.batchCounter], len(samples))
-	tb.batchCounter += 1
+func (step *testBatchStep) ProcessBatch(_ *Header, samples []*Sample) (*Header, []*Sample, error) {
+	step.Equal(step.expectedBatchSizes[step.batchCounter], len(samples))
+	step.batchCounter += 1
 	return nil, nil, nil
 }
 
-func (tb *TestBatchStep) String() string {
-	return "TestBatchStep"
+func (step *testBatchStep) String() string {
+	return "testBatchStep"
 }
 
-func _do_test_batch(processor *BatchProcessor, samples []Sample, bStep *TestBatchStep, t *testing.T) {
-	assert := assert.New(t)
+func (s *BatchStepTestSuite) testBatch(processor *BatchProcessor, samples []Sample, step *testBatchStep) {
 	processor.Start(&sync.WaitGroup{})
 	for i := range samples {
 		_ = processor.Sample(&samples[i], &Header{Fields: []string{"dummy"}})
 	}
 	processor.Close()
-	assert.Equal(len(bStep.expectedBatchSizes), bStep.batchCounter)
+	s.Equal(len(step.expectedBatchSizes), step.batchCounter)
 }
 
-func _test_mixed_batch(samples []Sample, processor *BatchProcessor, bStep *TestBatchStep, t *testing.T) {
+func (s *BatchStepTestSuite) testMixedBatch(samples []Sample, processor *BatchProcessor, step *testBatchStep) {
 	refTime := samples[0].Time
 	timeFuture := refTime.Add(time.Second * time.Duration(70))
 	samples = append(samples, Sample{
@@ -45,10 +53,10 @@ func _test_mixed_batch(samples []Sample, processor *BatchProcessor, bStep *TestB
 		Time: timeFuture,
 		tags: map[string]string{"test": "test", "flush": "flush1"},
 	})
-	_do_test_batch(processor, samples, bStep, t)
+	s.testBatch(processor, samples, step)
 }
 
-func TestSampleBatchTimeMixed(t *testing.T) {
+func (s *BatchStepTestSuite) TestSampleBatchTimeMixed() {
 	processor := &BatchProcessor{
 		FlushTags:          []string{"test", "flush"},
 		FlushSampleLag:     time.Second * time.Duration(30),
@@ -67,17 +75,17 @@ func TestSampleBatchTimeMixed(t *testing.T) {
 			tags:   map[string]string{"test": "test", "flush": "flush"},
 		}
 	}
-	bStep := &TestBatchStep{
-		assert:             assert.New(t),
+	step := &testBatchStep{
+		BatchStepTestSuite: s,
 		expectedBatchSizes: []int{6, 6, 1, 1},
 		batchCounter:       0,
 	}
-	processor.Add(bStep)
+	processor.Add(step)
 
-	_test_mixed_batch(samples, processor, bStep, t)
+	s.testMixedBatch(samples, processor, step)
 }
 
-func TestSampleBatchNumberMixed(t *testing.T) {
+func (s *BatchStepTestSuite) TestSampleBatchNumberMixed() {
 	processor := &BatchProcessor{
 		FlushTags:            []string{"test", "flush"},
 		FlushSampleLag:       time.Second * time.Duration(30),
@@ -96,12 +104,12 @@ func TestSampleBatchNumberMixed(t *testing.T) {
 			tags:   map[string]string{"test": "test", "flush": "flush"},
 		}
 	}
-	bStep := &TestBatchStep{
-		assert:             assert.New(t),
+	step := &testBatchStep{
+		BatchStepTestSuite: s,
 		expectedBatchSizes: []int{5, 5, 1, 1},
 		batchCounter:       0,
 	}
-	processor.Add(bStep)
+	processor.Add(step)
 
-	_test_mixed_batch(samples, processor, bStep, t)
+	s.testMixedBatch(samples, processor, step)
 }

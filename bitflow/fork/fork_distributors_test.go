@@ -3,30 +3,19 @@ package fork
 import (
 	"testing"
 
+	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
-type distributorsTestSuite struct {
-	t *testing.T
-	*require.Assertions
+type ForkDistributorsTestSuite struct {
+	golib.AbstractTestSuite
 }
 
-func TestDistributors(t *testing.T) {
-	suite.Run(t, new(distributorsTestSuite))
+func TestForkDistributors(t *testing.T) {
+	new(ForkDistributorsTestSuite).Run(t)
 }
 
-func (suite *distributorsTestSuite) T() *testing.T {
-	return suite.t
-}
-
-func (suite *distributorsTestSuite) SetT(t *testing.T) {
-	suite.t = t
-	suite.Assertions = require.New(t)
-}
-
-func (suite *distributorsTestSuite) TestTagTemplateDistributor() {
+func (suite *ForkDistributorsTestSuite) TestTagTemplateDistributor() {
 	s := &bitflow.Sample{Values: []bitflow.Value{1, 2, 3}}
 	s.SetTag("tag1", "val1")
 	s.SetTag("tag2", "val2")

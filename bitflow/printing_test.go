@@ -4,8 +4,17 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/antongulenko/golib"
 	"github.com/stretchr/testify/assert"
 )
+
+type PipelinePrinterTestSuite struct {
+	golib.AbstractTestSuite
+}
+
+func TestPipelinePrinter(t *testing.T) {
+	new(PipelinePrinterTestSuite).Run(t)
+}
 
 var printer = IndentPrinter{
 	OuterIndent:  "| ",
@@ -14,7 +23,20 @@ var printer = IndentPrinter{
 	CornerIndent: "\\-",
 }
 
-func TestIndentPrinter1(t *testing.T) {
+type contained struct {
+	name     string
+	children []fmt.Stringer
+}
+
+func (c contained) ContainedStringers() []fmt.Stringer {
+	return c.children
+}
+
+func (c contained) String() string {
+	return c.name
+}
+
+func (s *PipelinePrinterTestSuite) TestIndentPrinter1(t *testing.T) {
 	obj := contained{"a", []fmt.Stringer{String("b"), nil, String("c")}}
 	assert.Equal(t,
 		`a
@@ -24,7 +46,7 @@ func TestIndentPrinter1(t *testing.T) {
 		printer.Print(obj))
 }
 
-func TestIndentPrinterBig(t *testing.T) {
+func (s *PipelinePrinterTestSuite) TestIndentPrinterBig(t *testing.T) {
 	obj := contained{"a",
 		[]fmt.Stringer{
 			contained{"b",
@@ -57,17 +79,4 @@ func TestIndentPrinterBig(t *testing.T) {
   |-h
   \-i`,
 		printer.Print(obj))
-}
-
-type contained struct {
-	name     string
-	children []fmt.Stringer
-}
-
-func (c contained) ContainedStringers() []fmt.Stringer {
-	return []fmt.Stringer(c.children)
-}
-
-func (c contained) String() string {
-	return c.name
 }

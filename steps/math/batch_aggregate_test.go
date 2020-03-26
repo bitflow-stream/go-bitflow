@@ -1,23 +1,30 @@
 package math
 
 import (
-	"github.com/bitflow-stream/go-bitflow/bitflow"
-	"github.com/stretchr/testify/require"
-
 	"testing"
 	"time"
+
+	"github.com/antongulenko/golib"
+	"github.com/bitflow-stream/go-bitflow/bitflow"
 )
 
-func _testAggregator(aggregator bitflow.BatchProcessingStep, header *bitflow.Header, samples []*bitflow.Sample, expectedValues []bitflow.Value, t *testing.T) {
-	assert := require.New(t)
-	outHeader, samples, err := aggregator.ProcessBatch(header, samples)
-	assert.NoError(err)
-	assert.Equal(header.Fields, outHeader.Fields)
-	assert.Len(samples, 1)
-	assert.Equal(expectedValues, samples[0].Values)
+type BatchAggregateTestSuite struct {
+	golib.AbstractTestSuite
 }
 
-func getTestSamples() (*bitflow.Header, []*bitflow.Sample) {
+func TestBatchAggregate(t *testing.T) {
+	new(BatchAggregateTestSuite).Run(t)
+}
+
+func (s *BatchAggregateTestSuite) testAggregator(aggregator bitflow.BatchProcessingStep, header *bitflow.Header, samples []*bitflow.Sample, expectedValues []bitflow.Value) {
+	outHeader, samples, err := aggregator.ProcessBatch(header, samples)
+	s.NoError(err)
+	s.Equal(header.Fields, outHeader.Fields)
+	s.Len(samples, 1)
+	s.Equal(expectedValues, samples[0].Values)
+}
+
+func (s *BatchAggregateTestSuite) getTestSamples() (*bitflow.Header, []*bitflow.Sample) {
 	samples := make([]*bitflow.Sample, 3)
 	samples[0] = &bitflow.Sample{
 		Values: []bitflow.Value{2, 5, 3},
@@ -34,32 +41,32 @@ func getTestSamples() (*bitflow.Header, []*bitflow.Sample) {
 	return &bitflow.Header{Fields: []string{"test1", "test2", "test3"}}, samples
 }
 
-func TestSumAggregator(t *testing.T) {
+func (s *BatchAggregateTestSuite) TestSumAggregator() {
 	expectedValues := []bitflow.Value{9, 9, 9}
-	header, samples := getTestSamples()
-	_testAggregator(NewBatchSumAggregator(), header, samples, expectedValues, t)
+	header, samples := s.getTestSamples()
+	s.testAggregator(NewBatchSumAggregator(), header, samples, expectedValues)
 }
 
-func TestMultiplyAggregator(t *testing.T) {
+func (s *BatchAggregateTestSuite) TestMultiplyAggregator() {
 	expectedValues := []bitflow.Value{20, 20, 27}
-	header, samples := getTestSamples()
-	_testAggregator(NewBatchMultiplyAggregator(), header, samples, expectedValues, t)
+	header, samples := s.getTestSamples()
+	s.testAggregator(NewBatchMultiplyAggregator(), header, samples, expectedValues)
 }
 
-func TestAvgAggregator(t *testing.T) {
+func (s *BatchAggregateTestSuite) TestAvgAggregator() {
 	expectedValues := []bitflow.Value{3, 3, 3}
-	header, samples := getTestSamples()
-	_testAggregator(NewBatchAvgAggregator(), header, samples, expectedValues, t)
+	header, samples := s.getTestSamples()
+	s.testAggregator(NewBatchAvgAggregator(), header, samples, expectedValues)
 }
 
-func TestMinAggregator(t *testing.T) {
+func (s *BatchAggregateTestSuite) TestMinAggregator() {
 	expectedValues := []bitflow.Value{2, 2, 3}
-	header, samples := getTestSamples()
-	_testAggregator(NewBatchMinAggregator(), header, samples, expectedValues, t)
+	header, samples := s.getTestSamples()
+	s.testAggregator(NewBatchMinAggregator(), header, samples, expectedValues)
 }
 
-func TestMaxAggregator(t *testing.T) {
+func (s *BatchAggregateTestSuite) TestMaxAggregator() {
 	expectedValues := []bitflow.Value{5, 5, 3}
-	header, samples := getTestSamples()
-	_testAggregator(NewBatchMaxAggregator(), header, samples, expectedValues, t)
+	header, samples := s.getTestSamples()
+	s.testAggregator(NewBatchMaxAggregator(), header, samples, expectedValues)
 }

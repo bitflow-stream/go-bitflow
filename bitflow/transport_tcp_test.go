@@ -9,7 +9,6 @@ import (
 
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/suite"
 )
 
 func GetLocalPort() string {
@@ -34,7 +33,7 @@ type TcpListenerTestSuite struct {
 }
 
 func TestTcpListener(t *testing.T) {
-	suite.Run(t, new(TcpListenerTestSuite))
+	new(TcpListenerTestSuite).Run(t)
 }
 
 func (suite *TcpListenerTestSuite) runGroup(sender golib.Task, generator SampleProcessor, receiver SampleSource, sink *testSampleSink) {
@@ -65,7 +64,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 		Endpoint:        ":" + port,
 		BufferedSamples: 100,
 	}
-	l.Writer.ParallelSampleHandler = parallel_handler
+	l.Writer.ParallelSampleHandler = parallelHandler
 	l.SetMarshaller(m)
 
 	s := &TCPSource{
@@ -74,7 +73,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkAll(m BidiMarshaller) {
 		RetryInterval: time.Second,
 		DialTimeout:   tcpDialTimeout,
 	}
-	s.Reader.ParallelSampleHandler = parallel_handler
+	s.Reader.ParallelSampleHandler = parallelHandler
 
 	sender := &oneShotTask{
 		do: func() {
@@ -102,7 +101,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 			Endpoint:        ":" + port,
 			BufferedSamples: 100,
 		}
-		l.Writer.ParallelSampleHandler = parallel_handler
+		l.Writer.ParallelSampleHandler = parallelHandler
 		l.SetMarshaller(m)
 
 		s := &TCPSource{
@@ -111,7 +110,7 @@ func (suite *TcpListenerTestSuite) testListenerSinkIndividual(m Marshaller) {
 			RetryInterval: tcpDownloadRetryInterval,
 			DialTimeout:   tcpDialTimeout,
 		}
-		s.Reader.ParallelSampleHandler = parallel_handler
+		s.Reader.ParallelSampleHandler = parallelHandler
 
 		sender := &oneShotTask{
 			do: func() {
@@ -151,14 +150,14 @@ func (suite *TcpListenerTestSuite) testListenerSourceAll(m Marshaller) {
 
 	l := NewTcpListenerSource(":" + port)
 	l.Reader = SampleReader{
-		ParallelSampleHandler: parallel_handler,
+		ParallelSampleHandler: parallelHandler,
 	}
 
 	s := &TCPSink{
 		Endpoint:    "localhost:" + port,
 		DialTimeout: tcpDialTimeout,
 	}
-	s.Writer.ParallelSampleHandler = parallel_handler
+	s.Writer.ParallelSampleHandler = parallelHandler
 	s.SetMarshaller(m)
 
 	sender := &oneShotTask{
@@ -183,14 +182,14 @@ func (suite *TcpListenerTestSuite) testListenerSourceIndividual(m BidiMarshaller
 
 		l := NewTcpListenerSource(":" + port)
 		l.Reader = SampleReader{
-			ParallelSampleHandler: parallel_handler,
+			ParallelSampleHandler: parallelHandler,
 		}
 
 		s := &TCPSink{
 			Endpoint:    "localhost:" + port,
 			DialTimeout: tcpDialTimeout,
 		}
-		s.Writer.ParallelSampleHandler = parallel_handler
+		s.Writer.ParallelSampleHandler = parallelHandler
 		s.SetMarshaller(m)
 
 		sender := &oneShotTask{
@@ -213,7 +212,7 @@ type oneShotTask struct {
 	do func()
 }
 
-func (t *oneShotTask) Start(wg *sync.WaitGroup) (_ golib.StopChan) {
+func (t *oneShotTask) Start(_ *sync.WaitGroup) (_ golib.StopChan) {
 	t.do()
 	return
 }
@@ -249,7 +248,7 @@ func (suite *TcpListenerTestSuite) TestTcpListenerSourceError() {
 
 	l := NewTcpListenerSource("8.8.8.8:7777") // The IP should not be valid for the current host -> give error
 	l.Reader = SampleReader{
-		ParallelSampleHandler: parallel_handler,
+		ParallelSampleHandler: parallelHandler,
 	}
 
 	var group golib.TaskGroup

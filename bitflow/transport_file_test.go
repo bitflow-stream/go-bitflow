@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/suite"
 )
 
 type FileTestSuite struct {
@@ -26,7 +25,7 @@ const (
 )
 
 func TestFileTransport(t *testing.T) {
-	suite.Run(t, new(FileTestSuite))
+	new(FileTestSuite).Run(t)
 }
 
 func (suite *FileTestSuite) SetupSuite() {
@@ -62,7 +61,7 @@ func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
 	}
 	out.SetMarshaller(m)
 	out.SetSink(new(DroppingSampleProcessor))
-	out.Writer.ParallelSampleHandler = parallel_handler
+	out.Writer.ParallelSampleHandler = parallelHandler
 	var wg sync.WaitGroup
 	ch := out.Start(&wg)
 	suite.sendAllSamples(out)
@@ -83,7 +82,7 @@ func (suite *FileTestSuite) testAllHeaders(m Marshaller) {
 			return replacementFilename
 		},
 	}
-	in.Reader.ParallelSampleHandler = parallel_handler
+	in.Reader.ParallelSampleHandler = parallelHandler
 	in.Reader.Handler = suite.newHandler(replacementFilename)
 	in.SetSink(testSink)
 	ch = in.Start(&wg)
@@ -114,7 +113,7 @@ func (suite *FileTestSuite) testIndividualHeaders(m Marshaller) {
 		}
 		out.SetMarshaller(m)
 		out.SetSink(new(DroppingSampleProcessor))
-		out.Writer.ParallelSampleHandler = parallel_handler
+		out.Writer.ParallelSampleHandler = parallelHandler
 		var wg sync.WaitGroup
 		ch := out.Start(&wg)
 		suite.sendSamples(out, i)
@@ -134,7 +133,7 @@ func (suite *FileTestSuite) testIndividualHeaders(m Marshaller) {
 				return replacementFilename
 			},
 		}
-		in.Reader.ParallelSampleHandler = parallel_handler
+		in.Reader.ParallelSampleHandler = parallelHandler
 		in.Reader.Handler = suite.newHandler(replacementFilename)
 		in.SetSink(testSink)
 		ch = in.Start(&wg)

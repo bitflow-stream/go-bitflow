@@ -6,24 +6,23 @@ import (
 	"math/rand"
 	"strconv"
 	"sync"
-	"testing"
 	"time"
 
 	"github.com/antongulenko/golib"
 	"github.com/stretchr/testify/require"
 )
 
-var parallel_handler = ParallelSampleHandler{
+var parallelHandler = ParallelSampleHandler{
 	BufferedSamples: 5,
 	ParallelParsers: 6,
 }
 
-var debug_tests = true
+var debugTests = true
 
 //noinspection GoBoolExpressions
 func init() {
-	// debug_tests = true
-	if debug_tests {
+	// debugTests = true
+	if debugTests {
 		golib.LogVerbose = true
 	} else {
 		golib.LogQuiet = true
@@ -31,22 +30,8 @@ func init() {
 	golib.ConfigureLogging()
 }
 
-type testSuiteBase struct {
-	t *testing.T
-	*require.Assertions
-}
-
-func (suite *testSuiteBase) T() *testing.T {
-	return suite.t
-}
-
-func (suite *testSuiteBase) SetT(t *testing.T) {
-	suite.t = t
-	suite.Assertions = require.New(t)
-}
-
 type testSuiteWithSamples struct {
-	testSuiteBase
+	golib.AbstractTestSuite
 
 	rand      *rand.Rand
 	timestamp time.Time
@@ -283,6 +268,6 @@ func (suite *testSuiteWithSamples) newHandler(source string) *testSampleHandler 
 	}
 }
 
-func (h *testSampleHandler) HandleSample(sample *Sample, source string) {
+func (h *testSampleHandler) HandleSample(_ *Sample, source string) {
 	h.suite.Equal(h.source, source)
 }
