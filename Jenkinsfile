@@ -115,11 +115,11 @@ pipeline {
                     image 'teambitflow/golang-build:arm'
                     args '-v /tmp/go-mod-cache/arm32v7:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
-                environment {
-                    GOOS = 'linux'
-                    GOARCH = 'arm'
-                    CC = 'arm-linux-gnueabi-gcc'
-                }
+            }
+            environment {
+                GOOS = 'linux'
+                GOARCH = 'arm'
+                CC = 'arm-linux-gnueabi-gcc'
             }
             stages {
                 stage('Docker build') {
@@ -155,11 +155,11 @@ pipeline {
                     image 'teambitflow/golang-build:arm'
                     args '-v /tmp/go-mod-cache/arm64v8:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
-                environment {
-                    GOOS = 'linux'
-                    GOARCH = 'arm64'
-                    CC = 'aarch64-linux-gnu-gcc'
-                }
+            }
+            environment {
+                GOOS = 'linux'
+                GOARCH = 'arm64'
+                CC = 'aarch64-linux-gnu-gcc'
             }
             stages {
                 stage('Docker build') {
