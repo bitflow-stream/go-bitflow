@@ -193,26 +193,30 @@ pipeline {
             when {
                 branch 'master'
             }
+            agent {
+                docker {
+                    image 'teambitflow/golang-build:debian'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
             steps {
-                node('master') {
-                    withCredentials([
-                      [
-                        $class: 'UsernamePasswordMultiBinding',
-                        credentialsId: 'dockerhub',
-                        usernameVariable: 'DOCKERUSER',
-                        passwordVariable: 'DOCKERPASS'
-                      ]
-                    ]) {
-                        // Dockerhub Login
-                        sh '''#! /bin/bash
-                        echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
-                        '''
-                        // teambitflow/bitflow4j:latest manifest
-                        sh "docker manifest create ${registry}:latest ${registry}:latest-amd64 ${registry}:latest-arm32v7 ${registry}:latest-arm64v8"
-                        sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm32v7 --os=linux --arch=arm --variant=v7"
-                        sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm64v8 --os=linux --arch=arm64 --variant=v8"
-                        sh "docker manifest push --purge ${registry}:latest"
-                    }
+                withCredentials([
+                  [
+                    $class: 'UsernamePasswordMultiBinding',
+                    credentialsId: 'dockerhub',
+                    usernameVariable: 'DOCKERUSER',
+                    passwordVariable: 'DOCKERPASS'
+                  ]
+                ]) {
+                    // Dockerhub Login
+                    sh '''#! /bin/bash
+                    echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
+                    '''
+                    // teambitflow/bitflow4j:latest manifest
+                    sh "docker manifest create ${registry}:latest ${registry}:latest-amd64 ${registry}:latest-arm32v7 ${registry}:latest-arm64v8"
+                    sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm32v7 --os=linux --arch=arm --variant=v7"
+                    sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm64v8 --os=linux --arch=arm64 --variant=v8"
+                    sh "docker manifest push --purge ${registry}:latest"
                 }
             }
         }
