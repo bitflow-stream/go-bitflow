@@ -9,7 +9,9 @@
 
 # docker build -f golang-build-debian.Dockerfile -t teambitflow/golang-build:debian .
 FROM golang:1.13.4-stretch
+WORKDIR /build
 ENV GO111MODULE=on
+
 RUN apt-get update && \
     apt-get -y install \
         apt-transport-https ca-certificates curl gnupg2 software-properties-common && \
