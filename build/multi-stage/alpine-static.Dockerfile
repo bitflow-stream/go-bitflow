@@ -1,12 +1,13 @@
-# teambitflow/go-bitflow:static-arm32v7
-FROM teambitflow/golang-build:1.12-stretch as build
-RUN apt-get update && apt-get install -y git gcc-arm-linux-gnueabi
+# teambitflow/go-bitflow:static
+# Build from root of the repository:
+# docker build -t teambitflow/go-bitflow:static build/multi-stage/alpine-static.Dockerfile .
+FROM golang:1.12-alpine as build
+RUN apk --no-cache add git gcc g++ musl-dev
 WORKDIR /build
 
-ENV GOOS=linux
-ENV GOARCH=arm
-ENV CC=arm-linux-gnueabi-gcc
 ENV CGO_ENABLED=1
+ENV GOOS=linux
+ENV GOARCH=amd64
 
 # Copy go.mod first and download dependencies, to enable the Docker build cache
 COPY go.mod .

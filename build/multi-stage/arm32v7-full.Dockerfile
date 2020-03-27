@@ -1,11 +1,12 @@
-# teambitflow/go-bitflow:static
+# teambitflow/go-bitflow:latest-arm32v7
+# Build from root of the repository:
+# docker build -t teambitflow/go-bitflow:latest-arm32v7 build/multi-stage/arm32v7-full.Dockerfile .
 FROM golang:1.12-alpine as build
 RUN apk --no-cache add git gcc g++ musl-dev
 WORKDIR /build
 
-ENV CGO_ENABLED=1
 ENV GOOS=linux
-ENV GOARCH=amd64
+ENV GOARCH=arm
 
 # Copy go.mod first and download dependencies, to enable the Docker build cache
 COPY go.mod .
@@ -17,9 +18,9 @@ RUN go mod download
 COPY . .
 RUN find -name go.sum -delete
 RUN sed -i $(find -name go.mod) -e '\_//.*gitignore$_d' -e '\_#.*gitignore$_d'
-RUN go build -a -tags netgo -ldflags '-w -extldflags "-static"' -o /bitflow-pipeline ./cmd/bitflow-pipeline
+RUN go build -o /bitflow-pipeline ./cmd/bitflow-pipeline
 
-FROM scratch
+FROM arm32v7/alpine:3.9
+RUN apk --no-cache add libstdc++
 COPY --from=build /bitflow-pipeline /
 ENTRYPOINT ["/bitflow-pipeline"]
-
