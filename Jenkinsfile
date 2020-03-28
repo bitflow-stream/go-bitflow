@@ -112,23 +112,16 @@ pipeline {
         stage('Docker arm32v7') {
             agent {
                 docker {
-                    image 'teambitflow/golang-build:arm'
+                    image 'teambitflow/golang-build:arm32v7'
                     args '-v /tmp/go-mod-cache/arm32v7:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
-            }
-            environment {
-                GOOS = 'linux'
-                GOARCH = 'arm'
-                CC = 'arm-linux-gnueabi-gcc'
             }
             stages {
                 stage('Docker build') {
                     steps {
                         sh './build/native-build.sh'
-                        sh './build/native-static-build.sh'
                         script {
                             normalImageARM32 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/arm32v7-prebuilt.Dockerfile build/_output'
-                            staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                     }
                 }
@@ -141,6 +134,35 @@ pipeline {
                             docker.withRegistry('', registryCredential) {
                                 normalImageARM32.push("build-$BUILD_NUMBER-arm32v7")
                                 normalImageARM32.push("latest-arm32v7")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        stage('Docker arm32v7 static') {
+            agent {
+                docker {
+                    image 'teambitflow/golang-build:static-arm32v7'
+                    args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
+            stages {
+                stage('Docker build') {
+                    steps {
+                        sh './build/native-static-build.sh'
+                        script {
+                            staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/static-prebuilt.Dockerfile build/_output/static'
+                        }
+                    }
+                }
+                stage('Docker push') {
+                    when {
+                        branch 'master'
+                    }
+                    steps {
+                        script {
+                            docker.withRegistry('', registryCredential) {
                                 staticImageARM32.push("static-build-$BUILD_NUMBER-arm32v7")
                                 staticImageARM32.push("static-arm32v7")
                             }
@@ -152,23 +174,16 @@ pipeline {
         stage('Docker arm64v8') {
             agent {
                 docker {
-                    image 'teambitflow/golang-build:arm'
+                    image 'teambitflow/golang-build:arm64v8'
                     args '-v /tmp/go-mod-cache/arm64v8:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
-            }
-            environment {
-                GOOS = 'linux'
-                GOARCH = 'arm64'
-                CC = 'aarch64-linux-gnu-gcc'
             }
             stages {
                 stage('Docker build') {
                     steps {
                         sh './build/native-build.sh'
-                        sh './build/native-static-build.sh'
                         script {
                             normalImageARM64 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/arm64v8-prebuilt.Dockerfile build/_output'
-                            staticImageARM64 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                     }
                 }
@@ -181,6 +196,35 @@ pipeline {
                             docker.withRegistry('', registryCredential) {
                                 normalImageARM64.push("build-$BUILD_NUMBER-arm64v8")
                                 normalImageARM64.push("latest-arm64v8")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        stage('Docker arm64v8 static') {
+            agent {
+                docker {
+                    image 'teambitflow/golang-build:static-arm64v8'
+                    args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
+            stages {
+                stage('Docker build') {
+                    steps {
+                        sh './build/native-static-build.sh'
+                        script {
+                            staticImageARM64 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/static-prebuilt.Dockerfile build/_output/static'
+                        }
+                    }
+                }
+                stage('Docker push') {
+                    when {
+                        branch 'master'
+                    }
+                    steps {
+                        script {
+                            docker.withRegistry('', registryCredential) {
                                 staticImageARM64.push("static-build-$BUILD_NUMBER-arm64v8")
                                 staticImageARM64.push("static-arm64v8")
                             }

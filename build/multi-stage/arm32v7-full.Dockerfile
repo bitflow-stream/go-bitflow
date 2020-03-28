@@ -1,10 +1,10 @@
 # teambitflow/go-bitflow:latest-arm32v7
 # Build from root of the repository:
-# docker build -t teambitflow/go-bitflow:latest-arm32v7 build/multi-stage/arm32v7-full.Dockerfile .
-FROM golang:1.12-alpine as build
-RUN apk --no-cache add git gcc g++ musl-dev
+# docker build -t teambitflow/go-bitflow:latest-arm32v7 -f build/multi-stage/arm32v7-full.Dockerfile .
+FROM golang:1.14.1-alpine as build
+RUN apk --no-cache add curl bash git mercurial gcc g++ docker musl-dev
 WORKDIR /build
-
+ENV GO111MODULE=on
 ENV GOOS=linux
 ENV GOARCH=arm
 
@@ -18,9 +18,9 @@ RUN go mod download
 COPY . .
 RUN find -name go.sum -delete
 RUN sed -i $(find -name go.mod) -e '\_//.*gitignore$_d' -e '\_#.*gitignore$_d'
-RUN go build -o /bitflow-pipeline ./cmd/bitflow-pipeline
+RUN ./build/native-build.sh
 
-FROM arm32v7/alpine:3.9
+FROM arm32v7/alpine:3.11.5
 RUN apk --no-cache add libstdc++
-COPY --from=build /bitflow-pipeline /
+COPY --from=build /build/build/_output/bitflow-pipeline /
 ENTRYPOINT ["/bitflow-pipeline"]
