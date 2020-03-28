@@ -218,7 +218,7 @@ pipeline {
                         }
                     }
 
-                    post {b
+                    post {
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
