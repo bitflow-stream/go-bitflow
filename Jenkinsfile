@@ -65,6 +65,13 @@ pipeline {
                 }
 
                 stage('SonarQube') {
+                    agent {
+                        docker {
+                            image 'teambitflow/golang-build:debian'
+                            args '-v /tmp/go-mod-cache/debian:/go'
+                        }
+                    }
+                    
                     steps {
                         script {
                             // sonar-scanner which don't rely on JVM
