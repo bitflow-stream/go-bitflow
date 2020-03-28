@@ -112,14 +112,9 @@ pipeline {
         stage('Docker arm32v7') {
             agent {
                 docker {
-                    image 'teambitflow/golang-build:arm'
+                    image 'teambitflow/golang-build:arm32v7'
                     args '-v /tmp/go-mod-cache/arm32v7:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
-            }
-            environment {
-                GOOS = 'linux'
-                GOARCH = 'arm'
-                CC = 'arm-linux-gnueabi-gcc'
             }
             stages {
                 stage('Docker build') {
@@ -152,14 +147,9 @@ pipeline {
         stage('Docker arm64v8') {
             agent {
                 docker {
-                    image 'teambitflow/golang-build:arm'
+                    image 'teambitflow/golang-build:arm64v8'
                     args '-v /tmp/go-mod-cache/arm64v8:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
-            }
-            environment {
-                GOOS = 'linux'
-                GOARCH = 'arm64'
-                CC = 'aarch64-linux-gnu-gcc'
             }
             stages {
                 stage('Docker build') {

@@ -7,19 +7,18 @@
 # docker run -v /tmp/go-mod-cache/debian:/go -ti teambitflow/golang-build:debian go get -u github.com/jstemmer/go-junit-report
 # docker run -v /tmp/go-mod-cache/debian:/go -ti teambitflow/golang-build:debian go get -u golang.org/x/lint/golint
 
-# docker build -f golang-build-debian.Dockerfile -t teambitflow/golang-build:debian .
-FROM golang:1.13.4-stretch
+# docker build -t teambitflow/golang-build:debian -f debian-build.Dockerfile .
+FROM golang:1.14.1-buster
 WORKDIR /build
 ENV GO111MODULE=on
 
 RUN apt-get update && \
-    apt-get -y install \
-        apt-transport-https ca-certificates curl gnupg2 software-properties-common && \
+    apt-get -y install apt-transport-https ca-certificates curl gnupg2 software-properties-common && \
     curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg > /tmp/dkey; apt-key add /tmp/dkey && \
     add-apt-repository \
        "deb [arch=amd64] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable" && \
     apt-get update && \
-    apt-get -y install docker-ce qemu-user mercurial
+    apt-get -y install docker-ce qemu-user mercurial git
 
 # Enable docker-cli experimental features
 RUN mkdir ~/.docker && echo '{\n\t"experimental": "enabled"\n}' > ~/.docker/config.json
