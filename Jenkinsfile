@@ -32,66 +32,76 @@ pipeline {
                         }
                     }
                 }
+
                 stage('Build & test') {
-                    steps {
-                            sh 'go clean -i -v ./...'
-                            sh 'go install -v ./...'
-                            sh 'rm -rf reports && mkdir -p reports'
-                            sh 'stdbuf -o 0 go test -v ./... -coverprofile=reports/test-coverage.txt | tee reports/test-output.txt' // Use stdbuf to disable buffering of the tee output
-                            sh 'cat reports/test-output.txt | go-junit-report -set-exit-code > reports/test.xml'
-                            sh 'go vet ./... &> reports/vet.txt'
-                            sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
-                    }
-                    post {
-                        always {
-                            archiveArtifacts 'reports/*'
-                            junit 'reports/test.xml'
-                        }
-                    }
-                }
-                stage('SonarQube') {
-                    steps {
-                        script {
-                            // sonar-scanner which don't rely on JVM
-                            def scannerHome = tool 'sonar-scanner-linux'
-                            withSonarQubeEnv('CIT SonarQube') {
-                                sh """
-                                    ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitflow -Dsonar.branch.name=$BRANCH_NAME \
-                                        -Dsonar.sources=. -Dsonar.tests=. \
-                                        -Dsonar.inclusions="**/*.go" -Dsonar.test.inclusions="**/*_test.go" \
-                                        -Dsonar.exclusions="script/script/internal/*.go" \
-                                        -Dsonar.go.golint.reportPath=reports/lint.txt \
-                                        -Dsonar.go.govet.reportPaths=reports/vet.txt \
-                                        -Dsonar.go.coverage.reportPaths=reports/test-coverage.txt \
-                                        -Dsonar.test.reportPath=reports/test.xml
-                                """
+                    parallel {
+
+                        stage('Unit tests') {
+                            steps {
+                                sh 'go clean -i -v ./...'
+                                sh 'go install -v ./...'
+                                sh 'rm -rf reports && mkdir -p reports'
+                                sh 'stdbuf -o 0 go test -v ./... -coverprofile=reports/test-coverage.txt | tee reports/test-output.txt' // Use stdbuf to disable buffering of the tee output
+                                sh 'cat reports/test-output.txt | go-junit-report -set-exit-code > reports/test.xml'
+                                sh 'go vet ./... &> reports/vet.txt'
+                                sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
+                            }   
+                            post {
+                                always {
+                                    archiveArtifacts 'reports/*'
+                                    junit 'reports/test.xml'
+                                }
                             }
                         }
-                        timeout(time: 10, unit: 'MINUTES') {
-                            waitForQualityGate abortPipeline: true
+
+                        stage('SonarQube') {
+                            steps {
+                                script {
+                                    // sonar-scanner which don't rely on JVM
+                                    def scannerHome = tool 'sonar-scanner-linux'
+                                    withSonarQubeEnv('CIT SonarQube') {
+                                        sh """
+                                            ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitflow -Dsonar.branch.name=$BRANCH_NAME \
+                                                -Dsonar.sources=. -Dsonar.tests=. \
+                                                -Dsonar.inclusions="**/*.go" -Dsonar.test.inclusions="**/*_test.go" \
+                                                -Dsonar.exclusions="script/script/internal/*.go" \
+                                                -Dsonar.go.golint.reportPath=reports/lint.txt \
+                                                -Dsonar.go.govet.reportPaths=reports/vet.txt \
+                                                -Dsonar.go.coverage.reportPaths=reports/test-coverage.txt \
+                                                -Dsonar.test.reportPath=reports/test.xml
+                                        """
+                                    }
+                                }
+                                timeout(time: 10, unit: 'MINUTES') {
+                                    waitForQualityGate abortPipeline: true
+                                }
+                            }
+                        }
+
+                        stage ("Lint dockerfiles") {
+                            agent {
+                                docker {
+                                    image 'hadolint/hadolint:latest-debian'
+                                }
+                            }
+                            steps {
+                                sh 'hadolint build/*.Dockerfile | tee -a hadolint_lint.txt'
+                            }
+                            post {
+                                always {
+                                    archiveArtifacts 'hadolint_lint.txt'
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-        stage ("Lint dockerfiles") {
-            agent {
-                docker {
-                    image 'hadolint/hadolint:latest-debian'
-                }
-            }
-            steps {
-                sh 'hadolint build/*.Dockerfile | tee -a hadolint_lint.txt'
-            }
-            post {
-                always {
-                    archiveArtifacts 'hadolint_lint.txt'
-                }
-            }
-        }
+
         stage('Build docker images') {
             parallel {
-                stage('amd64') {
+
+                stage('') {
                     agent {
                         docker {
                             image 'teambitflow/golang-build:alpine'
@@ -99,7 +109,7 @@ pipeline {
                         }
                     }
                     stages {
-                        stage('build') {
+                        stage('amd64') {
                             steps {
                                 sh './build/native-build.sh'
                                 sh './build/native-static-build.sh'
@@ -126,6 +136,7 @@ pipeline {
                         }
                     }
                 }
+
                 stage('arm32v7') {
                     agent {
                         docker {
@@ -157,6 +168,7 @@ pipeline {
                         }
                     }
                 }
+
                 stage('arm32v7 static') {
                     agent {
                         docker {
@@ -188,6 +200,7 @@ pipeline {
                         }
                     }
                 }
+
                 stage('arm64v8') {
                     agent {
                         docker {
@@ -219,6 +232,7 @@ pipeline {
                         }
                     }
                 }
+
                 stage('arm64v8 static') {
                     agent {
                         docker {
