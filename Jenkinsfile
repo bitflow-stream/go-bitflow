@@ -33,7 +33,7 @@ pipeline {
                     }
                 }
 
-                stage('Build & test') {
+                stage('Testing') {
                     parallel {
 
                         stage('Unit tests') {
@@ -101,7 +101,7 @@ pipeline {
         stage('Build docker images') {
             parallel {
 
-                stage('') {
+                stage('amd64') {
                     agent {
                         docker {
                             image 'teambitflow/golang-build:alpine'
@@ -109,7 +109,7 @@ pipeline {
                         }
                     }
                     stages {
-                        stage('amd64') {
+                        stage('build') {
                             steps {
                                 sh './build/native-build.sh'
                                 sh './build/native-static-build.sh'
