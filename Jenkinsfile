@@ -211,8 +211,8 @@ pipeline {
                 }
             }
         }
-    }
 */
+    }
     post {
         success {
             node('master') {
