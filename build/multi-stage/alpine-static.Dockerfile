@@ -1,8 +1,8 @@
 # teambitflow/go-bitflow:static
 # Build from root of the repository:
-# docker build -t teambitflow/go-bitflow:static build/multi-stage/alpine-static.Dockerfile .
+# docker build -t teambitflow/go-bitflow:static -f build/multi-stage/alpine-static.Dockerfile .
 FROM golang:1.14.1-alpine as build
-RUN apk --no-cache add git gcc g++ musl-dev
+RUN apk --no-cache add curl bash git mercurial gcc g++ docker musl-dev
 WORKDIR /build
 ENV GO111MODULE=on
 ENV CGO_ENABLED=1

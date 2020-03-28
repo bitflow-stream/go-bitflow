@@ -3,4 +3,3 @@
 FROM teambitflow/golang-build:alpine
 ENV GOOS='linux'
 ENV GOARCH='arm64'
-ENV CC='aarch64-linux-gnu-gcc'

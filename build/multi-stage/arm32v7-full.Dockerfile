@@ -1,8 +1,8 @@
 # teambitflow/go-bitflow:latest-arm32v7
 # Build from root of the repository:
-# docker build -t teambitflow/go-bitflow:latest-arm32v7 build/multi-stage/arm32v7-full.Dockerfile .
+# docker build -t teambitflow/go-bitflow:latest-arm32v7 -f build/multi-stage/arm32v7-full.Dockerfile .
 FROM golang:1.14.1-alpine as build
-RUN apk --no-cache add git gcc g++ musl-dev
+RUN apk --no-cache add curl bash git mercurial gcc g++ docker musl-dev
 WORKDIR /build
 ENV GO111MODULE=on
 ENV GOOS=linux
