@@ -13,85 +13,95 @@ pipeline {
         staticImageARM32 = ''
         staticImageARM64 = ''
     }
+
     stages {
-        stage('Build & test') {
+
+        stage('Git') {
             agent {
                 docker {
                     image 'teambitflow/golang-build:debian'
                     args '-v /tmp/go-mod-cache/debian:/go'
-                }
+                    }
             }
-            stages {
-                stage('Git') {
-                    steps {
-                        script {
-                            env.GIT_COMMITTER_EMAIL = sh(
+                    
+            steps {
+                script {
+                    env.GIT_COMMITTER_EMAIL = sh(
                                 script: "git --no-pager show -s --format='%ae'",
                                 returnStdout: true
                                 ).trim()
+                }
+            }
+        }
+
+        stage('Build & test') {
+
+            parallel {
+
+                stage('Unit tests') {
+                    agent {
+                        docker {
+                            image 'teambitflow/golang-build:debian'
+                            args '-v /tmp/go-mod-cache/debian:/go'
+                        }
+                    }
+
+                    steps {
+                        sh 'go clean -i -v ./...'
+                        sh 'go install -v ./...'
+                        sh 'rm -rf reports && mkdir -p reports'
+                        sh 'stdbuf -o 0 go test -v ./... -coverprofile=reports/test-coverage.txt | tee reports/test-output.txt' // Use stdbuf to disable buffering of the tee output
+                        sh 'cat reports/test-output.txt | go-junit-report -set-exit-code > reports/test.xml'
+                        sh 'go vet ./... &> reports/vet.txt'
+                        sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
+                    } 
+
+                    post {
+                        always {
+                            archiveArtifacts 'reports/*'
+                            junit 'reports/test.xml'
                         }
                     }
                 }
 
-                stage('Testing') {
-                    parallel {
-
-                        stage('Unit tests') {
-                            steps {
-                                sh 'go clean -i -v ./...'
-                                sh 'go install -v ./...'
-                                sh 'rm -rf reports && mkdir -p reports'
-                                sh 'stdbuf -o 0 go test -v ./... -coverprofile=reports/test-coverage.txt | tee reports/test-output.txt' // Use stdbuf to disable buffering of the tee output
-                                sh 'cat reports/test-output.txt | go-junit-report -set-exit-code > reports/test.xml'
-                                sh 'go vet ./... &> reports/vet.txt'
-                                sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
-                            }   
-                            post {
-                                always {
-                                    archiveArtifacts 'reports/*'
-                                    junit 'reports/test.xml'
-                                }
+                stage('SonarQube') {
+                    steps {
+                        script {
+                            // sonar-scanner which don't rely on JVM
+                            def scannerHome = tool 'sonar-scanner-linux'
+                            withSonarQubeEnv('CIT SonarQube') {
+                                sh """
+                                    ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitflow -Dsonar.branch.name=$BRANCH_NAME \
+                                        -Dsonar.sources=. -Dsonar.tests=. \
+                                        -Dsonar.inclusions="**/*.go" -Dsonar.test.inclusions="**/*_test.go" \
+                                        -Dsonar.exclusions="script/script/internal/*.go" \
+                                        -Dsonar.go.golint.reportPath=reports/lint.txt \
+                                        -Dsonar.go.govet.reportPaths=reports/vet.txt \
+                                        -Dsonar.go.coverage.reportPaths=reports/test-coverage.txt \
+                                        -Dsonar.test.reportPath=reports/test.xml
+                                """
                             }
                         }
-
-                        stage('SonarQube') {
-                            steps {
-                                script {
-                                    // sonar-scanner which don't rely on JVM
-                                    def scannerHome = tool 'sonar-scanner-linux'
-                                    withSonarQubeEnv('CIT SonarQube') {
-                                        sh """
-                                            ${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=go-bitflow -Dsonar.branch.name=$BRANCH_NAME \
-                                                -Dsonar.sources=. -Dsonar.tests=. \
-                                                -Dsonar.inclusions="**/*.go" -Dsonar.test.inclusions="**/*_test.go" \
-                                                -Dsonar.exclusions="script/script/internal/*.go" \
-                                                -Dsonar.go.golint.reportPath=reports/lint.txt \
-                                                -Dsonar.go.govet.reportPaths=reports/vet.txt \
-                                                -Dsonar.go.coverage.reportPaths=reports/test-coverage.txt \
-                                                -Dsonar.test.reportPath=reports/test.xml
-                                        """
-                                    }
-                                }
-                                timeout(time: 10, unit: 'MINUTES') {
-                                    waitForQualityGate abortPipeline: true
-                                }
-                            }
+                        timeout(time: 10, unit: 'MINUTES') {
+                            waitForQualityGate abortPipeline: true
                         }
+                    }
+                }
 
-                        stage ("Lint dockerfiles") {
-                            agent {
-                                docker {
-                                    image 'hadolint/hadolint:latest-debian'
-                                }
-                            }
-                            steps {
-                                sh 'hadolint build/*.Dockerfile | tee -a hadolint_lint.txt'
-                            }
-                            post {
-                                always {
-                                    archiveArtifacts 'hadolint_lint.txt'
-                                }
-                            }
+                stage ("Lint dockerfiles") {
+                    agent {
+                        docker {
+                            image 'hadolint/hadolint:latest-debian'
+                        }
+                    }
+
+                    steps {
+                        sh 'hadolint build/*.Dockerfile | tee -a hadolint_lint.txt'
+                    }
+
+                    post {
+                        always {
+                            archiveArtifacts 'hadolint_lint.txt'
                         }
                     }
                 }
@@ -99,6 +109,7 @@ pipeline {
         }
 
         stage('Build docker images') {
+
             parallel {
 
                 stage('amd64') {
@@ -207,7 +218,7 @@ pipeline {
                         }
                     }
 
-                    post {
+                    post {b
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
@@ -228,6 +239,7 @@ pipeline {
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
+
                     steps {
                         sh './build/native-static-build.sh'
                         script {
@@ -283,6 +295,7 @@ pipeline {
             }
         }
     }
+
     post {
         success {
             node('master') {
@@ -314,4 +327,3 @@ pipeline {
         }
     }
 }
-
