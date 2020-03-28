@@ -74,6 +74,21 @@ pipeline {
                 }
             }
         }
+        stage ("Lint dockerfiles") {
+            agent {
+                docker {
+                    image 'hadolint/hadolint:latest-debian'
+                }
+            }
+            steps {
+                sh 'hadolint build/*.Dockerfile | tee -a hadolint_lint.txt'
+            }
+            post {
+                always {
+                    archiveArtifacts 'hadolint_lint.txt'
+                }
+            }
+        }
         stage('Build docker images') {
             parallel {
                 stage('amd64') {
