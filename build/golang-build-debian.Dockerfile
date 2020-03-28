@@ -22,4 +22,4 @@ RUN apt-get update && \
     apt-get -y install docker-ce qemu-user mercurial
 
 # Enable docker-cli experimental features
-RUN mkdir ~/.docker && echo -e '{\n\t"experimental": "enabled"\n}' > ~/.docker/config.json
+RUN mkdir ~/.docker && echo '{\n\t"experimental": "enabled"\n}' > ~/.docker/config.json
