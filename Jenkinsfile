@@ -76,7 +76,7 @@ pipeline {
         }
         stage('Build docker images') {
             parallel {
-                stage('Docker alpine') {
+                stage('amd64') {
                     agent {
                         docker {
                             image 'teambitflow/golang-build:alpine'
@@ -84,7 +84,7 @@ pipeline {
                         }
                     }
                     stages {
-                        stage('Docker build') {
+                        stage('build') {
                             steps {
                                 sh './build/native-build.sh'
                                 sh './build/native-static-build.sh'
@@ -94,7 +94,7 @@ pipeline {
                                 }
                             }
                         }
-                        stage('Docker push') {
+                        stage('push') {
                             when {
                                 branch 'master'
                             }
@@ -111,7 +111,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Docker arm32v7') {
+                stage('arm32v7') {
                     agent {
                         docker {
                             image 'teambitflow/golang-build:arm32v7'
@@ -119,7 +119,7 @@ pipeline {
                         }
                     }
                     stages {
-                        stage('Docker build') {
+                        stage('build') {
                             steps {
                                 sh './build/native-build.sh'
                                 script {
@@ -127,7 +127,7 @@ pipeline {
                                 }
                             }
                         }
-                        stage('Docker push') {
+                        stage('push') {
                             when {
                                 branch 'master'
                             }
@@ -142,7 +142,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Docker arm32v7 static') {
+                stage('arm32v7 static') {
                     agent {
                         docker {
                             image 'teambitflow/golang-build:static-arm32v7'
@@ -150,7 +150,7 @@ pipeline {
                         }
                     }
                     stages {
-                        stage('Docker build') {
+                        stage('build') {
                             steps {
                                 sh './build/native-static-build.sh'
                                 script {
@@ -158,7 +158,7 @@ pipeline {
                                 }
                             }
                         }
-                        stage('Docker push') {
+                        stage('push') {
                             when {
                                 branch 'master'
                             }
@@ -173,7 +173,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Docker arm64v8') {
+                stage('arm64v8') {
                     agent {
                         docker {
                             image 'teambitflow/golang-build:arm64v8'
@@ -181,7 +181,7 @@ pipeline {
                         }
                     }
                     stages {
-                        stage('Docker build') {
+                        stage('build') {
                             steps {
                                 sh './build/native-build.sh'
                                 script {
@@ -189,7 +189,7 @@ pipeline {
                                 }
                             }
                         }
-                        stage('Docker push') {
+                        stage('push') {
                             when {
                                 branch 'master'
                             }
@@ -204,7 +204,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Docker arm64v8 static') {
+                stage('arm64v8 static') {
                     agent {
                         docker {
                             image 'teambitflow/golang-build:static-arm64v8'
@@ -212,7 +212,7 @@ pipeline {
                         }
                     }
                     stages {
-                        stage('Docker build') {
+                        stage('build') {
                             steps {
                                 sh './build/native-static-build.sh'
                                 script {
@@ -220,7 +220,7 @@ pipeline {
                                 }
                             }
                         }
-                        stage('Docker push') {
+                        stage('push') {
                             when {
                                 branch 'master'
                             }
