@@ -1,6 +1,6 @@
-# teambitflow/golang-build:static-arm64v8
-# docker build -t teambitflow/golang-build:static-arm64v8 -f arm64v8-static-build.Dockerfile .
-FROM teambitflow/golang-build:debian
+# bitflowstream/golang-build:static-arm64v8
+# docker build -t bitflowstream/golang-build:static-arm64v8 -f arm64v8-static-build.Dockerfile .
+FROM bitflowstream/golang-build:debian
 RUN apt-get install -y gcc-aarch64-linux-gnu
 ENV GOOS=linux
 ENV GOARCH=arm64
