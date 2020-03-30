@@ -1,6 +1,6 @@
-# teambitflow/go-bitflow
+# bitflowstream/bitflow-pipeline
 # Build from root of the repository:
-# docker build -t teambitflow/go-bitflow -f build/multi-stage/alpine-full.Dockerfile .
+# docker build -t bitflowstream/bitflow-pipeline -f build/multi-stage/alpine-full.Dockerfile .
 FROM golang:1.14.1-alpine as build
 RUN apk --no-cache add curl bash git mercurial gcc g++ docker musl-dev
 WORKDIR /build

@@ -4,7 +4,7 @@ pipeline {
     }
     agent none
     environment {
-        registry = 'teambitflow/go-bitflow'
+        registry = 'bitflowstream/bitflow-pipeline'
         registryCredential = 'dockerhub'
         normalImage = '' // Empty variable must be declared here to allow passing an object between the stages.
         normalImageARM32 = ''
@@ -17,7 +17,7 @@ pipeline {
         stage('Build & test') {
             agent {
                 docker {
-                    image 'teambitflow/golang-build:debian'
+                    image 'bitflowstream/golang-build:debian'
                     args '-v /tmp/go-mod-cache/debian:/go'
                 }
             }
@@ -77,7 +77,7 @@ pipeline {
         stage('Docker alpine') {
             agent {
                 docker {
-                    image 'teambitflow/golang-build:alpine'
+                    image 'bitflowstream/golang-build:alpine'
                     args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
@@ -112,7 +112,7 @@ pipeline {
         stage('Docker arm32v7') {
             agent {
                 docker {
-                    image 'teambitflow/golang-build:arm32v7'
+                    image 'bitflowstream/golang-build:arm32v7'
                     args '-v /tmp/go-mod-cache/arm32v7:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
@@ -143,7 +143,7 @@ pipeline {
         stage('Docker arm32v7 static') {
             agent {
                 docker {
-                    image 'teambitflow/golang-build:static-arm32v7'
+                    image 'bitflowstream/golang-build:static-arm32v7'
                     args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
@@ -174,7 +174,7 @@ pipeline {
         stage('Docker arm64v8') {
             agent {
                 docker {
-                    image 'teambitflow/golang-build:arm64v8'
+                    image 'bitflowstream/golang-build:arm64v8'
                     args '-v /tmp/go-mod-cache/arm64v8:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
@@ -205,7 +205,7 @@ pipeline {
         stage('Docker arm64v8 static') {
             agent {
                 docker {
-                    image 'teambitflow/golang-build:static-arm64v8'
+                    image 'bitflowstream/golang-build:static-arm64v8'
                     args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
@@ -239,7 +239,7 @@ pipeline {
             }
             agent {
                 docker {
-                    image 'teambitflow/golang-build:debian'
+                    image 'bitflowstream/golang-build:debian'
                     args '-v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
@@ -256,7 +256,7 @@ pipeline {
                     sh '''#! /bin/bash
                     echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
                     '''
-                    // teambitflow/bitflow4j:latest manifest
+                    // bitflowstream/bitflow4j:latest manifest
                     sh "docker manifest create ${registry}:latest ${registry}:latest-amd64 ${registry}:latest-arm32v7 ${registry}:latest-arm64v8"
                     sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm32v7 --os=linux --arch=arm --variant=v7"
                     sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm64v8 --os=linux --arch=arm64 --variant=v8"

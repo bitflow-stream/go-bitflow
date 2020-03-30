@@ -1,6 +1,6 @@
-# teambitflow/go-bitflow:static-arm32v7
+# bitflowstream/bitflow-pipeline:static-arm32v7
 # Build from root of the repository:
-# docker build -t teambitflow/go-bitflow:static-arm32v7 -f build/multi-stage/arm32v7-static.Dockerfile .
+# docker build -t bitflowstream/bitflow-pipeline:static-arm32v7 -f build/multi-stage/arm32v7-static.Dockerfile .
 FROM golang:1.14.1-buster as build
 RUN apt-get update && apt-get install -y git mercurial qemu-user gcc-arm-linux-gnueabi
 WORKDIR /build

@@ -1,13 +1,13 @@
-# teambitflow/golang-build:debian
+# bitflowstream/golang-build:debian
 # This image is used to build Go programs on Debian hosts. The purpose of this separate container
 # is to mount the Go mod-cache into the container during the build, which is not possible with the 'docker build' command.
 
 # This image is intended to be run on the build host with a volume such as: -v /tmp/go-mod-cache/debian:/go
 # When /tmp/go-mod-cache/debian is cleared manually, the following commands should be executed afterwards:
-# docker run -v /tmp/go-mod-cache/debian:/go -ti teambitflow/golang-build:debian go get -u github.com/jstemmer/go-junit-report
-# docker run -v /tmp/go-mod-cache/debian:/go -ti teambitflow/golang-build:debian go get -u golang.org/x/lint/golint
+# docker run -v /tmp/go-mod-cache/debian:/go -ti bitflowstream/golang-build:debian go get -u github.com/jstemmer/go-junit-report
+# docker run -v /tmp/go-mod-cache/debian:/go -ti bitflowstream/golang-build:debian go get -u golang.org/x/lint/golint
 
-# docker build -t teambitflow/golang-build:debian -f debian-build.Dockerfile .
+# docker build -t bitflowstream/golang-build:debian -f debian-build.Dockerfile .
 FROM golang:1.14.1-buster
 WORKDIR /build
 ENV GO111MODULE=on
