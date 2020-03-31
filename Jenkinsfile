@@ -34,35 +34,35 @@ pipeline {
             }
         }
 
-        stage('Build & test') {
+        stage('Unit tests') {
+            agent {
+                docker {
+                    image 'teambitflow/golang-build:debian'
+                    args '-v /tmp/go-mod-cache/debian:/go'
+                }
+            }
+
+            steps {
+                sh 'go clean -i -v ./...'
+                sh 'go install -v ./...'
+                sh 'rm -rf reports && mkdir -p reports'
+                sh 'stdbuf -o 0 go test -v ./... -coverprofile=reports/test-coverage.txt | tee reports/test-output.txt' // Use stdbuf to disable buffering of the tee output
+                sh 'cat reports/test-output.txt | go-junit-report -set-exit-code > reports/test.xml'
+                sh 'go vet ./... &> reports/vet.txt'
+                sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
+            } 
+
+            post {
+                always {
+                    archiveArtifacts 'reports/*'
+                    junit 'reports/test.xml'
+                }
+            }
+        }
+
+        stage('Linting & Static Analyis') {
 
             parallel {
-
-                stage('Unit tests') {
-                    agent {
-                        docker {
-                            image 'teambitflow/golang-build:debian'
-                            args '-v /tmp/go-mod-cache/debian:/go'
-                        }
-                    }
-
-                    steps {
-                        sh 'go clean -i -v ./...'
-                        sh 'go install -v ./...'
-                        sh 'rm -rf reports && mkdir -p reports'
-                        sh 'stdbuf -o 0 go test -v ./... -coverprofile=reports/test-coverage.txt | tee reports/test-output.txt' // Use stdbuf to disable buffering of the tee output
-                        sh 'cat reports/test-output.txt | go-junit-report -set-exit-code > reports/test.xml'
-                        sh 'go vet ./... &> reports/vet.txt'
-                        sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
-                    } 
-
-                    post {
-                        always {
-                            archiveArtifacts 'reports/*'
-                            junit 'reports/test.xml'
-                        }
-                    }
-                }
 
                 stage('SonarQube') {
                     agent {
