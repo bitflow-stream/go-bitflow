@@ -29,6 +29,8 @@ const (
 	DefaultWidth  = 20 * vg.Centimeter
 	DefaultHeight = DefaultWidth
 
+	defaultXYMinMax = -math.MaxFloat64
+
 	numColors      = 100
 	plotTimeFormat = "02.01.2006 15:04:05"
 	plotTimeLabel  = "time"
@@ -562,16 +564,16 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 			Type:       ScatterPlot,
 		}
 
-		if n := params["xMin"].(float64); !math.IsInf(n, -1) {
+		if n := params["xMin"].(float64); n != defaultXYMinMax {
 			plot.ForceXmin = &n
 		}
-		if n := params["xMax"].(float64); !math.IsInf(n, -1) {
+		if n := params["xMax"].(float64); n != defaultXYMinMax {
 			plot.ForceXmax = &n
 		}
-		if n := params["yMin"].(float64); !math.IsInf(n, -1) {
+		if n := params["yMin"].(float64); n != defaultXYMinMax {
 			plot.ForceYmin = &n
 		}
-		if n := params["yMax"].(float64); !math.IsInf(n, -1) {
+		if n := params["yMax"].(float64); n != defaultXYMinMax {
 			plot.ForceYmax = &n
 		}
 
@@ -633,8 +635,8 @@ func RegisterPlot(b reg.ProcessorRegistry) {
 		Optional("separate", reg.Bool(), false).
 		Optional("force_scatter", reg.Bool(), false).
 		Optional("force_time", reg.Bool(), false).
-		Optional("xMin", reg.Float(), math.Inf(-1)).
-		Optional("xMax", reg.Float(), math.Inf(-1)).
-		Optional("yMin", reg.Float(), math.Inf(-1)).
-		Optional("yMax", reg.Float(), math.Inf(-1))
+		Optional("xMin", reg.Float(), defaultXYMinMax).
+		Optional("xMax", reg.Float(), defaultXYMinMax).
+		Optional("yMin", reg.Float(), defaultXYMinMax).
+		Optional("yMax", reg.Float(), defaultXYMinMax)
 }

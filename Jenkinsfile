@@ -90,6 +90,8 @@ pipeline {
                             normalImage = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER", '-f build/alpine-prebuilt.Dockerfile build/_output'
                             staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
+                        sh "./build/test-image.sh $BRANCH_NAME-build-$BUILD_NUMBER"
+                        sh "./build/test-image.sh static-$BRANCH_NAME-build-$BUILD_NUMBER"
                     }
                 }
                 stage('Docker push') {
@@ -123,6 +125,7 @@ pipeline {
                         script {
                             normalImageARM32 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/arm32v7-prebuilt.Dockerfile build/_output'
                         }
+                        sh "./build/test-image.sh $BRANCH_NAME-build-$BUILD_NUMBER-arm32v7"
                     }
                 }
                 stage('Docker push') {
@@ -154,6 +157,7 @@ pipeline {
                         script {
                             staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
+                        sh "./build/test-image.sh static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7"
                     }
                 }
                 stage('Docker push') {
@@ -185,6 +189,7 @@ pipeline {
                         script {
                             normalImageARM64 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/arm64v8-prebuilt.Dockerfile build/_output'
                         }
+                        sh "./build/test-image.sh $BRANCH_NAME-build-$BUILD_NUMBER-arm64v8"
                     }
                 }
                 stage('Docker push') {
@@ -216,6 +221,7 @@ pipeline {
                         script {
                             staticImageARM64 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
+                        sh "./build/test-image.sh static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8"
                     }
                 }
                 stage('Docker push') {

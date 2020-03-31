@@ -4,5 +4,5 @@ FROM bitflowstream/golang-build:debian
 RUN apt-get install -y gcc-arm-linux-gnueabihf
 ENV GOOS=linux
 ENV GOARCH=arm
-ENV CC=aarm-linux-gnueabihf-gcc
+ENV CC=arm-linux-gnueabihf-gcc
 ENV CGO_ENABLED=1

@@ -4,7 +4,7 @@
 # This image is intended to be run on the build host with a volume such as: -v /tmp/go-mod-cache/alpine:/go
 # docker build -t bitflowstream/golang-build:alpine -f alpine-build.Dockerfile .
 FROM golang:1.14.1-alpine
-RUN apk --no-cache add curl bash git mercurial gcc g++ docker musl-dev
+RUN apk --no-cache add curl bash git mercurial gcc g++ docker musl-dev jq
 WORKDIR /build
 ENV GO111MODULE=on
 
