@@ -174,7 +174,8 @@ pipeline {
 
                     post {
                         always {
-                            archiveArtifacts ''
+                            sh 'cp build/_output/bitflow-pipeline build/_output/bitflow-pipeline-arm32v7'
+                            archiveArtifacts 'build/_output/bitflow-pipeline-arm32v7'
                         }
                         success {
                             script {
@@ -192,7 +193,7 @@ pipeline {
                 stage('arm32v7 static') {
                     agent {
                         docker {
-                            image 'bitflowstream/golang-buhttps://www.youtube.com/ild:static-arm32v7'
+                            image 'bitflowstream/golang-build:static-arm32v7'
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
