@@ -1,3 +1,4 @@
+def image, staticImage // Define global variables for sharing between stages
 pipeline {
     options {
         timeout(time: 1, unit: 'HOURS')
@@ -106,9 +107,6 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-                    script {
-                        def image, staticImage
-                    }
                     steps {
                         sh './build/native-build.sh'
                         script {
@@ -149,9 +147,6 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-                    script {
-                        def image
-                    }
                     steps {
                         sh './build/native-build.sh'
                         script {
@@ -183,9 +178,6 @@ pipeline {
                             image 'bitflowstream/golang-build:static-arm32v7'
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
-                    }
-                    script {
-                        def image
                     }
                     steps {
                         sh './build/native-static-build.sh'
@@ -219,9 +211,6 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-                    script {
-                        def image
-                    }
                     steps {
                         sh './build/native-build.sh'
                         script {
@@ -253,9 +242,6 @@ pipeline {
                             image 'bitflowstream/golang-build:static-arm64v8'
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
-                    }
-                    script {
-                        def image
                     }
                     steps {
                         sh './build/native-static-build.sh'
