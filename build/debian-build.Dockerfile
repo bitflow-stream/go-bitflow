@@ -18,7 +18,7 @@ RUN apt-get update && \
     add-apt-repository \
        "deb [arch=amd64] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable" && \
     apt-get update && \
-    apt-get -y install docker-ce qemu-user mercurial git
+    apt-get -y install docker-ce qemu-user mercurial git jq
 
 # Enable docker-cli experimental features
 RUN mkdir ~/.docker && echo '{\n\t"experimental": "enabled"\n}' > ~/.docker/config.json
