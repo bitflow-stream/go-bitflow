@@ -15,21 +15,13 @@ pipeline {
     }
 
     stages {
-
         stage('Git') {
             agent {
-                docker {
-                    image 'bitflowstream/golang-build:debian'
-                    args '-v /tmp/go-mod-cache/debian:/go'
-                    }
+                label 'master'
             }
-                    
             steps {
                 script {
-                    env.GIT_COMMITTER_EMAIL = sh(
-                                script: "git --no-pager show -s --format='%ae'",
-                                returnStdout: true
-                                ).trim()
+                    env.GIT_COMMITTER_EMAIL = sh(script: "git --no-pager show -s --format='%ae'", returnStdout: true).trim()
                 }
             }
         }
@@ -41,7 +33,6 @@ pipeline {
                     args '-v /tmp/go-mod-cache/debian:/go'
                 }
             }
-
             steps {
                 sh 'go clean -i -v ./...'
                 sh 'go install -v ./...'
@@ -52,7 +43,6 @@ pipeline {
                 sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
                 stash includes: 'reports/*', name: 'unitStage'
             } 
-
             post {
                 always {
                     archiveArtifacts 'reports/*'
@@ -61,10 +51,8 @@ pipeline {
             }
         }
 
-        stage('Linting & Static Analyis') {
-
+        stage('Linting & static analyis') {
             parallel {
-
                 stage('SonarQube') {
                     agent {
                         docker {
@@ -72,14 +60,11 @@ pipeline {
                             args '-v /tmp/go-mod-cache/debian:/go'
                         }
                     }
-                    
                     steps {
                         dir('reports') {
                             unstash 'unitStage'
                         }
-
                         script {
-                            // sonar-scanner which don't rely on JVM
                             def scannerHome = tool 'sonar-scanner-linux'
                             withSonarQubeEnv('CIT SonarQube') {
                                 sh """
@@ -100,17 +85,15 @@ pipeline {
                     }
                 }
 
-                stage ("Lint dockerfiles") {
+                stage ("Lint Dockerfiles") {
                     agent {
                         docker {
                             image 'hadolint/hadolint:latest-debian'
                         }
                     }
-
                     steps {
                         sh 'hadolint --format checkstyle build/*.Dockerfile | tee -a hadolint.xml'
                     }
-
                     post {
                         always {
                             archiveArtifacts 'hadolint.xml'
@@ -121,9 +104,7 @@ pipeline {
         }
 
         stage('Build docker images') {
-
             parallel {
-
                 stage('amd64') {
                     agent {
                         docker {
@@ -131,7 +112,6 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-
                     steps {
                         sh './build/native-build.sh'
                         sh './build/native-static-build.sh'
@@ -140,13 +120,11 @@ pipeline {
                             staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                     }
-
                     post {
                         always {
                             sh 'mv build/_output/bitflow-pipeline build/_output/bitflow-pipeline-amd64'
                             archiveArtifacts 'build/_output/bitflow-pipeline-amd64'
                         }
-
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
@@ -169,20 +147,17 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-
                     steps {
                         sh './build/native-build.sh'
                         script {
                             normalImageARM32 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/arm32v7-prebuilt.Dockerfile build/_output'
                         }
                     }
-
                     post {
                         always {
                             sh 'mv build/_output/bitflow-pipeline build/_output/bitflow-pipeline-arm32v7'
                             archiveArtifacts 'build/_output/bitflow-pipeline-arm32v7'
                         }
-
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
@@ -203,20 +178,17 @@ pipeline {
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-                    
                     steps {
                         sh './build/native-static-build.sh'
                         script {
                             staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                     }
-
                     post {
                         always {
                             sh 'mv build/_output/static/bitflow-pipeline build/_output/static/bitflow-pipeline-arm32v7'
                             archiveArtifacts 'build/_output/static/bitflow-pipeline-arm32v7'
                         }
-
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
@@ -237,20 +209,17 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-
                     steps {
                         sh './build/native-build.sh'
                         script {
                             normalImageARM64 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/arm64v8-prebuilt.Dockerfile build/_output'
                         }
                     }
-
                     post {
                         always {
                             sh 'mv build/_output/bitflow-pipeline build/_output/bitflow-pipeline-arm64v8'
                             archiveArtifacts 'build/_output/bitflow-pipeline-arm64v8'
                         }
-
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
@@ -271,20 +240,17 @@ pipeline {
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-
                     steps {
                         sh './build/native-static-build.sh'
                         script {
                             staticImageARM64 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                     }
-
                     post {
                         always {
                             sh 'mv build/_output/static/bitflow-pipeline build/_output/static/bitflow-pipeline-arm64v8'
                             archiveArtifacts 'build/_output/static/bitflow-pipeline-arm64v8'
                         }
-
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
