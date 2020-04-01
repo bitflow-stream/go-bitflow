@@ -13,46 +13,58 @@ pipeline {
         staticImageARM32 = ''
         staticImageARM64 = ''
     }
+
     stages {
-        stage('Build & test') {
+        stage('Git') {
+            agent {
+                label 'master'
+            }
+            steps {
+                script {
+                    env.GIT_COMMITTER_EMAIL = sh(script: "git --no-pager show -s --format='%ae'", returnStdout: true).trim()
+                }
+            }
+        }
+
+        stage('Unit tests') {
             agent {
                 docker {
                     image 'bitflowstream/golang-build:debian'
                     args '-v /tmp/go-mod-cache/debian:/go'
                 }
             }
-            stages {
-                stage('Git') {
-                    steps {
-                        script {
-                            env.GIT_COMMITTER_EMAIL = sh(
-                                script: "git --no-pager show -s --format='%ae'",
-                                returnStdout: true
-                                ).trim()
-                        }
-                    }
+            steps {
+                sh 'go clean -i -v ./...'
+                sh 'go install -v ./...'
+                sh 'rm -rf reports && mkdir -p reports'
+                sh 'stdbuf -o 0 go test -v ./... -coverprofile=reports/test-coverage.txt | tee reports/test-output.txt' // Use stdbuf to disable buffering of the tee output
+                sh 'cat reports/test-output.txt | go-junit-report -set-exit-code > reports/test.xml'
+                sh 'go vet ./... &> reports/vet.txt'
+                sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
+                stash includes: 'reports/*', name: 'unitStage'
+            } 
+            post {
+                always {
+                    archiveArtifacts 'reports/*'
+                    junit 'reports/test.xml'
                 }
-                stage('Build & test') {
-                    steps {
-                            sh 'go clean -i -v ./...'
-                            sh 'go install -v ./...'
-                            sh 'rm -rf reports && mkdir -p reports'
-                            sh 'stdbuf -o 0 go test -v ./... -coverprofile=reports/test-coverage.txt | tee reports/test-output.txt' // Use stdbuf to disable buffering of the tee output
-                            sh 'cat reports/test-output.txt | go-junit-report -set-exit-code > reports/test.xml'
-                            sh 'go vet ./... &> reports/vet.txt'
-                            sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
-                    }
-                    post {
-                        always {
-                            archiveArtifacts 'reports/*'
-                            junit 'reports/test.xml'
-                        }
-                    }
-                }
+            }
+        }
+
+        stage('Linting & static analyis') {
+            parallel {
                 stage('SonarQube') {
+                    agent {
+                        docker {
+                            image 'bitflowstream/golang-build:debian'
+                            args '-v /tmp/go-mod-cache/debian:/go'
+                        }
+                    }
                     steps {
+                        dir('reports') {
+                            unstash 'unitStage'
+                        }
                         script {
-                            // sonar-scanner which don't rely on JVM
                             def scannerHome = tool 'sonar-scanner-linux'
                             withSonarQubeEnv('CIT SonarQube') {
                                 sh """
@@ -72,17 +84,34 @@ pipeline {
                         }
                     }
                 }
-            }
-        }
-        stage('Docker alpine') {
-            agent {
-                docker {
-                    image 'bitflowstream/golang-build:alpine'
-                    args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
+
+                stage ("Lint Dockerfiles") {
+                    agent {
+                        docker {
+                            image 'hadolint/hadolint:latest-debian'
+                        }
+                    }
+                    steps {
+                        sh 'hadolint --format checkstyle build/*.Dockerfile | tee -a hadolint.xml'
+                    }
+                    post {
+                        always {
+                            archiveArtifacts 'hadolint.xml'
+                        }
+                    }
                 }
             }
-            stages {
-                stage('Docker build') {
+        }
+
+        stage('Build docker images') {
+            parallel {
+                stage('amd64') {
+                    agent {
+                        docker {
+                            image 'bitflowstream/golang-build:alpine'
+                            args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
+                        }
+                    }
                     steps {
                         sh './build/native-build.sh'
                         sh './build/native-static-build.sh'
@@ -91,149 +120,153 @@ pipeline {
                             staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                     }
-                }
-                stage('Docker push') {
-                    when {
-                        branch 'master'
-                    }
-                    steps {
-                        script {
-                            docker.withRegistry('', registryCredential) {
-                                normalImage.push("build-$BUILD_NUMBER")
-                                normalImage.push("latest-amd64")
-                                staticImage.push("static-build-$BUILD_NUMBER")
-                                staticImage.push("static")
-                            }
+                    post {
+                        always {
+                            sh 'mv build/_output/bitflow-pipeline build/_output/bitflow-pipeline-amd64'
+                            archiveArtifacts 'build/_output/bitflow-pipeline-amd64'
+                        }
+                        success {
+                            script {
+                                if (env.BRANCH_NAME == 'master') {
+                                    docker.withRegistry('', registryCredential) {
+                                        normalImage.push("build-$BUILD_NUMBER")
+                                        normalImage.push("latest-amd64")
+                                        staticImage.push("static-build-$BUILD_NUMBER")
+                                        staticImage.push("static")
+                                    }
+                                }
+                            }                                      
                         }
                     }
                 }
-            }
-        }
-        stage('Docker arm32v7') {
-            agent {
-                docker {
-                    image 'bitflowstream/golang-build:arm32v7'
-                    args '-v /tmp/go-mod-cache/arm32v7:/go -v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
-            stages {
-                stage('Docker build') {
+
+                stage('arm32v7') {
+                    agent {
+                        docker {
+                            image 'bitflowstream/golang-build:arm32v7'
+                            args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
+                        }
+                    }
                     steps {
                         sh './build/native-build.sh'
                         script {
                             normalImageARM32 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/arm32v7-prebuilt.Dockerfile build/_output'
                         }
                     }
-                }
-                stage('Docker push') {
-                    when {
-                        branch 'master'
-                    }
-                    steps {
-                        script {
-                            docker.withRegistry('', registryCredential) {
-                                normalImageARM32.push("build-$BUILD_NUMBER-arm32v7")
-                                normalImageARM32.push("latest-arm32v7")
-                            }
+                    post {
+                        always {
+                            sh 'mv build/_output/bitflow-pipeline build/_output/bitflow-pipeline-arm32v7'
+                            archiveArtifacts 'build/_output/bitflow-pipeline-arm32v7'
+                        }
+                        success {
+                            script {
+                                if (env.BRANCH_NAME == 'master') {
+                                    docker.withRegistry('', registryCredential) {
+                                        normalImageARM32.push("build-$BUILD_NUMBER-arm32v7")
+                                        normalImageARM32.push("latest-arm32v7")
+                                    }
+                                }
+                            }                                      
                         }
                     }
                 }
-            }
-        }
-        stage('Docker arm32v7 static') {
-            agent {
-                docker {
-                    image 'bitflowstream/golang-build:static-arm32v7'
-                    args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
-            stages {
-                stage('Docker build') {
+                   
+                stage('arm32v7 static') {
+                    agent {
+                        docker {
+                            image 'bitflowstream/golang-build:static-arm32v7'
+                            args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
+                        }
+                    }
                     steps {
                         sh './build/native-static-build.sh'
                         script {
                             staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                     }
-                }
-                stage('Docker push') {
-                    when {
-                        branch 'master'
-                    }
-                    steps {
-                        script {
-                            docker.withRegistry('', registryCredential) {
-                                staticImageARM32.push("static-build-$BUILD_NUMBER-arm32v7")
-                                staticImageARM32.push("static-arm32v7")
-                            }
+                    post {
+                        always {
+                            sh 'mv build/_output/static/bitflow-pipeline build/_output/static/bitflow-pipeline-arm32v7'
+                            archiveArtifacts 'build/_output/static/bitflow-pipeline-arm32v7'
+                        }
+                        success {
+                            script {
+                                if (env.BRANCH_NAME == 'master') {
+                                    docker.withRegistry('', registryCredential) {
+                                        staticImageARM32.push("static-build-$BUILD_NUMBER-arm32v7")
+                                        staticImageARM32.push("static-arm32v7")
+                                    }
+                                }
+                            }                                      
                         }
                     }
                 }
-            }
-        }
-        stage('Docker arm64v8') {
-            agent {
-                docker {
-                    image 'bitflowstream/golang-build:arm64v8'
-                    args '-v /tmp/go-mod-cache/arm64v8:/go -v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
-            stages {
-                stage('Docker build') {
+
+                stage('arm64v8') {
+                    agent {
+                        docker {
+                            image 'bitflowstream/golang-build:arm64v8'
+                            args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
+                        }
+                    }
                     steps {
                         sh './build/native-build.sh'
                         script {
                             normalImageARM64 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/arm64v8-prebuilt.Dockerfile build/_output'
                         }
                     }
+                    post {
+                        always {
+                            sh 'mv build/_output/bitflow-pipeline build/_output/bitflow-pipeline-arm64v8'
+                            archiveArtifacts 'build/_output/bitflow-pipeline-arm64v8'
+                        }
+                        success {
+                            script {
+                                if (env.BRANCH_NAME == 'master') {
+                                    docker.withRegistry('', registryCredential) {
+                                        normalImageARM64.push("build-$BUILD_NUMBER-arm64v8")
+                                        normalImageARM64.push("latest-arm64v8")
+                                    }
+                                }
+                            }                                      
+                        }
+                    }          
                 }
-                stage('Docker push') {
-                    when {
-                        branch 'master'
-                    }
-                    steps {
-                        script {
-                            docker.withRegistry('', registryCredential) {
-                                normalImageARM64.push("build-$BUILD_NUMBER-arm64v8")
-                                normalImageARM64.push("latest-arm64v8")
-                            }
+
+                stage('arm64v8 static') {
+                    agent {
+                        docker {
+                            image 'bitflowstream/golang-build:static-arm64v8'
+                            args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-                }
-            }
-        }
-        stage('Docker arm64v8 static') {
-            agent {
-                docker {
-                    image 'bitflowstream/golang-build:static-arm64v8'
-                    args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
-            stages {
-                stage('Docker build') {
                     steps {
                         sh './build/native-static-build.sh'
                         script {
                             staticImageARM64 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                     }
-                }
-                stage('Docker push') {
-                    when {
-                        branch 'master'
-                    }
-                    steps {
-                        script {
-                            docker.withRegistry('', registryCredential) {
-                                staticImageARM64.push("static-build-$BUILD_NUMBER-arm64v8")
-                                staticImageARM64.push("static-arm64v8")
-                            }
+                    post {
+                        always {
+                            sh 'mv build/_output/static/bitflow-pipeline build/_output/static/bitflow-pipeline-arm64v8'
+                            archiveArtifacts 'build/_output/static/bitflow-pipeline-arm64v8'
+                        }
+                        success {
+                            script {
+                                if (env.BRANCH_NAME == 'master') {
+                                    docker.withRegistry('', registryCredential) {
+                                        staticImageARM64.push("static-build-$BUILD_NUMBER-arm64v8")
+                                        staticImageARM64.push("static-arm64v8")
+                                    }
+                                }
+                            }                                      
                         }
                     }
                 }
-            }
+            }   
         }
-        stage('Docker manifests') {
+        
+        stage('Docker manifest') {
             when {
                 branch 'master'
             }
@@ -265,6 +298,7 @@ pipeline {
             }
         }
     }
+
     post {
         success {
             node('master') {
@@ -296,4 +330,3 @@ pipeline {
         }
     }
 }
-
