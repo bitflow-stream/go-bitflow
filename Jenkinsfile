@@ -170,7 +170,7 @@ pipeline {
                         }
                     }
                 }
-                   
+
                 stage('arm32v7 static') {
                     agent {
                         docker {
@@ -280,19 +280,12 @@ pipeline {
                 }
             }
             steps {
-                withCredentials([
-                  [
+                withCredentials([[
                     $class: 'UsernamePasswordMultiBinding',
-                    credentialsId: 'dockerhub',
-                    usernameVariable: 'DOCKERUSER',
-                    passwordVariable: 'DOCKERPASS'
-                  ]
-                ]) {
+                    credentialsId: 'dockerhub', usernameVariable: 'DOCKERUSER', passwordVariable: 'DOCKERPASS'
+                ]]) {
                     // Dockerhub Login
-                    sh '''#! /bin/bash
-                    echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
-                    '''
-                    // bitflowstream/bitflow4j:latest manifest
+                    sh 'echo "$DOCKERPASS" | docker login -u "$DOCKERUSER" --password-stdin'
                     sh "docker manifest create ${registry}:latest ${registry}:latest-amd64 ${registry}:latest-arm32v7 ${registry}:latest-arm64v8"
                     sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm32v7 --os=linux --arch=arm --variant=v7"
                     sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm64v8 --os=linux --arch=arm64 --variant=v8"
