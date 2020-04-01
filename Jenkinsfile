@@ -6,12 +6,6 @@ pipeline {
     environment {
         registry = 'bitflowstream/bitflow-pipeline'
         registryCredential = 'dockerhub'
-        normalImage = '' // Empty variable must be declared here to allow passing an object between the stages.
-        normalImageARM32 = ''
-        normalImageARM64 = ''
-        staticImage = ''
-        staticImageARM32 = ''
-        staticImageARM64 = ''
     }
 
     stages {
@@ -115,13 +109,13 @@ pipeline {
                     steps {
                         sh './build/native-build.sh'
                         script {
-                            normalImage = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER", '-f build/alpine-prebuilt.Dockerfile build/_output'
+                            def image = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER", '-f build/alpine-prebuilt.Dockerfile build/_output'
                         }
                         sh "./build/test-image.sh $BRANCH_NAME-build-$BUILD_NUMBER"
-                        
+
                         sh './build/native-static-build.sh'
                         script {
-                            staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f build/static-prebuilt.Dockerfile build/_output/static'
+                            def staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                         sh "./build/test-image.sh static-$BRANCH_NAME-build-$BUILD_NUMBER"
                     }
@@ -134,8 +128,8 @@ pipeline {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
                                     docker.withRegistry('', registryCredential) {
-                                        normalImage.push("build-$BUILD_NUMBER")
-                                        normalImage.push("latest-amd64")
+                                        image.push("build-$BUILD_NUMBER")
+                                        image.push("latest-amd64")
                                         staticImage.push("static-build-$BUILD_NUMBER")
                                         staticImage.push("static")
                                     }
@@ -155,7 +149,7 @@ pipeline {
                     steps {
                         sh './build/native-build.sh'
                         script {
-                            normalImageARM32 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/arm32v7-prebuilt.Dockerfile build/_output'
+                            def image = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/arm32v7-prebuilt.Dockerfile build/_output'
                         }
                         sh "./build/test-image.sh $BRANCH_NAME-build-$BUILD_NUMBER-arm32v7"
                     }
@@ -168,8 +162,8 @@ pipeline {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
                                     docker.withRegistry('', registryCredential) {
-                                        normalImageARM32.push("build-$BUILD_NUMBER-arm32v7")
-                                        normalImageARM32.push("latest-arm32v7")
+                                        image.push("build-$BUILD_NUMBER-arm32v7")
+                                        image.push("latest-arm32v7")
                                     }
                                 }
                             }                                      
@@ -187,7 +181,7 @@ pipeline {
                     steps {
                         sh './build/native-static-build.sh'
                         script {
-                            staticImageARM32 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/static-prebuilt.Dockerfile build/_output/static'
+                            def image = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                         sh "./build/test-image.sh static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7"
                     }
@@ -200,8 +194,8 @@ pipeline {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
                                     docker.withRegistry('', registryCredential) {
-                                        staticImageARM32.push("static-build-$BUILD_NUMBER-arm32v7")
-                                        staticImageARM32.push("static-arm32v7")
+                                        image.push("static-build-$BUILD_NUMBER-arm32v7")
+                                        image.push("static-arm32v7")
                                     }
                                 }
                             }                                      
@@ -219,7 +213,7 @@ pipeline {
                     steps {
                         sh './build/native-build.sh'
                         script {
-                            normalImageARM64 = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/arm64v8-prebuilt.Dockerfile build/_output'
+                            def image = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/arm64v8-prebuilt.Dockerfile build/_output'
                         }
                         sh "./build/test-image.sh $BRANCH_NAME-build-$BUILD_NUMBER-arm64v8"
                     }
@@ -232,8 +226,8 @@ pipeline {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
                                     docker.withRegistry('', registryCredential) {
-                                        normalImageARM64.push("build-$BUILD_NUMBER-arm64v8")
-                                        normalImageARM64.push("latest-arm64v8")
+                                        image.push("build-$BUILD_NUMBER-arm64v8")
+                                        image.push("latest-arm64v8")
                                     }
                                 }
                             }                                      
@@ -251,7 +245,7 @@ pipeline {
                     steps {
                         sh './build/native-static-build.sh'
                         script {
-                            staticImageARM64 = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/static-prebuilt.Dockerfile build/_output/static'
+                            def image = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                         sh "./build/test-image.sh static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8"
                     }
@@ -264,8 +258,8 @@ pipeline {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
                                     docker.withRegistry('', registryCredential) {
-                                        staticImageARM64.push("static-build-$BUILD_NUMBER-arm64v8")
-                                        staticImageARM64.push("static-arm64v8")
+                                        image.push("static-build-$BUILD_NUMBER-arm64v8")
+                                        image.push("static-arm64v8")
                                     }
                                 }
                             }                                      
