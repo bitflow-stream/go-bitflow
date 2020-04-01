@@ -114,12 +114,15 @@ pipeline {
                     }
                     steps {
                         sh './build/native-build.sh'
-                        sh './build/native-static-build.sh'
                         script {
                             normalImage = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER", '-f build/alpine-prebuilt.Dockerfile build/_output'
-                            staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                         sh "./build/test-image.sh $BRANCH_NAME-build-$BUILD_NUMBER"
+                        
+                        sh './build/native-static-build.sh'
+                        script {
+                            staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f build/static-prebuilt.Dockerfile build/_output/static'
+                        }
                         sh "./build/test-image.sh static-$BRANCH_NAME-build-$BUILD_NUMBER"
                     }
                     post {
