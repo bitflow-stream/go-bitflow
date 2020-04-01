@@ -137,7 +137,7 @@ pipeline {
                                 //}
                             }
                         }
-                    }   
+                    }
                 }
 
                 stage('arm32v7') {
