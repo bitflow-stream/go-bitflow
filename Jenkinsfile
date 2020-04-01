@@ -50,6 +50,7 @@ pipeline {
                 sh 'cat reports/test-output.txt | go-junit-report -set-exit-code > reports/test.xml'
                 sh 'go vet ./... &> reports/vet.txt'
                 sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
+                stash includes: 'reports/*', name: 'unitStage'
             } 
 
             post {
@@ -73,6 +74,10 @@ pipeline {
                     }
                     
                     steps {
+                        dir('reports') {
+                            unstash 'unitStage'
+                        }
+
                         script {
                             // sonar-scanner which don't rely on JVM
                             def scannerHome = tool 'sonar-scanner-linux'
