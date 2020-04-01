@@ -113,7 +113,6 @@ pipeline {
 
                     post {
                         always {
-                            junit 'hadolint'
                             archiveArtifacts 'hadolint.xml'
                         }
                     }
@@ -174,6 +173,9 @@ pipeline {
                     }
 
                     post {
+                        always {
+                            archiveArtifacts ''
+                        }
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
