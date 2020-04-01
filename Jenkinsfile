@@ -6,11 +6,11 @@ pipeline {
     environment {
         registry = 'bitflowstream/bitflow-pipeline'
         registryCredential = 'dockerhub'
+        image = "" // Define global variables for sharing between stages
+        staticImage = ""
     }
 
     stages {
-        def image, staticImage // Define global variables for sharing between stages
-
         stage('Git') {
             agent {
                 label 'master'
