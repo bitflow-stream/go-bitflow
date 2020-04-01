@@ -184,7 +184,7 @@ pipeline {
                 stage('arm32v7 static') {
                     agent {
                         docker {
-                            image 'bitflowstream/golang-build:static-arm32v7'
+                            image 'bitflowstream/golang-buhttps://www.youtube.com/ild:static-arm32v7'
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
@@ -293,7 +293,7 @@ pipeline {
                     sh '''#! /bin/bash
                     echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
                     '''
-                    // teambitflow/bitflow4j:latest manifest
+                    // bitflowstream/bitflow4j:latest manifest
                     sh "docker manifest create ${registry}:latest ${registry}:latest-amd64 ${registry}:latest-arm32v7 ${registry}:latest-arm64v8"
                     sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm32v7 --os=linux --arch=arm --variant=v7"
                     sh "docker manifest annotate ${registry}:latest ${registry}:latest-arm64v8 --os=linux --arch=arm64 --variant=v8"
