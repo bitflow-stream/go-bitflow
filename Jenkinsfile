@@ -103,12 +103,13 @@ pipeline {
                     }
 
                     steps {
-                        sh 'hadolint build/*.Dockerfile | tee -a hadolint_lint.txt'
+                        sh 'hadolint --format checkstyle build/*.Dockerfile | tee -a hadolint.xml'
                     }
 
                     post {
                         always {
-                            archiveArtifacts 'hadolint_lint.txt'
+                            junit 'hadolint'
+                            archiveArtifacts 'hadolint.xml'
                         }
                     }
                 }
