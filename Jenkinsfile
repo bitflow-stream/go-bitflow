@@ -127,14 +127,14 @@ pipeline {
                         }
                         success {
                             script {
-                                //if (env.BRANCH_NAME == 'master') {
+                                if (env.BRANCH_NAME == 'master') {
                                     docker.withRegistry('', registryCredential) {
                                         image.push("build-$BUILD_NUMBER")
                                         image.push("latest-amd64")
                                         staticImage.push("static-build-$BUILD_NUMBER")
                                         staticImage.push("static")
                                     }
-                                //}
+                                }
                             }
                         }
                     }
