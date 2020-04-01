@@ -142,6 +142,11 @@ pipeline {
                     }
 
                     post {
+                        always {
+                            sh 'mv build/_output/bitflow-pipeline build/_output/bitflow-pipeline-amd64'
+                            archiveArtifacts 'build/_output/bitflow-pipeline-amd64'
+                        }
+
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
@@ -174,9 +179,10 @@ pipeline {
 
                     post {
                         always {
-                            sh 'cp build/_output/bitflow-pipeline build/_output/bitflow-pipeline-arm32v7'
+                            sh 'mv build/_output/bitflow-pipeline build/_output/bitflow-pipeline-arm32v7'
                             archiveArtifacts 'build/_output/bitflow-pipeline-arm32v7'
                         }
+
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
@@ -206,6 +212,11 @@ pipeline {
                     }
 
                     post {
+                        always {
+                            sh 'mv build/_output/static/bitflow-pipeline build/_output/static/bitflow-pipeline-arm32v7'
+                            archiveArtifacts 'build/_output/static/bitflow-pipeline-arm32v7'
+                        }
+
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
@@ -235,6 +246,11 @@ pipeline {
                     }
 
                     post {
+                        always {
+                            sh 'mv build/_output/bitflow-pipeline build/_output/bitflow-pipeline-arm64v8'
+                            archiveArtifacts 'build/_output/bitflow-pipeline-arm64v8'
+                        }
+
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
@@ -264,6 +280,11 @@ pipeline {
                     }
 
                     post {
+                        always {
+                            sh 'mv build/_output/static/bitflow-pipeline build/_output/static/bitflow-pipeline-arm64v8'
+                            archiveArtifacts 'build/_output/static/bitflow-pipeline-arm64v8'
+                        }
+
                         success {
                             script {
                                 if (env.BRANCH_NAME == 'master') {
