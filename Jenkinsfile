@@ -12,12 +12,11 @@ pipeline {
 
     stages {
         stage('Git') {
-            agent {
-                label 'master'
-            }
-            steps {
-                script {
-                    env.GIT_COMMITTER_EMAIL = sh(script: "git --no-pager show -s --format='%ae'", returnStdout: true).trim()
+            node {
+                steps {
+                    script {
+                        env.GIT_COMMITTER_EMAIL = sh(script: "git --no-pager show -s --format='%ae'", returnStdout: true).trim()
+                    }
                 }
             }
         }
