@@ -106,7 +106,9 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-                    def image, staticImage
+                    script {
+                        def image, staticImage
+                    }
                     steps {
                         sh './build/native-build.sh'
                         script {
@@ -147,7 +149,9 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-                    def image
+                    script {
+                        def image
+                    }
                     steps {
                         sh './build/native-build.sh'
                         script {
@@ -180,7 +184,9 @@ pipeline {
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-                    def image
+                    script {
+                        def image
+                    }
                     steps {
                         sh './build/native-static-build.sh'
                         script {
@@ -213,7 +219,9 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-                    def image
+                    script {
+                        def image
+                    }
                     steps {
                         sh './build/native-build.sh'
                         script {
@@ -246,7 +254,9 @@ pipeline {
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
-                    def image
+                    script {
+                        def image
+                    }
                     steps {
                         sh './build/native-static-build.sh'
                         script {
