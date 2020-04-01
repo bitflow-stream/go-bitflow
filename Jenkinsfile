@@ -106,16 +106,17 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
+                    def image, staticImage
                     steps {
                         sh './build/native-build.sh'
                         script {
-                            def image = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER", '-f build/alpine-prebuilt.Dockerfile build/_output'
+                            image = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER", '-f build/alpine-prebuilt.Dockerfile build/_output'
                         }
                         sh "./build/test-image.sh $BRANCH_NAME-build-$BUILD_NUMBER"
 
                         sh './build/native-static-build.sh'
                         script {
-                            def staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f build/static-prebuilt.Dockerfile build/_output/static'
+                            staticImage = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER",  '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                         sh "./build/test-image.sh static-$BRANCH_NAME-build-$BUILD_NUMBER"
                     }
@@ -126,17 +127,17 @@ pipeline {
                         }
                         success {
                             script {
-                                if (env.BRANCH_NAME == 'master') {
+                                //if (env.BRANCH_NAME == 'master') {
                                     docker.withRegistry('', registryCredential) {
                                         image.push("build-$BUILD_NUMBER")
                                         image.push("latest-amd64")
                                         staticImage.push("static-build-$BUILD_NUMBER")
                                         staticImage.push("static")
                                     }
-                                }
-                            }                                      
+                                //}
+                            }
                         }
-                    }
+                    }   
                 }
 
                 stage('arm32v7') {
@@ -146,10 +147,11 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
+                    def image
                     steps {
                         sh './build/native-build.sh'
                         script {
-                            def image = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/arm32v7-prebuilt.Dockerfile build/_output'
+                            image = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/arm32v7-prebuilt.Dockerfile build/_output'
                         }
                         sh "./build/test-image.sh $BRANCH_NAME-build-$BUILD_NUMBER-arm32v7"
                     }
@@ -178,10 +180,11 @@ pipeline {
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
+                    def image
                     steps {
                         sh './build/native-static-build.sh'
                         script {
-                            def image = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/static-prebuilt.Dockerfile build/_output/static'
+                            image = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                         sh "./build/test-image.sh static-$BRANCH_NAME-build-$BUILD_NUMBER-arm32v7"
                     }
@@ -210,10 +213,11 @@ pipeline {
                             args '-v /tmp/go-mod-cache/alpine:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
+                    def image
                     steps {
                         sh './build/native-build.sh'
                         script {
-                            def image = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/arm64v8-prebuilt.Dockerfile build/_output'
+                            image = docker.build registry + ":$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/arm64v8-prebuilt.Dockerfile build/_output'
                         }
                         sh "./build/test-image.sh $BRANCH_NAME-build-$BUILD_NUMBER-arm64v8"
                     }
@@ -242,10 +246,11 @@ pipeline {
                             args '-v /tmp/go-mod-cache/debian:/go -v /var/run/docker.sock:/var/run/docker.sock'
                         }
                     }
+                    def image
                     steps {
                         sh './build/native-static-build.sh'
                         script {
-                            def image = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/static-prebuilt.Dockerfile build/_output/static'
+                            image = docker.build registry + ":static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8", '-f build/static-prebuilt.Dockerfile build/_output/static'
                         }
                         sh "./build/test-image.sh static-$BRANCH_NAME-build-$BUILD_NUMBER-arm64v8"
                     }
