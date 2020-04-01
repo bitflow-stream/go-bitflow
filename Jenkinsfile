@@ -1,4 +1,3 @@
-def image, staticImage // Define global variables for sharing between stages
 pipeline {
     options {
         timeout(time: 1, unit: 'HOURS')
@@ -10,6 +9,8 @@ pipeline {
     }
 
     stages {
+        def image, staticImage // Define global variables for sharing between stages
+
         stage('Git') {
             agent {
                 label 'master'
