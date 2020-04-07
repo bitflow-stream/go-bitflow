@@ -12,11 +12,14 @@ pipeline {
 
     stages {
         stage('Git') {
+            agent {
+                docker {
+                    image 'bitflowstream/golang-build:debian'
+                }
+            }
             steps {
                 script {
-                    node {
-                        env.GIT_COMMITTER_EMAIL = sh(script: "git --no-pager show -s --format='%ae'", returnStdout: true).trim()
-                    }
+                    env.GIT_COMMITTER_EMAIL = sh(script: "git --no-pager show -s --format='%ae'", returnStdout: true).trim()
                 }
             }
         }
@@ -37,7 +40,7 @@ pipeline {
                 sh 'go vet ./... &> reports/vet.txt'
                 sh 'golint $(go list -f "{{.Dir}}" ./...) &> reports/lint.txt'
                 stash includes: 'reports/*', name: 'unitStage'
-            } 
+            }
             post {
                 always {
                     archiveArtifacts 'reports/*'
@@ -167,7 +170,7 @@ pipeline {
                                         image.push("latest-arm32v7")
                                     }
                                 }
-                            }                                      
+                            }
                         }
                     }
                 }
@@ -199,7 +202,7 @@ pipeline {
                                         image.push("static-arm32v7")
                                     }
                                 }
-                            }                                      
+                            }
                         }
                     }
                 }
@@ -231,9 +234,9 @@ pipeline {
                                         image.push("latest-arm64v8")
                                     }
                                 }
-                            }                                      
+                            }
                         }
-                    }          
+                    }
                 }
 
                 stage('arm64v8 static') {
@@ -263,13 +266,13 @@ pipeline {
                                         image.push("static-arm64v8")
                                     }
                                 }
-                            }                                      
+                            }
                         }
                     }
                 }
-            }   
+            }
         }
-        
+
         stage('Docker manifest') {
             when {
                 branch 'master'
