@@ -9,6 +9,7 @@ import (
 
 	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/suite"
 )
 
 func GetLocalPort() string {
@@ -33,7 +34,7 @@ type TcpListenerTestSuite struct {
 }
 
 func TestTcpListener(t *testing.T) {
-	new(TcpListenerTestSuite).Run(t)
+	suite.Run(t, new(TcpListenerTestSuite))
 }
 
 func (suite *TcpListenerTestSuite) runGroup(sender golib.Task, generator SampleProcessor, receiver SampleSource, sink *testSampleSink) {

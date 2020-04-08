@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/antongulenko/golib"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -14,8 +14,7 @@ const scriptContent = "a -> avg() -> b"
 const nonexistingFile = "-------SOMETHING-NONEXISTING-------"
 
 type argsTestSuite struct {
-	t *testing.T
-	*require.Assertions
+	golib.AbstractTestSuite
 
 	tempDir        string
 	executableFile string
@@ -25,15 +24,6 @@ type argsTestSuite struct {
 
 func TestProcessorRegistry(t *testing.T) {
 	suite.Run(t, new(argsTestSuite))
-}
-
-func (suite *argsTestSuite) T() *testing.T {
-	return suite.t
-}
-
-func (suite *argsTestSuite) SetT(t *testing.T) {
-	suite.t = t
-	suite.Assertions = require.New(t)
 }
 
 func (suite *argsTestSuite) SetupSuite() {

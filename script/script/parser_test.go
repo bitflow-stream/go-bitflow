@@ -9,6 +9,7 @@ import (
 	"github.com/bitflow-stream/go-bitflow/script/reg"
 	"github.com/bitflow-stream/go-bitflow/steps"
 	"github.com/bugsnag/bugsnag-go/errors"
+	"github.com/stretchr/testify/suite"
 )
 
 type ParserTestSuite struct {
@@ -16,7 +17,7 @@ type ParserTestSuite struct {
 }
 
 func TestParser(t *testing.T) {
-	new(ParserTestSuite).Run(t)
+	suite.Run(t, new(ParserTestSuite))
 }
 
 func (s *ParserTestSuite) Test_withFileInputAndOutput_shouldHaveFileSourceAndFileSink() {

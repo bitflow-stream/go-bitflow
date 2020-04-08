@@ -6,6 +6,7 @@ import (
 
 	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/stretchr/testify/suite"
 )
 
 type BatchAggregateTestSuite struct {
@@ -13,7 +14,7 @@ type BatchAggregateTestSuite struct {
 }
 
 func TestBatchAggregate(t *testing.T) {
-	new(BatchAggregateTestSuite).Run(t)
+	suite.Run(t, new(BatchAggregateTestSuite))
 }
 
 func (s *BatchAggregateTestSuite) testAggregator(aggregator bitflow.BatchProcessingStep, header *bitflow.Header, samples []*bitflow.Sample, expectedValues []bitflow.Value) {
