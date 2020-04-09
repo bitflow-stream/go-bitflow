@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/suite"
 )
 
 type FileTestSuite struct {
@@ -25,7 +26,7 @@ const (
 )
 
 func TestFileTransport(t *testing.T) {
-	new(FileTestSuite).Run(t)
+	suite.Run(t, new(FileTestSuite))
 }
 
 func (suite *FileTestSuite) SetupSuite() {

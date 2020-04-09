@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type MarshallerTestSuite struct {
@@ -12,7 +14,7 @@ type MarshallerTestSuite struct {
 }
 
 func TestMarshallerTestSuite(t *testing.T) {
-	new(MarshallerTestSuite).Run(t)
+	suite.Run(t, new(MarshallerTestSuite))
 }
 
 func (suite *MarshallerTestSuite) testRead(m BidiMarshaller, rdr *bufio.Reader, expectedHeader *UnmarshalledHeader, samples []*Sample) {

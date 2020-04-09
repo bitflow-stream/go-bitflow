@@ -5,6 +5,7 @@ import (
 
 	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/stretchr/testify/suite"
 )
 
 type MetricSplitterTestSuite struct {
@@ -12,7 +13,7 @@ type MetricSplitterTestSuite struct {
 }
 
 func TestMetricSplitter(t *testing.T) {
-	new(MetricSplitterTestSuite).Run(t)
+	suite.Run(t, new(MetricSplitterTestSuite))
 }
 
 func (s *MetricSplitterTestSuite) TestFailedRegexMetricSplitter() {

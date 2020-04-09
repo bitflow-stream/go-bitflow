@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/antongulenko/golib"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
 type PipelinePrinterTestSuite struct {
@@ -13,7 +13,7 @@ type PipelinePrinterTestSuite struct {
 }
 
 func TestPipelinePrinter(t *testing.T) {
-	new(PipelinePrinterTestSuite).Run(t)
+	suite.Run(t, new(PipelinePrinterTestSuite))
 }
 
 var printer = IndentPrinter{
@@ -36,17 +36,16 @@ func (c contained) String() string {
 	return c.name
 }
 
-func (s *PipelinePrinterTestSuite) TestIndentPrinter1(t *testing.T) {
+func (s *PipelinePrinterTestSuite) TestIndentPrinter1() {
 	obj := contained{"a", []fmt.Stringer{String("b"), nil, String("c")}}
-	assert.Equal(t,
-		`a
+	s.Equal(`a
 |-b
 |-(nil)
 \-c`,
 		printer.Print(obj))
 }
 
-func (s *PipelinePrinterTestSuite) TestIndentPrinterBig(t *testing.T) {
+func (s *PipelinePrinterTestSuite) TestIndentPrinterBig() {
 	obj := contained{"a",
 		[]fmt.Stringer{
 			contained{"b",
@@ -64,8 +63,7 @@ func (s *PipelinePrinterTestSuite) TestIndentPrinterBig(t *testing.T) {
 				[]fmt.Stringer{String("h"), String("i")}},
 		}}
 
-	assert.Equal(t,
-		`a
+	s.Equal(`a
 |-b
 | \-c
 |-d

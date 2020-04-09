@@ -10,6 +10,7 @@ import (
 	"github.com/bitflow-stream/go-bitflow/script/plugin"
 	"github.com/bitflow-stream/go-bitflow/script/reg"
 	"github.com/bitflow-stream/go-bitflow/script/script"
+	"github.com/bitflow-stream/go-bitflow/steps"
 	defaultPlugin "github.com/bitflow-stream/go-bitflow/steps/bitflow-plugin-default-steps"
 	log "github.com/sirupsen/logrus"
 )
@@ -22,6 +23,7 @@ type CmdPipelineBuilder struct {
 	printCapabilities     bool
 	printJsonCapabilities bool
 	pluginPaths           golib.StringSlice
+	externalCommands      golib.StringSlice
 }
 
 func (c *CmdPipelineBuilder) RegisterFlags() {
@@ -29,6 +31,7 @@ func (c *CmdPipelineBuilder) RegisterFlags() {
 	flag.BoolVar(&c.printCapabilities, "capabilities", false, "Print a list of available processing steps and exit.")
 	flag.BoolVar(&c.printJsonCapabilities, "json-capabilities", false, "Print the capabilities of this pipeline in JSON form and exit.")
 	flag.Var(&c.pluginPaths, "p", "Plugins to load for additional functionality")
+	flag.Var(&c.externalCommands, "exe", "Register external executable to be used as step. Format: '<short name>;<executable path>;<initial executable parameters>'")
 
 	c.ProcessorRegistry = reg.NewProcessorRegistry(bitflow.NewEndpointFactory())
 	c.Endpoints.RegisterGeneralFlagsTo(flag.CommandLine)
@@ -40,6 +43,10 @@ func (c *CmdPipelineBuilder) RegisterFlags() {
 
 func (c *CmdPipelineBuilder) BuildPipeline(getScript func() (string, error)) (*bitflow.SamplePipeline, error) {
 	err := loadPlugins(c.ProcessorRegistry, c.pluginPaths)
+	if err != nil {
+		return nil, err
+	}
+	err = registerExternalExecutables(c.ProcessorRegistry, c.externalCommands)
 	if err != nil {
 		return nil, err
 	}
@@ -78,4 +85,13 @@ func loadPlugins(registry reg.ProcessorRegistry, pluginPaths []string) error {
 	// Load the default pipeline steps
 	// TODO add a plugin discovery mechanism
 	return defaultPlugin.Plugin.Init(registry)
+}
+
+func registerExternalExecutables(registry reg.ProcessorRegistry, commands golib.StringSlice) error {
+	for _, description := range commands {
+		if err := steps.RegisterExecutable(registry, description); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/antongulenko/golib"
+	"github.com/stretchr/testify/suite"
 )
 
 type PipelineTestSuite struct {
@@ -13,7 +14,7 @@ type PipelineTestSuite struct {
 }
 
 func TestPipelineTestSuite(t *testing.T) {
-	new(PipelineTestSuite).Run(t)
+	suite.Run(t, new(PipelineTestSuite))
 }
 
 func (suite *PipelineTestSuite) TestGuessEndpoint() {

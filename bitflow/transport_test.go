@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/antongulenko/golib"
+	"github.com/stretchr/testify/suite"
 )
 
 // Tests for transport_read.go and transport_write.go
@@ -15,7 +16,7 @@ type TransportStreamTestSuite struct {
 }
 
 func TestTransportStreamTestSuite(t *testing.T) {
-	new(TransportStreamTestSuite).Run(t)
+	suite.Run(t, new(TransportStreamTestSuite))
 }
 
 func (suite *TransportStreamTestSuite) testAllHeaders(m BidiMarshaller) {

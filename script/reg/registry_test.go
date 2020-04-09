@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/antongulenko/golib"
+	"github.com/stretchr/testify/suite"
 )
 
 type RegistryTestSuite struct {
@@ -11,7 +12,7 @@ type RegistryTestSuite struct {
 }
 
 func TestRegistry(t *testing.T) {
-	new(RegistryTestSuite).Run(t)
+	suite.Run(t, new(RegistryTestSuite))
 }
 
 // TODO implement tests

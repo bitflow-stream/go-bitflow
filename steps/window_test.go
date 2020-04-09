@@ -5,6 +5,7 @@ import (
 
 	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/stretchr/testify/suite"
 )
 
 type WindowTestSuite struct {
@@ -12,10 +13,18 @@ type WindowTestSuite struct {
 }
 
 func TestWindow(t *testing.T) {
-	new(WindowTestSuite).Run(t)
+	suite.Run(t, new(WindowTestSuite))
 }
 
-func (s *WindowTestSuite) do(win *MetricWindow, values ...float64) {
+func (s *WindowTestSuite) do(win *MetricWindow, floatValues ...float64) {
+	var values []bitflow.Value
+	if floatValues != nil {
+		values = make([]bitflow.Value, len(floatValues))
+		for i, val := range floatValues {
+			values[i] = bitflow.Value(val)
+		}
+	}
+
 	s.Equal(len(values) == 0, win.Empty())
 	s.Equal(len(values), win.Size())
 	winLen := len(win.data)
@@ -25,13 +34,13 @@ func (s *WindowTestSuite) do(win *MetricWindow, values ...float64) {
 	s.Equal(values, win.FastData(), "FastData()")
 
 	filled := make([]bitflow.Value, 3)
-	expected := make([]float64, 3)
+	expected := make([]bitflow.Value, 3)
 	copy(expected, values)
 	win.FillData(filled)
 	s.Equal(expected, filled, "FillData() [short]")
 
 	filled = make([]bitflow.Value, winLen+5)
-	expected = make([]float64, len(filled))
+	expected = make([]bitflow.Value, len(filled))
 	copy(expected, values)
 	win.FillData(filled)
 	s.Equal(expected, filled, "FillData() [long]")

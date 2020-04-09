@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/antongulenko/golib"
+	"github.com/stretchr/testify/suite"
 )
 
 type SampleTestSuite struct {
@@ -11,7 +12,7 @@ type SampleTestSuite struct {
 }
 
 func TestSamples(t *testing.T) {
-	new(SampleTestSuite).Run(t)
+	suite.Run(t, new(SampleTestSuite))
 }
 
 func (s *SampleTestSuite) TestEmptySampleRing() {

@@ -31,6 +31,52 @@ type SubProcessRunner struct {
 	stderr bytes.Buffer
 }
 
+func RegisterExecutable(b reg.ProcessorRegistry, description string) error {
+	descriptionParts := strings.Split(description, ";")
+	const expectedParts = 3
+	if len(descriptionParts) != expectedParts {
+		return fmt.Errorf("Wrong format for external executable (have %v part(s)), need %v parts:"+
+			" <short name>;<executable path>;<initial arguments>", len(descriptionParts), expectedParts)
+	}
+	name := descriptionParts[0]
+	executablePath := descriptionParts[1]
+	initialArgs := SplitShellCommand(descriptionParts[2])
+
+	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
+		// Assemble the command line parameters: <initial args> <extra args> -step <step name> -args <step args>
+		args := initialArgs
+		stepName := params["step"].(string)
+		stepArgs := golib.FormatSortedMap(params["args"].(map[string]string))
+		extraArgs := params["exe-args"].([]string)
+		args = append(args, extraArgs...)
+		args = append(args, "-step", stepName, "-args", stepArgs)
+		runner := &SubProcessRunner{
+			Cmd:  executablePath,
+			Args: args,
+		}
+
+		format := params["format"].(string)
+		factory, err := b.Endpoints.CloneWithParams(params["endpoint-config"].(map[string]string))
+		if err != nil {
+			return fmt.Errorf("Error parsing endpoint parameters: %v", err)
+		}
+		if err = runner.Configure(format, factory); err != nil {
+			return err
+		}
+		p.Add(runner)
+		return nil
+	}
+	b.RegisterStep(name, create,
+		fmt.Sprintf("Start as a sub-process: %v\nInitial arguments: %v", executablePath, initialArgs)).
+		Required("step", reg.String(), "The name of the specific step to be executed").
+		Optional("args", reg.Map(reg.String()), map[string]string{}, "Arguments for the step").
+		Optional("exe-args", reg.List(reg.String()), []string{}, "Extra command line arguments for the sub process").
+		Optional("format", reg.String(), "bin", "Data marshalling format used for exchanging samples on the standard in/out streams").
+		Optional("endpoint-config", reg.Map(reg.String()), map[string]string{}, "Extra configuration parameters for the endpoint factory")
+
+	return nil
+}
+
 func RegisterSubProcessRunner(b reg.ProcessorRegistry) {
 	create := func(p *bitflow.SamplePipeline, params map[string]interface{}) error {
 		cmd := SplitShellCommand(params["cmd"].(string))

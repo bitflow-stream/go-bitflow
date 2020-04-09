@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/antongulenko/golib"
+	"github.com/stretchr/testify/suite"
 )
 
 type BatchStepTestSuite struct {
@@ -13,7 +14,7 @@ type BatchStepTestSuite struct {
 }
 
 func TestBatchStep(t *testing.T) {
-	new(BatchStepTestSuite).Run(t)
+	suite.Run(t, new(BatchStepTestSuite))
 }
 
 type testBatchStep struct {

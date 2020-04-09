@@ -5,6 +5,7 @@ import (
 
 	"github.com/antongulenko/golib"
 	"github.com/bitflow-stream/go-bitflow/bitflow"
+	"github.com/stretchr/testify/suite"
 )
 
 type ForkDistributorsTestSuite struct {
@@ -12,7 +13,7 @@ type ForkDistributorsTestSuite struct {
 }
 
 func TestForkDistributors(t *testing.T) {
-	new(ForkDistributorsTestSuite).Run(t)
+	suite.Run(t, new(ForkDistributorsTestSuite))
 }
 
 func (suite *ForkDistributorsTestSuite) TestTagTemplateDistributor() {
