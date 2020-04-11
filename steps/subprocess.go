@@ -166,6 +166,7 @@ func (r *SubProcessRunner) createProcess() error {
 	}
 	r.output.Writer = r.Writer
 	r.output.Marshaller = r.Marshaller
+	r.output.SetSink(new(bitflow.DroppingSampleProcessor))
 
 	if _, isEmpty := r.GetSink().(*bitflow.DroppingSampleProcessor); r.GetSink() != nil && !isEmpty {
 		readPipe, err := r.cmd.StdoutPipe()

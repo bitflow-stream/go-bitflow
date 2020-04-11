@@ -108,6 +108,34 @@ func (s *EmptySampleSource) String() string {
 }
 
 // SetSampleHandler implements the UnmarshallingSampleSource interface.
-func (s *EmptySampleSource) SetSampleHandler(handler ReadSampleHandler) {
+func (s *EmptySampleSource) SetSampleHandler(_ ReadSampleHandler) {
+	// Do nothing
+}
+
+// ClosedSampleSource implements SampleSource, but instead generating samples, it immediately closes.
+// It can be used for debugging purposes, to create a real pipeline that does not
+type ClosedSampleSource struct {
+	AbstractSampleSource
+	wg *sync.WaitGroup
+}
+
+// Start implements the golib.Task interface.
+func (s *ClosedSampleSource) Start(wg *sync.WaitGroup) golib.StopChan {
+	s.wg = wg
+	return golib.NewStoppedChan(nil)
+}
+
+// Close implements the SampleSource interface.
+func (s *ClosedSampleSource) Close() {
+	s.CloseSinkParallel(s.wg)
+}
+
+// String implements the golib.Task interface.
+func (s *ClosedSampleSource) String() string {
+	return "closed sample source"
+}
+
+// SetSampleHandler implements the UnmarshallingSampleSource interface.
+func (s *ClosedSampleSource) SetSampleHandler(_ ReadSampleHandler) {
 	// Do nothing
 }
