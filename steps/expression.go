@@ -114,7 +114,7 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 			}, nil
 		}),
 		"timestamp": p.makeStringFunction("timestamp", 0, func(sample *bitflow.Sample, _ ...string) (interface{}, error) {
-			return float64(sample.Time.Unix()), nil
+			return float64(sample.Time.UnixNano()), nil
 		}),
 		// Dates are parsed automatically by the govaluate library if a date/time formatted string is encountered. The Unix() value is used.
 		// If alternative date formats are required, this function can be added.
@@ -133,6 +133,19 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 				return fmt.Sprintf("%v", arguments[0]), nil
 			}
 			return nil, fmt.Errorf("str() needs 1 parameter, but received: %v", printParamStrings(arguments))
+		},
+		"round_timestamp": func(arguments ...interface{}) (interface{}, error) {
+			if len(arguments) == 1 {
+				if numArg, ok := arguments[0].(float64); ok {
+					outSampleAndHeader := &bitflow.SampleAndHeader{
+						Sample: p.currentSample(),
+						Header: p.currentHeader(),
+					}
+					p.currentSample().Time = p.currentSample().Time.Round(time.Duration(numArg))
+					return outSampleAndHeader, nil
+				}
+			}
+			return nil, fmt.Errorf("round_timestamp() needs 1 number parameter, but received: %v", printParamStrings(arguments))
 		},
 		"parse_float": func(arguments ...interface{}) (interface{}, error) {
 			if len(arguments) == 1 {
@@ -161,7 +174,9 @@ func (p *Expression) makeFunctions() map[string]govaluate.ExpressionFunction {
 						Sample: p.currentSample(),
 						Header: p.currentHeader(),
 					}
-					p.currentSample().Time = time.Unix(int64(numArg), 0)
+					seconds := int64(numArg) / time.Second.Nanoseconds()
+					nanos := int64(numArg) % time.Second.Nanoseconds()
+					p.currentSample().Time = time.Unix(seconds, nanos)
 					return outSampleAndHeader, nil
 				}
 			}

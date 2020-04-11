@@ -27,6 +27,7 @@ const (
 	StdEndpoint       = EndpointType("std")
 	HttpEndpoint      = EndpointType("http")
 	EmptyEndpoint     = EndpointType("empty")
+	ClosedEndpoint    = EndpointType("closed")
 
 	UndefinedFormat = MarshallingFormat("")
 	TextFormat      = MarshallingFormat("text")
@@ -147,7 +148,7 @@ func (f *EndpointFactory) Clone() *EndpointFactory {
 	copyFlags := func(flags []func(f *flag.FlagSet)) []func(f *flag.FlagSet) {
 		copied := make([]func(f *flag.FlagSet), len(flags))
 		for i, v := range flags {
-			copied[i   ] = v
+			copied[i] = v
 		}
 		return copied
 	}
@@ -179,6 +180,9 @@ func registerEmptyInputOutput(factory *EndpointFactory) {
 	}
 	factory.CustomDataSources[EmptyEndpoint] = func(string) (SampleSource, error) {
 		return new(EmptySampleSource), nil
+	}
+	factory.CustomDataSources[ClosedEndpoint] = func(string) (SampleSource, error) {
+		return new(ClosedSampleSource), nil
 	}
 }
 
