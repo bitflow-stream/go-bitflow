@@ -40,7 +40,7 @@ func (f *fileVanishChecker) hasFileVanished(name string) bool {
 // closing a file, while it is still being read concurrently.
 func IsFileClosedError(err error) bool {
 	pathErr, ok := err.(*os.PathError)
-	return ok && pathErr.Err == syscall.EBADF
+	return ok && (pathErr.Err == syscall.EBADF || pathErr.Err == os.ErrClosed)
 }
 
 func IsBrokenPipeError(err error) bool {

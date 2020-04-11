@@ -147,7 +147,11 @@ func (r *SubProcessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
 
 		// After everything is shut down: forward the close call
 		r.CloseSink()
-		return err.NilOrError()
+
+		if err := err.NilOrError(); err != nil {
+			return fmt.Errorf("Error in %v: %v", r, err)
+		}
+		return nil
 	})
 }
 
@@ -158,7 +162,7 @@ func (r *SubProcessRunner) createProcess() error {
 
 	writePipe, err := r.cmd.StdinPipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to attach to standard input of subprocess: %v", err)
 	}
 	r.output = &bitflow.WriterSink{
 		Output:      writePipe,
@@ -171,7 +175,7 @@ func (r *SubProcessRunner) createProcess() error {
 	if _, isEmpty := r.GetSink().(*bitflow.DroppingSampleProcessor); r.GetSink() != nil && !isEmpty {
 		readPipe, err := r.cmd.StdoutPipe()
 		if err != nil {
-			return err
+			return fmt.Errorf("Failed to attach to standard output of subprocess: %v", err)
 		}
 		r.input = &bitflow.ReaderSource{
 			Input:       readPipe,
@@ -187,22 +191,27 @@ func (r *SubProcessRunner) createProcess() error {
 
 func (r *SubProcessRunner) runProcess() error {
 	err := r.cmd.Run()
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		if exitErr.Success() {
-			err = nil
-		} else {
-			if r.stderr.Len() > 0 {
-				log.Warnf("Stderr output of %v:", r)
-				scanner := bufio.NewScanner(&r.stderr)
-				scanner.Split(bufio.ScanLines)
-				for scanner.Scan() {
-					log.Warnln(" > " + scanner.Text())
-				}
-			}
-			return fmt.Errorf("Subprocess '%v' exited abnormally (%v)", r.Cmd, exitErr.ProcessState.String())
+
+	// TODO allow to output stderr of the process immediately instead of when closing
+	if r.stderr.Len() > 0 {
+		log.Warnf("Stderr output of %v:", r)
+		scanner := bufio.NewScanner(&r.stderr)
+		scanner.Split(bufio.ScanLines)
+		for scanner.Scan() {
+			log.Warnln(" > " + scanner.Text())
 		}
 	}
-	return err
+
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if exitErr.Success() {
+			return nil
+		} else {
+			return fmt.Errorf("Subprocess '%v' exited abnormally (%v)", r.Cmd, exitErr.ProcessState.String())
+		}
+	} else if err != nil {
+		return fmt.Errorf("Error executing subprocess: %v", err)
+	}
+	return nil
 }
 
 func (r *SubProcessRunner) String() string {

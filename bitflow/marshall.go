@@ -128,6 +128,10 @@ func checkHeaderField(field string) error {
 
 func detectFormat(input *bufio.Reader) (Unmarshaller, error) {
 	peeked, err := input.Peek(detect_format_peek)
+	if len(peeked) == 0 && err == io.EOF {
+		// Stream closed immediately without sending any data. Not considered an error.
+		return nil, nil
+	}
 	if err == bufio.ErrBufferFull {
 		err = errors.New("IO buffer is too small to auto-detect input stream format")
 	}

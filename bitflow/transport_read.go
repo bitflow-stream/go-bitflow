@@ -97,7 +97,7 @@ func (r *SampleReader) OpenBuffered(input io.ReadCloser, sink SampleSink, bufSiz
 // created this SampleInputStream. The source string will be used for the HandleSample() method.
 func (stream *SampleInputStream) ReadSamples(source string) (int, error) {
 	if stream.um == nil {
-		if um, err := detectFormat(stream.reader); err != nil {
+		if um, err := detectFormat(stream.reader); err != nil || um == nil {
 			return 0, err
 		} else {
 			stream.um = um

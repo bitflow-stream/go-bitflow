@@ -106,6 +106,6 @@ func (source *ReaderSource) Close() {
 	// from the outside, or the program is stopped forcefully.
 	err := source.stream.Close()
 	if err != nil && !IsFileClosedError(err) {
-		log.Errorf("%v: error closing output: %v", source, err)
+		log.Errorf("%v: error closing output: %v. Err type: %T. Err: %#v", source, err, err, err)
 	}
 }
