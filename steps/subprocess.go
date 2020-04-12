@@ -19,6 +19,11 @@ type SubProcessRunner struct {
 	Cmd  string
 	Args []string
 
+	// StderrPrefix enables immediate logging of each line of the stderr of the sub-process. These lines are
+	// prefixed with the given string. If StderrPrefix is left empty, the output is instead collected in an in-memory
+	// buffer, and logged when the process exits (regardless of the exit condition).
+	StderrPrefix string
+
 	// Configurations for the input/output marshalling
 
 	Reader     bitflow.SampleReader
@@ -28,7 +33,9 @@ type SubProcessRunner struct {
 	cmd    *exec.Cmd
 	output *bitflow.WriterSink
 	input  *bitflow.ReaderSource
-	stderr bytes.Buffer
+
+	stderr       bytes.Buffer
+	stderrLogger *LoggingWriter
 }
 
 func RegisterExecutable(b reg.ProcessorRegistry, description string) error {
@@ -50,9 +57,14 @@ func RegisterExecutable(b reg.ProcessorRegistry, description string) error {
 		extraArgs := params["exe-args"].([]string)
 		args = append(args, extraArgs...)
 		args = append(args, "-step", stepName, "-args", stepArgs)
+		stderrPrefix := ""
+		if !params["buffer-stderr"].(bool) {
+			stderrPrefix = fmt.Sprintf("[%v/%v] ", name, stepName)
+		}
 		runner := &SubProcessRunner{
-			Cmd:  executablePath,
-			Args: args,
+			Cmd:          executablePath,
+			Args:         args,
+			StderrPrefix: stderrPrefix,
 		}
 
 		format := params["format"].(string)
@@ -72,7 +84,8 @@ func RegisterExecutable(b reg.ProcessorRegistry, description string) error {
 		Optional("args", reg.Map(reg.String()), map[string]string{}, "Arguments for the step").
 		Optional("exe-args", reg.List(reg.String()), []string{}, "Extra command line arguments for the sub process").
 		Optional("format", reg.String(), "bin", "Data marshalling format used for exchanging samples on the standard in/out streams").
-		Optional("endpoint-config", reg.Map(reg.String()), map[string]string{}, "Extra configuration parameters for the endpoint factory")
+		Optional("endpoint-config", reg.Map(reg.String()), map[string]string{}, "Extra configuration parameters for the endpoint factory").
+		Optional("buffer-stderr", reg.Bool(), false, "Instead of always logging the stderr output of the sub-process, collect it and output it after the process exits")
 
 	return nil
 }
@@ -157,7 +170,12 @@ func (r *SubProcessRunner) Start(wg *sync.WaitGroup) golib.StopChan {
 
 func (r *SubProcessRunner) createProcess() error {
 	r.cmd = exec.Command(r.Cmd, r.Args...)
-	r.cmd.Stderr = &r.stderr
+	if r.StderrPrefix != "" {
+		r.stderrLogger = &LoggingWriter{Prefix: r.StderrPrefix}
+		r.cmd.Stderr = r.stderrLogger
+	} else {
+		r.cmd.Stderr = &r.stderr
+	}
 	desc := r.String()
 
 	writePipe, err := r.cmd.StdinPipe()
@@ -191,27 +209,34 @@ func (r *SubProcessRunner) createProcess() error {
 
 func (r *SubProcessRunner) runProcess() error {
 	err := r.cmd.Run()
+	exitErr, isExitErr := err.(*exec.ExitError)
+	success := err == nil || (isExitErr && exitErr.Success())
 
-	// TODO allow to output stderr of the process immediately instead of when closing
 	if r.stderr.Len() > 0 {
-		log.Warnf("Stderr output of %v:", r)
+		level := log.ErrorLevel
+		if success {
+			level = log.InfoLevel
+		}
+		log.StandardLogger().Logf(level, "Stderr output of %v:", r)
 		scanner := bufio.NewScanner(&r.stderr)
 		scanner.Split(bufio.ScanLines)
 		for scanner.Scan() {
-			log.Warnln(" > " + scanner.Text())
+			log.StandardLogger().Logln(level, " > "+scanner.Text())
 		}
+	}
+	if r.stderrLogger != nil {
+		r.stderrLogger.Flush()
 	}
 
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		if exitErr.Success() {
-			return nil
-		} else {
-			return fmt.Errorf("Subprocess '%v' exited abnormally (%v)", r.Cmd, exitErr.ProcessState.String())
-		}
+	if success {
+		return nil
+	} else if isExitErr {
+		return fmt.Errorf("Subprocess '%v' exited abnormally (%v)", r.Cmd, exitErr.ProcessState.String())
 	} else if err != nil {
 		return fmt.Errorf("Error executing subprocess: %v", err)
+	} else {
+		return nil
 	}
-	return nil
 }
 
 func (r *SubProcessRunner) String() string {
@@ -241,4 +266,37 @@ func (r *SubProcessRunner) Close() {
 	r.output.Close()
 	// TODO if the process won't close, try to kill it
 	// r.cmd.Process.Kill()
+}
+
+type LoggingWriter struct {
+	Prefix string
+	buf    []byte
+}
+
+func (w *LoggingWriter) Write(p []byte) (int, error) {
+	n := len(p)
+	for len(p) > 0 {
+		i := bytes.IndexByte(p, '\n')
+		if i < 0 {
+			break
+		}
+		if len(w.buf) > 0 {
+			log.Printf("%v%s%s\n", w.Prefix, w.buf, p[:i])
+			w.buf = w.buf[0:0]
+		} else {
+			log.Printf("%v%s\n", w.Prefix, p[:i])
+		}
+		p = p[i+1:]
+	}
+
+	// Copy the unterminated line until the next Write
+	w.buf = append(w.buf, p...)
+	return n, nil
+}
+
+func (w *LoggingWriter) Flush() {
+	if len(w.buf) > 0 {
+		log.Printf("%s\n", w.buf)
+		w.buf = w.buf[0:0]
+	}
 }
