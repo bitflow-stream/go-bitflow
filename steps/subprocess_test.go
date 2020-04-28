@@ -63,26 +63,26 @@ func (s *SubProcessTestSuite) TestExternalExecutableRegistration() {
 
 	// No initial args
 	test("name;exe;", "", "name", "exe",
-		map[string]interface{}{"step": "anything",},
-		"-step", "anything", "-args", "")
+		map[string]interface{}{"step": "anything"},
+		"-step", "anything", "-args")
 
 	// One initial arg
 	test("name;exe;args", "", "name", "exe",
-		map[string]interface{}{"step": "anything",},
-		"args", "-step", "anything", "-args", "")
+		map[string]interface{}{"step": "anything"},
+		"args", "-step", "anything", "-args")
 
 	// Multiple initial args
 	test("name;exe;arg1 arg2 arg3", "", "name", "exe",
 		map[string]interface{}{"step": "anything"},
-		"arg1", "arg2", "arg3", "-step", "anything", "-args", "")
+		"arg1", "arg2", "arg3", "-step", "anything", "-args")
 
 	// No initial args with step args and exe-args
 	test("name;exe;", "", "name", "exe",
 		map[string]interface{}{"step": "anything", "args": map[string]string{"a": "b", "c": "d"}, "exe-args": []string{"extra", "arg"}},
-		"extra", "arg", "-step", "anything", "-args", "a=b, c=d")
+		"extra", "arg", "-step", "anything", "-args", "a=b", "c=d")
 
 	// Multiple initial args with step args and exe-args
 	test("name;exe;arg1 arg2 arg3", "", "name", "exe",
 		map[string]interface{}{"step": "anything", "args": map[string]string{"c": "d", "a": "b"}, "exe-args": []string{"extra", "arg"}},
-		"arg1", "arg2", "arg3", "extra", "arg", "-step", "anything", "-args", "a=b, c=d")
+		"arg1", "arg2", "arg3", "extra", "arg", "-step", "anything", "-args", "a=b", "c=d")
 }
