@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 
@@ -56,8 +57,11 @@ func RegisterExecutable(b reg.ProcessorRegistry, description string) error {
 		extraArgs := params["exe-args"].([]string)
 		args = append(args, extraArgs...)
 		args = append(args, "-step", stepName, "-args")
-		for key, val := range params["args"].(map[string]string) {
-			args = append(args, fmt.Sprintf("%v=%v", key, val))
+
+		stepArgs := golib.SplitMapKeysAndValues(params["args"].(map[string]string))
+		sort.Sort(&stepArgs)
+		for i, stepArgKey := range stepArgs.Keys {
+			args = append(args, fmt.Sprintf("%v=%v", stepArgKey, stepArgs.Values[i]))
 		}
 
 		stderrPrefix := ""
