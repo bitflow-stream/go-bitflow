@@ -39,5 +39,6 @@ require (
 	gonum.org/v1/plot v0.0.0-20190615073203-9aa86143727f
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/ini.v1 v1.46.0 // indirect
+	gopkg.in/yaml.v2 v2.2.4 // indirect
 	vbom.ml/util v0.0.0-20180919145318-efcd4e0f9787
 )

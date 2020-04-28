@@ -11,7 +11,7 @@ import (
 const (
 	DefaultCsvTimeColumn = "time"
 	TagsColumn           = "tags"
-	BinaryTimeColumn     = "timB" // Must not collide with csv_time_col, but have same length
+	BinaryTimeColumn     = "timB" // Must not collide with DefaultCsvTimeColumn, but have same length
 
 	detect_format_peek        = len(DefaultCsvTimeColumn)
 	illegal_header_characters = string(DefaultCsvSeparator) + string(DefaultCsvNewline) + string(BinarySeparator)

@@ -53,10 +53,13 @@ func RegisterExecutable(b reg.ProcessorRegistry, description string) error {
 		// Assemble the command line parameters: <initial args> <extra args> -step <step name> -args <step args>
 		args := initialArgs
 		stepName := params["step"].(string)
-		stepArgs := golib.FormatSortedMap(params["args"].(map[string]string))
 		extraArgs := params["exe-args"].([]string)
 		args = append(args, extraArgs...)
-		args = append(args, "-step", stepName, "-args", stepArgs)
+		args = append(args, "-step", stepName, "-args")
+		for key, val := range params["args"].(map[string]string) {
+			args = append(args, fmt.Sprintf("%v=%v", key, val))
+		}
+
 		stderrPrefix := ""
 		if !params["buffer-stderr"].(bool) {
 			stderrPrefix = fmt.Sprintf("[%v/%v] ", name, stepName)
