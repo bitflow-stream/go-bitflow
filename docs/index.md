@@ -38,7 +38,7 @@ All commands below are executed in the repository root.
 Select one of the files in `build/multi-stage/[alpine|arm23v7|arm64v8]-[full|static].Dockerfile` and run:
 
 ```
-docker build -t [IMAGE_NAME] -f build/multi-stage/[...].Dockerfile
+docker build -t [IMAGE_NAME] -f build/multi-stage/[...].Dockerfile .
 ```
 
 #### Cached static build (fast & small container)
