@@ -15,7 +15,7 @@ The [`cmd/bitflow-pipeline`](cmd/bitflow-pipeline) sub-package provides an execu
 The dataflow graph (including data sources, data sinks, tree of operators) is expressed in the simple domain specific language [`Bitflowscript`](https://bitflow.readthedocs.io/projects/bitflow-antlr-grammars/en/latest/bitflow-script).
 Some aspects of the execution can also be configured through additional command line flags.
 
-Go requirement: at least version 1.11. Use the `--help` flag for a list of command line flags.
+Go version: 1.14. Use the `--help` flag for a list of command line flags.
 
 # Installation
 
