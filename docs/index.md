@@ -57,3 +57,14 @@ TARGET=[arm32v7|arm64v8|alpine]
 ./build/containerized-build.sh $TARGET /tmp/go-cache-directory
 docker build -t [IMAGE_NAME] -f build/$TARGET-prebuilt.Dockerfile build/_output/$TARGET
 ```
+
+# Dockerhub
+
+Docker container images are available in the [`bitflowstream/bitflow-pipeline`](https://hub.docker.com/repository/docker/bitflowstream/bitflow-pipeline) Dockerhub repository:
+
+```
+docker pull bitflowstream/bitflow-pipeline
+docker run -ti bitflowstream/bitflow-pipeline --help
+```
+
+The Docker manifest will select the appropriate platform (amd64/arm32v7/arm64v8) automatically. You can choose between the `static` and the `latest` tags, where the `static` image is smaller and contains a single file that can easily be integrated in other container images.
