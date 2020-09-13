@@ -11,6 +11,7 @@ require (
 	github.com/antongulenko/golib v0.0.25
 	github.com/bugsnag/bugsnag-go v1.5.3
 	github.com/fogleman/gg v1.3.0 // indirect
+	github.com/fvbommel/sortorder v1.0.1
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/gin-gonic/gin v1.4.0
 	github.com/go-ini/ini v1.46.0
@@ -29,7 +30,6 @@ require (
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/ugorji/go v1.1.7 // indirect
-	github.com/xlab/handysort v0.0.0-20150421192137-fb3537ed64a1 // indirect
 	golang.org/x/exp v0.0.0-20190912063710-ac5d2bfcbfe0 // indirect
 	golang.org/x/image v0.0.0-20190910094157-69e4b8554b2a // indirect
 	golang.org/x/net v0.0.0-20190912160710-24e19bdeb0f2 // indirect
@@ -40,5 +40,4 @@ require (
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	gopkg.in/yaml.v2 v2.2.4 // indirect
-	vbom.ml/util v0.0.0-20180919145318-efcd4e0f9787
 )
