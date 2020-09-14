@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/antongulenko/golib"
+	"github.com/fvbommel/sortorder"
 	log "github.com/sirupsen/logrus"
-	"vbom.ml/util/sortorder"
 )
 
 // FileGroup provides utility functionality when dealing with a group of files sharing
