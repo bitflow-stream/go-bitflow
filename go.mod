@@ -12,32 +12,24 @@ require (
 	github.com/bugsnag/bugsnag-go v1.5.3
 	github.com/fogleman/gg v1.3.0 // indirect
 	github.com/fvbommel/sortorder v1.0.1
-	github.com/gin-contrib/sse v0.1.0 // indirect
-	github.com/gin-gonic/gin v1.4.0
+	github.com/gin-gonic/gin v1.7.0
 	github.com/go-ini/ini v1.46.0
-	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/gorilla/mux v1.7.3
-	github.com/json-iterator/go v1.1.7 // indirect
 	github.com/jung-kurt/gofpdf v1.12.1 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/ktye/fft v0.0.0-20160109133121-5beb24bb6a43
 	github.com/lucasb-eyer/go-colorful v1.0.2
-	github.com/mattn/go-isatty v0.0.9 // indirect
 	github.com/ryanuber/go-glob v1.0.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/stretchr/testify v1.4.0
-	github.com/ugorji/go v1.1.7 // indirect
 	golang.org/x/exp v0.0.0-20190912063710-ac5d2bfcbfe0 // indirect
 	golang.org/x/image v0.0.0-20190910094157-69e4b8554b2a // indirect
-	golang.org/x/net v0.0.0-20190912160710-24e19bdeb0f2 // indirect
-	golang.org/x/sys v0.0.0-20190912141932-bc967efca4b8 // indirect
 	gonum.org/v1/gonum v0.0.0-20190911200027-40d3308efe80
 	gonum.org/v1/netlib v0.0.0-20190331212654-76723241ea4e // indirect
 	gonum.org/v1/plot v0.0.0-20190615073203-9aa86143727f
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/ini.v1 v1.46.0 // indirect
-	gopkg.in/yaml.v2 v2.2.4 // indirect
 )
