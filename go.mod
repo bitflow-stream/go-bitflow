@@ -32,8 +32,7 @@ require (
 	github.com/ugorji/go v1.1.7 // indirect
 	golang.org/x/exp v0.0.0-20190912063710-ac5d2bfcbfe0 // indirect
 	golang.org/x/image v0.0.0-20190910094157-69e4b8554b2a // indirect
-	golang.org/x/net v0.0.0-20190912160710-24e19bdeb0f2 // indirect
-	golang.org/x/sys v0.0.0-20190912141932-bc967efca4b8 // indirect
+	golang.org/x/net v0.7.0 // indirect
 	gonum.org/v1/gonum v0.0.0-20190911200027-40d3308efe80
 	gonum.org/v1/netlib v0.0.0-20190331212654-76723241ea4e // indirect
 	gonum.org/v1/plot v0.0.0-20190615073203-9aa86143727f
